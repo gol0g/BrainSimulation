@@ -1,0 +1,103 @@
+:root {
+  --bg-color: #050505;
+  --panel-bg: #0a0a0a;
+  --text-primary: #e0e0e0;
+  --accent-cyan: #00f3ff;
+  --accent-purple: #bc13fe;
+  --grid-line: #1a1a1a;
+  --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--grid-line);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan);
+}
+
+.sci-fi-border {
+  border: 1px solid var(--grid-line);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.sci-fi-border:hover {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+}
+
+.btn-primary {
+  background: transparent;
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  padding: 8px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background: var(--accent-cyan);
+  color: #000;
+  box-shadow: 0 0 10px var(--accent-cyan);
+}
+
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--accent-purple);
+  color: var(--accent-purple);
+  padding: 8px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.btn-danger:hover {
+  background: var(--accent-purple);
+  color: #000;
+  box-shadow: 0 0 10px var(--accent-purple);
+}
+
+.neon-text {
+  text-shadow: 0 0 5px var(--accent-cyan);
+}
+
+.control-group {
+  margin-bottom: 1rem;
+}
+
+.control-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.control-group input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-cyan);
+}
