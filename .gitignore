@@ -30,3 +30,6 @@ npm-debug.log*
 # Build
 build/
 *.egg-info/
+
+# Secrets
+.github_token

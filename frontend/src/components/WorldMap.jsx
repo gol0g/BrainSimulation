@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from 'react';
 
 const WorldMap = ({ world, lastAction }) => {
     const canvasRef = useRef(null);
-    const gridSize = 10;
-    const cellSize = 30;
+    const gridSize = 15;  // Larger map for avoidance learning
+    const cellSize = 24;  // Smaller cells to fit
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -70,6 +70,98 @@ const WorldMap = ({ world, lastAction }) => {
         ctx.fillRect(ax * cellSize + 5, ay * cellSize + 5, cellSize - 10, cellSize - 10);
 
         ctx.shadowBlur = 0;
+
+        // Draw Predator (red skull/circle)
+        if (world.predator) {
+            const [px, py] = world.predator.position;
+            const threatLevel = world.predator.threat_level || 0;
+
+            // Draw threat radius (subtle red glow)
+            if (threatLevel > 0) {
+                const gradient = ctx.createRadialGradient(
+                    px * cellSize + cellSize / 2, py * cellSize + cellSize / 2, 0,
+                    px * cellSize + cellSize / 2, py * cellSize + cellSize / 2, cellSize * 2
+                );
+                gradient.addColorStop(0, `rgba(255, 62, 62, ${threatLevel * 0.3})`);
+                gradient.addColorStop(1, 'rgba(255, 62, 62, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(
+                    (px - 2) * cellSize, (py - 2) * cellSize,
+                    cellSize * 5, cellSize * 5
+                );
+            }
+
+            // Draw predator body
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff3e3e';
+            ctx.fillStyle = '#ff3e3e';
+            ctx.beginPath();
+            ctx.arc(px * cellSize + cellSize / 2, py * cellSize + cellSize / 2, cellSize / 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw eyes (makes it look menacing)
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(px * cellSize + cellSize / 2 - 4, py * cellSize + cellSize / 2 - 2, 2, 0, Math.PI * 2);
+            ctx.arc(px * cellSize + cellSize / 2 + 4, py * cellSize + cellSize / 2 - 2, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw Wind indicator (arrows on screen edge)
+        if (world.wind && world.wind.active) {
+            const windDir = world.wind.direction;
+            ctx.fillStyle = '#87CEEB';
+            ctx.strokeStyle = '#87CEEB';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#87CEEB';
+
+            const arrowSize = 12;
+            const margin = 15;
+            const centerX = (gridSize * cellSize) / 2;
+            const centerY = (gridSize * cellSize) / 2;
+
+            // Draw multiple arrows based on direction
+            const drawArrow = (x, y, angle) => {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(0, -arrowSize);
+                ctx.lineTo(-arrowSize / 2, arrowSize / 2);
+                ctx.lineTo(arrowSize / 2, arrowSize / 2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            };
+
+            // Draw 3 arrows on the source side
+            if (windDir === 'down') {
+                // Wind from top
+                drawArrow(centerX - 30, margin, 0);
+                drawArrow(centerX, margin, 0);
+                drawArrow(centerX + 30, margin, 0);
+            } else if (windDir === 'up') {
+                // Wind from bottom
+                drawArrow(centerX - 30, gridSize * cellSize - margin, Math.PI);
+                drawArrow(centerX, gridSize * cellSize - margin, Math.PI);
+                drawArrow(centerX + 30, gridSize * cellSize - margin, Math.PI);
+            } else if (windDir === 'right') {
+                // Wind from left
+                drawArrow(margin, centerY - 30, Math.PI / 2);
+                drawArrow(margin, centerY, Math.PI / 2);
+                drawArrow(margin, centerY + 30, Math.PI / 2);
+            } else if (windDir === 'left') {
+                // Wind from right
+                drawArrow(gridSize * cellSize - margin, centerY - 30, -Math.PI / 2);
+                drawArrow(gridSize * cellSize - margin, centerY, -Math.PI / 2);
+                drawArrow(gridSize * cellSize - margin, centerY + 30, -Math.PI / 2);
+            }
+
+            ctx.shadowBlur = 0;
+        }
 
         // Highlight Activity
         if (world.reward > 0) {

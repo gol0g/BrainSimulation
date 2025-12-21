@@ -3,10 +3,54 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Neuroscope from './components/Neuroscope';
 import ControlPanel from './components/ControlPanel';
-import { Activity } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight } from 'lucide-react';
 import WorldMap from './components/WorldMap';
 
 const API_URL = 'http://localhost:8000';
+
+// Collapsible Section Component
+const CollapsibleSection = ({ title, icon, children, defaultOpen = false, color = '#888' }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div style={{ marginBottom: '8px' }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          padding: '8px 12px', background: '#0a0a0a', borderRadius: '6px',
+          cursor: 'pointer', border: '1px solid #222',
+          transition: 'all 0.2s'
+        }}
+      >
+        {isOpen ? <ChevronDown size={14} color={color} /> : <ChevronRight size={14} color={color} />}
+        <span style={{ fontSize: '0.75rem', color, fontWeight: 'bold' }}>{icon} {title}</span>
+      </div>
+      {isOpen && (
+        <div style={{
+          padding: '12px', background: '#0a0a0a',
+          borderRadius: '0 0 6px 6px', borderTop: 'none',
+          border: '1px solid #222', borderTop: 'none', marginTop: '-1px'
+        }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Compact Bar Component
+const CompactBar = ({ label, value, max = 1, color, showPercent = true, warning = false }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+    <div style={{ width: '55px', fontSize: '0.55rem', color: warning ? '#ff3e3e' : color }}>{label}</div>
+    <div style={{ flex: 1, height: '8px', background: '#111', borderRadius: '4px', overflow: 'hidden' }}>
+      <div style={{
+        height: '100%', width: `${(value / max) * 100}%`,
+        background: warning ? '#ff3e3e' : color, transition: 'width 0.2s', borderRadius: '4px'
+      }} />
+    </div>
+    {showPercent && <div style={{ width: '28px', fontSize: '0.55rem', color, textAlign: 'right' }}>{Math.round(value * 100)}%</div>}
+  </div>
+);
 
 function App() {
   const [neuronData, setNeuronData] = useState({
@@ -17,13 +61,18 @@ function App() {
   });
   const [synapses, setSynapses] = useState([]);
   const [worldState, setWorldState] = useState(null);
-  const [agencyState, setAgencyState] = useState(null);  // Agency tracking
-  const [agencyHistory, setAgencyHistory] = useState([]); // Agency level over time
-  const [memoryState, setMemoryState] = useState(null);  // Working Memory tracking
-  const [usingMemory, setUsingMemory] = useState(false); // Memory usage indicator
-  const [attentionState, setAttentionState] = useState(null);  // Attention tracking
-  const [conflictState, setConflictState] = useState(null);  // Value Conflict tracking
-  const [selfModelState, setSelfModelState] = useState(null);  // Self-Model: "What am I?"
+  const [agencyState, setAgencyState] = useState(null);
+  const [memoryState, setMemoryState] = useState(null);
+  const [usingMemory, setUsingMemory] = useState(false);
+  const [attentionState, setAttentionState] = useState(null);
+  const [conflictState, setConflictState] = useState(null);
+  const [selfModelState, setSelfModelState] = useState(null);
+  const [homeostasisState, setHomeostasisState] = useState(null);
+  const [emotionState, setEmotionState] = useState(null);
+  const [imaginationState, setImaginationState] = useState(null);
+  const [actionSource, setActionSource] = useState(null);
+  const [developmentState, setDevelopmentState] = useState(null);
+  const [ltmState, setLtmState] = useState(null);  // Long-term Memory
   const [injectValue, setInjectValue] = useState(0);
   const [neuronParams, setNeuronParams] = useState({ a: 0.02, b: 0.2, c: -65, d: 8 });
   const [noiseLevel, setNoiseLevel] = useState(2.0);
@@ -31,14 +80,15 @@ function App() {
   const [isBursting, setIsBursting] = useState(false);
   const [rewardFlash, setRewardFlash] = useState(false);
   const [deathFlash, setDeathFlash] = useState(false);
-  const [pushFlash, setPushFlash] = useState(false);  // External push indicator
-  const [perturbType, setPerturbType] = useState(null);  // 'wall', 'wind', or null
-  const [windInfo, setWindInfo] = useState(null);  // Wind state from server
+  const [pushFlash, setPushFlash] = useState(false);
+  const [perturbType, setPerturbType] = useState(null);
+  const [windInfo, setWindInfo] = useState(null);
 
   const injectRef = useRef(injectValue);
   injectRef.current = injectValue;
   const noiseRef = useRef(noiseLevel);
   noiseRef.current = noiseLevel;
+  const isFetchingRef = useRef(false);
 
   useEffect(() => {
     const intervalId = setInterval(fetchStep, 50);
@@ -50,117 +100,59 @@ function App() {
     setIsBursting(true);
     const originalValue = injectValue;
     const pulse = (count) => {
-      if (count <= 0) {
-        setInjectValue(originalValue);
-        setIsBursting(false);
-        return;
-      }
+      if (count <= 0) { setInjectValue(originalValue); setIsBursting(false); return; }
       setInjectValue(20);
-      setTimeout(() => {
-        setInjectValue(0);
-        setTimeout(() => pulse(count - 1), 150);
-      }, 150);
+      setTimeout(() => { setInjectValue(0); setTimeout(() => pulse(count - 1), 150); }, 150);
     };
     pulse(3);
   };
 
   const fetchStep = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const res = await axios.post(`${API_URL}/network/step`, {
-        currents: { "s_up": injectRef.current },
-        noise_level: noiseRef.current
+        currents: { "s_up": injectRef.current }, noise_level: noiseRef.current
       });
-
       if (status !== "ONLINE") setStatus("ONLINE");
       const { trajectories, synapses: synData, world } = res.data;
-
-      if (world && world.reward > 0) {
-        setRewardFlash(true);
-        setTimeout(() => setRewardFlash(false), 300);
-      }
-
-      if (world && world.died) {
-        setDeathFlash(true);
-        setTimeout(() => setDeathFlash(false), 1000);
-      }
-
+      if (world && world.reward > 0) { setRewardFlash(true); setTimeout(() => setRewardFlash(false), 300); }
+      if (world && world.died) { setDeathFlash(true); setTimeout(() => setDeathFlash(false), 1000); }
       setNeuronData(prev => {
         const updated = { ...prev };
         Object.keys(updated).forEach(nid => {
           if (trajectories[nid]) {
-            const newPoints = trajectories[nid].map((pt, i) => ({
-              t: Date.now() + i, v: pt.v, fired: pt.fired
-            }));
+            const newPoints = trajectories[nid].map((pt, i) => ({ t: Date.now() + i, v: pt.v, fired: pt.fired }));
             const arr = [...prev[nid], ...newPoints];
             updated[nid] = arr.length > 300 ? arr.slice(-300) : arr;
           }
         });
         return updated;
       });
-
       if (synData) setSynapses(synData);
       if (world) setWorldState(world);
-
-      // Update agency state
-      if (res.data.agency) {
-        setAgencyState(res.data.agency);
-        setAgencyHistory(prev => {
-          const newHistory = [...prev, res.data.agency.agency_level];
-          return newHistory.length > 100 ? newHistory.slice(-100) : newHistory;
-        });
-      }
-
-      // External perturbation flash (wall or wind)
+      if (res.data.agency) setAgencyState(res.data.agency);
       if (res.data.was_perturbed) {
-        setPushFlash(true);
-        setPerturbType(res.data.perturb_type);
-        setTimeout(() => {
-          setPushFlash(false);
-          setPerturbType(null);
-        }, 500);
+        setPushFlash(true); setPerturbType(res.data.perturb_type);
+        setTimeout(() => { setPushFlash(false); setPerturbType(null); }, 500);
       }
-
-      // Update wind info
-      if (res.data.world && res.data.world.wind) {
-        setWindInfo(res.data.world.wind);
-      }
-
-      // Update working memory state
-      if (res.data.memory) {
-        setMemoryState(res.data.memory);
-      }
-      if (res.data.using_memory !== undefined) {
-        setUsingMemory(res.data.using_memory);
-      }
-
-      // Update attention state
-      if (res.data.attention) {
-        setAttentionState(res.data.attention);
-      }
-
-      // Update conflict state
-      if (res.data.conflict) {
-        setConflictState(res.data.conflict);
-      }
-
-      // Update self-model state
-      if (res.data.self_model) {
-        setSelfModelState(res.data.self_model);
-      }
+      if (res.data.world?.wind) setWindInfo(res.data.world.wind);
+      if (res.data.memory) setMemoryState(res.data.memory);
+      if (res.data.using_memory !== undefined) setUsingMemory(res.data.using_memory);
+      if (res.data.attention) setAttentionState(res.data.attention);
+      if (res.data.conflict) setConflictState(res.data.conflict);
+      if (res.data.self_model) setSelfModelState(res.data.self_model);
+      if (res.data.homeostasis) setHomeostasisState(res.data.homeostasis);
+      if (res.data.emotion) setEmotionState(res.data.emotion);
+      if (res.data.imagination) setImaginationState(res.data.imagination);
+      if (res.data.action_source) setActionSource(res.data.action_source);
+      if (res.data.development) setDevelopmentState(res.data.development);
+      if (res.data.long_term_memory) setLtmState(res.data.long_term_memory);
     } catch (error) {
       if (status !== "OFFLINE") setStatus("OFFLINE");
+    } finally {
+      isFetchingRef.current = false;
     }
-  };
-
-  // External push handler
-  const handlePush = async (direction) => {
-    try {
-      const res = await axios.post(`${API_URL}/agency/push?direction=${direction}`);
-      if (res.data.agency) {
-        setAgencyState(res.data.agency);
-        setAgencyHistory(prev => [...prev, res.data.agency.agency_level].slice(-100));
-      }
-    } catch (e) { console.error(e); }
   };
 
   const handleReset = async () => {
@@ -171,831 +163,523 @@ function App() {
     } catch (e) { }
   };
 
-  const sensoryNeurons = [
-    { id: "s_up", label: "SENSE UP", color: "#00ff88" },
-    { id: "s_down", label: "SENSE DOWN", color: "#00ff88" },
-    { id: "s_left", label: "SENSE LEFT", color: "#00ff88" },
-    { id: "s_right", label: "SENSE RIGHT", color: "#00ff88" },
-  ];
+  // Get emotion emoji
+  const getEmotionEmoji = () => {
+    if (!emotionState) return '😐';
+    const e = emotionState.dominant;
+    return e === 'fear' ? '😨' : e === 'pain' ? '😵' : e === 'anxiety' ? '😰' :
+           e === 'satisfaction' ? '😊' : e === 'relief' ? '😌' : e === 'curiosity' ? '🧐' : '😐';
+  };
 
-  const hiddenNeurons = [
-    { id: "h_up", label: "HIDDEN UP", color: "#00f3ff" },
-    { id: "h_down", label: "HIDDEN DOWN", color: "#00f3ff" },
-    { id: "h_left", label: "HIDDEN LEFT", color: "#00f3ff" },
-    { id: "h_right", label: "HIDDEN RIGHT", color: "#00f3ff" },
-  ];
-
-  const actionNeurons = [
-    { id: "a_up", label: "ACT UP", color: "#bc13fe" },
-    { id: "a_down", label: "ACT DOWN", color: "#bc13fe" },
-    { id: "a_left", label: "ACT LEFT", color: "#bc13fe" },
-    { id: "a_right", label: "ACT RIGHT", color: "#bc13fe" },
-  ];
-
-  const gabaNeuron = { id: "gaba", label: "GABA", color: "#ff3e3e" };
-
-  const pushButtonStyle = {
-    width: '32px', height: '32px',
-    background: '#222', border: '1px solid #444',
-    color: '#ff6b00', fontWeight: 'bold', cursor: 'pointer',
-    borderRadius: '4px', fontSize: '1rem',
-    transition: 'all 0.2s',
+  // Get action source text
+  const getActionSourceText = () => {
+    if (!actionSource) return '?';
+    return actionSource === 'imagine' ? '상상' : actionSource === 'snn+imagine' ? '혼합' :
+           actionSource === 'snn' ? '반사' : actionSource === 'explore' ? '탐험' : '랜덤';
   };
 
   const renderNeuronGraph = (n) => (
-    <div key={n.id} style={{ marginBottom: '10px' }}>
-      <div style={{ fontSize: '0.6rem', color: n.color, fontWeight: 'bold', marginBottom: '3px' }}>{n.label}</div>
-      <Neuroscope dataPoints={neuronData[n.id]} color={n.color} height={60} />
+    <div key={n.id} style={{ marginBottom: '6px' }}>
+      <div style={{ fontSize: '0.5rem', color: n.color, fontWeight: 'bold', marginBottom: '2px' }}>{n.label}</div>
+      <Neuroscope dataPoints={neuronData[n.id]} color={n.color} height={40} />
     </div>
   );
 
   return (
     <div style={{
-      maxWidth: '1600px', margin: '0 auto', padding: '20px',
+      maxWidth: '1400px', margin: '0 auto', padding: '10px',
       transition: 'background-color 0.3s ease',
       backgroundColor: deathFlash ? 'rgba(255, 62, 62, 0.15)' :
                        pushFlash ? 'rgba(255, 107, 0, 0.15)' :
                        (rewardFlash ? 'rgba(0, 255, 136, 0.05)' : 'transparent')
     }}>
-      {/* Header */}
+      {/* Compact Header */}
       <header style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: '20px', borderBottom: '1px solid #333', paddingBottom: '15px'
+        marginBottom: '10px', padding: '8px 15px', background: '#0a0a0a',
+        borderRadius: '8px', border: '1px solid #222'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <img src="/neuron_no_background.png" alt="Mascot" style={{ width: '60px' }} />
-          <h1 style={{ margin: 0, letterSpacing: '2px', fontSize: '1.6rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
             PROJECT <span style={{ color: '#00f3ff' }}>GENESIS</span>
+          </span>
+          {developmentState && (
             <span style={{
-              fontSize: '0.7rem',
-              color: deathFlash ? '#ff3e3e' : (rewardFlash ? '#00ff88' : '#888'),
-              marginLeft: '10px', transition: 'color 0.3s'
+              padding: '2px 8px', borderRadius: '4px', fontSize: '0.65rem',
+              background: developmentState.phase === 'infant' ? '#ff6b0033' : '#00ff8833',
+              color: developmentState.phase === 'infant' ? '#ff6b00' : '#00ff88',
             }}>
-              PHASE 9 (VALUE CONFLICT)
-              {deathFlash && " [!!!] AGENT DIED - RESETTING..."}
-              {pushFlash && perturbType === 'wall' && " 🧱 WALL HIT!"}
-              {pushFlash && perturbType === 'wind' && " 💨 WIND PUSH!"}
-              {windInfo?.active && !pushFlash && ` 🌬️ WIND:${windInfo.direction?.toUpperCase()}`}
-              {conflictState?.in_conflict && " ⚖️ CONFLICT!"}
-              {attentionState?.mode === 'FOCUSED' && attentionState?.focus && !conflictState?.in_conflict && ` 👁️ ${attentionState.focus.toUpperCase()}`}
-              {rewardFlash && " +DOPAMINE SPIKE+"}
+              {developmentState.phase === 'infant' ? '👶 INFANT' : '🧑 ADULT'}
+              {developmentState.phase === 'infant' && ` ${Math.round(developmentState.progress * 100)}%`}
             </span>
-          </h1>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          {worldState && (
-            <div style={{ display: 'flex', gap: '15px', fontSize: '0.8rem', fontFamily: 'monospace' }}>
-              <span style={{
-                color: worldState.energy < 20 ? '#ff3e3e' : '#ff6b00',
-                fontWeight: worldState.energy < 20 ? 'bold' : 'normal'
-              }}>
-                ENERGY: {worldState.energy.toFixed(1)}%
-              </span>
-              <span style={{ color: worldState.reward > 0 ? '#00ff88' : (worldState.reward < 0 ? '#ff3e3e' : '#888') }}>
-                LAST REWARD: {worldState.reward.toFixed(1)}
-              </span>
-            </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderLeft: '1px solid #333', paddingLeft: '15px' }}>
-            <Activity size={16} color={status === "ONLINE" ? "#0f0" : "#f00"} />
-            <span style={{ color: status === "ONLINE" ? "#0f0" : "#f00", fontFamily: 'monospace', fontSize: '0.8rem' }}>{status}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', fontSize: '0.75rem' }}>
+          {worldState && (
+            <>
+              <span style={{ color: worldState.energy < 20 ? '#ff3e3e' : '#ff6b00' }}>
+                ⚡ {worldState.energy.toFixed(0)}%
+              </span>
+              <span style={{ color: worldState.reward > 0 ? '#00ff88' : worldState.reward < 0 ? '#ff3e3e' : '#666' }}>
+                R: {worldState.reward > 0 ? '+' : ''}{worldState.reward.toFixed(1)}
+              </span>
+            </>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Activity size={12} color={status === "ONLINE" ? "#0f0" : "#f00"} />
+            <span style={{ color: status === "ONLINE" ? "#0f0" : "#f00", fontSize: '0.7rem' }}>{status}</span>
           </div>
         </div>
       </header>
 
-      {/* Agency Panel */}
-      {agencyState && (
-        <div className="sci-fi-border" style={{
-          padding: '15px', background: '#0a0a0a', marginBottom: '20px',
-          display: 'grid', gridTemplateColumns: '200px 1fr 200px', gap: '20px', alignItems: 'center'
-        }}>
-          {/* Agency Level Display */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '5px' }}>SELF-AGENCY</div>
-            <div style={{
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              color: agencyState.agency_level > 0.7 ? '#00ff88' :
-                     agencyState.agency_level > 0.4 ? '#ff6b00' : '#ff3e3e',
-              fontFamily: 'monospace'
-            }}>
-              {(agencyState.agency_level * 100).toFixed(0)}%
-            </div>
-            <div style={{
-              fontSize: '0.8rem',
-              color: agencyState.interpretation === 'SELF_CAUSED' ? '#00ff88' :
-                     agencyState.interpretation === 'EXTERNAL_PUSH' ? '#ff3e3e' : '#ff6b00',
-              fontWeight: 'bold'
-            }}>
-              {agencyState.interpretation === 'SELF_CAUSED' ? '✓ 내가 했다' :
-               agencyState.interpretation === 'EXTERNAL_PUSH' ? '⚠ 외부 힘' : '? 불확실'}
-            </div>
+      {/* Main Content - 3 Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 280px', gap: '12px' }}>
+
+        {/* Left Column - World & Core Status */}
+        <div>
+          {/* World Map */}
+          <div style={{ marginBottom: '12px' }}>
+            <WorldMap world={worldState} />
           </div>
 
-          {/* Agency History Graph */}
-          <div style={{ height: '60px', position: 'relative', background: '#111', borderRadius: '4px', overflow: 'hidden' }}>
-            <svg width="100%" height="100%" preserveAspectRatio="none">
-              {/* Threshold lines */}
-              <line x1="0" y1="18" x2="100%" y2="18" stroke="#333" strokeDasharray="4,4" />
-              <line x1="0" y1="36" x2="100%" y2="36" stroke="#333" strokeDasharray="4,4" />
-              {/* Agency line */}
-              <polyline
-                fill="none"
-                stroke="#00f3ff"
-                strokeWidth="2"
-                points={agencyHistory.map((v, i) =>
-                  `${(i / Math.max(agencyHistory.length - 1, 1)) * 100}%,${60 - v * 60}`
-                ).join(' ')}
-              />
-            </svg>
-            <div style={{ position: 'absolute', top: '2px', left: '5px', fontSize: '0.6rem', color: '#666' }}>
-              AGENCY HISTORY
+          {/* Agent Mind - Always Visible */}
+          <div style={{
+            padding: '15px', background: '#0a0a0a', borderRadius: '8px',
+            border: '1px solid #222', textAlign: 'center', marginBottom: '12px'
+          }}>
+            {/* Emotion, Thinking & Remembering */}
+            <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '12px' }}>
+              <div>
+                <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '3px' }}>FEELING</div>
+                <div style={{ fontSize: '1.8rem' }}>{getEmotionEmoji()}</div>
+                <div style={{ fontSize: '0.6rem', color: '#aaa' }}>{emotionState?.description || '-'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '3px' }}>THINKING</div>
+                <div style={{ fontSize: '1.8rem' }}>🤔</div>
+                <div style={{ fontSize: '0.6rem', color: '#00f3ff' }}>{imaginationState?.reason || '...'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '3px' }}>REMEMBER</div>
+                <div style={{ fontSize: '1.8rem' }}>{ltmState?.has_recall ? '💭' : '○'}</div>
+                <div style={{ fontSize: '0.6rem', color: ltmState?.has_recall ? '#ffcc00' : '#555' }}>
+                  {ltmState?.recall_reason || '-'}
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* External Push Buttons */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '8px' }}>EXTERNAL PUSH TEST</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px', maxWidth: '120px', margin: '0 auto' }}>
-              <div></div>
-              <button onClick={() => handlePush('up')} style={pushButtonStyle}>↑</button>
-              <div></div>
-              <button onClick={() => handlePush('left')} style={pushButtonStyle}>←</button>
-              <div style={{ fontSize: '0.6rem', color: '#666', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>PUSH</div>
-              <button onClick={() => handlePush('right')} style={pushButtonStyle}>→</button>
-              <div></div>
-              <button onClick={() => handlePush('down')} style={pushButtonStyle}>↓</button>
-              <div></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Attention Panel */}
-      {attentionState && (
-        <div className="sci-fi-border" style={{
-          padding: '15px', background: '#0a0a0a', marginBottom: '20px',
-          display: 'grid', gridTemplateColumns: '150px 1fr 1fr 150px', gap: '15px', alignItems: 'center'
-        }}>
-          {/* Attention Mode Display */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '5px' }}>ATTENTION</div>
-            <div style={{
-              fontSize: '1.8rem',
-              fontWeight: 'bold',
-              color: attentionState.mode === 'FOCUSED' ? '#ff6b00' : '#00f3ff',
-              fontFamily: 'monospace'
-            }}>
-              {attentionState.mode === 'FOCUSED' ? '◉' : '○'}
-            </div>
-            <div style={{
-              fontSize: '0.75rem',
-              color: attentionState.mode === 'FOCUSED' ? '#ff6b00' : '#00f3ff',
-              fontWeight: 'bold'
-            }}>
-              {attentionState.mode === 'FOCUSED' ? '집중' : '확산'}
-            </div>
-            {attentionState.focus && (
+            {/* Action Decision */}
+            {imaginationState && (
               <div style={{
-                fontSize: '0.7rem',
-                color: '#ffcc00',
-                marginTop: '5px'
+                display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', marginBottom: '10px'
               }}>
-                → {attentionState.focus.toUpperCase()}
+                {['up', 'down', 'left', 'right'].map(dir => {
+                  const score = imaginationState.scores?.[dir] || 0;
+                  const isBest = imaginationState.best_action === dir;
+                  return (
+                    <div key={dir} style={{
+                      padding: '4px', borderRadius: '4px', fontSize: '0.6rem',
+                      background: isBest ? '#002200' : '#111',
+                      border: isBest ? '1px solid #00ff88' : '1px solid #333',
+                      color: isBest ? '#00ff88' : '#666'
+                    }}>
+                      {dir === 'up' ? '↑' : dir === 'down' ? '↓' : dir === 'left' ? '←' : '→'}
+                      {isBest && ' ✓'}
+                      <div style={{ fontSize: '0.5rem' }}>{score.toFixed(1)}</div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </div>
 
-          {/* Attention Weights - Visual Bars */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-            {['up', 'down', 'left', 'right'].map(dir => {
-              const weight = attentionState.weights?.[dir] || 1.0;
-              const isFocused = attentionState.focus === dir;
-              const isAmplified = weight > 1.0;
-              const isSuppressed = weight < 1.0;
-              return (
-                <div key={dir} style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontSize: '0.6rem',
-                    color: isFocused ? '#ffcc00' : (isAmplified ? '#00ff88' : (isSuppressed ? '#ff6b00' : '#666')),
-                    fontWeight: isFocused ? 'bold' : 'normal',
-                    marginBottom: '4px'
-                  }}>
-                    {dir.toUpperCase()} {isFocused && '★'}
-                  </div>
-                  <div style={{
-                    height: '30px',
-                    background: '#111',
-                    borderRadius: '3px',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: isFocused ? '1px solid #ffcc00' : '1px solid #222'
-                  }}>
-                    {/* Baseline (1.0) marker */}
-                    <div style={{
-                      position: 'absolute',
-                      bottom: '40%',
-                      left: 0,
-                      right: 0,
-                      height: '1px',
-                      background: '#444'
-                    }} />
-                    {/* Weight bar */}
-                    <div style={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: `${Math.min(100, (weight / 2.5) * 100)}%`,
-                      background: isFocused ? 'linear-gradient(to top, #ff6b00, #ffcc00)' :
-                                 isAmplified ? 'linear-gradient(to top, #006600, #00ff88)' :
-                                 isSuppressed ? 'linear-gradient(to top, #662200, #ff6b00)' :
-                                 '#555',
-                      transition: 'height 0.15s ease-out',
-                      borderRadius: '2px'
-                    }} />
-                  </div>
-                  <div style={{
-                    fontSize: '0.6rem',
-                    color: weight > 1.0 ? '#00ff88' : (weight < 1.0 ? '#ff6b00' : '#666'),
-                    marginTop: '2px',
-                    fontFamily: 'monospace'
-                  }}>
-                    {weight.toFixed(2)}x
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Salience - What's "interesting" */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-            {['up', 'down', 'left', 'right'].map(dir => {
-              const salience = attentionState.salience?.[dir] || 0;
-              const isHigh = salience > 0.3;
-              return (
-                <div key={dir} style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontSize: '0.55rem',
-                    color: isHigh ? '#bc13fe' : '#555',
-                    marginBottom: '3px'
-                  }}>
-                    SAL
-                  </div>
-                  <div style={{
-                    height: '20px',
-                    background: '#111',
-                    borderRadius: '3px',
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: `${salience * 100}%`,
-                      background: isHigh ? 'linear-gradient(to top, #6600aa, #bc13fe)' : '#333',
-                      transition: 'height 0.1s ease-out'
-                    }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Focus Strength & Width */}
-          <div style={{ textAlign: 'center', borderLeft: '1px solid #333', paddingLeft: '15px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '0.6rem', color: '#888' }}>FOCUS STR</div>
-              <div style={{
-                fontSize: '1.2rem',
-                fontWeight: 'bold',
-                color: attentionState.strength > 0.5 ? '#ffcc00' : '#666',
-                fontFamily: 'monospace'
+            {/* Action Source */}
+            <div style={{
+              display: 'flex', justifyContent: 'center', gap: '10px', fontSize: '0.6rem'
+            }}>
+              <span style={{ color: '#888' }}>결정:</span>
+              <span style={{
+                color: actionSource === 'snn' ? '#00ff88' : actionSource === 'imagine' ? '#bc13fe' :
+                       actionSource === 'snn+imagine' ? '#00f3ff' : '#ffcc00',
+                fontWeight: 'bold'
               }}>
-                {(attentionState.strength * 100).toFixed(0)}%
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.6rem', color: '#888' }}>WIDTH</div>
-              <div style={{
-                width: '60px',
-                height: '8px',
-                background: '#111',
-                borderRadius: '4px',
-                margin: '5px auto',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: `${attentionState.width * 100}%`,
-                  height: '100%',
-                  background: attentionState.width < 0.5 ? '#ff6b00' : '#00f3ff',
-                  borderRadius: '4px',
-                  transition: 'width 0.2s ease-out'
-                }} />
-              </div>
-              <div style={{
-                fontSize: '0.6rem',
-                color: attentionState.width < 0.5 ? '#ff6b00' : '#00f3ff'
-              }}>
-                {attentionState.width < 0.3 ? '좁음' : attentionState.width < 0.7 ? '중간' : '넓음'}
-              </div>
+                {getActionSourceText()}
+              </span>
+              <span style={{ color: '#666' }}>|</span>
+              <span style={{ color: '#888' }}>신뢰도:</span>
+              <span style={{ color: '#bc13fe' }}>{Math.round((imaginationState?.confidence || 0) * 100)}%</span>
             </div>
           </div>
+
+          {/* Learning Progress - Always Visible */}
+          {emotionState?.learned && (
+            <div style={{
+              padding: '10px', background: '#0a0a0a', borderRadius: '8px',
+              border: '1px solid #222', marginBottom: '12px'
+            }}>
+              <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: '8px' }}>학습된 연관</div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.55rem', color: '#ff3e3e', marginBottom: '2px' }}>🔴 위험 ({emotionState.learned.pain_experiences || 0}회)</div>
+                  <div style={{ height: '6px', background: '#111', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${(emotionState.learned.predator_fear || 0) * 100}%`, background: '#ff3e3e' }} />
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.55rem', color: '#00ff88', marginBottom: '2px' }}>🟢 음식 ({emotionState.learned.food_experiences || 0}회)</div>
+                  <div style={{ height: '6px', background: '#111', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${(emotionState.learned.food_seeking || 0) * 100}%`, background: '#00ff88' }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
 
-      {/* Value Conflict Panel */}
-      {conflictState && (
-        <div className="sci-fi-border" style={{
-          padding: '15px', background: '#0a0a0a', marginBottom: '20px',
-          display: 'grid', gridTemplateColumns: '120px 1fr 1fr 150px', gap: '20px', alignItems: 'center'
-        }}>
-          {/* Conflict Level Gauge */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '5px' }}>CONFLICT</div>
-            <div style={{
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              color: conflictState.in_conflict ? '#ff6b00' : '#555',
-              fontFamily: 'monospace'
-            }}>
-              {conflictState.in_conflict ? '⚖️' : '○'}
-            </div>
-            <div style={{
-              fontSize: '0.8rem',
-              color: conflictState.in_conflict ? '#ff6b00' : '#555',
-              fontWeight: 'bold'
-            }}>
-              {conflictState.in_conflict ? '갈등!' : '없음'}
-            </div>
-            <div style={{
-              fontSize: '0.65rem',
-              color: '#888',
-              marginTop: '3px'
-            }}>
-              {(conflictState.conflict * 100).toFixed(0)}%
-            </div>
-          </div>
-
-          {/* Hesitation & Conflict Bar */}
-          <div>
-            <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: '5px' }}>HESITATION</div>
-            <div style={{
-              height: '25px',
-              background: '#111',
-              borderRadius: '4px',
-              position: 'relative',
-              overflow: 'hidden',
-              border: conflictState.hesitation > 0.3 ? '1px solid #ff6b0066' : '1px solid #222'
-            }}>
-              <div style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: `${conflictState.hesitation * 100}%`,
-                background: conflictState.hesitation > 0.5 ?
-                  'linear-gradient(to right, #ff3e3e, #ff6b00)' :
-                  'linear-gradient(to right, #444, #ff6b00)',
-                transition: 'width 0.2s ease-out'
-              }} />
-              <div style={{
-                position: 'absolute',
-                left: '5px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                fontSize: '0.6rem',
-                color: '#fff',
-                textShadow: '1px 1px 2px #000'
-              }}>
-                {conflictState.hesitation > 0.5 ? '망설이는 중...' : ''}
+        {/* Center Column - Collapsible Details */}
+        <div>
+          {/* Body: Homeostasis & Drives */}
+          <CollapsibleSection title="BODY (항상성)" icon="🫀" color="#ff6b6b">
+            {homeostasisState && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>내부 상태</div>
+                  <CompactBar label="ENERGY" value={homeostasisState.states?.energy || 0} color="#00ff88" warning={homeostasisState.critical?.starving} />
+                  <CompactBar label="HEALTH" value={homeostasisState.states?.health || 0} color="#ff6b6b" warning={homeostasisState.critical?.injured} />
+                  <CompactBar label="SAFETY" value={homeostasisState.states?.safety || 0} color="#00f3ff" warning={homeostasisState.critical?.in_danger} />
+                  <CompactBar label="FATIGUE" value={homeostasisState.states?.fatigue || 0} color="#bc13fe" warning={homeostasisState.critical?.exhausted} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>욕구 (Drives)</div>
+                  <CompactBar label="HUNGER" value={homeostasisState.drives?.hunger || 0} color="#ff6b00" />
+                  <CompactBar label="SAFETY" value={homeostasisState.drives?.safety || 0} color="#ff3e3e" />
+                  <CompactBar label="REST" value={homeostasisState.drives?.rest || 0} color="#bc13fe" />
+                  {homeostasisState.pain > 0 && (
+                    <div style={{ marginTop: '8px', color: '#ff0000', fontSize: '0.65rem', fontWeight: 'bold' }}>
+                      🩸 고통! {Math.round(homeostasisState.pain * 100)}%
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+          </CollapsibleSection>
 
-            <div style={{
-              marginTop: '8px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: '0.6rem'
-            }}>
-              <span style={{ color: '#00ff88' }}>
-                즉시 보상 (●)
-              </span>
-              <span style={{ color: '#ffcc00' }}>
-                지연 보상 (★)
-              </span>
-            </div>
-          </div>
+          {/* Mind: Emotions */}
+          <CollapsibleSection title="MIND (감정)" icon="💭" color="#bc13fe">
+            {emotionState && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>부정 감정</div>
+                  <CompactBar label="😨 FEAR" value={emotionState.emotions?.fear || 0} color="#ff3e3e" />
+                  <CompactBar label="😵 PAIN" value={emotionState.emotions?.pain || 0} color="#ff0000" />
+                  <CompactBar label="😰 ANXIETY" value={emotionState.emotions?.anxiety || 0} color="#ff6b00" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>긍정 감정</div>
+                  <CompactBar label="😊 SATISFY" value={emotionState.emotions?.satisfaction || 0} color="#00ff88" />
+                  <CompactBar label="😌 RELIEF" value={emotionState.emotions?.relief || 0} color="#00f3ff" />
+                  <CompactBar label="🧐 CURIOUS" value={emotionState.emotions?.curiosity || 0} color="#bc13fe" />
+                </div>
+              </div>
+            )}
+          </CollapsibleSection>
 
-          {/* Regret / Satisfaction */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.65rem', color: '#888', marginBottom: '5px' }}>
-              {conflictState.regret > 0 ? 'REGRET' : 'SATISFACTION'}
-            </div>
-            <div style={{
-              height: '50px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
-            }}>
-              {conflictState.regret > 0.1 ? (
-                <div style={{
-                  fontSize: '1.5rem',
-                  color: '#ff3e3e'
-                }}>
-                  😔 {(conflictState.regret * 100).toFixed(0)}%
+          {/* Self-Model */}
+          <CollapsibleSection title="SELF (자기인식)" icon="🪞" color="#00f3ff">
+            {selfModelState && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div>
+                  <CompactBar label="CONF" value={selfModelState.state?.confidence || 0} color="#00ff88" />
+                  <CompactBar label="UNCERT" value={selfModelState.state?.uncertainty || 0} color="#ff6b00" />
+                  <CompactBar label="EFFORT" value={selfModelState.state?.effort || 0} color="#bc13fe" />
                 </div>
-              ) : conflictState.satisfaction > 0.1 ? (
-                <div style={{
-                  fontSize: '1.5rem',
-                  color: '#00ff88'
-                }}>
-                  😊 {(conflictState.satisfaction * 100).toFixed(0)}%
+                <div>
+                  <CompactBar label="EXPLORE" value={selfModelState.state?.exploration_need || 0} color="#00f3ff" />
+                  <CompactBar label="STABLE" value={selfModelState.state?.stability || 0} color="#888" />
+                  <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                    <span style={{
+                      fontSize: '0.7rem', padding: '3px 8px', borderRadius: '4px',
+                      background: '#111', color: selfModelState.behavioral_label === 'CONFIDENT' ? '#00ff88' :
+                                               selfModelState.behavioral_label === 'EXPLORING' ? '#00f3ff' :
+                                               selfModelState.behavioral_label === 'STRUGGLING' ? '#ff6b00' : '#888'
+                    }}>
+                      {selfModelState.behavioral_label}
+                    </span>
+                  </div>
                 </div>
-              ) : (
-                <div style={{
-                  fontSize: '1.2rem',
-                  color: '#555'
-                }}>
-                  😐
+              </div>
+            )}
+          </CollapsibleSection>
+
+          {/* Agency & Attention */}
+          <CollapsibleSection title="AGENCY (주체성)" icon="🎯" color="#ffcc00">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              {agencyState && (
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>자기 주체감</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      fontSize: '1.5rem', fontWeight: 'bold',
+                      color: agencyState.agency_level > 0.7 ? '#00ff88' : agencyState.agency_level > 0.4 ? '#ff6b00' : '#ff3e3e'
+                    }}>
+                      {Math.round(agencyState.agency_level * 100)}%
+                    </div>
+                    <div style={{
+                      fontSize: '0.6rem',
+                      color: agencyState.interpretation === 'SELF_CAUSED' ? '#00ff88' : '#ff3e3e'
+                    }}>
+                      {agencyState.interpretation === 'SELF_CAUSED' ? '✓ 내가 함' : '⚠ 외부 힘'}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {attentionState && (
+                <div>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>주의 집중</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{
+                      fontSize: '1.2rem',
+                      color: attentionState.mode === 'FOCUSED' ? '#ff6b00' : '#00f3ff'
+                    }}>
+                      {attentionState.mode === 'FOCUSED' ? '◉' : '○'}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: '#aaa' }}>
+                      {attentionState.focus ? `→ ${attentionState.focus.toUpperCase()}` : '확산'}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
-            {conflictState.last_choice && (
-              <div style={{
-                fontSize: '0.6rem',
-                color: conflictState.last_choice === 'large' ? '#ffcc00' : '#00ff88'
-              }}>
-                마지막: {conflictState.last_choice === 'large' ? '★ 큰 보상' : '● 작은 보상'}
+          </CollapsibleSection>
+
+          {/* Working Memory */}
+          <CollapsibleSection title="MEMORY (작업기억)" icon="🧠" color="#00f3ff">
+            {memoryState && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {['up', 'down', 'left', 'right'].map(dir => {
+                  const mem = memoryState[`m_${dir}`];
+                  const activity = mem?.activity || 0;
+                  const isStrongest = memoryState.strongest === dir;
+                  return (
+                    <div key={dir} style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.55rem', color: isStrongest ? '#ffcc00' : '#666' }}>
+                        {dir.toUpperCase()} {isStrongest && '★'}
+                      </div>
+                      <div style={{
+                        height: '30px', background: '#111', borderRadius: '4px',
+                        position: 'relative', overflow: 'hidden', marginTop: '3px'
+                      }}>
+                        <div style={{
+                          position: 'absolute', bottom: 0, left: 0, right: 0,
+                          height: `${activity * 100}%`,
+                          background: isStrongest ? '#ffcc00' : '#00f3ff',
+                          transition: 'height 0.1s'
+                        }} />
+                      </div>
+                      <div style={{ fontSize: '0.5rem', color: '#666', marginTop: '2px' }}>
+                        {Math.round(activity * 100)}%
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </div>
+          </CollapsibleSection>
 
-          {/* Statistics */}
-          <div style={{
-            borderLeft: '1px solid #333',
-            paddingLeft: '15px',
-            fontSize: '0.65rem',
-            color: '#888'
-          }}>
-            <div style={{ marginBottom: '5px' }}>
-              <span style={{ color: '#555' }}>총 갈등:</span>{' '}
-              <span style={{ color: '#ff6b00' }}>{conflictState.stats?.total_conflicts || 0}</span>
+          {/* Long-term Memory */}
+          <CollapsibleSection title="LTM (장기기억)" icon="📚" color="#ffcc00">
+            {ltmState && (
+              <div>
+                {/* Memory Stats */}
+                <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: '10px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#ffcc00' }}>
+                      {ltmState.total_memories || 0}
+                    </div>
+                    <div style={{ fontSize: '0.5rem', color: '#888' }}>기억</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#ff3e3e' }}>
+                      {ltmState.outcome_distribution?.pain || 0}
+                    </div>
+                    <div style={{ fontSize: '0.5rem', color: '#888' }}>고통</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#00ff88' }}>
+                      {ltmState.outcome_distribution?.food || 0}
+                    </div>
+                    <div style={{ fontSize: '0.5rem', color: '#888' }}>음식</div>
+                  </div>
+                </div>
+
+                {/* Current Recall */}
+                {ltmState.has_recall && (
+                  <div style={{
+                    padding: '8px', background: '#111', borderRadius: '6px',
+                    border: '1px solid #ffcc0044', marginBottom: '8px'
+                  }}>
+                    <div style={{ fontSize: '0.6rem', color: '#ffcc00', marginBottom: '4px' }}>
+                      💭 현재 recall: {ltmState.recall_count}개
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#fff' }}>
+                      {ltmState.recall_reason}
+                    </div>
+                  </div>
+                )}
+
+                {/* Memory Influence with Details (피드백 #4: 왜 떠올랐는지 표시) */}
+                {ltmState.memory_influence && Object.values(ltmState.memory_influence).some(v => v !== 0) && (
+                  <div>
+                    <div style={{ fontSize: '0.55rem', color: '#888', marginBottom: '4px' }}>기억 영향 (경험 기반)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
+                      {['up', 'down', 'left', 'right'].map(dir => {
+                        const influence = ltmState.memory_influence[dir] || 0;
+                        const details = ltmState.recall_details?.[dir];
+                        const isPositive = influence > 0;
+                        const isNegative = influence < 0;
+                        return (
+                          <div key={dir} style={{
+                            textAlign: 'center', padding: '4px', borderRadius: '4px',
+                            background: isNegative ? '#220000' : isPositive ? '#002200' : '#111',
+                            border: `1px solid ${isNegative ? '#ff3e3e44' : isPositive ? '#00ff8844' : '#333'}`
+                          }}>
+                            <div style={{ fontSize: '0.5rem', color: '#888' }}>
+                              {dir === 'up' ? '↑' : dir === 'down' ? '↓' : dir === 'left' ? '←' : '→'}
+                            </div>
+                            <div style={{
+                              fontSize: '0.7rem', fontWeight: 'bold',
+                              color: isNegative ? '#ff3e3e' : isPositive ? '#00ff88' : '#666'
+                            }}>
+                              {influence > 0 ? '+' : ''}{influence.toFixed(2)}
+                            </div>
+                            {/* Show delta breakdown if available */}
+                            {details && (
+                              <div style={{ fontSize: '0.4rem', color: '#666', marginTop: '2px' }}>
+                                {details.delta_pain > 0 && <span style={{ color: '#ff3e3e' }}>⚡{details.delta_pain.toFixed(2)} </span>}
+                                {details.delta_energy > 0 && <span style={{ color: '#00ff88' }}>+E{details.delta_energy.toFixed(2)} </span>}
+                                {details.delta_energy < 0 && <span style={{ color: '#ff8800' }}>-E{Math.abs(details.delta_energy).toFixed(2)} </span>}
+                                <span style={{ color: '#888' }}>({details.memory_count})</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CollapsibleSection>
+        </div>
+
+        {/* Right Column - Brain (SNN) */}
+        <div>
+          <CollapsibleSection title="BRAIN (신경망)" icon="⚡" color="#00ff88" defaultOpen={true}>
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '0.6rem', color: '#00ff88', marginBottom: '6px' }}>Sensory</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                {[{ id: "s_up", label: "S↑", color: "#00ff88" },
+                  { id: "s_down", label: "S↓", color: "#00ff88" },
+                  { id: "s_left", label: "S←", color: "#00ff88" },
+                  { id: "s_right", label: "S→", color: "#00ff88" }].map(n => (
+                  <div key={n.id}>
+                    <div style={{ fontSize: '0.45rem', color: n.color }}>{n.label}</div>
+                    <Neuroscope dataPoints={neuronData[n.id]} color={n.color} height={25} />
+                  </div>
+                ))}
+              </div>
             </div>
-            <div style={{ marginBottom: '5px' }}>
-              <span style={{ color: '#00ff88' }}>● 즉시 선택:</span>{' '}
-              {conflictState.stats?.chose_small || 0}
-            </div>
-            <div style={{ marginBottom: '5px' }}>
-              <span style={{ color: '#ffcc00' }}>★ 지연 선택:</span>{' '}
-              {conflictState.stats?.chose_large || 0}
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '0.6rem', color: '#00f3ff', marginBottom: '6px' }}>Hidden</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                {[{ id: "h_up", label: "H↑", color: "#00f3ff" },
+                  { id: "h_down", label: "H↓", color: "#00f3ff" },
+                  { id: "h_left", label: "H←", color: "#00f3ff" },
+                  { id: "h_right", label: "H→", color: "#00f3ff" }].map(n => (
+                  <div key={n.id}>
+                    <div style={{ fontSize: '0.45rem', color: n.color }}>{n.label}</div>
+                    <Neuroscope dataPoints={neuronData[n.id]} color={n.color} height={25} />
+                  </div>
+                ))}
+              </div>
             </div>
             <div>
-              <span style={{ color: '#555' }}>평균 후회:</span>{' '}
-              <span style={{ color: '#ff3e3e' }}>
-                {((conflictState.stats?.avg_regret || 0) * 100).toFixed(0)}%
-              </span>
+              <div style={{ fontSize: '0.6rem', color: '#bc13fe', marginBottom: '6px' }}>Action</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                {[{ id: "a_up", label: "A↑", color: "#bc13fe" },
+                  { id: "a_down", label: "A↓", color: "#bc13fe" },
+                  { id: "a_left", label: "A←", color: "#bc13fe" },
+                  { id: "a_right", label: "A→", color: "#bc13fe" }].map(n => (
+                  <div key={n.id}>
+                    <div style={{ fontSize: '0.45rem', color: n.color }}>{n.label}</div>
+                    <Neuroscope dataPoints={neuronData[n.id]} color={n.color} height={25} />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </CollapsibleSection>
 
-      {/* Self-Model Panel - "What kind of being am I?" */}
-      {selfModelState && (
-        <div className="sci-fi-border" style={{
-          padding: '15px', background: '#0a0a0a', marginBottom: '20px',
-          display: 'grid', gridTemplateColumns: '120px 1fr 1fr 150px', gap: '20px', alignItems: 'center'
-        }}>
-          {/* Behavioral State */}
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '5px' }}>SELF-STATE</div>
-            <div style={{
-              fontSize: '1.2rem',
-              fontWeight: 'bold',
-              color: selfModelState.behavioral_label === 'CONFIDENT' ? '#00ff88' :
-                     selfModelState.behavioral_label === 'EXPLORING' ? '#00f3ff' :
-                     selfModelState.behavioral_label === 'STRUGGLING' ? '#ff6b00' :
-                     selfModelState.behavioral_label === 'REACTIVE' ? '#ff3e3e' :
-                     selfModelState.behavioral_label === 'FATIGUED' ? '#bc13fe' : '#888',
-              fontFamily: 'monospace'
-            }}>
-              {selfModelState.behavioral_label === 'CONFIDENT' ? '😎' :
-               selfModelState.behavioral_label === 'EXPLORING' ? '🔍' :
-               selfModelState.behavioral_label === 'STRUGGLING' ? '😰' :
-               selfModelState.behavioral_label === 'REACTIVE' ? '⚡' :
-               selfModelState.behavioral_label === 'FATIGUED' ? '😴' :
-               selfModelState.behavioral_label === 'STABLE' ? '😌' : '🤔'}
+          <CollapsibleSection title="SYNAPSES (가중치)" icon="🔗" color="#ff6b00">
+            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+              {synapses.slice(0, 15).map((syn, i) => (
+                <div key={i} style={{ marginBottom: '4px', fontSize: '0.55rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888' }}>
+                    <span>{syn.pre}→{syn.post}</span>
+                    <span style={{ color: syn.weight > 50 ? '#00ff88' : '#666' }}>{syn.weight.toFixed(1)}</span>
+                  </div>
+                  <div style={{ background: '#111', height: '3px', borderRadius: '2px', marginTop: '1px' }}>
+                    <div style={{
+                      width: `${Math.min(100, (syn.weight / 100) * 100)}%`, height: '100%',
+                      background: syn.weight < 0 ? '#ff3e3e' : '#ff6b00', borderRadius: '2px'
+                    }} />
+                  </div>
+                </div>
+              ))}
             </div>
-            <div style={{
-              fontSize: '0.7rem',
-              color: '#aaa',
-              marginTop: '3px'
-            }}>
-              {selfModelState.behavioral_label}
-            </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Core Self-State Bars */}
-          <div style={{ display: 'grid', gridTemplateRows: 'repeat(3, 1fr)', gap: '8px' }}>
-            {/* Confidence */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '70px', fontSize: '0.6rem', color: '#00ff88' }}>CONFIDENCE</div>
-              <div style={{
-                flex: 1, height: '12px', background: '#111', borderRadius: '6px',
-                overflow: 'hidden', position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${(selfModelState.state?.confidence || 0) * 100}%`,
-                  background: 'linear-gradient(to right, #006644, #00ff88)',
-                  transition: 'width 0.2s'
-                }} />
+          <CollapsibleSection title="CONTROLS" icon="🎛️" color="#888">
+            <div style={{ fontSize: '0.6rem' }}>
+              <div style={{ marginBottom: '8px' }}>
+                <label style={{ color: '#888' }}>Noise: {noiseLevel.toFixed(1)}</label>
+                <input type="range" min="0" max="10" step="0.5" value={noiseLevel}
+                  onChange={(e) => setNoiseLevel(parseFloat(e.target.value))}
+                  style={{ width: '100%' }}
+                />
               </div>
-              <div style={{ width: '35px', fontSize: '0.65rem', color: '#00ff88', textAlign: 'right' }}>
-                {((selfModelState.state?.confidence || 0) * 100).toFixed(0)}%
-              </div>
-            </div>
-            {/* Uncertainty */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '70px', fontSize: '0.6rem', color: '#ff6b00' }}>UNCERTAINTY</div>
-              <div style={{
-                flex: 1, height: '12px', background: '#111', borderRadius: '6px',
-                overflow: 'hidden', position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${(selfModelState.state?.uncertainty || 0) * 100}%`,
-                  background: 'linear-gradient(to right, #663300, #ff6b00)',
-                  transition: 'width 0.2s'
-                }} />
-              </div>
-              <div style={{ width: '35px', fontSize: '0.65rem', color: '#ff6b00', textAlign: 'right' }}>
-                {((selfModelState.state?.uncertainty || 0) * 100).toFixed(0)}%
-              </div>
-            </div>
-            {/* Effort */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '70px', fontSize: '0.6rem', color: '#bc13fe' }}>EFFORT</div>
-              <div style={{
-                flex: 1, height: '12px', background: '#111', borderRadius: '6px',
-                overflow: 'hidden', position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${(selfModelState.state?.effort || 0) * 100}%`,
-                  background: 'linear-gradient(to right, #4a0080, #bc13fe)',
-                  transition: 'width 0.2s'
-                }} />
-              </div>
-              <div style={{ width: '35px', fontSize: '0.65rem', color: '#bc13fe', textAlign: 'right' }}>
-                {((selfModelState.state?.effort || 0) * 100).toFixed(0)}%
-              </div>
-            </div>
-          </div>
-
-          {/* Exploration Need & Stability */}
-          <div style={{ display: 'grid', gridTemplateRows: 'repeat(2, 1fr)', gap: '8px' }}>
-            {/* Exploration Need */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '70px', fontSize: '0.6rem', color: '#00f3ff' }}>EXPLORE</div>
-              <div style={{
-                flex: 1, height: '12px', background: '#111', borderRadius: '6px',
-                overflow: 'hidden', position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${(selfModelState.state?.exploration_need || 0) * 100}%`,
-                  background: 'linear-gradient(to right, #005566, #00f3ff)',
-                  transition: 'width 0.2s'
-                }} />
-              </div>
-              <div style={{ width: '35px', fontSize: '0.65rem', color: '#00f3ff', textAlign: 'right' }}>
-                {((selfModelState.state?.exploration_need || 0) * 100).toFixed(0)}%
-              </div>
-            </div>
-            {/* Stability */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '70px', fontSize: '0.6rem', color: '#888' }}>STABILITY</div>
-              <div style={{
-                flex: 1, height: '12px', background: '#111', borderRadius: '6px',
-                overflow: 'hidden', position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${(selfModelState.state?.stability || 0) * 100}%`,
-                  background: 'linear-gradient(to right, #444, #888)',
-                  transition: 'width 0.2s'
-                }} />
-              </div>
-              <div style={{ width: '35px', fontSize: '0.65rem', color: '#888', textAlign: 'right' }}>
-                {((selfModelState.state?.stability || 0) * 100).toFixed(0)}%
-              </div>
-            </div>
-          </div>
-
-          {/* Derived Metrics */}
-          <div style={{
-            borderLeft: '1px solid #333',
-            paddingLeft: '15px',
-            fontSize: '0.6rem',
-            color: '#666'
-          }}>
-            <div style={{ marginBottom: '4px' }}>
-              <span>Avg Agency:</span>{' '}
-              <span style={{ color: '#00ff88' }}>
-                {((selfModelState.derived?.avg_agency || 0) * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div style={{ marginBottom: '4px' }}>
-              <span>Avg Pred Err:</span>{' '}
-              <span style={{ color: '#ff6b00' }}>
-                {((selfModelState.derived?.avg_pred_error || 0) * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div style={{ marginBottom: '4px' }}>
-              <span>Reward Trend:</span>{' '}
-              <span style={{
-                color: (selfModelState.derived?.reward_trend || 0) > 0 ? '#00ff88' :
-                       (selfModelState.derived?.reward_trend || 0) < 0 ? '#ff3e3e' : '#888'
-              }}>
-                {(selfModelState.derived?.reward_trend || 0) > 0 ? '↑' :
-                 (selfModelState.derived?.reward_trend || 0) < 0 ? '↓' : '→'}
-                {((selfModelState.derived?.reward_trend || 0) * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div>
-              <span>Focus Duration:</span>{' '}
-              <span style={{ color: '#ffcc00' }}>
-                {selfModelState.focus_duration || 0}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Working Memory Panel */}
-      {memoryState && (
-        <div className="sci-fi-border" style={{
-          padding: '15px', background: '#0a0a0a', marginBottom: '20px',
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 200px', gap: '15px', alignItems: 'center'
-        }}>
-          {/* Memory Bars for each direction */}
-          {['up', 'down', 'left', 'right'].map(dir => {
-            const mem = memoryState[`m_${dir}`];
-            if (!mem) return null;
-            const activity = mem.activity || 0;
-            const isActive = activity > 0.15;
-            const isStrongest = memoryState.strongest === dir;
-            return (
-              <div key={dir} style={{ textAlign: 'center' }}>
-                <div style={{
-                  fontSize: '0.65rem',
-                  color: isStrongest ? '#ffcc00' : (isActive ? '#00f3ff' : '#555'),
-                  fontWeight: isStrongest ? 'bold' : 'normal',
-                  marginBottom: '5px'
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={handleReset} style={{
+                  flex: 1, padding: '6px', background: '#222', border: '1px solid #444',
+                  color: '#ff6b00', borderRadius: '4px', cursor: 'pointer', fontSize: '0.6rem'
                 }}>
-                  MEM {dir.toUpperCase()} {isStrongest && '★'}
-                </div>
-                {/* Activity Bar */}
-                <div style={{
-                  height: '40px',
-                  background: '#111',
-                  borderRadius: '4px',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  border: isActive ? '1px solid #00f3ff33' : '1px solid #222'
+                  RESET
+                </button>
+                <button onClick={triggerBurst} disabled={isBursting} style={{
+                  flex: 1, padding: '6px', background: isBursting ? '#333' : '#222',
+                  border: '1px solid #444', color: '#00f3ff', borderRadius: '4px',
+                  cursor: isBursting ? 'not-allowed' : 'pointer', fontSize: '0.6rem'
                 }}>
-                  <div style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: `${activity * 100}%`,
-                    background: isStrongest ? 'linear-gradient(to top, #ff6b00, #ffcc00)' :
-                               isActive ? 'linear-gradient(to top, #006688, #00f3ff)' :
-                               '#333',
-                    transition: 'height 0.1s ease-out',
-                    borderRadius: '2px'
-                  }} />
-                  {/* Threshold line */}
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '15%',
-                    left: 0,
-                    right: 0,
-                    height: '1px',
-                    background: '#ff3e3e44',
-                    borderStyle: 'dashed'
-                  }} />
-                </div>
-                <div style={{
-                  fontSize: '0.7rem',
-                  color: isActive ? '#00f3ff' : '#444',
-                  marginTop: '3px',
-                  fontFamily: 'monospace'
-                }}>
-                  {(activity * 100).toFixed(0)}%
-                </div>
+                  BURST
+                </button>
               </div>
-            );
-          })}
-
-          {/* Memory Status */}
-          <div style={{ textAlign: 'center', borderLeft: '1px solid #333', paddingLeft: '15px' }}>
-            <div style={{ fontSize: '0.7rem', color: '#888', marginBottom: '8px' }}>WORKING MEMORY</div>
-            <div style={{
-              fontSize: '1.2rem',
-              fontWeight: 'bold',
-              color: usingMemory ? '#ffcc00' : (memoryState.using_memory ? '#00f3ff' : '#555'),
-              marginBottom: '5px'
-            }}>
-              {usingMemory ? '🧠 ACTIVE' : (memoryState.strongest ? '💭 STORED' : '○ EMPTY')}
             </div>
-            {memoryState.strongest && (
-              <div style={{
-                fontSize: '0.8rem',
-                color: '#ff6b00',
-                fontFamily: 'monospace'
-              }}>
-                기억: {memoryState.strongest.toUpperCase()}
-              </div>
-            )}
-            {usingMemory && (
-              <div style={{
-                fontSize: '0.65rem',
-                color: '#ffcc00',
-                marginTop: '5px',
-                animation: 'pulse 1s infinite'
-              }}>
-                ⚡ 기억 사용 중
-              </div>
-            )}
-          </div>
+          </CollapsibleSection>
         </div>
-      )}
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 250px 300px', gap: '20px' }}>
-        {/* Sensory Column */}
-        <div className="sci-fi-border" style={{ padding: '15px', background: '#0a0a0a' }}>
-          <h3 style={{ fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', marginTop: 0 }}>Sensory Input</h3>
-          {sensoryNeurons.map(renderNeuronGraph)}
-        </div>
-
-        {/* World + Hidden Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <WorldMap world={worldState} />
-          </div>
-          <div className="sci-fi-border" style={{ padding: '15px', background: '#0a0a0a' }}>
-            <h3 style={{ fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', marginTop: 0 }}>Inter-Neurons</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              {hiddenNeurons.map(renderNeuronGraph)}
-            </div>
-          </div>
-        </div>
-
-        {/* Action Column */}
-        <div className="sci-fi-border" style={{ padding: '15px', background: '#0a0a0a' }}>
-          <h3 style={{ fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', marginTop: 0 }}>Action Output</h3>
-          {actionNeurons.map(renderNeuronGraph)}
-          <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #222' }}>
-            {renderNeuronGraph(gabaNeuron)}
-          </div>
-        </div>
-
-        {/* Controls and Synapses */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <ControlPanel
-            params={neuronParams} onParamChange={setNeuronParams}
-            injectValue={injectValue} onInjectChange={setInjectValue}
-            noiseLevel={noiseLevel} onNoiseChange={setNoiseLevel}
-            onReset={handleReset} onBurst={triggerBurst} isBursting={isBursting}
-          />
-
-          <div className="sci-fi-border" style={{ padding: '15px', background: '#0a0a0a', maxHeight: '400px', overflowY: 'auto' }}>
-            <h3 style={{ fontSize: '0.8rem', color: '#ff6b00', textTransform: 'uppercase', marginTop: 0 }}>Synaptic Weights</h3>
-            {synapses.map((syn, i) => (
-              <div key={i} style={{ marginBottom: '8px', fontSize: '0.7rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ccc' }}>
-                  <span>{syn.pre}→{syn.post}</span>
-                  <span style={{ color: syn.weight > 10 ? '#0f0' : '#888' }}>w: {syn.weight.toFixed(1)}</span>
-                </div>
-                <div style={{ background: '#1a1a1a', height: '4px', borderRadius: '2px', marginTop: '2px' }}>
-                  <div style={{
-                    width: `${Math.min(100, (Math.abs(syn.weight) / 30) * 100)}%`, height: '100%',
-                    background: syn.weight < 0 ? '#f00' : '#ff6b00', borderRadius: '2px'
-                  }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Status Bar */}
+      <div style={{
+        marginTop: '10px', padding: '6px 15px', background: '#0a0a0a',
+        borderRadius: '6px', border: '1px solid #222',
+        display: 'flex', justifyContent: 'center', gap: '20px',
+        fontSize: '0.6rem', color: '#666'
+      }}>
+        {windInfo?.active && <span>🌬️ WIND: {windInfo.direction?.toUpperCase()}</span>}
+        {conflictState?.in_conflict && <span style={{ color: '#ff6b00' }}>⚖️ CONFLICT</span>}
+        {usingMemory && <span style={{ color: '#00f3ff' }}>🧠 WM ACTIVE</span>}
+        {ltmState?.has_recall && <span style={{ color: '#ffcc00' }}>📚 LTM RECALL</span>}
+        {homeostasisState?.critical?.starving && <span style={{ color: '#ff3e3e' }}>⚠️ STARVING</span>}
+        {homeostasisState?.critical?.in_danger && <span style={{ color: '#ff3e3e' }}>⚠️ DANGER</span>}
+        {deathFlash && <span style={{ color: '#ff0000' }}>💀 AGENT DIED</span>}
       </div>
     </div>
   );

@@ -9,6 +9,10 @@ from working_memory import WorkingMemorySystem
 from attention import AttentionSystem
 from value_conflict import ValueConflictSystem
 from self_model import SelfModel
+from homeostasis import HomeostasisSystem
+from emotion import EmotionSystem
+from imagination import ImaginationSystem
+from memory_ltm import LongTermMemory
 import random
 
 app = FastAPI(title="Genesis Brain Simulation API - Phase 2")
@@ -24,7 +28,7 @@ app.add_middleware(
 
 # --- Simulation State ---
 network = Network()
-world = GridWorld(10, 10)
+world = GridWorld(15, 15)  # Larger map for avoidance learning
 agency_detector = AgencyDetector()  # Self-Agency detection module
 working_memory = WorkingMemorySystem(  # Working Memory module v2
     decay=0.92,        # ~12 steps half-life
@@ -48,6 +52,15 @@ self_model = SelfModel(  # Self-Model: "What kind of being am I right now?"
     confidence_decay=0.9,     # How quickly confidence fades
     effort_recovery=0.05      # How quickly effort recovers
 )
+homeostasis = HomeostasisSystem(  # Homeostasis: "What does this being NEED?"
+    energy_decay=0.002,       # Energy lost per step (metabolism)
+    safety_recovery=0.02,     # Safety recovery when calm
+    fatigue_recovery=0.01,    # Fatigue recovery when resting
+    fatigue_buildup=0.005     # Fatigue from effort
+)
+emotion = EmotionSystem()  # Emotion: "How does this being FEEL?"
+imagination = ImaginationSystem()  # Imagination: "What would happen if...?"
+long_term_memory = LongTermMemory(max_episodes=100)  # LTM: "What happened before?"
 
 # --- Exploration Parameters ---
 EPSILON = 0.2  # Probability of random action (exploration)
@@ -71,6 +84,11 @@ REVERSED_REWARD = False  # If True, reward for moving AWAY from food (reversal l
 for s_id in ["s_up", "s_down", "s_left", "s_right"]:
     network.add_neuron(s_id, neuron_type="RS")
 
+# 1b. Predator Sensory Neurons (DANGER detection)
+# These detect predator direction and INHIBIT movement toward danger
+for p_id in ["p_up", "p_down", "p_left", "p_right"]:
+    network.add_neuron(p_id, neuron_type="RS")
+
 # 2. Hidden Layer (Inter-neurons - 4 Directions)
 hidden_ids = ["h_up", "h_down", "h_left", "h_right"]
 for h_id in hidden_ids:
@@ -89,18 +107,20 @@ for a_id in action_map.keys():
 # 4. Inhibitory Neuron (Winner-Take-All competition)
 network.add_neuron("gaba", neuron_type="FS")
 
+# 4b. Predator-specific inhibitory neuron
+network.add_neuron("fear_gaba", neuron_type="FS")
+
 # --- Connections (Brain 2.0: Competitive Reflex Mapping) ---
 
-# 1. Sensory -> Hidden (Reflexive biased mapping)
-# S_UP drives H_UP strongly, others weakly
+# 1. Sensory -> Hidden (NO PRIOR KNOWLEDGE - tabula rasa)
+# All connections start equal - agent must LEARN which direction is correct
+# This is the "infant" state: knows nothing about food direction
+INFANT_WEIGHT = 40.0  # All equal - no bias
 for direct in ["up", "down", "left", "right"]:
     s_id = f"s_{direct}"
-    h_target = f"h_{direct}"
     for h_id in hidden_ids:
-        if h_id == h_target:
-            network.connect(s_id, h_id, weight=70.0 + random.uniform(-5, 5), delay=2)
-        else:
-            network.connect(s_id, h_id, weight=10.0 + random.uniform(-2, 2), delay=2)
+        # Small random variation for symmetry breaking, but no directional bias
+        network.connect(s_id, h_id, weight=INFANT_WEIGHT + random.uniform(-3, 3), delay=2)
 
 # 2. Hidden -> Action (Direct Command)
 # FIXED pathways - these are just relays, not learning connections
@@ -118,8 +138,20 @@ for a_id in action_map.keys():
 for a_id in action_map.keys():
     network.connect("gaba", a_id, weight=45.0, delay=1, is_inhibitory=True, enable_stdp=False)
 
-# Cross-Inhibition between Hidden axes (Optional but sharpens decisions)
-# e.g., H_UP inhibits H_DOWN slightly (actually easier via GABA but we stick to WTA at Action)
+# 4. Predator -> Fear GABA -> Hidden (INHIBIT movement toward danger)
+# Predator UP → activates fear_gaba → INHIBITS H_UP
+# This creates AVOIDANCE: seeing predator in a direction suppresses going that way
+for direct in ["up", "down", "left", "right"]:
+    # Predator sensor activates fear response
+    network.connect(f"p_{direct}", "fear_gaba", weight=60.0, delay=1, enable_stdp=False)
+
+# Fear GABA inhibits Hidden neurons (but which one depends on where predator is seen)
+# Strong direct inhibition: P_UP inhibits H_UP (don't go toward predator)
+for direct in ["up", "down", "left", "right"]:
+    # STRONG inhibition: predator direction suppresses that movement
+    # Weight 80 to compete with food signal (was 50)
+    # STDP disabled - this is a hardwired reflex, not learned
+    network.connect(f"p_{direct}", f"h_{direct}", weight=80.0, delay=1, is_inhibitory=True, enable_stdp=False)
 
 
 # --- Data Models ---
@@ -269,7 +301,35 @@ async def step_network(params: SimulationParams):
         for direction, mem_strength in memory_guidance.items():
             if mem_strength > 0.01:
                 sensor_currents[f"s_{direction}"] = sensor_currents.get(f"s_{direction}", 0) + mem_strength * 30.0
-    
+
+    # === PREDATOR SENSORY INPUT ===
+    # KEY INSIGHT: Agent must LEARN that predator is dangerous
+    # First encounter = weak avoidance signal (doesn't know it's dangerous)
+    # After pain experience = strong avoidance signal (learned fear)
+    predator_sensors = world.get_predator_sensory_input()
+    learned_fear = emotion.predator_fear_learned  # How much we've learned to fear
+
+    for direction in ['up', 'down', 'left', 'right']:
+        pred_signal = predator_sensors.get(f'predator_{direction}', 0)
+        if pred_signal > 0:
+            # Signal strength depends on LEARNED FEAR
+            # First encounter: weak signal (base 10) - just "something is there"
+            # After learning: strong signal (up to 80) - "DANGER!"
+            base_signal = 10.0  # Minimal awareness
+            fear_bonus = 70.0 * learned_fear  # Learned avoidance
+            signal_strength = base_signal + fear_bonus
+
+            sensor_currents[f"p_{direction}"] = pred_signal * signal_strength
+
+            # Suppress food signal ONLY if we've learned predator is dangerous
+            # "Food is there but I KNOW danger is blocking - don't go!"
+            if learned_fear > 0.2:
+                food_key = f"s_{direction}"
+                if food_key in sensor_currents and sensor_currents[food_key] > 0:
+                    # Suppression proportional to fear × threat
+                    suppression = pred_signal * learned_fear * 0.8
+                    sensor_currents[food_key] *= (1 - suppression)
+
     # Combine with external manual currents if any
     total_ext_currents = {**sensor_currents}
     if params.currents:
@@ -309,6 +369,63 @@ async def step_network(params: SimulationParams):
 
     found_food = False
 
+    # === LONG-TERM MEMORY: "What happened here before?" ===
+    # Recall relevant memories for current position
+    current_pos_tuple = (world.agent_pos[0], world.agent_pos[1])
+
+    # Store "before" values for delta calculation
+    energy_before = homeostasis.energy
+    safety_before = homeostasis.safety
+    pain_before = homeostasis.pain_level  # Note: attribute is 'pain_level' not 'pain'
+
+    # Context for similarity matching (피드백 #1: 위치 미신 방지)
+    predator_info_for_context = world.get_predator_info()
+    pred_dist = predator_info_for_context.get('distance') or predator_info_for_context.get('threat_level', 0)
+    # If distance not available, use threat_level as proxy (higher threat = closer)
+    if 'distance' in predator_info_for_context:
+        context_predator_near = pred_dist is not None and pred_dist <= 3
+    else:
+        context_predator_near = predator_info_for_context.get('threat_level', 0) > 0.3
+    context_energy_low = homeostasis.energy < 0.3
+    context_fleeing = emotion.emotions.get('fear', 0) > 0.3
+
+    # Get memory influence with context
+    memory_influence = long_term_memory.get_memory_influence(
+        current_pos_tuple,
+        current_predator_near=context_predator_near,
+        current_energy_low=context_energy_low,
+        current_fleeing=context_fleeing
+    )
+    memory_recall_reason = long_term_memory.get_recall_reason()
+
+    # === IMAGINATION: "What would happen if...?" ===
+    # Before deciding, imagine each possible action's outcome
+    predator_info = world.get_predator_info()
+    imagination_result = imagination.evaluate_all_actions(
+        current_state={
+            'learned_fear': emotion.predator_fear_learned,
+            'learned_food': emotion.food_seeking_learned,
+        },
+        world_info={
+            'agent_pos': world.agent_pos.copy(),
+            'food_pos': world.food_pos.copy(),
+            'predator_pos': predator_info['position'],
+            'grid_size': [world.width, world.height],
+        },
+        homeostasis=homeostasis.get_state(),
+        emotions=emotion.emotions,
+    )
+    imagination_scores = imagination_result.get('scores', {})
+    imagination_best = imagination_result.get('best_action')
+    imagination_confidence = imagination_result.get('confidence', 0.1)
+
+    # Combine imagination with memory influence
+    # Memory can boost or suppress imagination scores based on past experience
+    for direction in ['up', 'down', 'left', 'right']:
+        mem_mod = memory_influence.get(direction, 0.0)
+        if mem_mod != 0:
+            imagination_scores[direction] = imagination_scores.get(direction, 0) + mem_mod * 2.0
+
     # --- Epsilon-Greedy Exploration (Self-Model modulated) ---
     # Base epsilon adjusted by self-model state:
     # - exploration_need ↑ → ε ↑ ("I'm stuck, need to explore")
@@ -346,31 +463,92 @@ async def step_network(params: SimulationParams):
     # Internal fault → actively seek new strategies
     internal_boost = internal_fault * 0.2  # up to +0.2
 
+    # === Homeostasis-based exploration modulation ===
+    # Drives affect exploration strategy:
+    # - safety_drive ↑ → explore more (find safe spot)
+    # - rest_drive ↑ → explore less (conserve energy)
+    # - hunger_drive critical → desperate random search
+    homeo_mod = homeostasis.get_exploration_modulation()
+    homeo_epsilon_mod = homeo_mod['epsilon_modifier']
+
+    # === Emotion-based exploration modulation ===
+    # Emotions directly affect exploration:
+    # - fear ↑ → freeze/flee, don't explore
+    # - curiosity ↑ → explore more
+    # - anxiety ↑ → reduce exploration
+    emotion_mod = emotion.get_exploration_modulation()
+    emotion_epsilon_mod = emotion_mod['epsilon_modifier']
+
     effective_epsilon = EPSILON + exploration_boost - confidence_reduction + state_boost \
-                       - externality_reduction + internal_boost
+                       - externality_reduction + internal_boost + homeo_epsilon_mod + emotion_epsilon_mod
     effective_epsilon = max(0.05, min(0.5, effective_epsilon))  # Clamp to [0.05, 0.5]
 
-    is_exploring = random.random() < effective_epsilon
-    if is_exploring:
-        # Exploration: Random action with LEFT/RIGHT bias to escape UP/DOWN loops
-        # 70% chance of LEFT/RIGHT, 30% chance of UP/DOWN
-        if random.random() < 0.7:
-            primary_action = random.choice([3, 4])  # LEFT or RIGHT
-        else:
-            primary_action = random.choice([1, 2])  # UP or DOWN
-        winning_action_id = f"a_{['up', 'down', 'left', 'right'][primary_action - 1]}"
-    elif max_fires > 0:
-        # Exploitation: Use network's decision
-        winning_action_id = max(action_fire_counts, key=action_fire_counts.get)
-        primary_action = action_map[winning_action_id]
-    else:
-        # No firing: Stay
-        primary_action = 0
-        winning_action_id = None
+    # Fear freeze response: extreme fear completely stops exploration
+    if emotion_mod.get('freeze_response', False):
+        effective_epsilon = 0.0  # Don't move randomly when terrified
 
-    # --- Detect and Penalize Oscillation (UP↔DOWN or LEFT↔RIGHT loops) ---
+    is_exploring = random.random() < effective_epsilon
+    action_source = "unknown"  # Track why this action was chosen
+
+    if is_exploring:
+        # Exploration: Pure random action (25% each direction)
+        # No bias - infant needs to explore all directions equally
+        primary_action = random.choice([1, 2, 3, 4])  # UP, DOWN, LEFT, RIGHT
+        winning_action_id = f"a_{['up', 'down', 'left', 'right'][primary_action - 1]}"
+        action_source = "explore"
+    elif max_fires > 0:
+        # === BLEND SNN reflex with Imagination ===
+        # As imagination confidence grows, rely more on it
+        # imagination_weight increases with development phase and confidence
+        imagination_weight = imagination_confidence * 0.5  # Start small, grow with experience
+
+        # Combine SNN firing counts with imagination scores
+        direction_map = {'up': 1, 'down': 2, 'left': 3, 'right': 4}
+        combined_scores = {}
+
+        for direction in ['up', 'down', 'left', 'right']:
+            action_id = f"a_{direction}"
+            snn_score = action_fire_counts.get(action_id, 0)
+            img_score = imagination_scores.get(direction, 0)
+
+            # Normalize SNN score (0-1 range roughly)
+            snn_normalized = snn_score / max(max_fires, 1)
+
+            # Normalize imagination score (can be negative)
+            img_normalized = (img_score + 5) / 10  # Shift and scale
+
+            # Blend: (1 - weight) * SNN + weight * Imagination
+            combined = (1 - imagination_weight) * snn_normalized + imagination_weight * img_normalized
+            combined_scores[direction] = combined
+
+        # Choose direction with highest combined score
+        best_direction = max(combined_scores, key=combined_scores.get)
+        winning_action_id = f"a_{best_direction}"
+        primary_action = direction_map[best_direction]
+        action_source = "snn+imagine" if imagination_weight > 0.1 else "snn"
+    elif imagination_confidence > 0.3 and imagination_best:
+        # No SNN firing, but imagination has a recommendation
+        direction_map = {'up': 1, 'down': 2, 'left': 3, 'right': 4}
+        primary_action = direction_map.get(imagination_best, 1)
+        winning_action_id = f"a_{imagination_best}"
+        action_source = "imagine"
+    else:
+        # No firing, low imagination confidence: Explore randomly
+        # This is crucial for tabula rasa learning - agent must move to learn
+        primary_action = random.choice([1, 2, 3, 4])  # UP, DOWN, LEFT, RIGHT
+        winning_action_id = f"a_{['up', 'down', 'left', 'right'][primary_action - 1]}"
+        action_source = "random"
+
+    # --- Movement Reward & Anti-Stagnation ---
+    # Small reward for actual movement (encourages exploration)
+    # Penalty for staying still or oscillating
+    movement_reward = 0.0
     oscillation_penalty = 0.0
-    if len(action_history) >= 2:
+
+    if primary_action == 0:
+        # Staying still - small penalty to encourage movement
+        movement_reward = -0.02
+    elif len(action_history) >= 2:
         last_action = action_history[-1]
         second_last = action_history[-2]
 
@@ -379,6 +557,9 @@ async def step_network(params: SimulationParams):
             oscillation_penalty = -0.5  # UP↔DOWN oscillation
         elif (primary_action == 3 and last_action == 4) or (primary_action == 4 and last_action == 3):
             oscillation_penalty = -0.5  # LEFT↔RIGHT oscillation
+        else:
+            # Actual movement in a new direction - small reward
+            movement_reward = 0.01
 
     # Track action history
     action_history.append(primary_action)
@@ -400,14 +581,14 @@ async def step_network(params: SimulationParams):
     # Execute action (now returns collision_info)
     if primary_action > 0:
         reward, was_reset, collision_info = world.move_agent(primary_action)
-        total_reward = (reward * 1.0) + oscillation_penalty
+        total_reward = (reward * 1.0) + oscillation_penalty + movement_reward
         if reward > 5.0:  # Food was found
             found_food = True
         if was_reset:
             died = True
     else:
         reward, was_reset, collision_info = world.move_agent(0)  # Stay
-        total_reward = reward + oscillation_penalty
+        total_reward = reward + oscillation_penalty + movement_reward
         if was_reset:
             died = True
 
@@ -489,6 +670,27 @@ async def step_network(params: SimulationParams):
     # Pass self_state for self-explanation: "I'm confused, so errors are expected"
     agency_info = agency_detector.update(new_sensory, self_state=current_self_state)
 
+    # === CURIOSITY INTRINSIC REWARD ===
+    # Key insight: Novelty/surprise is inherently rewarding (for learning)
+    # High prediction error + self-caused = interesting discovery!
+    # This encourages exploration without telling agent WHERE to go
+    pred_error = agency_info.get('prediction_error', 0)
+    curiosity_reward = 0.0
+
+    if not was_perturbed and pred_error > 0.3:
+        # Self-caused novel experience - reward curiosity!
+        # Scale: 0.3 error = 0 reward, 1.0 error = 0.1 reward
+        curiosity_reward = (pred_error - 0.3) * 0.15
+
+        # Boost during infant phase (encourage exploration)
+        if world.development_phase == 0:
+            curiosity_reward *= 1.5
+
+        total_reward += curiosity_reward
+
+        if curiosity_reward > 0.05:
+            print(f"[CURIOSITY] +{curiosity_reward:.3f} (pred_error: {pred_error:.2f})")
+
     # --- WORKING MEMORY: Reset Triggers (v2 improvement) ---
     # Track if fast decay gets triggered for attention coordination
     wm_fast_decay_before = working_memory.fast_decay_steps
@@ -528,6 +730,106 @@ async def step_network(params: SimulationParams):
         focus_changed=focus_changed
     )
 
+    # === HOMEOSTASIS: Update internal needs ===
+    # "What does this being NEED right now?"
+    ate_food = collision_info.get('ate_food') if collision_info else None
+    got_food = ate_food is not None  # 'small' or 'large'
+    is_resting = primary_action == 0  # STAY action = resting
+    predator_threat = collision_info.get('predator_threat', 0.0) if collision_info else 0.0
+    predator_caught = collision_info.get('predator_caught', False) if collision_info else False
+
+    homeostasis.update(
+        got_food=got_food,
+        food_value=total_reward if got_food else 0,
+        was_external_event=was_perturbed,
+        hit_wall=collision_info.get('hit_wall', False) if collision_info else False,
+        effort_level=self_state.get('effort', 0),
+        is_resting=is_resting,
+        predator_threat=predator_threat,
+        predator_caught=predator_caught
+    )
+
+    # === EMOTION: Update emotional state ===
+    # "How does this being FEEL right now?"
+    # Emotion emerges from homeostasis + events
+    emotion.update(
+        homeostasis_state=homeostasis.get_state(),
+        predator_threat=predator_threat,
+        predator_caught=predator_caught,
+        got_food=got_food,
+        exploration_need=self_state.get('exploration_need', 0.3),
+        uncertainty=self_state.get('uncertainty', 0.3)
+    )
+
+    # Update imagination confidence based on actual outcome
+    # "Did my prediction match reality?" → confidence grows/shrinks
+    action_dir_for_imagination = action_dir_map.get(primary_action, 'stay')
+    imagination.update_from_outcome(
+        predicted_action=action_dir_for_imagination,
+        actual_outcome={
+            'got_food': got_food,
+            'got_hurt': predator_caught,
+        }
+    )
+
+    # === LONG-TERM MEMORY: Store significant episodes ===
+    # Determine outcome type for memory
+    if predator_caught:
+        memory_outcome = 'pain'
+    elif got_food:
+        memory_outcome = 'food'
+    elif predator_threat > 0.5:
+        memory_outcome = 'near_danger'
+    elif predator_threat > 0 and predator_threat < 0.3:
+        memory_outcome = 'escape'  # Was near danger but moved away
+    else:
+        memory_outcome = 'nothing'
+
+    # Calculate actual deltas (피드백 #2: 경험 기반 점수)
+    # These are the REAL changes that happened, not hardcoded values
+    delta_energy = homeostasis.energy - energy_before
+    delta_pain = homeostasis.pain_level - pain_before  # pain increased = bad experience
+    delta_safety = homeostasis.safety - safety_before
+
+    # Store episode if emotionally significant
+    emotion_va = emotion.get_valence_arousal()
+    episode_stored = long_term_memory.store(
+        position=current_pos_tuple,
+        energy=homeostasis.energy,
+        safety=homeostasis.safety,
+        action=action_dir_for_imagination,
+        outcome=memory_outcome,
+        reward=total_reward,
+        dominant_emotion=emotion.dominant_emotion or 'neutral',
+        emotion_intensity=emotion_va['arousal'],
+        # NEW: Actual deltas (경험 기반!)
+        delta_energy=delta_energy,
+        delta_pain=delta_pain,
+        delta_safety=delta_safety,
+        # NEW: Context (상황 요약)
+        context_predator_near=context_predator_near,
+        context_energy_low=context_energy_low,
+        context_was_fleeing=context_fleeing
+    )
+
+    # Age all memories
+    long_term_memory.step()
+
+    # Pain from predator = immediate negative reward (LEARNING SIGNAL!)
+    if predator_caught:
+        pain_penalty = -2.0  # Strong negative signal for learning
+        total_reward += pain_penalty
+        print(f"[PAIN!] Predator caught agent! Health: {homeostasis.health:.0%}")
+
+    # Get homeostasis modulation for behavior
+    homeo_exploration = homeostasis.get_exploration_modulation()
+    homeo_learning = homeostasis.get_learning_modulation()
+
+    # Get emotion modulation for behavior
+    emotion_exploration = emotion.get_exploration_modulation()
+    emotion_attention = emotion.get_attention_modulation()
+    emotion_learning = emotion.get_learning_modulation()
+
     # Self-Model modulates Attention based on internal state
     self_attention_mod = self_model.get_attention_modulation()
 
@@ -543,9 +845,22 @@ async def step_network(params: SimulationParams):
     # Apply gain modifier (effort ↑ → gain ↓, fatigued attention)
     attention.base_gain = 1.5 * self_attention_mod['gain_modifier']
 
+    # Apply emotion attention modulation (fear → narrow, curiosity → wide)
+    attention.attention_width = max(0.1, min(1.0,
+        attention.attention_width + emotion_attention['width_modifier']
+    ))
+
     # Modulate reward by agency: "I did this" = full reward, "External" = reduced
     agency_modifier = agency_detector.get_dopamine_modifier()
-    modulated_reward = total_reward * agency_modifier
+
+    # Modulate by homeostasis: tired/starving = less effective learning
+    # (brain needs energy and rest to consolidate memories)
+    learning_mod = homeo_learning['learning_rate_modifier']
+
+    # Modulate by emotion: fear/pain → enhanced memory, anxiety → impaired
+    learning_mod *= emotion_learning['learning_rate_modifier']
+
+    modulated_reward = total_reward * agency_modifier * learning_mod
 
     # Apply 3-factor learning ONLY for network's own decisions (not exploration)
     # AND only to the WINNING pathway (action-specific learning)
@@ -625,7 +940,8 @@ async def step_network(params: SimulationParams):
             "reward": total_reward,
             "modulated_reward": modulated_reward,
             "died": died,
-            "wind": world.get_wind_info()
+            "wind": world.get_wind_info(),
+            "predator": world.get_predator_info()
         },
         "agency": agency_info,
         "was_perturbed": was_perturbed,
@@ -634,7 +950,17 @@ async def step_network(params: SimulationParams):
         "using_memory": using_memory,
         "attention": attention.get_visualization_data(),
         "conflict": value_conflict.get_visualization_data(),
-        "self_model": self_model.get_visualization_data()
+        "self_model": self_model.get_visualization_data(),
+        "homeostasis": homeostasis.get_visualization_data(),
+        "emotion": emotion.get_visualization_data(),
+        "imagination": imagination.get_visualization_data(),  # Internal simulation
+        "action_source": action_source,  # Why this action was chosen
+        "development": world.get_development_info(),
+        "long_term_memory": {
+            **long_term_memory.get_visualization_data(),
+            "memory_influence": memory_influence,
+            "recall_reason": memory_recall_reason,
+        }
     }
 
 @app.get("/network/state")
@@ -646,16 +972,21 @@ def get_network_state():
 def reset_network():
     """Reset all neurons, synapses, and world to initial state."""
     global action_history, wall_blocked
+    global imagination, long_term_memory
     network.reset()
     world.reset()
     working_memory.clear_all()  # Clear working memory
     attention.clear()  # Clear attention focus
     value_conflict.clear()  # Clear value conflict state
     self_model.clear()  # Clear self-model state
+    homeostasis.clear()  # Clear homeostasis state
+    emotion.clear()  # Clear emotional state
+    imagination = ImaginationSystem()  # Reset imagination
+    long_term_memory = LongTermMemory(max_episodes=100)  # Reset long-term memory
     action_history = []  # Clear action history
     wall_blocked = {'up': 0, 'down': 0, 'left': 0, 'right': 0}  # Clear wall blocks
-    print("Simulation Reset: Energy restored to 100%, Memory, Attention & Self-Model cleared")
-    return {"message": "Network, World, Memory, Attention and Self-Model reset to initial state"}
+    print("Simulation Reset: All systems cleared (Memory, Attention, Self-Model, Homeostasis, Emotion, Imagination, LTM)")
+    return {"message": "All systems reset including Long-term Memory"}
 
 @app.post("/network/add_neuron")
 def add_neuron(neuron_id: str, neuron_type: str = "RS"):
