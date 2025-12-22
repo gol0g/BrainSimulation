@@ -323,18 +323,28 @@ class LongTermMemory:
         """
         Get memory-based score adjustment for each direction.
 
-        NEW: Uses actual experience deltas instead of fixed counts!
-        U = wE * delta_energy - wP * delta_pain + wS * delta_safety
+        v1.1: Uses actual experience deltas instead of fixed counts!
+        v1.2: Adds confidence based on sample count (성급한 일반화 방지)
 
-        This makes the memory influence feel like "experience" not "rules".
+        U_raw = wE * delta_energy - wP * delta_pain + wS * delta_safety
+        U_effective = U_raw * confidence(n)
+
+        where confidence(n) = sqrt(n) / (sqrt(n) + k)
+        - n=1 경험 → confidence ≈ 0.41 (영향력 절반 이하)
+        - n=4 경험 → confidence ≈ 0.67 (영향력 2/3)
+        - n=9 경험 → confidence ≈ 0.75 (영향력 3/4)
         """
         # Weight coefficients (튜닝 가능)
         W_ENERGY = 1.0    # 에너지 얻으면 좋음
         W_PAIN = 3.0      # 통증은 강력히 회피 (생존 본능)
         W_SAFETY = 1.5    # 안전도 중요
 
+        # Confidence scaling parameter (k)
+        # 높을수록 더 많은 경험이 필요해짐
+        CONFIDENCE_K = 1.5
+
         influences = {}
-        self.last_recall_details = {}  # NEW: Store details for UI
+        self.last_recall_details = {}  # Store details for UI
 
         for direction in ['up', 'down', 'left', 'right']:
             mem_info = self.recall_for_direction(
@@ -347,25 +357,41 @@ class LongTermMemory:
                 self.last_recall_details[direction] = None
                 continue
 
-            # NEW: Delta-based influence (경험 기반!)
+            # === v1.2: Clip deltas to [-1, 1] for scale stability ===
+            delta_energy = max(-1.0, min(1.0, mem_info['avg_delta_energy']))
+            delta_pain = max(0.0, min(1.0, mem_info['avg_delta_pain']))  # Pain is 0-1
+            delta_safety = max(-1.0, min(1.0, mem_info['avg_delta_safety']))
+
+            # Calculate raw U score (delta-based)
             # U = wE * Δenergy - wP * Δpain + wS * Δsafety
-            influence = 0.0
-            influence += W_ENERGY * mem_info['avg_delta_energy']
-            influence -= W_PAIN * mem_info['avg_delta_pain']  # Pain is negative
-            influence += W_SAFETY * mem_info['avg_delta_safety']
+            u_raw = 0.0
+            u_raw += W_ENERGY * delta_energy
+            u_raw -= W_PAIN * delta_pain  # Pain is negative
+            u_raw += W_SAFETY * delta_safety
 
             # Also add legacy reward influence (smaller weight)
-            influence += mem_info['avg_reward'] * 0.1
+            u_raw += mem_info['avg_reward'] * 0.1
 
-            influences[direction] = influence
+            # === v1.2: Apply confidence scaling (성급한 일반화 방지) ===
+            # confidence = sqrt(n) / (sqrt(n) + k)
+            n = mem_info['memory_count']
+            sqrt_n = math.sqrt(n)
+            confidence = sqrt_n / (sqrt_n + CONFIDENCE_K)
 
-            # Store details for UI
+            # Apply confidence to get effective U
+            u_effective = u_raw * confidence
+
+            influences[direction] = u_effective
+
+            # Store details for UI (including confidence)
             self.last_recall_details[direction] = {
-                'delta_energy': round(mem_info['avg_delta_energy'], 3),
-                'delta_pain': round(mem_info['avg_delta_pain'], 3),
-                'delta_safety': round(mem_info['avg_delta_safety'], 3),
-                'memory_count': mem_info['memory_count'],
-                'computed_score': round(influence, 3)
+                'delta_energy': round(delta_energy, 3),
+                'delta_pain': round(delta_pain, 3),
+                'delta_safety': round(delta_safety, 3),
+                'memory_count': n,
+                'confidence': round(confidence, 2),  # NEW: Show confidence
+                'u_raw': round(u_raw, 3),            # NEW: Raw score before confidence
+                'computed_score': round(u_effective, 3)  # Final score after confidence
             }
 
         return influences

@@ -240,6 +240,24 @@
   - 가치 갈등이 자연스럽게 발생 (배고픈데 피곤한 상황)
   - 감정의 생물학적 기초 (fear = low safety + high uncertainty)
 
+### 13. Goal-Directed Behavior (목표 지향 행동)
+- **핵심 개념**: "지금 뭘 집중해야 해?"
+- **2가지 서브목표**:
+  - `SAFE`: 안전 확보 (포식자 회피, 통증 감소)
+  - `FEED`: 먹이 확보 (에너지 회복)
+  - `IDLE`: 특별한 목표 없음 (안정 상태)
+- **목표 전환 조건**:
+  - safety 낮거나 predator 가까움 → SAFE 우선
+  - energy 낮고 안정적 → FEED 우선
+  - 둘 다 괜찮음 → IDLE
+- **목표별 행동 bias**:
+  - SAFE: predator_proximity -3.0, pain -4.0 (강한 회피)
+  - FEED: food_proximity +2.5, energy +2.0 (음식 추구)
+- **히스테리시스**: min_goal_duration = 10 스텝
+- **인과적 연결**:
+  - M) goal → action score bias
+  - N) internal state → goal switching
+
 ---
 
 ## 최근 구현 완료
@@ -374,6 +392,54 @@
   - **기억이 "규칙"이 아닌 "경험"처럼 느껴짐**
 - **UI 개선**:
   - 방향별 회상 상세 정보 표시 (delta_pain, delta_energy, memory_count)
+
+### Long-term Memory v1.2 ✅ (신뢰도 + 안정성)
+- **핵심 개선**:
+  - 문제: 한 번의 우연(운 좋게 먹음, 운 나쁘게 맞음)만으로 강한 회피/추구 발생
+  - 해결: 경험 횟수 기반 신뢰도(confidence) 적용
+- **신뢰도 시스템**:
+  - `confidence = sqrt(n) / (sqrt(n) + k)` where k=1.5
+  - n=1 경험 → confidence ≈ 0.40 (영향력 40%)
+  - n=4 경험 → confidence ≈ 0.57 (영향력 57%)
+  - n=9 경험 → confidence ≈ 0.67 (영향력 67%)
+  - `U_effective = U_raw × confidence`
+- **Δ 클립 (스케일 안정화)**:
+  - 모든 delta 값을 [-1, 1] 범위로 클립
+  - 환경 파라미터 변해도 기억 영향이 폭주 안 함
+- **기억 vs 현재 충돌 해결**:
+  - uncertainty 높음 → 기억 의존 ↑ (감각이 불확실)
+  - uncertainty 낮음 → 기억 의존 ↓ (감각이 확실)
+  - externality 높음 → 기억 저장 약화 ("이건 내 행동 결과가 아니야")
+- **UI 개선**:
+  - confidence 값 표시
+  - u_raw vs computed_score 분리 표시
+
+### Goal-Directed Behavior v1 ✅ (서브목표 스위칭)
+- **핵심 개념**: "지금 뭘 집중해야 해?"
+- **거창한 계획 없이 작게 시작**:
+  - 복잡한 planning 대신 상태 기반 목표 전환
+  - 목표가 action score에 bias 추가
+- **2가지 서브목표**:
+  - `SAFE`: 안전 확보 (포식자 회피, 통증 감소)
+  - `FEED`: 먹이 확보 (에너지 회복)
+  - `IDLE`: 특별한 목표 없음 (안정 상태)
+- **목표 전환 조건**:
+  - safety 낮거나 predator 가까움 → SAFE 우선
+  - energy 낮고 안정적 → FEED 우선
+  - 둘 다 괜찮음 → IDLE
+- **목표별 행동 bias**:
+  - SAFE: predator_proximity -3.0, pain -4.0 (강한 회피)
+  - FEED: food_proximity +2.5, energy +2.0 (음식 추구)
+- **히스테리시스**:
+  - min_goal_duration = 10 스텝 (목표가 쉽게 안 바뀜)
+  - 긴급 상황(pain > 0.5)은 즉시 SAFE로 전환
+- **인과적 연결**:
+  - M) goal → action score bias (목표가 행동 선택에 영향)
+  - N) internal state → goal switching (내부 상태가 목표 결정)
+- **철학적 의미**:
+  - 이전: 모든 것을 균등하게 고려
+  - v1: "지금은 안전이 중요해" → 포식자 회피에 집중
+  - **목표가 있는 존재처럼 행동**
 
 ---
 

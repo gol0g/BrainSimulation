@@ -13,6 +13,7 @@ from homeostasis import HomeostasisSystem
 from emotion import EmotionSystem
 from imagination import ImaginationSystem
 from memory_ltm import LongTermMemory
+from goal import GoalSystem
 import random
 
 app = FastAPI(title="Genesis Brain Simulation API - Phase 2")
@@ -61,6 +62,7 @@ homeostasis = HomeostasisSystem(  # Homeostasis: "What does this being NEED?"
 emotion = EmotionSystem()  # Emotion: "How does this being FEEL?"
 imagination = ImaginationSystem()  # Imagination: "What would happen if...?"
 long_term_memory = LongTermMemory(max_episodes=100)  # LTM: "What happened before?"
+goal_system = GoalSystem()  # Goal-directed behavior: "What should I focus on?"
 
 # --- Exploration Parameters ---
 EPSILON = 0.2  # Probability of random action (exploration)
@@ -421,10 +423,33 @@ async def step_network(params: SimulationParams):
 
     # Combine imagination with memory influence
     # Memory can boost or suppress imagination scores based on past experience
+    # v1.2: Memory weight adjusted by Self-Model uncertainty
+    # - uncertainty 높음 → 기억 의존 ↑ (감각이 불확실하니 경험에 의존)
+    # - uncertainty 낮음 → 기억 의존 ↓ (감각이 확실하니 현재 정보 신뢰)
+    current_uncertainty = self_model.get_state().get('uncertainty', 0.5)
+    # Memory weight: base 2.0, modulated by uncertainty (range: 1.0 ~ 3.0)
+    memory_weight = 1.0 + (current_uncertainty * 2.0)  # uncertainty 0 → 1.0, uncertainty 1 → 3.0
+
     for direction in ['up', 'down', 'left', 'right']:
         mem_mod = memory_influence.get(direction, 0.0)
         if mem_mod != 0:
-            imagination_scores[direction] = imagination_scores.get(direction, 0) + mem_mod * 2.0
+            imagination_scores[direction] = imagination_scores.get(direction, 0) + mem_mod * memory_weight
+
+    # === GOAL-DIRECTED BEHAVIOR: "What should I focus on?" ===
+    # Update current goal based on internal state
+    predator_distance = predator_info.get('distance') if predator_info.get('distance') else None
+    current_goal = goal_system.update(
+        safety=homeostasis.safety,
+        energy=homeostasis.energy,
+        predator_distance=predator_distance,
+        pain_level=homeostasis.pain_level
+    )
+
+    # Apply goal-specific biases to imagination scores
+    for direction in ['up', 'down', 'left', 'right']:
+        dir_details = imagination_result.get('details', {}).get(direction, {})
+        goal_bias = goal_system.get_action_bias(direction, dir_details)
+        imagination_scores[direction] = imagination_scores.get(direction, 0) + goal_bias
 
     # --- Epsilon-Greedy Exploration (Self-Model modulated) ---
     # Base epsilon adjusted by self-model state:
@@ -792,7 +817,14 @@ async def step_network(params: SimulationParams):
     delta_safety = homeostasis.safety - safety_before
 
     # Store episode if emotionally significant
+    # v1.2: Externality affects memory storage
+    # - externality 높음 → 기억 저장 약화 ("이건 내 행동 결과가 아니야")
+    # - externality 낮음 → 기억 저장 정상 ("이건 내가 한 거야")
     emotion_va = emotion.get_valence_arousal()
+    current_externality = self_model.get_state().get('externality', 0.0)
+    # Scale down emotion_intensity by externality (external events = less memorable for self)
+    adjusted_intensity = emotion_va['arousal'] * (1.0 - current_externality * 0.5)  # Max 50% reduction
+
     episode_stored = long_term_memory.store(
         position=current_pos_tuple,
         energy=homeostasis.energy,
@@ -801,12 +833,12 @@ async def step_network(params: SimulationParams):
         outcome=memory_outcome,
         reward=total_reward,
         dominant_emotion=emotion.dominant_emotion or 'neutral',
-        emotion_intensity=emotion_va['arousal'],
-        # NEW: Actual deltas (경험 기반!)
+        emotion_intensity=adjusted_intensity,  # Reduced if external cause
+        # Actual deltas (경험 기반!)
         delta_energy=delta_energy,
         delta_pain=delta_pain,
         delta_safety=delta_safety,
-        # NEW: Context (상황 요약)
+        # Context (상황 요약)
         context_predator_near=context_predator_near,
         context_energy_low=context_energy_low,
         context_was_fleeing=context_fleeing
@@ -960,6 +992,10 @@ async def step_network(params: SimulationParams):
             **long_term_memory.get_visualization_data(),
             "memory_influence": memory_influence,
             "recall_reason": memory_recall_reason,
+        },
+        "goal": {
+            **goal_system.get_visualization_data(),
+            "description": goal_system.get_goal_description(),
         }
     }
 
@@ -972,7 +1008,7 @@ def get_network_state():
 def reset_network():
     """Reset all neurons, synapses, and world to initial state."""
     global action_history, wall_blocked
-    global imagination, long_term_memory
+    global imagination, long_term_memory, goal_system
     network.reset()
     world.reset()
     working_memory.clear_all()  # Clear working memory
@@ -983,10 +1019,11 @@ def reset_network():
     emotion.clear()  # Clear emotional state
     imagination = ImaginationSystem()  # Reset imagination
     long_term_memory = LongTermMemory(max_episodes=100)  # Reset long-term memory
+    goal_system = GoalSystem()  # Reset goal system
     action_history = []  # Clear action history
     wall_blocked = {'up': 0, 'down': 0, 'left': 0, 'right': 0}  # Clear wall blocks
-    print("Simulation Reset: All systems cleared (Memory, Attention, Self-Model, Homeostasis, Emotion, Imagination, LTM)")
-    return {"message": "All systems reset including Long-term Memory"}
+    print("Simulation Reset: All systems cleared (Memory, Attention, Self-Model, Homeostasis, Emotion, Imagination, LTM, Goal)")
+    return {"message": "All systems reset including Long-term Memory and Goals"}
 
 @app.post("/network/add_neuron")
 def add_neuron(neuron_id: str, neuron_type: str = "RS"):
