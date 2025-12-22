@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 const WorldMap = ({ world, lastAction }) => {
     const canvasRef = useRef(null);
     const gridSize = 15;  // Larger map for avoidance learning
-    const cellSize = 24;  // Smaller cells to fit
+    const cellSize = 18;  // Fit within 280px column (15 * 18 = 270px)
 
     useEffect(() => {
         const canvas = canvasRef.current;

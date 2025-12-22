@@ -242,21 +242,82 @@
 
 ### 13. Goal-Directed Behavior (목표 지향 행동)
 - **핵심 개념**: "지금 뭘 집중해야 해?"
-- **2가지 서브목표**:
+- **4가지 서브목표**:
   - `SAFE`: 안전 확보 (포식자 회피, 통증 감소)
   - `FEED`: 먹이 확보 (에너지 회복)
+  - `REST`: 휴식 (피로 회복, 움직임 최소화)
   - `IDLE`: 특별한 목표 없음 (안정 상태)
 - **목표 전환 조건**:
   - safety 낮거나 predator 가까움 → SAFE 우선
+  - fatigue 높고 안정적 → REST 우선
   - energy 낮고 안정적 → FEED 우선
   - 둘 다 괜찮음 → IDLE
 - **목표별 행동 bias**:
   - SAFE: predator_proximity -3.0, pain -4.0 (강한 회피)
   - FEED: food_proximity +2.5, energy +2.0 (음식 추구)
+  - REST: movement_cost -1.5 (움직임 자체에 페널티)
 - **히스테리시스**: min_goal_duration = 10 스텝
 - **인과적 연결**:
   - M) goal → action score bias
   - N) internal state → goal switching
+  - O) fatigue → REST goal activation
+
+### 14. Rollout System (2-3 스텝 상상)
+- **핵심 개념**: "이 방향으로 가면, 그 다음엔 어떻게 될까?"
+- **철학적 의미**:
+  - 1스텝 상상: "저기 가면 아플 거야"
+  - 2-3스텝 상상: "저기 가면, 그 다음 포식자가 따라와서 아플 거야"
+  - **더 깊은 "생각"** → 우회 경로, 위험 회피 가능
+- **구현**:
+  - depth = 2 (2스텝 미리 봄)
+  - gamma = 0.9 (미래 discount)
+  - 4×4 = 16 경로 평가
+- **평가 함수**:
+  - `U_total = U(s1) + γ × U(s2)`
+  - 각 스텝에서 음식 접근, 포식자 회피, 벽 충돌 고려
+- **LTM 통합**:
+  - 각 가상 위치에서 기억 recall
+  - depth 깊을수록 기억 영향 감소 (0.7^depth)
+- **Goal 통합**:
+  - 현재 goal의 bias가 rollout 평가에도 적용
+  - REST 모드: 움직임 자체에 패널티
+- **UI**:
+  - 🔮 아이콘으로 예측 표시
+  - 최선 경로 화살표 시퀀스 (↑→←)
+  - 선택 이유 표시 ("2스텝: 음식 도달!", "2스텝: 포식자 접근 위험")
+- **인과적 연결**:
+  - P) rollout scores → imagination scores (장기 예측이 행동에 영향)
+  - Q) goal biases → rollout evaluation (목표가 미래 평가에 영향)
+
+### 15. Narrative Self (내러티브 자아)
+- **핵심 개념**: "나는 어떤 존재인가?"
+- **철학적 의미**:
+  - 정체성은 부여되는 것이 아니라 **경험에서 발견**됨
+  - "나는 조심성이 있다"는 "나는 자주 위험을 피했다"에서 나옴
+  - 이 자기 서사가 다시 미래 행동에 영향 → **자기 실현적 정체성**
+- **정체성 벡터 (6 traits, 0-1)**:
+  - `bravery`: 위험 앞에서 전진 vs 회피 비율
+  - `caution`: 위험 근처에서의 평균 regret
+  - `curiosity`: 안전할 때 탐험 빈도
+  - `persistence`: 목표 유지 시간
+  - `adaptability`: 외부 이벤트에 전략 변경 빈도
+  - `resilience`: 고통 후 회복 속도
+- **자기 서사 문장** (템플릿 기반):
+  - "나는 위험 앞에서도 물러서지 않는다." (bravery > 0.65)
+  - "나는 안전할 때 새로운 것을 탐험한다." (curiosity > 0.65)
+  - "나는 목표를 쉽게 포기하지 않는다." (persistence > 0.65)
+- **행동 변조** (5-10% 영향):
+  - epsilon_mod: curiosity ↑ → 탐험 ↑
+  - safety_priority_mod: caution ↑ → SAFE 우선
+  - goal_persistence_mod: persistence ↑ → 목표 전환 어려움
+  - risk_tolerance_mod: bravery ↑ → 위험 감수
+- **피드백 루프**:
+  ```
+  경험 → 정체성 형성 → 행동 변조 → 새 경험 → 정체성 강화
+  ```
+- **인과적 연결**:
+  - R) behavioral history → identity vector
+  - S) identity → behavior modulation (epsilon, goal priority)
 
 ---
 
@@ -414,32 +475,82 @@
   - confidence 값 표시
   - u_raw vs computed_score 분리 표시
 
-### Goal-Directed Behavior v1 ✅ (서브목표 스위칭)
+### Goal-Directed Behavior v1.1 ✅ (서브목표 스위칭 + REST)
 - **핵심 개념**: "지금 뭘 집중해야 해?"
 - **거창한 계획 없이 작게 시작**:
   - 복잡한 planning 대신 상태 기반 목표 전환
   - 목표가 action score에 bias 추가
-- **2가지 서브목표**:
+- **4가지 서브목표**:
   - `SAFE`: 안전 확보 (포식자 회피, 통증 감소)
   - `FEED`: 먹이 확보 (에너지 회복)
+  - `REST`: 휴식 (피로 회복, 움직임 최소화)
   - `IDLE`: 특별한 목표 없음 (안정 상태)
 - **목표 전환 조건**:
   - safety 낮거나 predator 가까움 → SAFE 우선
+  - fatigue 높고 안정적 → REST 우선
   - energy 낮고 안정적 → FEED 우선
   - 둘 다 괜찮음 → IDLE
 - **목표별 행동 bias**:
   - SAFE: predator_proximity -3.0, pain -4.0 (강한 회피)
   - FEED: food_proximity +2.5, energy +2.0 (음식 추구)
+  - REST: movement_cost -1.5 (움직임 자체에 페널티)
 - **히스테리시스**:
   - min_goal_duration = 10 스텝 (목표가 쉽게 안 바뀜)
   - 긴급 상황(pain > 0.5)은 즉시 SAFE로 전환
+  - REST 도중 굶주림 → FEED로 전환 가능
 - **인과적 연결**:
   - M) goal → action score bias (목표가 행동 선택에 영향)
   - N) internal state → goal switching (내부 상태가 목표 결정)
+  - O) fatigue → REST goal (피로가 휴식 목표 활성화)
 - **철학적 의미**:
   - 이전: 모든 것을 균등하게 고려
-  - v1: "지금은 안전이 중요해" → 포식자 회피에 집중
+  - v1.1: "지금은 쉬는 게 중요해" → 움직임 최소화
   - **목표가 있는 존재처럼 행동**
+
+### Rollout v1 ✅ (2-3 스텝 상상)
+- **핵심 개념**: "이 방향으로 가면, 그 다음엔?"
+- **철학적 의미**:
+  - 1스텝 상상만으로는 함정 회피 불가
+  - 2스텝 보면: "저기 가면, 그 다음 포식자가 따라와서..."
+  - **더 "생각하는" 느낌**
+- **구현**:
+  - `rollout.py`: RolloutSystem 클래스
+  - depth = 2, gamma = 0.9
+  - 16개 경로 (4×4) 평가
+- **통합**:
+  - imagination scores에 rollout 결과 추가
+  - rollout_weight = 0.3 × confidence
+  - LTM recall도 가상 위치에서 수행 (depth 감쇠)
+- **UI**:
+  - 🔮 아이콘으로 예측 표시
+  - 화살표 시퀀스로 최선 경로 표시
+  - 선택 이유 ("2스텝: 음식 도달!")
+
+### Narrative Self v1 ✅ (내러티브 자아)
+- **핵심 개념**: "나는 어떤 존재인가?" - 경험에서 정체성 형성
+- **철학적 의미**:
+  - 정체성은 **부여되는 것이 아니라 발견됨**
+  - "나는 조심성이 있다" ← "나는 자주 위험을 피했다"
+  - 자기 서사 → 행동 변조 → **자기 실현적 정체성**
+- **구현**:
+  - `narrative.py`: NarrativeSelf 클래스
+  - 6가지 정체성 trait (0-1)
+  - 행동 이벤트 수집 → 20스텝마다 정체성 업데이트
+- **정체성 벡터**:
+  - `bravery`: 위험 앞에서 전진/회피 비율
+  - `caution`: 위험 근처에서 regret 평균
+  - `curiosity`: 안전할 때 탐험 빈도
+  - `persistence`: 목표 유지 시간
+  - `adaptability`: 외부 이벤트에 전략 변경
+  - `resilience`: 고통 후 회복 속도
+- **행동 변조** (5-10% 영향력):
+  - epsilon_mod: curiosity ↑ → 탐험 ↑
+  - safety_priority_mod: caution ↑ → SAFE 우선
+  - goal_persistence_mod: persistence ↑ → 목표 고수
+  - risk_tolerance_mod: bravery ↑ → 위험 감수
+- **핵심 피드백 루프**:
+  - 경험 → 정체성 → 행동 변조 → 새 경험 → 정체성 강화
+  - **"나는 조심하는 존재야" → 조심스럽게 행동 → 더 조심성↑**
 
 ---
 
@@ -470,26 +581,53 @@
 | 단계 | 구성요소 | 상태 |
 |------|----------|------|
 | 내 상태 인식 | Self-Model, Homeostasis, Emotions | ✅ |
-| 미래를 가정해봄 | Internal Simulation (Forward Model) | ✅ |
-| 선택 | SNN + Imagination 혼합 결정 | ✅ |
+| **자기 정체성** | **Narrative Self (경험에서 형성)** | ✅ |
+| 미래를 가정해봄 | Internal Simulation (1-step) + Rollout (2-3 step) | ✅ |
+| 선택 | SNN + Imagination + Rollout + **정체성 변조** 혼합 결정 | ✅ |
 | 결과를 회상/갱신 | Long-term Memory (Episodic) | ✅ |
 
-**의식적 생각 루프 완성!** 에이전트는 이제:
+**의식적 생각 루프 + 자기 정체성!** 에이전트는 이제:
 1. 자기 상태를 인식하고 (Self-Model, Homeostasis, Emotions)
-2. 행동 결과를 상상하고 (Forward Model)
-3. 과거 경험을 떠올리고 (Long-term Memory)
-4. 이 모든 정보를 종합해서 선택한다 (SNN + Imagination + Memory)
+2. **"나는 어떤 존재인가"를 알고 (Narrative Self)**
+3. 행동 결과를 **2-3스텝 앞까지** 상상하고 (Forward Model + Rollout)
+4. 과거 경험을 떠올리고 (Long-term Memory)
+5. 목표에 따라 가중치를 조절하고 (Goal System)
+6. **자기 정체성에 맞게 행동을 조절하고 (Narrative Modulation)**
+7. 이 모든 정보를 종합해서 선택한다 (SNN + Imagination + Rollout + Memory + Identity)
 
 ---
 
 ## 다음 단계 로드맵
 
-### Priority 1: Goal-directed Behavior ⏳
-- **핵심**: 단순 반응을 넘어 "목표를 향한" 행동
+### Priority 1: 꿈/수면 시스템 (Dream/Sleep) ⏳
+- **핵심**: 기억 정리와 통합 - "뇌가 살아있는 느낌"
 - **구현 예정**:
-  - 명시적 goal 표상 (예: "음식 찾기")
-  - 목표 달성까지 행동 유지
-  - 목표 우선순위 관리
+  - 조건: fatigue 높거나 에피소드 끝날 때
+  - LTM에서 감정 강한 top-k 에피소드 샘플
+  - Replay하면서 시냅스/가치 약하게 업데이트
+  - 비슷한 에피소드는 "요약"으로 압축 (프로토-개념)
+- **기대 효과**:
+  - 깨어있을 때 학습 불안정 → 자고 나면 안정화
+  - 최근 큰 사건이 행동에 더 오래 남음
+
+### Priority 2: UI 시각화 강화
+- **핵심**: 내러티브/꿈이 생긴 후 관찰 용이성 확보
+- **구현 예정**:
+  - "오늘의 자아 요약" 표시
+  - "꿈에서 리플레이된 기억들" 표시
+  - "꿈 전/후 행동 변화" 비교
+  - 정체성 벡터 시각화
+
+### Priority 3: 호기심 v2 (Information Gain)
+- **핵심**: 정보 획득 기반 내재 동기
+- **구현 예정**:
+  - 예측 불확실성 높은 곳 → 호기심
+  - 정보 획득 = 보상
+  - 탐험의 "이유"가 더 정교해짐
+
+### Later: Proto-언어 & Depth-3 Rollout
+- Proto-언어: 내러티브 자아가 자리잡은 후
+- Depth-3 Rollout: 성능은 오르지만 의식 체감은 작음
 
 ---
 

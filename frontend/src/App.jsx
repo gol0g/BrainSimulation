@@ -28,7 +28,7 @@ const CollapsibleSection = ({ title, icon, children, defaultOpen = false, color 
       {isOpen && (
         <div style={{
           padding: '12px', background: '#0a0a0a',
-          borderRadius: '0 0 6px 6px', borderTop: 'none',
+          borderRadius: '0 0 6px 6px',
           border: '1px solid #222', borderTop: 'none', marginTop: '-1px'
         }}>
           {children}
@@ -73,6 +73,9 @@ function App() {
   const [actionSource, setActionSource] = useState(null);
   const [developmentState, setDevelopmentState] = useState(null);
   const [ltmState, setLtmState] = useState(null);  // Long-term Memory
+  const [goalState, setGoalState] = useState(null);  // Current Goal
+  const [rolloutState, setRolloutState] = useState(null);  // Multi-step Rollout
+  const [narrativeState, setNarrativeState] = useState(null);  // Narrative Self (Identity)
   const [injectValue, setInjectValue] = useState(0);
   const [neuronParams, setNeuronParams] = useState({ a: 0.02, b: 0.2, c: -65, d: 8 });
   const [noiseLevel, setNoiseLevel] = useState(2.0);
@@ -148,6 +151,9 @@ function App() {
       if (res.data.action_source) setActionSource(res.data.action_source);
       if (res.data.development) setDevelopmentState(res.data.development);
       if (res.data.long_term_memory) setLtmState(res.data.long_term_memory);
+      if (res.data.goal) setGoalState(res.data.goal);
+      if (res.data.rollout) setRolloutState(res.data.rollout);
+      if (res.data.narrative) setNarrativeState(res.data.narrative);
     } catch (error) {
       if (status !== "OFFLINE") setStatus("OFFLINE");
     } finally {
@@ -211,6 +217,21 @@ function App() {
             }}>
               {developmentState.phase === 'infant' ? '👶 INFANT' : '🧑 ADULT'}
               {developmentState.phase === 'infant' && ` ${Math.round(developmentState.progress * 100)}%`}
+            </span>
+          )}
+          {goalState && (
+            <span style={{
+              padding: '2px 8px', borderRadius: '4px', fontSize: '0.65rem',
+              background: goalState.current_goal === 'safe' ? '#ff3e3e33' :
+                         goalState.current_goal === 'feed' ? '#00ff8833' :
+                         goalState.current_goal === 'rest' ? '#bc13fe33' : '#66666633',
+              color: goalState.current_goal === 'safe' ? '#ff3e3e' :
+                     goalState.current_goal === 'feed' ? '#00ff88' :
+                     goalState.current_goal === 'rest' ? '#bc13fe' : '#888',
+            }}>
+              {goalState.current_goal === 'safe' ? '🛡️ SAFE' :
+               goalState.current_goal === 'feed' ? '🍎 FEED' :
+               goalState.current_goal === 'rest' ? '😴 REST' : '🚶 IDLE'}
             </span>
           )}
         </div>
@@ -289,6 +310,38 @@ function App() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Rollout - Multi-step lookahead */}
+            {rolloutState?.best_path && (
+              <div style={{
+                padding: '6px', background: '#111', borderRadius: '6px',
+                marginBottom: '8px', border: '1px solid #333'
+              }}>
+                <div style={{ fontSize: '0.55rem', color: '#bc13fe', marginBottom: '4px' }}>
+                  🔮 {rolloutState.depth}스텝 예측
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginBottom: '4px' }}>
+                  {rolloutState.best_path.actions?.map((action, idx) => (
+                    <span key={idx} style={{
+                      padding: '2px 6px', borderRadius: '4px', fontSize: '0.6rem',
+                      background: idx === 0 ? '#bc13fe33' : '#222',
+                      color: idx === 0 ? '#bc13fe' : '#888',
+                      border: idx === 0 ? '1px solid #bc13fe' : '1px solid #333'
+                    }}>
+                      {action === 'up' ? '↑' : action === 'down' ? '↓' : action === 'left' ? '←' : '→'}
+                    </span>
+                  ))}
+                  <span style={{ fontSize: '0.5rem', color: '#666', marginLeft: '4px' }}>
+                    ({rolloutState.best_path.total_utility?.toFixed(1)})
+                  </span>
+                </div>
+                {rolloutState.top_reasons?.length > 0 && (
+                  <div style={{ fontSize: '0.5rem', color: '#888' }}>
+                    {rolloutState.top_reasons.join(' | ')}
+                  </div>
+                )}
               </div>
             )}
 
@@ -405,6 +458,131 @@ function App() {
                       {selfModelState.behavioral_label}
                     </span>
                   </div>
+                </div>
+              </div>
+            )}
+          </CollapsibleSection>
+
+          {/* Narrative Self (Identity) */}
+          <CollapsibleSection title="IDENTITY (정체성)" icon="👤" color="#e066ff">
+            {narrativeState && (
+              <div>
+                {/* Identity Vector */}
+                <div style={{ marginBottom: '10px' }}>
+                  <div style={{ fontSize: '0.6rem', color: '#888', marginBottom: '6px' }}>정체성 벡터</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <CompactBar label="용기" value={narrativeState.identity?.bravery || 0.5} color="#ff6b00" />
+                    <CompactBar label="신중" value={narrativeState.identity?.caution || 0.5} color="#00f3ff" />
+                    <CompactBar label="호기심" value={narrativeState.identity?.curiosity || 0.5} color="#bc13fe" />
+                    <CompactBar label="끈기" value={narrativeState.identity?.persistence || 0.5} color="#00ff88" />
+                    <CompactBar label="적응력" value={narrativeState.identity?.adaptability || 0.5} color="#ffcc00" />
+                    <CompactBar label="회복력" value={narrativeState.identity?.resilience || 0.5} color="#ff3e3e" />
+                  </div>
+                </div>
+
+                {/* Self Summary */}
+                <div style={{
+                  padding: '8px', background: '#111', borderRadius: '6px',
+                  marginBottom: '8px', textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.8rem', color: '#e066ff', fontStyle: 'italic' }}>
+                    "{narrativeState.summary || '아직 정체성이 형성 중...'}"
+                  </div>
+                </div>
+
+                {/* Narrative Sentences with Evidence */}
+                {narrativeState.narrative && narrativeState.narrative.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ fontSize: '0.55rem', color: '#888', marginBottom: '4px' }}>자기 서술 (근거 포함)</div>
+                    <div style={{
+                      padding: '6px', background: '#0a0a0a', borderRadius: '4px',
+                      fontSize: '0.6rem', lineHeight: '1.6'
+                    }}>
+                      {narrativeState.narrative.map((sentence, i) => {
+                        const evidence = narrativeState.evidence?.[sentence];
+                        return (
+                          <div key={i} style={{ marginBottom: '4px' }}>
+                            <span style={{ color: '#aaa' }}>• {sentence}</span>
+                            {evidence && (
+                              <span style={{ color: '#666', fontSize: '0.5rem', marginLeft: '4px' }}>
+                                ({evidence})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Chapter Events (Life Story) */}
+                {narrativeState.chapters && narrativeState.chapters.length > 0 && (
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ fontSize: '0.55rem', color: '#888', marginBottom: '4px' }}>
+                      생애 이야기 (최근 {narrativeState.total_chapters || 0}개 중 {narrativeState.chapters.length}개)
+                    </div>
+                    <div style={{
+                      padding: '6px', background: '#0a0a0a', borderRadius: '4px',
+                      maxHeight: '80px', overflowY: 'auto'
+                    }}>
+                      {narrativeState.chapters.slice().reverse().map((ch, i) => (
+                        <div key={i} style={{
+                          fontSize: '0.5rem', marginBottom: '3px', padding: '2px 4px',
+                          background: ch.type === 'near_death' ? '#330000' :
+                                     ch.type === 'big_pain' ? '#331100' :
+                                     ch.type === 'big_reward' ? '#003300' :
+                                     ch.type === 'identity_shift' ? '#330033' : '#111',
+                          borderRadius: '2px',
+                          borderLeft: `2px solid ${
+                            ch.type === 'near_death' ? '#ff3e3e' :
+                            ch.type === 'big_pain' ? '#ff6b00' :
+                            ch.type === 'big_reward' ? '#00ff88' :
+                            ch.type === 'identity_shift' ? '#e066ff' : '#666'
+                          }`
+                        }}>
+                          <span style={{ color: '#666' }}>[{ch.step}]</span>
+                          <span style={{ color: '#aaa', marginLeft: '4px' }}>{ch.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Behavior Modulation */}
+                {narrativeState.modulation && (
+                  <div>
+                    <div style={{ fontSize: '0.55rem', color: '#888', marginBottom: '4px' }}>행동 변조</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px' }}>
+                      {[
+                        { key: 'epsilon_mod', label: '탐험', color: '#bc13fe' },
+                        { key: 'safety_priority_mod', label: '안전', color: '#ff3e3e' },
+                        { key: 'goal_persistence_mod', label: '목표유지', color: '#00ff88' },
+                        { key: 'risk_tolerance_mod', label: '위험감수', color: '#ff6b00' }
+                      ].map(({ key, label, color }) => {
+                        const val = narrativeState.modulation[key] || 0;
+                        const isPositive = val > 0;
+                        return (
+                          <div key={key} style={{
+                            padding: '4px', background: '#111', borderRadius: '4px',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                          }}>
+                            <span style={{ fontSize: '0.5rem', color: '#888' }}>{label}</span>
+                            <span style={{
+                              fontSize: '0.6rem', fontWeight: 'bold',
+                              color: val === 0 ? '#666' : isPositive ? '#00ff88' : '#ff3e3e'
+                            }}>
+                              {val > 0 ? '+' : ''}{(val * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Events Recorded */}
+                <div style={{ marginTop: '8px', textAlign: 'right', fontSize: '0.5rem', color: '#555' }}>
+                  기록된 이벤트: {narrativeState.events_recorded || 0}개
                 </div>
               </div>
             )}
@@ -679,6 +857,9 @@ function App() {
         {ltmState?.has_recall && <span style={{ color: '#ffcc00' }}>📚 LTM RECALL</span>}
         {homeostasisState?.critical?.starving && <span style={{ color: '#ff3e3e' }}>⚠️ STARVING</span>}
         {homeostasisState?.critical?.in_danger && <span style={{ color: '#ff3e3e' }}>⚠️ DANGER</span>}
+        {narrativeState?.dominant_trait && narrativeState.dominant_trait[0] !== 'neutral' && Math.abs(narrativeState.dominant_trait[1] - 0.5) > 0.15 && (
+          <span style={{ color: '#e066ff' }}>👤 {narrativeState.dominant_trait[0].toUpperCase()}</span>
+        )}
         {deathFlash && <span style={{ color: '#ff0000' }}>💀 AGENT DIED</span>}
       </div>
     </div>

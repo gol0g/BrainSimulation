@@ -30,6 +30,7 @@ class Goal(Enum):
     """Available subgoals."""
     SAFE = "safe"      # 안전 확보: 포식자로부터 거리 벌리기
     FEED = "feed"      # 먹이 확보: 에너지 회복
+    REST = "rest"      # 휴식: 피로 회복 (움직임 최소화)
     IDLE = "idle"      # 특별한 목표 없음 (안정 상태)
 
 
@@ -52,6 +53,8 @@ class GoalSystem:
         self.safety_comfortable = 0.7  # Above this → can leave SAFE
         self.energy_critical = 0.3     # Below this → FEED mode
         self.energy_comfortable = 0.6  # Above this → can leave FEED
+        self.fatigue_critical = 0.7    # Above this → REST mode
+        self.fatigue_comfortable = 0.4 # Below this → can leave REST
         self.predator_threat_radius = 4  # Predator closer than this → SAFE
 
         # Minimum duration before switching (hysteresis)
@@ -66,6 +69,7 @@ class GoalSystem:
                 'safety': 2.0,               # Seek safety
                 'food_proximity': 0.5,       # Still somewhat interested
                 'energy': 0.5,               # Less priority
+                'movement_cost': 0.0,        # Doesn't care about moving
             },
             Goal.FEED: {
                 'predator_proximity': -1.5,  # Still avoid, but less
@@ -73,6 +77,15 @@ class GoalSystem:
                 'safety': 1.0,               # Some importance
                 'food_proximity': 2.5,       # Prioritize food
                 'energy': 2.0,               # Very important
+                'movement_cost': 0.0,        # Doesn't care about moving
+            },
+            Goal.REST: {
+                'predator_proximity': -2.5,  # Still avoid predators
+                'pain': -3.0,                # Avoid pain
+                'safety': 1.5,               # Want to be safe while resting
+                'food_proximity': 0.3,       # Not very interested in food
+                'energy': 0.5,               # Less priority
+                'movement_cost': -1.5,       # Prefer NOT to move (energy conservation)
             },
             Goal.IDLE: {
                 # Balanced, no special bias
@@ -81,18 +94,20 @@ class GoalSystem:
                 'safety': 1.5,
                 'food_proximity': 1.0,
                 'energy': 1.0,
+                'movement_cost': 0.0,
             }
         }
 
         # Statistics
         self.goal_switches = 0
-        self.time_in_goals = {Goal.SAFE: 0, Goal.FEED: 0, Goal.IDLE: 0}
+        self.time_in_goals = {Goal.SAFE: 0, Goal.FEED: 0, Goal.REST: 0, Goal.IDLE: 0}
 
     def update(self,
                safety: float,
                energy: float,
                predator_distance: Optional[float] = None,
-               pain_level: float = 0.0) -> Goal:
+               pain_level: float = 0.0,
+               fatigue: float = 0.0) -> Goal:
         """
         Update current goal based on internal state.
 
@@ -101,6 +116,7 @@ class GoalSystem:
             energy: Current energy level (0-1)
             predator_distance: Distance to nearest predator (None if no predator)
             pain_level: Current pain level (0-1)
+            fatigue: Current fatigue level (0-1)
 
         Returns:
             Current active goal
@@ -110,12 +126,12 @@ class GoalSystem:
 
         # Determine desired goal
         desired_goal = self._evaluate_desired_goal(
-            safety, energy, predator_distance, pain_level
+            safety, energy, predator_distance, pain_level, fatigue
         )
 
         # Check if we should switch (with hysteresis)
         if desired_goal != self.current_goal:
-            if self._should_switch(desired_goal, safety, energy, predator_distance, pain_level):
+            if self._should_switch(desired_goal, safety, energy, predator_distance, pain_level, fatigue):
                 old_goal = self.current_goal
                 self.current_goal = desired_goal
                 self.goal_duration = 0
@@ -128,10 +144,11 @@ class GoalSystem:
                                safety: float,
                                energy: float,
                                predator_distance: Optional[float],
-                               pain_level: float) -> Goal:
+                               pain_level: float,
+                               fatigue: float = 0.0) -> Goal:
         """Determine what goal we SHOULD be pursuing based on state."""
 
-        # Priority 1: Immediate danger → SAFE
+        # Priority 1: Immediate danger → SAFE (highest priority)
         if pain_level > 0.3:  # Recent pain
             return Goal.SAFE
 
@@ -141,13 +158,21 @@ class GoalSystem:
         if safety < self.safety_critical:
             return Goal.SAFE
 
-        # Priority 2: Low energy and safe → FEED
+        # Priority 2: Critical fatigue and safe → REST
+        if fatigue > self.fatigue_critical and safety > self.safety_comfortable:
+            return Goal.REST
+
+        # Priority 3: Low energy and safe → FEED
         if energy < self.energy_critical and safety > self.safety_comfortable:
             return Goal.FEED
 
-        # Priority 3: Moderate hunger and very safe → FEED
+        # Priority 4: Moderate hunger and very safe → FEED
         if energy < 0.5 and safety > 0.8:
             return Goal.FEED
+
+        # Priority 5: High fatigue (but not critical) and very safe → REST
+        if fatigue > 0.5 and safety > 0.8 and energy > 0.4:
+            return Goal.REST
 
         # Default: IDLE (balanced state)
         return Goal.IDLE
@@ -157,7 +182,8 @@ class GoalSystem:
                        safety: float,
                        energy: float,
                        predator_distance: Optional[float],
-                       pain_level: float) -> bool:
+                       pain_level: float,
+                       fatigue: float = 0.0) -> bool:
         """
         Check if we should actually switch goals (hysteresis).
 
@@ -189,6 +215,16 @@ class GoalSystem:
                 return True
             if new_goal == Goal.SAFE:
                 return True  # Danger overrides feeding
+
+        elif self.current_goal == Goal.REST:
+            # Exit REST if rested or in danger
+            if fatigue < self.fatigue_comfortable:
+                return True
+            if new_goal == Goal.SAFE:
+                return True  # Danger overrides resting
+            # Also exit REST if starving
+            if energy < self.energy_critical:
+                return True
 
         elif self.current_goal == Goal.IDLE:
             # Exit IDLE more freely
@@ -244,6 +280,12 @@ class GoalSystem:
         elif delta_food_dist < 0:  # Getting closer to food
             adjustment += biases['food_proximity'] * abs(delta_food_dist) * 0.5
 
+        # Movement cost adjustment (REST mode: prefer not to move)
+        # All movement costs energy, so REST mode applies a penalty to all directions
+        movement_cost = biases.get('movement_cost', 0.0)
+        if movement_cost != 0:
+            adjustment += movement_cost  # Negative for REST = penalty for moving
+
         return adjustment
 
     def get_visualization_data(self) -> Dict:
@@ -268,6 +310,8 @@ class GoalSystem:
             return "안전 확보 중"
         elif self.current_goal == Goal.FEED:
             return "먹이 탐색 중"
+        elif self.current_goal == Goal.REST:
+            return "휴식 중"
         else:
             return "탐험 중"
 
@@ -275,12 +319,14 @@ class GoalSystem:
                          delta_energy: float,
                          delta_pain: float,
                          delta_safety: float,
-                         delta_predator_dist: float) -> bool:
+                         delta_predator_dist: float,
+                         delta_fatigue: float = 0.0) -> bool:
         """
         Evaluate if the current action contributed to goal success.
 
         FEED success: energy increased
         SAFE success: pain decreased OR predator distance increased OR safety increased
+        REST success: fatigue decreased (or at least didn't increase much)
         IDLE: always "success" (no specific goal to fail)
 
         Args:
@@ -288,6 +334,7 @@ class GoalSystem:
             delta_pain: Change in pain
             delta_safety: Change in safety
             delta_predator_dist: Change in predator distance (positive = farther)
+            delta_fatigue: Change in fatigue (negative = resting well)
 
         Returns:
             True if action helped achieve current goal
@@ -302,6 +349,13 @@ class GoalSystem:
             escaped = delta_predator_dist > 0.5
             safer = delta_safety > 0.05
             return pain_reduced or escaped or safer
+
+        elif self.current_goal == Goal.REST:
+            # REST 성공: 피로 감소 (가만히 있으면 피로가 줄어듦)
+            resting_well = delta_fatigue < 0.0
+            # 또는 피로가 크게 증가하지 않았으면 성공 (안정 유지)
+            stable = abs(delta_fatigue) < 0.02
+            return resting_well or stable
 
         else:  # IDLE
             # IDLE은 특별한 목표가 없으므로 항상 "성공"
