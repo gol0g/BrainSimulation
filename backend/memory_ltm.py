@@ -50,10 +50,14 @@ class Episode:
     delta_pain: float = 0.0     # 통증 변화량 (0 = 없음, 1 = 최대 고통)
     delta_safety: float = 0.0   # 안전 변화량 (-1 ~ +1)
 
-    # === NEW: Context (상황 요약 - 위치 미신 방지) ===
+    # === Context (상황 요약 - 위치 미신 방지) ===
     context_predator_near: bool = False   # 포식자가 근처에 있었나
     context_energy_low: bool = False      # 에너지가 낮았나
     context_was_fleeing: bool = False     # 도망 중이었나
+
+    # === Goal-related (목표 성공/실패 태깅) ===
+    goal_active: str = "idle"     # 이 행동 시 활성 목표 (safe/feed/idle)
+    goal_success: bool = False    # 목표 달성 여부
 
     # Memory metadata
     importance: float = 0.0  # Calculated from emotion intensity
@@ -132,14 +136,17 @@ class LongTermMemory:
               reward: float,
               dominant_emotion: str,
               emotion_intensity: float,
-              # NEW: Actual deltas (경험 기반 점수)
+              # Actual deltas (경험 기반 점수)
               delta_energy: float = 0.0,
               delta_pain: float = 0.0,
               delta_safety: float = 0.0,
-              # NEW: Context (상황 요약)
+              # Context (상황 요약)
               context_predator_near: bool = False,
               context_energy_low: bool = False,
-              context_was_fleeing: bool = False) -> bool:
+              context_was_fleeing: bool = False,
+              # Goal-related (목표 성공/실패)
+              goal_active: str = "idle",
+              goal_success: bool = False) -> bool:
         """
         Attempt to store a new episode.
 
@@ -160,7 +167,9 @@ class LongTermMemory:
             delta_safety=delta_safety,
             context_predator_near=context_predator_near,
             context_energy_low=context_energy_low,
-            context_was_fleeing=context_was_fleeing
+            context_was_fleeing=context_was_fleeing,
+            goal_active=goal_active,
+            goal_success=goal_success
         )
 
         # Check if worth storing
@@ -299,6 +308,12 @@ class LongTermMemory:
             avg_delta_pain = 0.0
             avg_delta_safety = 0.0
 
+        # v1.2.1: Validated count = memory_count + recall_count bonus
+        # 단순 저장 횟수만 세면 "우연히 같은 자리에서 4번"도 과신하게 됨
+        # recall_count는 "쓸모 있는 기억"이라는 검증
+        total_recall = sum(m.recall_count for m in memories)
+        validated_count = len(memories) + (total_recall * 0.5)  # recall은 절반만 가산
+
         return {
             'has_memory': True,
             'pain_count': pain_count,
@@ -307,7 +322,8 @@ class LongTermMemory:
             'avg_reward': avg_reward,
             'danger_level': danger_level,
             'memory_count': len(memories),
-            # NEW: Delta aggregates
+            'validated_count': validated_count,  # NEW: 검증된 횟수
+            # Delta aggregates
             'avg_delta_energy': avg_delta_energy,
             'avg_delta_pain': avg_delta_pain,
             'avg_delta_safety': avg_delta_safety,
@@ -372,9 +388,10 @@ class LongTermMemory:
             # Also add legacy reward influence (smaller weight)
             u_raw += mem_info['avg_reward'] * 0.1
 
-            # === v1.2: Apply confidence scaling (성급한 일반화 방지) ===
+            # === v1.2.1: Apply confidence scaling (성급한 일반화 방지) ===
             # confidence = sqrt(n) / (sqrt(n) + k)
-            n = mem_info['memory_count']
+            # n = validated_count (저장 횟수 + 유용하게 사용된 횟수)
+            n = mem_info.get('validated_count', mem_info['memory_count'])
             sqrt_n = math.sqrt(n)
             confidence = sqrt_n / (sqrt_n + CONFIDENCE_K)
 

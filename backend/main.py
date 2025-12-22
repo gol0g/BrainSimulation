@@ -379,9 +379,11 @@ async def step_network(params: SimulationParams):
     energy_before = homeostasis.energy
     safety_before = homeostasis.safety
     pain_before = homeostasis.pain_level  # Note: attribute is 'pain_level' not 'pain'
+    predator_info_before = world.get_predator_info()
+    predator_dist_before = predator_info_before.get('distance') if predator_info_before.get('distance') else 99
 
     # Context for similarity matching (피드백 #1: 위치 미신 방지)
-    predator_info_for_context = world.get_predator_info()
+    predator_info_for_context = predator_info_before
     pred_dist = predator_info_for_context.get('distance') or predator_info_for_context.get('threat_level', 0)
     # If distance not available, use threat_level as proxy (higher threat = closer)
     if 'distance' in predator_info_for_context:
@@ -423,12 +425,16 @@ async def step_network(params: SimulationParams):
 
     # Combine imagination with memory influence
     # Memory can boost or suppress imagination scores based on past experience
-    # v1.2: Memory weight adjusted by Self-Model uncertainty
+    # v1.2: Memory weight adjusted by Self-Model uncertainty AND externality
     # - uncertainty 높음 → 기억 의존 ↑ (감각이 불확실하니 경험에 의존)
     # - uncertainty 낮음 → 기억 의존 ↓ (감각이 확실하니 현재 정보 신뢰)
-    current_uncertainty = self_model.get_state().get('uncertainty', 0.5)
-    # Memory weight: base 2.0, modulated by uncertainty (range: 1.0 ~ 3.0)
+    # v1.2.1: externality 게이트 추가 (외부 원인 불확실성에서 기억 과신 방지)
+    current_self_state = self_model.get_state()
+    current_uncertainty = current_self_state.get('uncertainty', 0.5)
+    current_externality = current_self_state.get('externality', 0.0)
+    # Memory weight: base, modulated by uncertainty, gated by externality
     memory_weight = 1.0 + (current_uncertainty * 2.0)  # uncertainty 0 → 1.0, uncertainty 1 → 3.0
+    memory_weight *= (1.0 - 0.7 * current_externality)  # externality 1 → 30% 기억 의존
 
     for direction in ['up', 'down', 'left', 'right']:
         mem_mod = memory_influence.get(direction, 0.0)
@@ -446,9 +452,10 @@ async def step_network(params: SimulationParams):
     )
 
     # Apply goal-specific biases to imagination scores
+    # v1.1: Pass predator_distance for distance-based penalty
     for direction in ['up', 'down', 'left', 'right']:
         dir_details = imagination_result.get('details', {}).get(direction, {})
-        goal_bias = goal_system.get_action_bias(direction, dir_details)
+        goal_bias = goal_system.get_action_bias(direction, dir_details, predator_distance)
         imagination_scores[direction] = imagination_scores.get(direction, 0) + goal_bias
 
     # --- Epsilon-Greedy Exploration (Self-Model modulated) ---
@@ -816,6 +823,20 @@ async def step_network(params: SimulationParams):
     delta_pain = homeostasis.pain_level - pain_before  # pain increased = bad experience
     delta_safety = homeostasis.safety - safety_before
 
+    # Calculate delta_predator_dist for goal success evaluation
+    predator_info_after = world.get_predator_info()
+    predator_dist_after = predator_info_after.get('distance') if predator_info_after.get('distance') else 99
+    delta_predator_dist = predator_dist_after - predator_dist_before  # positive = escaped
+
+    # === Goal success evaluation ===
+    goal_active_str = goal_system.current_goal.value
+    goal_success = goal_system.evaluate_success(
+        delta_energy=delta_energy,
+        delta_pain=delta_pain,
+        delta_safety=delta_safety,
+        delta_predator_dist=delta_predator_dist
+    )
+
     # Store episode if emotionally significant
     # v1.2: Externality affects memory storage
     # - externality 높음 → 기억 저장 약화 ("이건 내 행동 결과가 아니야")
@@ -841,7 +862,10 @@ async def step_network(params: SimulationParams):
         # Context (상황 요약)
         context_predator_near=context_predator_near,
         context_energy_low=context_energy_low,
-        context_was_fleeing=context_fleeing
+        context_was_fleeing=context_fleeing,
+        # Goal (목표 성공/실패)
+        goal_active=goal_active_str,
+        goal_success=goal_success
     )
 
     # Age all memories

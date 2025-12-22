@@ -196,13 +196,15 @@ class GoalSystem:
 
         return False
 
-    def get_action_bias(self, direction: str, imagination_details: Dict) -> float:
+    def get_action_bias(self, direction: str, imagination_details: Dict,
+                        predator_distance: Optional[float] = None) -> float:
         """
         Get goal-specific bias for a direction based on imagination predictions.
 
         Args:
             direction: 'up', 'down', 'left', 'right'
             imagination_details: Predictions for this direction from imagination system
+            predator_distance: Current distance to predator (for distance-based penalty)
 
         Returns:
             Score adjustment based on current goal
@@ -210,7 +212,6 @@ class GoalSystem:
         biases = self.goal_biases[self.current_goal]
 
         # Extract predictions from imagination
-        # These should match the imagination system's output
         delta_pred_dist = imagination_details.get('delta_pred_dist', 0)
         reach_predator = imagination_details.get('reach_predator', False)
         reach_food = imagination_details.get('reach_food', False)
@@ -218,20 +219,28 @@ class GoalSystem:
 
         adjustment = 0.0
 
-        # Predator proximity adjustment
-        # Negative delta_pred_dist means getting closer to predator
-        if delta_pred_dist < 0:  # Getting closer
-            adjustment += biases['predator_proximity'] * abs(delta_pred_dist) * 0.5
-        elif delta_pred_dist > 0:  # Getting farther
-            adjustment -= biases['predator_proximity'] * 0.2  # Small bonus for escaping
+        # === v1.1: Distance-based predator penalty ===
+        # 고정값보다 거리 기반: 가까울수록 강한 패널티
+        # danger(distance) = 1/distance (멀면 약함, 가까우면 강함)
+        if predator_distance is not None and predator_distance > 0:
+            danger_factor = min(1.0, 3.0 / predator_distance)  # 거리 3에서 1.0, 거리 6에서 0.5
+        else:
+            danger_factor = 0.3  # 포식자 없으면 기본 낮은 위험
 
-        # Pain/danger adjustment
+        # Predator proximity adjustment (이제 거리 기반)
+        if delta_pred_dist < 0:  # Getting closer
+            # 가까이 갈수록, 현재 거리가 가까울수록 더 큰 패널티
+            adjustment += biases['predator_proximity'] * abs(delta_pred_dist) * danger_factor
+        elif delta_pred_dist > 0:  # Getting farther
+            adjustment -= biases['predator_proximity'] * 0.2 * danger_factor
+
+        # Pain/danger adjustment (also distance-scaled)
         if reach_predator:
-            adjustment += biases['pain'] * 2.0  # Strong penalty
+            adjustment += biases['pain'] * 2.0 * danger_factor
 
         # Food proximity adjustment
         if reach_food:
-            adjustment += biases['food_proximity'] * 3.0  # Strong bonus
+            adjustment += biases['food_proximity'] * 3.0
         elif delta_food_dist < 0:  # Getting closer to food
             adjustment += biases['food_proximity'] * abs(delta_food_dist) * 0.5
 
@@ -261,3 +270,39 @@ class GoalSystem:
             return "먹이 탐색 중"
         else:
             return "탐험 중"
+
+    def evaluate_success(self,
+                         delta_energy: float,
+                         delta_pain: float,
+                         delta_safety: float,
+                         delta_predator_dist: float) -> bool:
+        """
+        Evaluate if the current action contributed to goal success.
+
+        FEED success: energy increased
+        SAFE success: pain decreased OR predator distance increased OR safety increased
+        IDLE: always "success" (no specific goal to fail)
+
+        Args:
+            delta_energy: Change in energy
+            delta_pain: Change in pain
+            delta_safety: Change in safety
+            delta_predator_dist: Change in predator distance (positive = farther)
+
+        Returns:
+            True if action helped achieve current goal
+        """
+        if self.current_goal == Goal.FEED:
+            # FEED 성공: 에너지가 증가함
+            return delta_energy > 0.01
+
+        elif self.current_goal == Goal.SAFE:
+            # SAFE 성공: 통증 감소 OR 포식자와 거리 증가 OR 안전 증가
+            pain_reduced = delta_pain < -0.01
+            escaped = delta_predator_dist > 0.5
+            safer = delta_safety > 0.05
+            return pain_reduced or escaped or safer
+
+        else:  # IDLE
+            # IDLE은 특별한 목표가 없으므로 항상 "성공"
+            return True
