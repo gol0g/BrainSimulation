@@ -5,7 +5,74 @@
 
 ---
 
-## 현재 구현된 시스템
+## ⚡ v2 통합 원리 아키텍처 (NEW!)
+
+### 핵심 철학
+- **하나의 원리로 모든 행동 설명**: 감정/목표/주의가 별도 모듈이 아니라 **단일 비용 함수의 다른 그림자**
+- **죽음 = 흡수 상태**: HP가 아니라 "미래 agency가 0이 되는 비가역적 상태"
+- **공포는 라벨이 아니다**: p_absorb↑ → 정책 변화가 "공포처럼 보이는 것"
+- **빠른/느린 경로**: 즉각 반응(Alarm) + 숙고(Deliberation)
+
+### 핵심 시스템 (backend/core/)
+
+#### 1. Viability System (`viability.py`)
+- **HP 대체**: 생존 가능성 커널 (viability kernel)
+- **3개 채널**: energy, integrity, threat_exposure
+- **p_absorb**: 흡수 상태(죽음) 진입 확률
+- **핵심 통찰**: 존재 지속은 "목표"가 아니라 "시스템 작동의 전제조건"
+
+#### 2. World Model (`world_model.py`)
+- **예측 처리 (Predictive Processing)**
+- **두 가지 오차**:
+  - External: 감각 예측 오차 (세상이 다름)
+  - Internal: 내부 상태 오차 (몸이 불편함)
+- **창발적 상태**:
+  - `fear_like`: p_absorb↑ → 이것이 "공포"
+  - `curiosity_like`: uncertainty↑ + threat↓ → 이것이 "호기심"
+  - `satisfaction_like`: 오차↓ + margin↑ → 이것이 "만족"
+
+#### 3. Unified Value (`unified_value.py`)
+- **단일 비용 함수**:
+  ```
+  C(s,a) = w_v × C_viability + w_p × C_prediction + w_c × C_control - w_i × C_information
+  ```
+- **동적 가중치**: 위기 시 w_viability↑, 안전 시 w_information↑
+- **목표 시스템 대체**: SAFE/FEED/REST 대신 비용 최소화
+
+#### 4. Alarm System (`alarm.py`)
+- **빠른 경로 (Low Road)**: 숙고 없이 즉각 반응
+- **학습된 위협 패턴**: 포식자 → 고통 → 다음엔 "보자마자" 반응
+- **정책 변조**:
+  - attention_width ↓ (좁아짐)
+  - avoidance_strength ↑ (회피 강화)
+  - memory_boost ↑ (강한 기억)
+  - freeze_probability ↑ (극심한 공포 = 얼어붙음)
+
+#### 5. Unified Policy (`policy.py`)
+- **최종 행동 선택**: 모든 시스템 통합
+- **세 가지 모드**:
+  - `reactive`: 알람↑ → 즉각 반응
+  - `deliberative`: 알람↓ → 비용 평가
+  - `exploratory`: 호기심↑ + 위협↓ → 탐험
+- **설명 가능**: "왜 이 행동?" → 항상 비용 함수 항으로 설명
+
+### v2 실행 방법
+```bash
+python backend/main_v2.py  # 포트 8001에서 실행
+```
+
+### v1 vs v2 비교
+| 개념 | v1 | v2 |
+|------|-----|-----|
+| 죽음 | HP=0 (게임 규칙) | 흡수 상태 (agency 소멸) |
+| 공포 | `emotion.fear` 라벨 | p_absorb↑로 창발 |
+| 목표 | SAFE/FEED/REST 분리 | 단일 비용 함수 |
+| 즉각 반응 | 없음 | Alarm 빠른 경로 |
+| 행동 설명 | 모듈별 기여도 | 단일 비용 항으로 설명 |
+
+---
+
+## 현재 구현된 시스템 (v1)
 
 ### 1. SNN (Spiking Neural Network)
 - STDP 3-factor learning (pre-post timing + neuromodulator)
