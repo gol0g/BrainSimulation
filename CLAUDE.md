@@ -5,247 +5,106 @@
 **뇌의 근본적인 작동 원리가 모든 행위, 생각, 감정의 근원이 되어야 한다.**
 
 이것은 심즈가 아니다. 수치의 나열이 아니다.
-- "지루함 게이지가 차면 놀이를 한다" ❌
-- "정보 획득률이 0이면 모델이 정체되어 미래 적응력이 떨어지므로 시스템이 새로운 입력을 찾는다" ✅
+- "지루함 게이지가 차면 놀이를 한다" (X)
+- "Risk가 높으면 회피 행동" (O)
 
 모든 행동에는 **왜?**가 있어야 하고, 그 **왜?**를 계속 파고들면 **하나의 근본 원리**에 도달해야 한다.
 
 ---
 
-## 근본 원리: Free Energy Principle
+## 현재 구현 상태 - True FEP v2.1
 
-### 존재의 조건
-
-시스템이 존재하려면 흡수 상태(소멸)를 피해야 한다.
-흡수 상태를 피하려면 환경과의 경계를 유지해야 한다.
-경계를 유지하려면 환경에 적응해야 한다.
-적응하려면 환경에 대한 내부 모델이 있어야 한다.
-
-### Free Energy란?
+### 핵심 공식 (True FEP)
 
 ```
-F = D_KL[Q(s) || P(s|o)] - log P(o)
+F = Prediction Error + Complexity
+G(a) = Risk + Ambiguity
 ```
 
-단순화하면:
+- **Risk** = KL[Q(o|a) || P(o)] - 진짜 KL divergence
+  - Q(o|a): 행동 a 후 예측 관측 분포
+  - P(o): 선호 관측 분포 (Beta distributions)
+- **Ambiguity** = f(transition_std) - 전이 모델 불확실성
+  - 휴리스틱 아님: 경험 → 학습 → delta_std 감소 → ambiguity 감소
+
+### P(o) 선호 분포 (Beta distributions)
+
 ```
-F ≈ Prediction Error + Complexity
+food_proximity:   P(o) = Beta(5, 1)  # 음식 위에 있고 싶음
+danger_proximity: P(o) = Beta(1, 5)  # 위험에서 멀리
+directions:       P(o) = Uniform     # 방향 선호 없음
 ```
 
-- **Prediction Error**: 예측과 실제의 차이 (놀라움)
-- **Complexity**: 모델의 복잡도 (단순한 설명 선호)
+### 관측 공간 (6차원)
 
-### 왜 Free Energy를 최소화하는가?
-
-수학적으로 증명됨:
-- Free Energy는 Surprise의 상한이다
-- Surprise를 최소화하는 시스템만 존재를 유지한다
-- 따라서 **존재하는 모든 시스템은 Free Energy를 최소화한다**
-
-이것은 "목표"가 아니라 **존재의 필연적 조건**이다.
+```
+observation = [food_proximity, danger_proximity, food_dx, food_dy, danger_dx, danger_dy]
+```
 
 ---
 
-## 모든 것의 유도
+## v2.1 변경사항 (2024-12-25)
 
-### 1. 지각 (Perception)
+### 1. 브라우저 간섭 해결 (SimulationClock)
 
-**왜 지각하는가?**
-- 감각 데이터 o가 들어옴
-- 내부 모델 Q(s)를 업데이트하여 F를 최소화
-- F = D_KL[Q(s) || P(s|o)] 이므로
-- Q(s)를 P(s|o)에 가깝게 만들면 F 감소
-- 이것이 **지각** = 베이지안 추론
+**문제**: 브라우저가 /step을 ~20x/초로 호출 → 전이 모델 학습 오염
 
-### 2. 행동 (Action)
+**해결**: SimulationClock 도입
+- Fast-path: lock 전에 캐시 체크 → 중복 요청 즉시 반환
+- Time-based throttling: 50ms 간격 (max 20 FPS)
+- Learning downsampling: 5 tick마다 학습
 
-**왜 행동하는가?**
-- 현재 F가 높으면 (예측 오차가 크면)
-- 두 가지 방법으로 줄일 수 있음:
-  1. 모델을 바꾼다 (지각)
-  2. 세상을 바꾼다 (행동)
-- 행동 = 예측에 맞게 세상을 변화시킴
-- 예: "손이 컵 위에 있다"고 예측 → 손을 움직여 실현
+### 2. 행동별 Ambiguity (FEP 정의 준수)
 
-### 3. 감정 (Emotion)
+**이전 (휴리스틱)**: confidence = sqrt(n)/(sqrt(n)+2), STAY bonus
 
-**감정은 라벨이 아니다. F의 변화율과 예측이다.**
+**현재 (FEP 정의)**: ambiguity = transition_std * 1.5
 
-- **공포**: 미래 F가 급격히 높아질 것으로 예측됨
-  - 왜? 흡수 상태에 가까워지는 경로가 예측됨
-  - 결과: 회피 행동, 주의 집중, 학습 강화
-
-- **호기심**: 행동하면 F를 크게 줄일 수 있음 (정보 획득)
-  - 왜? 불확실한 영역에서 정보를 얻으면 모델 정확도 증가
-  - 결과: 탐색 행동
-
-- **지루함**: F가 낮지만 정보 획득률도 0
-  - 왜? 모델이 업데이트되지 않으면 환경 변화에 취약
-  - 현재는 괜찮지만 **미래 F 증가 위험**
-  - 결과: 새로운 입력 탐색
-
-- **만족**: F가 감소하고 있음
-  - 왜? 예측이 맞고, 목표 상태에 가까워지고 있음
-  - 결과: 현재 행동 유지
-
-### 4. 목표 (Goal)
-
-**목표는 설정되는 것이 아니다. Prior preference에서 나온다.**
-
-- P(o) = 선호하는 관측의 분포
-- 생존하는 시스템은 특정 관측을 더 자주 경험함 (예: 적정 체온, 충분한 에너지)
-- 이것이 prior preference로 인코딩됨
-- 목표 = prior preference에서 벗어난 상태를 줄이는 것
-
-### 5. 학습 (Learning)
-
-**왜 학습하는가?**
-- 모델 파라미터 θ를 업데이트하면 장기적으로 F 감소
-- F = E[prediction error] + complexity
-- 더 좋은 모델 = 더 낮은 평균 prediction error
-
-### 6. 주의 (Attention)
-
-**왜 주의를 기울이는가?**
-- 모든 감각을 동등하게 처리하면 계산 비용이 높음
-- Precision weighting: 신뢰할 수 있는 신호에 더 가중치
-- 높은 precision = 높은 주의
-- F 최소화에 더 기여하는 신호에 주의 집중
-
-### 7. 생각/계획 (Thinking/Planning)
-
-**왜 생각하는가?**
-- 행동 전에 시뮬레이션
-- Expected Free Energy (EFE) 계산:
-  ```
-  G(π) = E_Q[F(o,s|π)]  // 정책 π를 따랐을 때 예상 F
-  ```
-- 가장 낮은 EFE를 가진 정책 선택
-- 이것이 **계획** = 미래 F 최소화
+**핵심**: 경험 → 모델 학습 → delta_std 감소 → ambiguity 감소 (휴리스틱 아님)
 
 ---
 
-## 구현 원칙
+## v2.0 변경사항 (2024-12-25)
 
-### 1. 하나의 수식에서 시작
-
-모든 코드는 Free Energy 계산에서 시작해야 한다:
-```python
-F = prediction_error + complexity
-```
-
-### 2. 파생되는 것만 존재
-
-- `fear` 변수 ❌
-- `F_future_prediction`이 임계값을 넘으면 회피 행동 ✅
-
-- `curiosity` 변수 ❌
-- `expected_information_gain`이 높으면 탐색 행동 ✅
-
-- `boredom` 변수 ❌
-- `information_rate ≈ 0`이 지속되면 새로운 입력 탐색 ✅
-
-### 3. 명시적 라벨 금지
-
-감정 이름을 코드에 넣지 않는다.
-관찰자가 행동을 보고 "저건 공포 반응이네"라고 해석하는 것.
-시스템 내부에는 오직 F와 그 파생량만 존재.
-
-### 4. 모든 행동의 설명 가능성
-
-어떤 행동이든 "왜?"라고 물으면:
-"그 행동이 Expected Free Energy를 최소화하기 때문"
-으로 대답할 수 있어야 한다.
+1. P(o)를 확률분포로 변경: Beta distributions
+2. Risk = KL divergence: 진짜 KL[Q||P]
+3. STAY 패널티 제거: P(o)에 흡수
+4. 전이 모델 학습: 물리 Prior + 온라인 학습
 
 ---
 
-## 아키텍처
-
-### Generative Model (생성 모델)
-
-```
-P(o, s, θ) = P(o|s) × P(s|s_prev, a) × P(θ)
-```
-
-- **P(o|s)**: 상태가 주어졌을 때 관측 확률 (likelihood)
-- **P(s|s_prev, a)**: 전이 모델 (dynamics)
-- **P(θ)**: 모델 파라미터의 prior
-
-### Inference (추론)
-
-```
-Q(s) ≈ P(s|o)  // Variational inference
-```
-
-- 관측이 주어졌을 때 숨겨진 상태 추론
-- Free Energy 최소화로 수행
-
-### Action Selection (행동 선택)
-
-```
-π* = argmin_π G(π)
-G(π) = E_Q[F(o,s|π)] + H[Q(o|π)]
-```
-
-- Expected Free Energy가 가장 낮은 정책 선택
-- Epistemic value (정보 획득) + Pragmatic value (선호 충족)
-
----
-
-## 파일 구조 (새로 개발)
+## 파일 구조
 
 ```
 backend/
-├── genesis/                    # 새로운 코어 엔진
-│   ├── free_energy.py         # F 계산의 핵심
-│   ├── generative_model.py    # 생성 모델 P(o,s,θ)
-│   ├── inference.py           # Q(s) 추론
-│   ├── action_selection.py    # Expected Free Energy 기반 선택
-│   └── precision.py           # Precision weighting (주의)
-├── world/                      # 환경
-│   └── environment.py         # 단순화된 그리드 월드
-└── main_genesis.py            # 새로운 메인
+├── genesis/
+│   ├── action_selection.py    # G = Risk + Ambiguity
+│   ├── preference_distributions.py  # P(o) Beta 분포
+│   └── agent.py
+├── main_genesis.py            # FastAPI 서버
 ```
 
----
+### API 엔드포인트
 
-## 개발 순서
-
-1. **Free Energy 계산기** - 가장 기본
-2. **단순 생성 모델** - 상태-관측 관계
-3. **추론 엔진** - Q(s) 업데이트
-4. **행동 선택** - EFE 최소화
-5. **환경 연결** - 실제로 돌려보기
-6. **창발 관찰** - 감정/목표가 나타나는지 확인
-
----
-
-## 검증 기준
-
-1. **모든 행동이 F 또는 EFE로 설명되는가?**
-2. **감정 라벨 없이 감정적 행동이 나타나는가?**
-3. **목표를 주입하지 않았는데 목표 지향 행동이 나타나는가?**
-4. **"왜?"를 계속 물었을 때 하나의 원리에 도달하는가?**
+- POST /step - 한 스텝 실행
+- POST /reset - 리셋
+- GET /clock - 시뮬레이션 시계 상태
 
 ---
 
 ## 금지 사항
 
-- 감정 이름을 변수로 사용 ❌
-- "if hungry then seek_food" 같은 규칙 ❌
-- 행동별 보상 테이블 ❌
-- 하드코딩된 목표 ❌
-- 심즈식 욕구 게이지 ❌
+- 감정 이름을 변수로 사용 (X)
+- 심즈식 욕구 게이지 (X)
+- 휴리스틱으로 직접 행동 조작 (X)
 
 ---
 
-## 기억할 것
+## 다음 단계
 
-> "놀이를 오랫동안 하지 않으면 지루함 수치가 증가하면 그게 뇌냐? 심즈지?"
+- Complexity = KL[Q(s)||P(s)]: 믿음 업데이트 제약
+- 환경 테스트 시나리오
 
-> "근본의 근원까지 파고들어서 모든 것의 이유가 되는 걸 바닥부터 개발해서 뇌를 만들고 싶다"
+---
 
 > "뇌의 근본적인 작동 원리가 모든 행위, 생각, 감정의 근원이 되어야 한다"
-
-이 프로젝트의 목적은 **진짜 뇌의 원리**를 구현하는 것이다.
-수치의 나열이 아니라, 하나의 원리에서 모든 것이 창발하는 시스템.

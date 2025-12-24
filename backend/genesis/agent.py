@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from .free_energy import FreeEnergyEngine, FreeEnergyState
 from .generative_model import GenerativeModel
 from .inference import InferenceEngine, InferenceResult
-from .action_selection import ActionSelector, ActionResult
+from .action_selection import ActionSelector, ActionResult, GDecomposition
 
 
 @dataclass
@@ -45,9 +45,11 @@ class AgentState:
 
     # Action-related
     action: int              # Selected action
-    G: Dict[int, float]      # Expected Free Energy per action
-    epistemic: Dict[int, float]
-    pragmatic: Dict[int, float]
+    G_decomposition: Dict[int, GDecomposition]  # Full G decomposition per action
+
+    # Key components of G for selected action
+    risk: float              # KL[Q(o|a) || P(o)] - preference violation
+    ambiguity: float         # E[H[P(o|s')]] - observation uncertainty
 
     # Inference-related
     prediction_error: float
@@ -59,6 +61,9 @@ class AgentState:
 
     # History
     F_history: List[float]
+
+    # Explanation
+    dominant_factor: str     # 'risk_avoidance', 'ambiguity_reduction', or 'balanced'
 
 
 class GenesisAgent:
@@ -128,7 +133,8 @@ class GenesisAgent:
         inference_result = self.inference.infer(observation)
 
         # === ACTION: Minimize expected F by selecting action ===
-        action_result = self.action_selector.select_action()
+        # Pass current observation for direct prediction
+        action_result = self.action_selector.select_action(current_obs=observation)
 
         # === LEARNING: Update model from experience ===
         # (This happens after action is taken and new observation received)
@@ -160,19 +166,31 @@ class GenesisAgent:
 
         self._step_count += 1
 
+        # Get decomposition for selected action
+        selected_G = action_result.G_all[action_result.action]
+
+        # Determine dominant factor (for observer interpretation only)
+        if selected_G.risk > selected_G.ambiguity * 1.5:
+            dominant = 'risk_avoidance'  # Looks like "fear"
+        elif selected_G.ambiguity > selected_G.risk * 1.5:
+            dominant = 'ambiguity_reduction'  # Looks like "curiosity"
+        else:
+            dominant = 'balanced'
+
         return AgentState(
             F=inference_result.F.F,
             dF_dt=inference_result.F.dF_dt,
             Q_s=inference_result.Q_s,
             action=action_result.action,
-            G=action_result.G,
-            epistemic=action_result.epistemic,
-            pragmatic=action_result.pragmatic,
+            G_decomposition=action_result.G_all,
+            risk=selected_G.risk,
+            ambiguity=selected_G.ambiguity,
             prediction_error=inference_result.prediction_error,
             belief_update=inference_result.belief_update,
             information_rate=information_rate,
             preference_divergence=preference_divergence,
-            F_history=self._F_history.copy()
+            F_history=self._F_history.copy(),
+            dominant_factor=dominant
         )
 
     def step_with_action(self,
@@ -198,8 +216,8 @@ class GenesisAgent:
             observation, previous_action, Q_s_prev
         )
 
-        # Select next action
-        action_result = self.action_selector.select_action()
+        # Select next action with current observation
+        action_result = self.action_selector.select_action(current_obs=observation)
 
         # Learn
         self.model.update_model(
@@ -225,19 +243,31 @@ class GenesisAgent:
 
         self._step_count += 1
 
+        # Get decomposition for selected action
+        selected_G = action_result.G_all[action_result.action]
+
+        # Determine dominant factor
+        if selected_G.risk > selected_G.ambiguity * 1.5:
+            dominant = 'risk_avoidance'
+        elif selected_G.ambiguity > selected_G.risk * 1.5:
+            dominant = 'ambiguity_reduction'
+        else:
+            dominant = 'balanced'
+
         return AgentState(
             F=inference_result.F.F,
             dF_dt=inference_result.F.dF_dt,
             Q_s=inference_result.Q_s,
             action=action_result.action,
-            G=action_result.G,
-            epistemic=action_result.epistemic,
-            pragmatic=action_result.pragmatic,
+            G_decomposition=action_result.G_all,
+            risk=selected_G.risk,
+            ambiguity=selected_G.ambiguity,
             prediction_error=inference_result.prediction_error,
             belief_update=inference_result.belief_update,
             information_rate=information_rate,
             preference_divergence=preference_divergence,
-            F_history=self._F_history.copy()
+            F_history=self._F_history.copy(),
+            dominant_factor=dominant
         )
 
     def get_explanation(self, state: AgentState) -> Dict:
@@ -272,13 +302,16 @@ class GenesisAgent:
 
         interpretations = []
 
+        # Get G decomposition for selected action
+        selected_G = state.G_decomposition[state.action]
+
         # High F + increasing = distress/anxiety
         if F > 2.0 and F_trend > 0.1:
             interpretations.append("distress (F high and rising)")
 
-        # High F + predicting worse = fear
-        if F > 2.0 and state.G.get(state.action, 0) > 2.0:
-            interpretations.append("fear-like (high expected F)")
+        # High risk = avoiding preference violation (looks like "fear")
+        if state.risk > 0.5:
+            interpretations.append("risk-averse (avoiding preference violation)")
 
         # F decreasing = satisfaction/relief
         if F_trend < -0.1:
@@ -288,15 +321,17 @@ class GenesisAgent:
         if info_rate < 0.1 and F < 1.0:
             interpretations.append("boredom-like (no information, low F)")
 
-        # High epistemic value = curiosity
-        max_epistemic = max(state.epistemic.values()) if state.epistemic else 0
-        if max_epistemic > 0.5:
-            interpretations.append("curiosity-like (high information gain available)")
+        # Low ambiguity seeking = curiosity (reducing observation uncertainty)
+        min_ambiguity = min(g.ambiguity for g in state.G_decomposition.values())
+        if state.ambiguity < min_ambiguity + 0.1:
+            # Chose action with low ambiguity - seeking clear information
+            interpretations.append("information-seeking (reducing ambiguity)")
 
-        # High pragmatic drive = goal pursuit
-        max_pragmatic = max(state.pragmatic.values()) if state.pragmatic else 0
-        if abs(max_pragmatic) > 1.0:
-            interpretations.append("goal-directed (high pragmatic value)")
+        # Dominant factor interpretation
+        if state.dominant_factor == 'risk_avoidance':
+            interpretations.append("dominant: avoiding bad outcomes")
+        elif state.dominant_factor == 'ambiguity_reduction':
+            interpretations.append("dominant: seeking clarity")
 
         return {
             'F': F,
@@ -304,21 +339,28 @@ class GenesisAgent:
             'information_rate': info_rate,
             'preference_divergence': pref_div,
             'action': state.action,
-            'action_G': state.G.get(state.action, 0),
+            'action_G': selected_G.G,
             'observer_interpretations': interpretations,
 
-            # Raw values for analysis
-            'epistemic_values': state.epistemic,
-            'pragmatic_values': state.pragmatic,
+            # Risk/Ambiguity decomposition (the mechanical explanation)
+            'risk': state.risk,
+            'ambiguity': state.ambiguity,
+            'dominant_factor': state.dominant_factor,
+
+            # All actions G decomposition
+            'all_G': {a: state.G_decomposition[a].G for a in state.G_decomposition},
+            'all_risk': {a: state.G_decomposition[a].risk for a in state.G_decomposition},
+            'all_ambiguity': {a: state.G_decomposition[a].ambiguity for a in state.G_decomposition},
 
             # The only "ground truth"
-            'why_this_action': f"Action {state.action} had lowest G = {state.G.get(state.action, 0):.3f}"
+            'why_this_action': f"Action {state.action}: G={selected_G.G:.3f} (risk={selected_G.risk:.3f}, ambiguity={selected_G.ambiguity:.3f})"
         }
 
     def reset(self):
         """Reset agent to initial state."""
         self.model.reset()
         self.fe.reset()
+        self.action_selector.reset_transition_model()  # Reset learned transitions
         self._step_count = 0
         self._F_history = []
         self._info_rate_history = []
