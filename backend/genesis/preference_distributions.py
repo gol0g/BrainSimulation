@@ -7,13 +7,22 @@ Preference Distributions - P(o) as Proper Probability Distributions
 
     이제 Risk = KL[Q(o|a) || P(o)]가 "진짜" KL divergence가 됨.
 
-각 관측 차원별 분포:
+각 관측 차원별 분포 (v2.5: 8차원):
+    === EXTEROCEPTION (외부 세계) ===
     - food_proximity [0]: Beta(5, 1) - 1에 가까울수록 선호 (음식 위에 있고 싶음)
     - danger_proximity [1]: Beta(1, 5) - 0에 가까울수록 선호 (위험에서 멀리)
     - food_dx [2]: Categorical(uniform) - 방향 선호 없음
     - food_dy [3]: Categorical(uniform) - 방향 선호 없음
     - danger_dx [4]: Categorical(uniform) - 방향 선호 없음
     - danger_dy [5]: Categorical(uniform) - 방향 선호 없음
+
+    === INTEROCEPTION (내부 상태) - v2.5 ===
+    - energy [6]: Beta(3, 2) - ~0.6 선호 (항상성: 적당한 에너지)
+    - pain [7]: Beta(1, 5) - 0 선호 (통증 없음)
+
+    Phase 0: 외부 선호 유지, 내부 선호는 약하게 시작
+    Phase 1: lambda로 외부/내부 혼합
+    Phase 2: 내부 선호만 (외부는 학습으로 발견)
 
 Beta 분포 특성:
     - Beta(α, β): α > β → 1 쪽으로 치우침
@@ -87,13 +96,20 @@ class PreferenceDistributions:
     P(o) - Prior preference over observations as probability distributions.
 
     각 관측 차원이 독립이라고 가정:
-    P(o) = P(o_0) × P(o_1) × ... × P(o_5)
+    P(o) = P(o_0) × P(o_1) × ... × P(o_7)
 
     Risk = KL[Q(o|a) || P(o)] 계산 가능.
+
+    v2.5: 8차원 (6 exteroception + 2 interoception)
     """
 
-    def __init__(self):
-        # === PROXIMITY PREFERENCES (Beta distributions) ===
+    def __init__(self, internal_pref_weight: float = 1.0):
+        """
+        Args:
+            internal_pref_weight: Phase 0-2 전환용 lambda (0.0 = 외부만, 1.0 = 내부만)
+                                 v2.5: 기본값 1.0 (내부 선호만) - 테스트에서 더 좋은 성능
+        """
+        # === EXTEROCEPTION PREFERENCES (외부 세계) ===
 
         # food_proximity [0]: Want to be ON food (value near 1)
         # Beta(5, 1): mode at 1, mean = 5/6 ≈ 0.83
@@ -112,11 +128,26 @@ class PreferenceDistributions:
         self.danger_dx_pref = CategoricalParams(probs=uniform_3.copy())
         self.danger_dy_pref = CategoricalParams(probs=uniform_3.copy())
 
-        # === MOVEMENT PREFERENCE (absorbed STAY penalty) ===
-        # "정지 상태 관측"에 대한 비선호 → P(o)에 흡수
-        # 만약 이전 관측과 같은 관측이면 → 약간의 비선호
-        # 이건 나중에 구현 (우선은 proximity/direction만)
-        self.static_obs_penalty = 0.0  # TODO: implement later
+        # === INTEROCEPTION PREFERENCES (내부 상태) - v2.5 ===
+
+        # energy [6]: Homeostatic setpoint around 0.6
+        # Beta(3, 2): mode at 0.67, mean = 0.6
+        # 이것이 "진짜" 선호 - 에너지가 적당해야 함
+        self.energy_pref = BetaParams(alpha=3.0, beta=2.0)
+
+        # pain [7]: Want NO pain (value near 0)
+        # Beta(1, 5): mode at 0, mean = 0.17
+        # 이것이 "진짜" 선호 - 통증이 없어야 함
+        self.pain_pref = BetaParams(alpha=1.0, beta=5.0)
+
+        # === PHASE CONTROL (v2.5) ===
+        # lambda = 0.0: 외부 선호만 (Phase 0)
+        # lambda = 0.5: 혼합 (Phase 1)
+        # lambda = 1.0: 내부 선호만 (Phase 2)
+        self.internal_pref_weight = internal_pref_weight
+
+        # === LEGACY ===
+        self.static_obs_penalty = 0.0
 
     def log_prob_food_prox(self, value: float) -> float:
         """log P(food_proximity = value)"""
@@ -203,17 +234,21 @@ class PreferenceDistributions:
 
     def compute_risk(self,
                      q_obs: np.ndarray,
-                     q_uncertainty: Optional[np.ndarray] = None) -> float:
+                     q_uncertainty: Optional[np.ndarray] = None,
+                     precision_weights: Optional[np.ndarray] = None) -> float:
         """
-        Risk = -log P(predicted_obs) (simplified from KL divergence)
+        Risk = -log P(predicted_obs) with PRECISION weighting
+
+        v2.5: 8차원 지원 (exteroception + interoception)
+        - internal_pref_weight로 외부/내부 선호 혼합 조절
 
         더 간단하고 직관적인 접근:
         - 예측된 관측값이 선호에 맞으면 → 낮은 risk
         - 예측된 관측값이 선호에서 벗어나면 → 높은 risk
 
-        -log P(o)를 사용하면:
-        - food_prox = 1.0 (음식 위) → P(1.0) 높음 → -log 낮음 → risk 낮음 ✓
-        - food_prox = 0.5 (멀리) → P(0.5) 낮음 → -log 높음 → risk 높음 ✓
+        Precision 가중치:
+        - precision_weights[i]가 높으면 → 이 차원의 선호 위반에 더 민감
+        - precision은 예측 오차가 작을수록 높아짐 (신뢰할 수 있는 정보)
 
         Returns:
             Risk value (negative log probability under preference)
@@ -221,38 +256,70 @@ class PreferenceDistributions:
         if len(q_obs) < 6:
             return 0.0
 
-        total_risk = 0.0
+        # Default precision weights (no weighting) - now 8 dimensions
+        if precision_weights is None:
+            precision_weights = np.ones(8)
+        elif len(precision_weights) < 8:
+            # Extend to 8 dimensions if needed
+            precision_weights = np.concatenate([precision_weights, np.ones(8 - len(precision_weights))])
 
-        # === Food proximity risk ===
+        external_risk = 0.0
+        internal_risk = 0.0
+
+        # === EXTEROCEPTION RISK (외부 세계) ===
+        # 외부 선호 가중치: (1 - internal_pref_weight)
+        ext_weight = 1.0 - self.internal_pref_weight
+
+        # Food proximity risk
         # P(o) = Beta(5, 1) prefers high values (near 1.0)
-        # Risk = -log P(food_prox_pred)
         food_prox_pred = np.clip(q_obs[0], 0.01, 0.99)
         log_p_food = self.food_prox_pref.log_pdf(food_prox_pred)
+        max_log_p_food = self.food_prox_pref.log_pdf(0.99)
+        risk_food = max(0.0, -(log_p_food - max_log_p_food))
+        external_risk += risk_food * precision_weights[0]
 
-        # Normalize to reasonable scale (Beta(5,1) has log_pdf range roughly -5 to +1.5)
-        # Shift so that preferred value (food_prox=1.0) has risk ≈ 0
-        max_log_p_food = self.food_prox_pref.log_pdf(0.99)  # Near-max probability
-        risk_food = -(log_p_food - max_log_p_food)  # 0 at preferred, positive elsewhere
-        risk_food = max(0.0, risk_food)  # Ensure non-negative
-
-        total_risk += risk_food
-
-        # === Danger proximity risk ===
+        # Danger proximity risk
         # P(o) = Beta(1, 5) prefers low values (near 0.0)
         danger_prox_pred = np.clip(q_obs[1], 0.01, 0.99)
         log_p_danger = self.danger_prox_pref.log_pdf(danger_prox_pred)
+        max_log_p_danger = self.danger_prox_pref.log_pdf(0.01)
+        risk_danger = max(0.0, -(log_p_danger - max_log_p_danger))
+        external_risk += risk_danger * precision_weights[1]
 
-        max_log_p_danger = self.danger_prox_pref.log_pdf(0.01)  # Near-max probability
-        risk_danger = -(log_p_danger - max_log_p_danger)
-        risk_danger = max(0.0, risk_danger)
+        # Direction risks (categorical) = 0 (uniform preference)
 
-        total_risk += risk_danger
+        # === INTEROCEPTION RISK (내부 상태) - v2.5 ===
+        # 내부 선호 가중치: internal_pref_weight
+        int_weight = self.internal_pref_weight
 
-        # === Direction risks (categorical) ===
-        # Uniform preference = no contribution to risk
-        # Direction is informational, not preferential
+        if len(q_obs) >= 8:
+            # Energy risk
+            # P(o) = Beta(3, 2) prefers ~0.6
+            energy_pred = np.clip(q_obs[6], 0.01, 0.99)
+            log_p_energy = self.energy_pref.log_pdf(energy_pred)
+            max_log_p_energy = self.energy_pref.log_pdf(0.6)  # Near mode
+            risk_energy = max(0.0, -(log_p_energy - max_log_p_energy))
+            internal_risk += risk_energy * precision_weights[6]
+
+            # Pain risk
+            # P(o) = Beta(1, 5) prefers 0
+            pain_pred = np.clip(q_obs[7], 0.01, 0.99)
+            log_p_pain = self.pain_pref.log_pdf(pain_pred)
+            max_log_p_pain = self.pain_pref.log_pdf(0.01)
+            risk_pain = max(0.0, -(log_p_pain - max_log_p_pain))
+            internal_risk += risk_pain * precision_weights[7]
+
+        # === TOTAL RISK ===
+        # Phase 0: ext_weight=1.0, int_weight=0.0 → 외부만
+        # Phase 1: 혼합
+        # Phase 2: ext_weight=0.0, int_weight=1.0 → 내부만
+        total_risk = ext_weight * external_risk + int_weight * internal_risk
 
         return total_risk
+
+    def set_internal_weight(self, weight: float):
+        """Phase 전환을 위한 internal_pref_weight 설정"""
+        self.internal_pref_weight = max(0.0, min(1.0, weight))
 
     def compute_ambiguity(self, transition_uncertainty: float = 0.1) -> float:
         """
@@ -306,3 +373,175 @@ class PreferenceDistributions:
                 'interpretation': 'No directional preference'
             }
         }
+
+
+class StatePreferenceDistribution:
+    """
+    P(s) - Prior preference over hidden states.
+
+    Complexity = KL[Q(s) || P(s)]
+    = "믿음이 선호 상태 분포에서 얼마나 벗어났나"
+
+    핵심 개념:
+    - P(s)는 "에이전트가 어떤 상태에 있고 싶은가"
+    - 상태 s는 관측 o와 연결됨 (상태가 좋으면 좋은 관측)
+    - P(s)가 높은 상태: 안전하고, 음식에 가깝고, 예측 가능한 상태
+
+    Complexity의 역할:
+    - "믿음을 너무 급격하게 바꾸지 마라" (인지적 관성)
+    - "선호 상태에서 벗어난 믿음을 가지면 비용이 든다"
+
+    Expected Complexity for action selection:
+    - E[KL[Q(s'|a) || P(s')]]
+    - "이 행동을 하면 믿음이 선호에서 얼마나 벗어날 것인가"
+    """
+
+    def __init__(self, n_states: int = 16):
+        """
+        Initialize state preference distribution.
+
+        Args:
+            n_states: Number of hidden states
+        """
+        self.n_states = n_states
+
+        # P(s) - 상태 선호 분포
+        # 초기에는 균등하지만, 관측 선호에서 유도됨
+        self.P_s = np.ones(n_states) / n_states
+
+        # 상태-관측 매핑을 통해 P(s) 구성
+        # 상태 i → 예상 관측 o_i → P(o_i)에서 P(s) 유도
+        self._build_from_observation_preferences()
+
+    def _build_from_observation_preferences(self):
+        """
+        관측 선호 P(o)에서 상태 선호 P(s) 유도.
+
+        아이디어:
+        - 상태 s가 "좋은" 관측 o를 생성할 확률이 높으면 → P(s) 높음
+        - P(s) ∝ E_{P(o|s)}[P(o)]
+
+        단순화:
+        - n_states를 격자로 해석
+        - 각 상태를 (food_prox_level, danger_prox_level)로 매핑
+        """
+        # 4x4 격자로 해석 (16 states)
+        # state i → (food_level, danger_level)
+        # food_level: 0-3 (0=far, 3=on food)
+        # danger_level: 0-3 (0=safe, 3=dangerous)
+
+        n_grid = int(np.sqrt(self.n_states))
+        if n_grid * n_grid != self.n_states:
+            n_grid = 4  # Default to 4x4
+
+        obs_prefs = PreferenceDistributions()
+
+        for s in range(self.n_states):
+            food_level = s % n_grid
+            danger_level = s // n_grid
+
+            # 관측으로 매핑 (0-3 → 0.0-1.0)
+            food_prox = food_level / (n_grid - 1)
+            danger_prox = danger_level / (n_grid - 1)
+
+            # P(o) 하에서의 확률
+            log_p_food = obs_prefs.food_prox_pref.log_pdf(np.clip(food_prox, 0.01, 0.99))
+            log_p_danger = obs_prefs.danger_prox_pref.log_pdf(np.clip(danger_prox, 0.01, 0.99))
+
+            # 결합 확률 (독립 가정)
+            log_p_s = log_p_food + log_p_danger
+            self.P_s[s] = np.exp(log_p_s)
+
+        # 정규화
+        self.P_s = self.P_s / self.P_s.sum()
+
+    def compute_complexity(self, Q_s: np.ndarray) -> float:
+        """
+        Complexity = KL[Q(s) || P(s)]
+
+        현재 믿음이 선호 상태 분포에서 얼마나 벗어났나.
+
+        Args:
+            Q_s: Current belief over states
+
+        Returns:
+            Complexity value (KL divergence)
+        """
+        Q_s = np.clip(Q_s, 1e-10, 1.0)
+        Q_s = Q_s / Q_s.sum()
+
+        P_s = np.clip(self.P_s, 1e-10, 1.0)
+
+        # KL[Q || P] = sum Q(s) * log(Q(s) / P(s))
+        kl = np.sum(Q_s * (np.log(Q_s) - np.log(P_s)))
+
+        return max(0.0, kl)
+
+    def compute_expected_complexity(self,
+                                     Q_s_current: np.ndarray,
+                                     transition_matrix: np.ndarray) -> float:
+        """
+        Expected Complexity = KL[Q(s'|a) || P(s')]
+
+        행동 후 예측 믿음이 선호에서 얼마나 벗어날 것인가.
+
+        Args:
+            Q_s_current: Current belief Q(s)
+            transition_matrix: P(s'|s, a) for specific action, shape (n_states, n_states)
+
+        Returns:
+            Expected complexity after action
+        """
+        # Q(s'|a) = sum_s P(s'|s,a) Q(s)
+        Q_s_next = transition_matrix.T @ Q_s_current
+        Q_s_next = np.clip(Q_s_next, 1e-10, 1.0)
+        Q_s_next = Q_s_next / Q_s_next.sum()
+
+        # Complexity of predicted belief
+        return self.compute_complexity(Q_s_next)
+
+    def compute_expected_complexity_from_obs(self,
+                                              current_obs: np.ndarray,
+                                              predicted_obs: np.ndarray) -> float:
+        """
+        관측 공간에서 직접 Expected Complexity 계산.
+
+        상태 공간을 거치지 않고 관측 예측에서 직접 계산.
+        현재 시스템이 관측 기반이므로 더 실용적.
+
+        Args:
+            current_obs: Current observation
+            predicted_obs: Predicted observation after action
+
+        Returns:
+            Expected complexity (proxy)
+
+        핵심 아이디어:
+        - 예측 관측이 "선호 상태"에서 멀어지면 → 높은 complexity
+        - "선호 상태" = food_prox 높고, danger_prox 낮은 상태
+        """
+        if len(predicted_obs) < 2:
+            return 0.0
+
+        obs_prefs = PreferenceDistributions()
+
+        # 예측 관측이 선호에서 얼마나 벗어나는가?
+        food_prox_pred = np.clip(predicted_obs[0], 0.01, 0.99)
+        danger_prox_pred = np.clip(predicted_obs[1], 0.01, 0.99)
+
+        # P(s) = P(food_prox) * P(danger_prox)
+        log_p_food = obs_prefs.food_prox_pref.log_pdf(food_prox_pred)
+        log_p_danger = obs_prefs.danger_prox_pref.log_pdf(danger_prox_pred)
+
+        # 선호 상태의 최대 log prob (food=1, danger=0)
+        max_log_p = (obs_prefs.food_prox_pref.log_pdf(0.99) +
+                     obs_prefs.danger_prox_pref.log_pdf(0.01))
+
+        # Complexity = -(log_p - max_log_p) = 선호에서 벗어난 정도
+        log_p_pred = log_p_food + log_p_danger
+        complexity = -(log_p_pred - max_log_p)
+
+        # 스케일 조정: Risk와 비슷한 스케일로
+        complexity = complexity * 0.3
+
+        return max(0.0, complexity)

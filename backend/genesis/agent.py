@@ -50,6 +50,7 @@ class AgentState:
     # Key components of G for selected action
     risk: float              # KL[Q(o|a) || P(o)] - preference violation
     ambiguity: float         # E[H[P(o|s')]] - observation uncertainty
+    complexity: float        # KL[Q(s'|a) || P(s')] - belief divergence from preferred states
 
     # Inference-related
     prediction_error: float
@@ -63,7 +64,7 @@ class AgentState:
     F_history: List[float]
 
     # Explanation
-    dominant_factor: str     # 'risk_avoidance', 'ambiguity_reduction', or 'balanced'
+    dominant_factor: str     # 'risk_avoidance', 'ambiguity_reduction', 'complexity_avoidance', or 'balanced'
 
 
 class GenesisAgent:
@@ -170,10 +171,15 @@ class GenesisAgent:
         selected_G = action_result.G_all[action_result.action]
 
         # Determine dominant factor (for observer interpretation only)
-        if selected_G.risk > selected_G.ambiguity * 1.5:
+        factors = {'risk': selected_G.risk, 'ambiguity': selected_G.ambiguity, 'complexity': selected_G.complexity}
+        max_factor = max(factors, key=factors.get)
+
+        if max_factor == 'risk' and selected_G.risk > selected_G.ambiguity * 1.5 and selected_G.risk > selected_G.complexity * 1.5:
             dominant = 'risk_avoidance'  # Looks like "fear"
-        elif selected_G.ambiguity > selected_G.risk * 1.5:
+        elif max_factor == 'ambiguity' and selected_G.ambiguity > selected_G.risk * 1.5 and selected_G.ambiguity > selected_G.complexity * 1.5:
             dominant = 'ambiguity_reduction'  # Looks like "curiosity"
+        elif max_factor == 'complexity' and selected_G.complexity > selected_G.risk * 1.5 and selected_G.complexity > selected_G.ambiguity * 1.5:
+            dominant = 'complexity_avoidance'  # Looks like "cognitive conservatism"
         else:
             dominant = 'balanced'
 
@@ -185,6 +191,7 @@ class GenesisAgent:
             G_decomposition=action_result.G_all,
             risk=selected_G.risk,
             ambiguity=selected_G.ambiguity,
+            complexity=selected_G.complexity,
             prediction_error=inference_result.prediction_error,
             belief_update=inference_result.belief_update,
             information_rate=information_rate,
@@ -247,10 +254,15 @@ class GenesisAgent:
         selected_G = action_result.G_all[action_result.action]
 
         # Determine dominant factor
-        if selected_G.risk > selected_G.ambiguity * 1.5:
+        factors = {'risk': selected_G.risk, 'ambiguity': selected_G.ambiguity, 'complexity': selected_G.complexity}
+        max_factor = max(factors, key=factors.get)
+
+        if max_factor == 'risk' and selected_G.risk > selected_G.ambiguity * 1.5 and selected_G.risk > selected_G.complexity * 1.5:
             dominant = 'risk_avoidance'
-        elif selected_G.ambiguity > selected_G.risk * 1.5:
+        elif max_factor == 'ambiguity' and selected_G.ambiguity > selected_G.risk * 1.5 and selected_G.ambiguity > selected_G.complexity * 1.5:
             dominant = 'ambiguity_reduction'
+        elif max_factor == 'complexity' and selected_G.complexity > selected_G.risk * 1.5 and selected_G.complexity > selected_G.ambiguity * 1.5:
+            dominant = 'complexity_avoidance'
         else:
             dominant = 'balanced'
 
@@ -262,6 +274,7 @@ class GenesisAgent:
             G_decomposition=action_result.G_all,
             risk=selected_G.risk,
             ambiguity=selected_G.ambiguity,
+            complexity=selected_G.complexity,
             prediction_error=inference_result.prediction_error,
             belief_update=inference_result.belief_update,
             information_rate=information_rate,
@@ -332,6 +345,8 @@ class GenesisAgent:
             interpretations.append("dominant: avoiding bad outcomes")
         elif state.dominant_factor == 'ambiguity_reduction':
             interpretations.append("dominant: seeking clarity")
+        elif state.dominant_factor == 'complexity_avoidance':
+            interpretations.append("dominant: maintaining cognitive stability")
 
         return {
             'F': F,
@@ -342,18 +357,20 @@ class GenesisAgent:
             'action_G': selected_G.G,
             'observer_interpretations': interpretations,
 
-            # Risk/Ambiguity decomposition (the mechanical explanation)
+            # Risk/Ambiguity/Complexity decomposition (the mechanical explanation)
             'risk': state.risk,
             'ambiguity': state.ambiguity,
+            'complexity': state.complexity,
             'dominant_factor': state.dominant_factor,
 
             # All actions G decomposition
             'all_G': {a: state.G_decomposition[a].G for a in state.G_decomposition},
             'all_risk': {a: state.G_decomposition[a].risk for a in state.G_decomposition},
             'all_ambiguity': {a: state.G_decomposition[a].ambiguity for a in state.G_decomposition},
+            'all_complexity': {a: state.G_decomposition[a].complexity for a in state.G_decomposition},
 
             # The only "ground truth"
-            'why_this_action': f"Action {state.action}: G={selected_G.G:.3f} (risk={selected_G.risk:.3f}, ambiguity={selected_G.ambiguity:.3f})"
+            'why_this_action': f"Action {state.action}: G={selected_G.G:.3f} (risk={selected_G.risk:.3f}, ambiguity={selected_G.ambiguity:.3f}, complexity={selected_G.complexity:.3f})"
         }
 
     def reset(self):
