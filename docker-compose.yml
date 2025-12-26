@@ -1,0 +1,65 @@
+# Genesis Brain - Docker Compose
+# v3.8: Environment reproducibility
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/info')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Frontend (optional - uncomment when needed)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "5173:5173"
+  #   depends_on:
+  #     - backend
+
+  # Reproducibility test runner
+  test-reproducibility:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    entrypoint: ["python", "-c"]
+    command:
+      - |
+        import urllib.request
+        import json
+        import time
+
+        # Wait for backend
+        time.sleep(2)
+
+        # Run reproducibility test
+        url = 'http://backend:8000/reproducibility/test?seed=42&n_steps=50&n_runs=3'
+        req = urllib.request.Request(url, method='POST')
+
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read().decode())
+
+        print('=== Reproducibility Test ===')
+        print(f"Passed: {result['passed']}")
+        print(f"Message: {result['message']}")
+        print(f"Fingerprints: {result['fingerprints']}")
+
+        if not result['passed']:
+            exit(1)
+        print('\\n[OK] G0 Gate: Reproducibility verified!')
+    profiles:
+      - test

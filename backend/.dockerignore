@@ -1,0 +1,38 @@
+# Docker ignore for Genesis Brain backend
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+test_*.py
+*_test.py
+
+# Checkpoints and results (will be created at runtime)
+checkpoints/
+*.json
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

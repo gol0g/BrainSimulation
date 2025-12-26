@@ -23,6 +23,11 @@ import time
 from genesis.agent import GenesisAgent, AgentState
 from genesis.free_energy import FreeEnergyState
 from genesis.scenarios import ScenarioManager, ScenarioType
+from genesis.checkpoint import BrainCheckpoint, HeadlessRunner
+from genesis.reproducibility import (
+    set_global_seed, get_global_seed, get_seed_manager,
+    run_reproducibility_test, SimulationFingerprint
+)
 
 
 
@@ -98,6 +103,10 @@ class World:
 
         # Infant phase: protected environment for learning
         self.infant_steps = 500  # First 500 steps are protected
+
+        # === STATISTICS TRACKING (v3.6) ===
+        self.total_food = 0      # Total food eaten
+        self.total_deaths = 0    # Total deaths
 
     def _random_pos(self) -> List[int]:
         return [np.random.randint(0, self.size), np.random.randint(0, self.size)]
@@ -212,6 +221,7 @@ class World:
         ate_food = (self.agent_pos == self.food_pos)
         if ate_food:
             self.energy = min(1.0, self.energy + 0.3)
+            self.total_food += 1  # v3.6: track total food eaten
             # Infant: respawn food nearby, Adult: random
             if is_infant:
                 self.food_pos = self._spawn_food_nearby()
@@ -247,23 +257,35 @@ class World:
 
         self.step_count += 1
 
+        # Check death
+        died = self.energy <= 0
+        if died:
+            self.total_deaths += 1  # v3.6: track total deaths
+
         return {
             'ate_food': ate_food,
             'hit_danger': hit_danger,
             'hit_wall': hit_wall,
             'energy': self.energy,
             'pain': self.pain,  # v2.5
-            'died': self.energy <= 0,
+            'died': died,
             'is_think': is_think,  # v3.4: THINK action 여부
         }
 
     def reset(self):
+        """Reset world for new episode. Keeps total_food and total_deaths."""
         self.agent_pos = [self.size // 2, self.size // 2]
         self.food_pos = self._nearby_pos()  # Start food nearby
         self.danger_pos = self._far_pos()   # Start danger far
         self.energy = 1.0
         self.pain = 0.0  # v2.5
         self.step_count = 0
+        # Note: total_food and total_deaths persist across episodes
+
+    def reset_statistics(self):
+        """Reset cumulative statistics (v3.6)."""
+        self.total_food = 0
+        self.total_deaths = 0
 
 
 # === INITIALIZE ===
@@ -340,15 +362,32 @@ async def step(params: StepParams):
         # === SCENARIO: 관측 수정 (센서 노이즈, 부분 관측 등) ===
         obs_modified = scenario_manager.modify_observation(obs_before)
 
+        # === MEMORY RECALL (v4.0) ===
+        # G 계산 전에 기억 회상 → memory_bias 설정
+        agent.action_selector.recall_from_memory(obs_modified)
+
         # Agent step (수정된 관측 사용)
         if last_state is None:
             state = agent.step(obs_modified)
         else:
             state = agent.step_with_action(obs_modified, last_action)
 
-        # === SCENARIO: 행동 수정 (미끄러짐 등) ===
+        # === SCENARIO: DRIFT 체크 (G1 Gate) ===
+        drift_just_activated = scenario_manager.check_and_activate_drift()
+
+        # === SCENARIO: 행동 수정 (미끄러짐, DRIFT 등) ===
         intended_action = int(state.action)
         action = scenario_manager.modify_action(intended_action)
+
+        # === MEMORY PREPARE (v4.0) ===
+        # 에피소드 저장 준비 (행동 후 결과와 함께 저장됨)
+        G_before = min(g.G for g in state.G_decomposition.values()) if state.G_decomposition else 0.0
+        agent.action_selector.prepare_episode(
+            t=sim_clock.tick_id,
+            obs_before=obs_modified,
+            action=action,
+            G_before=G_before
+        )
 
         # Execute action in world
         outcome = world.execute_action(action)
@@ -356,9 +395,21 @@ async def step(params: StepParams):
         # Get observation AFTER action
         obs_after = world.get_observation()
 
+        # === COUNTERFACTUAL + REGRET (v4.4) ===
+        # Counterfactual 계산: 선택한 행동이 대안보다 더 큰 G를 초래했는가?
+        # regret 신호는 memory_gate_boost, lr_boost, THINK benefit에 연결됨
+        if agent.action_selector.regret_enabled:
+            agent.action_selector.compute_counterfactual(
+                chosen_action=action,
+                obs_before=obs_before,
+                obs_after=obs_after
+            )
+
         # === TRANSITION MODEL LEARNING (downsampled) ===
+        # v4.2: Use intended_action (not drift-modified action) for transition learning
+        # This ensures drift creates prediction errors (agent learns what it CHOSE, not what was EXECUTED)
         if sim_clock.should_learn():
-            agent.action_selector.update_transition_model(action, obs_before, obs_after)
+            agent.action_selector.update_transition_model(intended_action, obs_before, obs_after)
 
         # === PRECISION LEARNING ===
         # 예측과 실제 관측 비교하여 precision 업데이트
@@ -375,13 +426,74 @@ async def step(params: StepParams):
             action=action
         )
 
+        # === PREFERENCE LEARNING (v3.5) ===
+        # 선호 분포 업데이트 (if enabled)
+        # G 값과 예측 오차를 기반으로 내부 선호(energy, pain) 학습
+        selected_G = state.G_decomposition.get(action)
+        if selected_G:
+            agent.action_selector.update_preference_learning(
+                current_obs=obs_after,
+                G_value=selected_G.G,
+                prediction_error=state.prediction_error
+            )
+
+        # === UNCERTAINTY TRACKING (v4.3) ===
+        # 불확실성 업데이트 (if enabled)
+        # 4가지 소스: belief entropy, action entropy, transition std, prediction error
+        avg_transition_std = np.mean(agent.action_selector.transition_model['delta_std'][:, :2])
+        agent.action_selector.update_uncertainty(
+            prediction_error=state.prediction_error,
+            transition_std=avg_transition_std
+        )
+
+        # === MEMORY STORE (v4.0) ===
+        # 에피소드 저장 시도 (memory_gate로 확률 결정)
+        G_after = min(g.G for g in state.G_decomposition.values()) if state.G_decomposition else 0.0
+        store_result = agent.action_selector.store_episode(obs_after, G_after)
+
+        # === CONSOLIDATION TRIGGER UPDATE (v4.1) ===
+        # Sleep 트리거 상태 업데이트 및 자동 통합 체크
+        merged = store_result.get('merged', False) if store_result else False
+        context_id = 0
+        hc = agent.action_selector.hierarchy_controller
+        if hc is not None and hasattr(hc, 'slow_layer') and hc.slow_layer is not None:
+            context_id = int(np.argmax(hc.slow_layer.Q_context))
+
+        agent.action_selector.update_consolidation_trigger(
+            surprise=state.prediction_error,
+            merged=merged,
+            context_id=context_id
+        )
+
+        # Auto-consolidation check (if enabled)
+        consolidation_result = agent.action_selector.check_and_consolidate()
+        if consolidation_result is not None:
+            print(f"[SLEEP] Consolidation completed: {consolidation_result.episodes_replayed} episodes, "
+                  f"std {consolidation_result.transition_std_before:.3f} -> {consolidation_result.transition_std_after:.3f}")
+
         # Handle death
         if outcome['died']:
             world.reset()
             agent.reset()
 
         # === SCENARIO: 로깅 ===
-        scenario_manager.log_step(state, action, outcome)
+        # v4.3: G1 Gate용 확장 로깅 (DRIFT 시나리오)
+        if (scenario_manager.current_scenario is not None and
+            scenario_manager.current_scenario.type == ScenarioType.DRIFT):
+            # Get volatility info from transition model
+            trans_error = agent.action_selector._last_transition_error
+            volatility_ratio = trans_error.get('volatility_ratio', 0.0) if trans_error else 0.0
+            std_change_pct = trans_error.get('std_change_pct', 0.0) if trans_error else 0.0
+            transition_std = float(np.mean(agent.action_selector.transition_model['delta_std'][:, :2]))
+            G_value = float(state.G_decomposition[action].G) if action in state.G_decomposition else 0.0
+
+            scenario_manager.log_step_g1(
+                state, action, outcome, transition_std, G_value,
+                volatility_ratio=volatility_ratio,
+                std_change_pct=std_change_pct
+            )
+        else:
+            scenario_manager.log_step(state, action, outcome)
 
         # Get explanation
         explanation = agent.get_explanation(state)
@@ -398,7 +510,9 @@ async def step(params: StepParams):
             'energy': world.energy,
             'step': world.step_count,
             'phase': 'infant' if world.step_count < world.infant_steps else 'adult',
-            'phase_progress': min(1.0, world.step_count / world.infant_steps)
+            'phase_progress': min(1.0, world.step_count / world.infant_steps),
+            'total_food': world.total_food,       # v3.6
+            'total_deaths': world.total_deaths,   # v3.6
         },
 
             'free_energy': {
@@ -440,7 +554,9 @@ async def step(params: StepParams):
             'type': scenario_manager.current_scenario.type.value if scenario_manager.current_scenario else None,
             'progress': len(scenario_manager._step_logs) if scenario_manager.current_scenario else 0,
             'duration': scenario_manager.current_scenario.duration if scenario_manager.current_scenario else 0,
-            'action_modified': action != intended_action
+            'action_modified': action != intended_action,
+            'drift_active': scenario_manager._drift_active,
+            'drift_just_activated': drift_just_activated,
         },
 
             'precision': {
@@ -459,7 +575,26 @@ async def step(params: StepParams):
 
             'hierarchy': agent.action_selector.get_hierarchy_status(),
 
-            'think': agent.action_selector.get_think_status()  # v3.4
+            'think': agent.action_selector.get_think_status(),  # v3.4
+
+            'preference_learning': agent.action_selector.get_preference_learning_status(),  # v3.5
+
+            'uncertainty': agent.action_selector.get_uncertainty_status(),  # v4.3
+
+            'memory': agent.action_selector.get_memory_status(),  # v4.0
+
+            'consolidation': agent.action_selector.get_consolidation_status(),  # v4.1
+
+            'regret': agent.action_selector.get_regret_status(),  # v4.4
+
+            # v4.2: Transition model learning info for G1 Gate debugging
+            'transition_learning': {
+                'avg_std': float(np.mean(agent.action_selector.transition_model['delta_std'][:, :2])),
+                'std_per_action': [float(np.mean(agent.action_selector.transition_model['delta_std'][a, :2]))
+                                   for a in range(5)],
+                'counts': agent.action_selector.transition_model['count'][:5].tolist(),
+                'last_error': agent.action_selector._last_transition_error,
+            }
         })
         sim_clock.advance()
         sim_clock.cached_response = response
@@ -528,8 +663,21 @@ async def list_scenarios():
 
 
 @app.post("/scenario/start/{scenario_id}")
-async def start_scenario(scenario_id: str, duration: int = 200):
-    """시나리오 시작"""
+async def start_scenario(
+    scenario_id: str,
+    duration: int = 200,
+    drift_after: int = 100,
+    drift_type: str = "rotate"
+):
+    """
+    시나리오 시작
+
+    Args:
+        scenario_id: 시나리오 ID (conflict, deadend, temptation, sensor_noise, partial_obs, slip, drift)
+        duration: 총 스텝 수
+        drift_after: DRIFT 시나리오용 - 몇 스텝 후 drift 시작
+        drift_type: DRIFT 시나리오용 - rotate, flip_x, flip_y, reverse
+    """
     global last_action, last_state
 
     scenario_map = {
@@ -539,6 +687,7 @@ async def start_scenario(scenario_id: str, duration: int = 200):
         "sensor_noise": ScenarioType.SENSOR_NOISE,
         "partial_obs": ScenarioType.PARTIAL_OBS,
         "slip": ScenarioType.SLIP,
+        "drift": ScenarioType.DRIFT,  # G1 Gate용
     }
 
     if scenario_id not in scenario_map:
@@ -550,10 +699,19 @@ async def start_scenario(scenario_id: str, duration: int = 200):
         sim_clock.tick_id = 0
         sim_clock.cached_response = None
 
-        result = scenario_manager.start_scenario(
-            scenario_map[scenario_id],
-            duration=duration
-        )
+        # DRIFT 시나리오는 추가 파라미터 필요
+        if scenario_id == "drift":
+            result = scenario_manager.start_scenario(
+                scenario_map[scenario_id],
+                duration=duration,
+                drift_after=drift_after,
+                drift_type=drift_type
+            )
+        else:
+            result = scenario_manager.start_scenario(
+                scenario_map[scenario_id],
+                duration=duration
+            )
 
     return result
 
@@ -600,6 +758,70 @@ async def scenario_results():
             "adaptation_score": round(r.adaptation_score, 3),
         })
     return {"results": results}
+
+
+@app.get("/scenario/g1_gate")
+async def g1_gate_result():
+    """
+    G1 Gate (Generalization Test) 결과 조회 - v4.3 Enhanced
+
+    DRIFT 시나리오 실행 후 호출하여 결과 확인
+
+    Returns:
+        v4.3 Enhanced Metrics:
+        - std_auc_shock: shock window에서 std 면적 (급변 감지 강도)
+        - peak_std_ratio: max(std) / pre_std (스파이크 강도)
+        - volatility_auc: shock window에서 volatility 면적
+        - time_to_recovery: 회복까지 걸린 스텝
+        - food_rate_*: 각 phase별 food rate
+    """
+    result = scenario_manager.get_g1_gate_result()
+    if result is None:
+        return {
+            "error": "DRIFT 시나리오가 실행되지 않았거나 충분한 데이터가 없습니다",
+            "hint": "POST /scenario/start/drift?duration=100&drift_after=50&drift_type=reverse 로 시나리오 시작"
+        }
+
+    return {
+        "drift_type": result.drift_type,
+        "drift_after": result.drift_after,
+
+        # Pre-drift
+        "pre_drift": {
+            "food": result.pre_drift_food,
+            "danger": result.pre_drift_danger,
+            "avg_G": result.pre_drift_avg_G,
+            "transition_std": result.pre_drift_transition_std,
+            "food_rate": result.food_rate_pre,
+        },
+
+        # Post-drift
+        "post_drift": {
+            "food": result.post_drift_food,
+            "danger": result.post_drift_danger,
+            "avg_G": result.post_drift_avg_G,
+            "transition_std": result.post_drift_transition_std,
+        },
+
+        # v4.3 Enhanced Metrics
+        "enhanced_metrics": {
+            "std_auc_shock": result.std_auc_shock,
+            "peak_std_ratio": result.peak_std_ratio,
+            "volatility_auc": result.volatility_auc,
+            "time_to_recovery": result.time_to_recovery,
+            "food_rate_shock": result.food_rate_shock,
+            "food_rate_adapt": result.food_rate_adapt,
+        },
+
+        # Original metrics
+        "std_increase_ratio": result.std_increase_ratio,
+        "adaptation_steps": result.adaptation_steps,
+        "recovery_ratio": result.recovery_ratio,
+
+        # Gate result
+        "passed": result.passed,
+        "reasons": result.reasons,
+    }
 
 
 # === TEMPORAL DEPTH API ===
@@ -857,12 +1079,631 @@ async def think_status():
     return agent.action_selector.get_think_status()
 
 
+# === PREFERENCE LEARNING API (v3.5) ===
+
+@app.post("/preference/learning/enable")
+async def enable_preference_learning(mode_lr: float = 0.02, concentration_lr: float = 0.01):
+    """
+    온라인 선호 학습 활성화 (v3.5)
+
+    내부 선호(energy, pain)의 Beta 파라미터를 경험에서 학습.
+
+    핵심 원리:
+    - G가 낮았으면 (좋은 결과) → 현재 내부 상태를 더 선호하도록 mode 이동
+    - G가 높았으면 (나쁜 결과) → 현재 내부 상태에서 멀어지도록 mode 이동
+    - 일관된 경험 → concentration 증가 (확신)
+    - 불일치 경험 → concentration 감소 (불확실)
+
+    Args:
+        mode_lr: mode 학습률 (기본 0.02)
+        concentration_lr: concentration 학습률 (기본 0.01)
+    """
+    agent.action_selector.enable_preference_learning(
+        mode_lr=mode_lr,
+        concentration_lr=concentration_lr
+    )
+    return {
+        "status": "enabled",
+        "mode_lr": mode_lr,
+        "concentration_lr": concentration_lr
+    }
+
+
+@app.post("/preference/learning/disable")
+async def disable_preference_learning():
+    """온라인 선호 학습 비활성화"""
+    agent.action_selector.disable_preference_learning()
+    return {"status": "disabled"}
+
+
+@app.post("/preference/learning/reset")
+async def reset_preference_learning():
+    """선호 학습 리셋 (초기값으로)"""
+    agent.action_selector.reset_preference_learning()
+    return {"status": "reset"}
+
+
+@app.get("/preference/learning/status")
+async def preference_learning_status():
+    """현재 선호 학습 상태 조회"""
+    return agent.action_selector.get_preference_learning_status()
+
+
+# === UNCERTAINTY/CONFIDENCE API (v4.3) ===
+
+@app.post("/uncertainty/enable")
+async def enable_uncertainty(
+    belief_weight: float = 0.25,
+    action_weight: float = 0.30,
+    model_weight: float = 0.20,
+    surprise_weight: float = 0.25,
+    sensitivity: float = 1.0
+):
+    """
+    불확실성 추적 활성화 (v4.3)
+
+    불확실성이 "자동으로" 행동을 바꾸게 만듦:
+    - THINK 선택 확률/비용 연동 (불확실 → THINK 유리)
+    - Precision 메타-조절 (불확실 → precision 낮춤)
+    - 탐색/회피 균형 (불확실 → 탐색 보너스)
+    - 기억 저장 게이트 (v4.0 준비)
+
+    4가지 불확실성 소스:
+    1) Belief (context entropy): "어떤 상황인지 모름"
+    2) Action (decision entropy): "뭘 해야 할지 모름"
+    3) Model (transition std): "행동 결과를 모름"
+    4) Surprise (prediction error): "예측이 틀림"
+
+    Args:
+        belief_weight: context belief 엔트로피 가중치
+        action_weight: action 선택 엔트로피 가중치
+        model_weight: 전이 모델 불확실성 가중치
+        surprise_weight: 예측 오차 가중치
+        sensitivity: 조절 민감도 (0.0~2.0)
+    """
+    agent.action_selector.enable_uncertainty(
+        belief_weight=belief_weight,
+        action_weight=action_weight,
+        model_weight=model_weight,
+        surprise_weight=surprise_weight,
+        sensitivity=sensitivity
+    )
+    return {
+        "status": "enabled",
+        "weights": {
+            "belief": belief_weight,
+            "action": action_weight,
+            "model": model_weight,
+            "surprise": surprise_weight
+        },
+        "sensitivity": sensitivity
+    }
+
+
+@app.post("/uncertainty/disable")
+async def disable_uncertainty():
+    """불확실성 추적 비활성화"""
+    agent.action_selector.disable_uncertainty()
+    return {"status": "disabled"}
+
+
+@app.post("/uncertainty/reset")
+async def reset_uncertainty():
+    """불확실성 상태 리셋"""
+    agent.action_selector.reset_uncertainty()
+    return {"status": "reset"}
+
+
+@app.get("/uncertainty/status")
+async def uncertainty_status():
+    """
+    현재 불확실성 상태 조회
+
+    Returns:
+        - state: global_uncertainty, global_confidence, components
+        - modulation: think_bias, precision_mult, exploration_bonus, memory_gate
+        - top_factor: 현재 불확실성의 주 원인
+        - top_factor_distribution: 최근 top factor 분포
+    """
+    return agent.action_selector.get_uncertainty_status()
+
+
+@app.get("/uncertainty/memory_gate")
+async def get_memory_gate():
+    """
+    기억 저장 게이트 값 반환 (v4.0 Memory 준비용)
+
+    Returns:
+        memory_gate: 0.0~1.0
+            - 0.0 = 저장 안 함 (안정적, 반복적)
+            - 1.0 = 강하게 저장 (놀라움, 불확실)
+    """
+    return {
+        "memory_gate": agent.action_selector.get_memory_gate()
+    }
+
+
+# === LONG-TERM MEMORY API (v4.0) ===
+
+@app.post("/memory/enable")
+async def enable_memory(
+    max_episodes: int = 1000,
+    store_threshold: float = 0.5,
+    store_sharpness: float = 5.0,
+    similarity_threshold: float = 0.95,
+    recall_top_k: int = 5
+):
+    """
+    장기 기억 활성화 (v4.0)
+
+    기억 = 미래 F/G를 줄이는 압축 모델
+    - 저장: memory_gate > threshold일 때 확률적 저장
+    - 회상: 유사 상황 검색 → G bias (행동 직접 지시 X)
+    - 불확실할 때 기억에 더 의존
+
+    Args:
+        max_episodes: 최대 저장 에피소드 수
+        store_threshold: 저장 임계값 (0.5 = memory_gate 50%에서 50% 확률)
+        store_sharpness: sigmoid 기울기
+        similarity_threshold: 중복 억제 유사도 (0.95 = 95% 유사하면 병합)
+        recall_top_k: 회상 시 상위 k개 에피소드 사용
+    """
+    agent.action_selector.enable_memory(
+        max_episodes=max_episodes,
+        store_threshold=store_threshold,
+        store_sharpness=store_sharpness,
+        similarity_threshold=similarity_threshold,
+        recall_top_k=recall_top_k
+    )
+    return {
+        "status": "enabled",
+        "max_episodes": max_episodes,
+        "store_threshold": store_threshold,
+        "similarity_threshold": similarity_threshold,
+        "recall_top_k": recall_top_k
+    }
+
+
+@app.post("/memory/disable")
+async def disable_memory():
+    """장기 기억 비활성화 (저장소는 유지)"""
+    agent.action_selector.disable_memory()
+    return {"status": "disabled"}
+
+
+@app.post("/memory/reset")
+async def reset_memory():
+    """장기 기억 저장소 초기화"""
+    agent.action_selector.reset_memory()
+    return {"status": "reset"}
+
+
+@app.get("/memory/status")
+async def memory_status():
+    """
+    현재 기억 상태 조회
+
+    Returns:
+        - enabled: 활성화 여부
+        - stats: 저장/회상 통계
+        - last_recall: 마지막 회상 결과
+        - last_store: 마지막 저장 결과
+    """
+    return agent.action_selector.get_memory_status()
+
+
+@app.get("/memory/episodes")
+async def get_episodes(limit: int = 10):
+    """최근 저장된 에피소드 목록"""
+    return {
+        "episodes": agent.action_selector.get_recent_episodes(limit)
+    }
+
+
+# === CONSOLIDATION API (v4.1) ===
+
+@app.post("/consolidation/enable")
+async def enable_consolidation(
+    similarity_threshold: float = 0.9,
+    min_cluster_size: int = 2,
+    replay_batch_size: int = 20,
+    auto_trigger: bool = True
+):
+    """
+    v4.1 Memory Consolidation 활성화
+
+    Args:
+        similarity_threshold: 프로토타입 생성 유사도 기준 (0.9)
+        min_cluster_size: 클러스터링 최소 에피소드 수 (2)
+        replay_batch_size: replay 시 처리할 에피소드 수 (20)
+        auto_trigger: 자동 sleep 트리거 여부 (True)
+
+    Returns:
+        status: enabled, configuration
+    """
+    agent.action_selector.enable_consolidation(
+        similarity_threshold=similarity_threshold,
+        min_cluster_size=min_cluster_size,
+        replay_batch_size=replay_batch_size,
+        auto_trigger=auto_trigger
+    )
+    return {
+        "status": "enabled",
+        "similarity_threshold": similarity_threshold,
+        "min_cluster_size": min_cluster_size,
+        "replay_batch_size": replay_batch_size,
+        "auto_trigger": auto_trigger
+    }
+
+
+@app.post("/consolidation/disable")
+async def disable_consolidation():
+    """Memory Consolidation 비활성화"""
+    agent.action_selector.disable_consolidation()
+    return {"status": "disabled"}
+
+
+@app.post("/consolidation/trigger")
+async def trigger_consolidation():
+    """
+    수동 Sleep 트리거
+
+    자동 트리거 조건과 무관하게 즉시 통합 실행.
+
+    Returns:
+        result: ConsolidationResult (episodes_replayed, transition_std before/after, etc.)
+    """
+    result = agent.action_selector.force_consolidate()
+    if result is None:
+        return {"status": "failed", "reason": "consolidation not enabled or no memory"}
+
+    return {
+        "status": "completed",
+        "episodes_replayed": result.episodes_replayed,
+        "transition_updates": result.transition_updates,
+        "prototypes_created": result.prototypes_created,
+        "context_updates": result.context_updates,
+        "transition_std_before": result.transition_std_before,
+        "transition_std_after": result.transition_std_after,
+        "compression_ratio": result.compression_ratio,
+        "avg_cluster_size": result.avg_cluster_size
+    }
+
+
+@app.get("/consolidation/status")
+async def consolidation_status():
+    """
+    현재 통합 시스템 상태 조회
+
+    Returns:
+        - enabled: 활성화 여부
+        - should_sleep: 현재 sleep 트리거 조건 충족 여부
+        - trigger_signals: 각 트리거 신호 값
+        - stats: 총 sleeps, 프로토타입 수 등
+        - last_result: 마지막 통합 결과
+        - current_transition_std: 현재 평균 transition_std
+    """
+    return agent.action_selector.get_consolidation_status()
+
+
+@app.post("/consolidation/reset")
+async def reset_consolidation():
+    """통합 시스템 초기화"""
+    agent.action_selector.reset_consolidation()
+    return {"status": "reset"}
+
+
+# === CHECKPOINT API (v3.6) ===
+
+checkpoint_manager = BrainCheckpoint()
+
+
+@app.post("/checkpoint/save")
+async def save_checkpoint(filename: str = "brain_checkpoint.json", description: str = ""):
+    """
+    현재 뇌 상태를 체크포인트로 저장
+
+    저장 대상:
+    - transition_model (전이 모델)
+    - precision_learner (정밀도 학습기)
+    - hierarchy_controller (계층 컨트롤러)
+    - preference_learner (선호 학습기)
+    - world 상태
+    """
+    filepath = checkpoint_manager.save(
+        action_selector=agent.action_selector,
+        world=world,
+        filename=filename,
+        description=description
+    )
+    return {"status": "saved", "filepath": filepath}
+
+
+@app.post("/checkpoint/load")
+async def load_checkpoint(filename: str = "brain_checkpoint.json"):
+    """체크포인트에서 뇌 상태 복원"""
+    try:
+        metadata = checkpoint_manager.load(
+            action_selector=agent.action_selector,
+            world=world,
+            filename=filename
+        )
+        return {
+            "status": "loaded",
+            "metadata": {
+                "version": metadata.version,
+                "timestamp": metadata.timestamp,
+                "step_count": metadata.step_count,
+                "description": metadata.description
+            }
+        }
+    except FileNotFoundError:
+        return {"status": "error", "message": f"Checkpoint '{filename}' not found"}
+
+
+@app.get("/checkpoint/list")
+async def list_checkpoints():
+    """사용 가능한 체크포인트 목록"""
+    return checkpoint_manager.list_checkpoints()
+
+
+# === HEADLESS EVALUATION API (v3.6) ===
+
+@app.post("/evaluate")
+async def run_evaluation(
+    n_episodes: int = 10,
+    max_steps: int = 500,
+    seed: int = None
+):
+    """
+    헤드리스 평가 실행
+
+    UI 없이 N 에피소드 자동 평가.
+
+    Args:
+        n_episodes: 에피소드 수
+        max_steps: 에피소드당 최대 스텝
+        seed: 랜덤 시드 (재현성)
+    """
+    runner = HeadlessRunner(agent, world, agent.action_selector, seed=seed)
+    result = runner.run(n_episodes=n_episodes, max_steps_per_episode=max_steps, verbose=False)
+    return result.to_dict()
+
+
+@app.post("/evaluate/save")
+async def run_and_save_evaluation(
+    n_episodes: int = 10,
+    max_steps: int = 500,
+    seed: int = None,
+    filename: str = "evaluation_result.json"
+):
+    """평가 실행 후 결과를 JSON으로 저장"""
+    runner = HeadlessRunner(agent, world, agent.action_selector, seed=seed)
+    result = runner.run(n_episodes=n_episodes, max_steps_per_episode=max_steps, verbose=False)
+    filepath = runner.save_result(result, filename)
+    return {"status": "saved", "filepath": filepath, "summary": {
+        "n_episodes": result.n_episodes,
+        "avg_food": result.avg_food_per_episode,
+        "survival_rate": result.survival_rate
+    }}
+
+
+# === SEED & REPRODUCIBILITY API (v3.7) ===
+
+@app.post("/seed")
+async def set_seed(seed: int):
+    """
+    글로벌 시드 설정 (재현성)
+
+    모든 랜덤 소스(np.random, random)의 시드를 고정.
+    동일 시드 → 동일 결과 보장.
+    """
+    set_global_seed(seed)
+    return {"status": "seed_set", "seed": seed}
+
+
+@app.get("/seed")
+async def get_seed():
+    """현재 시드 상태 조회"""
+    return get_seed_manager().get_status()
+
+
+@app.post("/reproducibility/test")
+async def test_reproducibility(
+    seed: int = 42,
+    n_steps: int = 100,
+    n_runs: int = 3
+):
+    """
+    재현성 테스트 실행
+
+    동일 seed로 n_runs번 시뮬레이션을 돌려서
+    모든 결과가 동일한지 검증.
+
+    합격 기준: 모든 실행의 fingerprint가 동일
+    """
+    result = run_reproducibility_test(
+        agent=agent,
+        world=world,
+        action_selector=agent.action_selector,
+        seed=seed,
+        n_steps=n_steps,
+        n_runs=n_runs
+    )
+    return {
+        "passed": result.passed,
+        "seed": result.seed,
+        "n_runs": result.n_runs,
+        "fingerprints": result.fingerprints,
+        "message": result.message,
+        "details": result.details
+    }
+
+
+# === ABLATION STUDY API (v4.3) ===
+
+from genesis.ablation import AblationRunner, AblationConfig, STANDARD_ABLATIONS, compute_ablation_contribution
+
+# Note: AblationRunner needs actual step execution which is complex
+# For now, provide config listing and manual ablation support
+
+@app.get("/ablation/configs")
+async def ablation_configs():
+    """사용 가능한 ablation 설정 목록"""
+    return {
+        "configs": [
+            {
+                "name": c.name,
+                "memory": c.memory_enabled,
+                "sleep": c.sleep_enabled,
+                "think": c.think_enabled,
+                "hierarchy": c.hierarchy_enabled,
+            }
+            for c in STANDARD_ABLATIONS
+        ],
+        "description": "각 config에 대해 G1 Gate 실행 후 /scenario/g1_gate로 결과 비교"
+    }
+
+
+@app.post("/ablation/apply")
+async def apply_ablation_config(
+    memory: bool = False,
+    sleep: bool = False,
+    think: bool = False,
+    hierarchy: bool = False,
+    regret: bool = False
+):
+    """
+    Ablation 설정 적용
+
+    Args:
+        memory: LTM 활성화 여부
+        sleep: Sleep/Consolidation 활성화 여부
+        think: THINK action 활성화 여부
+        hierarchy: Hierarchical context 활성화 여부
+        regret: Counterfactual + Regret 활성화 여부 (v4.4)
+
+    Usage:
+        1. POST /ablation/apply?memory=true&hierarchy=true&regret=true
+        2. POST /scenario/start/drift?duration=100&drift_after=50&drift_type=reverse
+        3. (run steps)
+        4. GET /scenario/g1_gate
+        5. 다른 config로 반복하여 비교
+    """
+    # Memory
+    if memory:
+        agent.action_selector.enable_memory(store_threshold=0.5)
+    else:
+        agent.action_selector.disable_memory()
+
+    # Sleep
+    if sleep:
+        agent.action_selector.enable_consolidation(auto_trigger=True)
+    else:
+        agent.action_selector.disable_consolidation()
+
+    # THINK
+    if think:
+        agent.action_selector.enable_think()
+    else:
+        agent.action_selector.disable_think()
+
+    # Hierarchy
+    if hierarchy:
+        agent.action_selector.enable_hierarchy(K=4, update_interval=10)
+    else:
+        agent.action_selector.disable_hierarchy()
+
+    # Regret (v4.4)
+    if regret:
+        agent.action_selector.enable_regret()
+    else:
+        agent.action_selector.disable_regret()
+
+    return {
+        "applied": {
+            "memory": memory,
+            "sleep": sleep,
+            "think": think,
+            "hierarchy": hierarchy,
+            "regret": regret
+        },
+        "status": "ok",
+        "next_step": "POST /scenario/start/drift 로 G1 Gate 테스트 시작"
+    }
+
+
+# === REGRET API (v4.4) ===
+
+@app.post("/regret/enable")
+async def enable_regret():
+    """
+    Counterfactual + Regret 활성화 (v4.4)
+
+    후회(regret)는 "감정 변수"가 아니라,
+    선택한 행동이 대안 행동보다 얼마나 더 큰 G를 초래했는지에 대한 '사후 EFE 차이'.
+
+    연결 방식 (FEP스럽게):
+    - 정책 직접 변경 X
+    - memory_gate, lr_boost, THINK 비용/편익 조정 O
+    → "후회가 '학습/추론 자원 배분'을 바꾸는 구조"
+    """
+    agent.action_selector.enable_regret()
+    return {"status": "enabled", "message": "Counterfactual + Regret system activated"}
+
+
+@app.post("/regret/disable")
+async def disable_regret():
+    """Counterfactual + Regret 비활성화"""
+    agent.action_selector.disable_regret()
+    return {"status": "disabled"}
+
+
+@app.post("/regret/reset")
+async def reset_regret():
+    """Regret 상태 초기화 (엔진은 활성 상태 유지)"""
+    agent.action_selector.reset_regret()
+    return {"status": "reset"}
+
+
+@app.get("/regret/status")
+async def regret_status():
+    """
+    현재 Regret 상태 조회
+
+    Returns:
+        - enabled: 활성화 여부
+        - engine_status: CounterfactualEngine 상태
+            - step_counter: 총 counterfactual 계산 횟수
+            - regret_state: 누적 regret, 최적 선택 비율 등
+            - last_result: 마지막 counterfactual 결과
+            - modulation: memory_gate_boost, lr_boost_factor, think_benefit_boost
+    """
+    return agent.action_selector.get_regret_status()
+
+
+@app.get("/regret/modulation")
+async def regret_modulation():
+    """
+    Regret 기반 조절 파라미터 반환
+
+    Returns:
+        - memory_gate_boost: 기억 저장 게이트 증가량 (0~0.3)
+        - lr_boost_factor: 학습률 승수 (1.0~1.5)
+        - think_benefit_boost: THINK 효과 증가량 (0~0.2)
+        - regret_real: 실제 후회 값
+        - regret_pred: 예측 기반 후회 값
+        - is_spike: 후회 급증 여부
+    """
+    return agent.action_selector.get_regret_modulation()
+
+
 @app.get("/info")
 async def info():
     """Get system info."""
     return {
         'name': 'Genesis Brain',
-        'version': 'v3.4 - THINK Action (Metacognition)',
+        'version': 'v4.0 - Long-Term Memory',
         'principle': 'Free Energy Minimization',
         'equations': {
             'F': 'Prediction Error + Complexity',

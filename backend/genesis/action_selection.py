@@ -31,10 +31,14 @@ from dataclasses import dataclass
 
 from .free_energy import FreeEnergyEngine
 from .generative_model import GenerativeModel
-from .preference_distributions import PreferenceDistributions, StatePreferenceDistribution
+from .preference_distributions import PreferenceDistributions, StatePreferenceDistribution, PreferenceLearner
 from .precision import PrecisionLearner, PrecisionState
 from .temporal import TemporalPlanner, RolloutResult
 from .hierarchy import HierarchicalController
+from .uncertainty import UncertaintyTracker, UncertaintyState, UncertaintyModulation, compute_context_entropy
+from .memory import LTMStore, Episode, RecallResult, compute_outcome_score
+from .consolidation import MemoryConsolidator, ConsolidationResult
+from .regret import CounterfactualEngine, CounterfactualResult, RegretState
 
 
 @dataclass
@@ -92,6 +96,11 @@ class ActionSelector:
         # === TRUE FEP v2.3: Precision Learning ===
         self.precision_learner = PrecisionLearner(n_obs=6, n_actions=n_actions)
         self._predicted_obs: Optional[np.ndarray] = None  # 예측 저장 (precision 업데이트용)
+
+        # === TRUE FEP v3.5: Online Preference Learning ===
+        # 내부 선호(energy, pain)의 Beta 파라미터를 경험에서 학습
+        self.preference_learner: Optional[PreferenceLearner] = None
+        self.preference_learning_enabled = False
 
         # === TRUE FEP v2.4: Temporal Depth ===
         self.temporal_planner: Optional[TemporalPlanner] = None
@@ -163,6 +172,9 @@ class ActionSelector:
         # Learning rate for transition model
         self.transition_lr = 0.1
 
+        # v4.2: Volatility tracking for transition model
+        self._last_transition_error = None
+
         # === TRUE FEP v3.0: Hierarchical Models ===
         # Slow layer가 fast layer의 precision을 조절
         self.hierarchy_controller: Optional[HierarchicalController] = None
@@ -203,12 +215,67 @@ class ActionSelector:
         self.think_enabled = False  # 기본: 비활성화
         self.think_energy_cost = 0.003  # THINK 시 energy 감소 (환경과 동일)
 
+        # === v3.4.1: THINK 최적화 ===
+        # 1) 2단계 게이트: entropy 높을 때만 THINK 평가
+        self.think_entropy_threshold = 1.0  # log(5)≈1.61의 ~62%
+        self.think_G_spread_threshold = 0.1  # G 차이가 이것보다 작으면 애매한 상황
+        self._think_gate_passed = False  # 디버그용: 게이트 통과 여부
+
+        # 2) THINK rollout 예산 하드캡
+        self.think_rollout_horizon = 2  # THINK용 rollout은 짧게
+        self.think_rollout_samples = 1  # 샘플 1개만
+
+        # 3) THINK 쿨다운
+        self.think_cooldown = 5  # THINK 후 N step 동안 THINK 평가 스킵
+        self._think_cooldown_counter = 0  # 현재 남은 쿨다운
+
         # THINK 선택 로그
         self._last_think_selected = False
         self._last_think_reason = ""
         self._last_expected_improvement = 0.0
         self._think_count = 0
         self._physical_action_after_think = None
+
+        # === TRUE FEP v4.3: Uncertainty/Confidence Tracking ===
+        # 불확실성 기반 자기조절 시스템
+        # - THINK 선택 확률/비용 연동
+        # - Precision 메타-조절
+        # - 탐색/회피 균형
+        # - 기억 저장 게이트 (v4.0 준비)
+        self.uncertainty_tracker: Optional[UncertaintyTracker] = None
+        self.uncertainty_enabled = False
+        self._last_uncertainty_state: Optional[UncertaintyState] = None
+        self._last_uncertainty_modulation: Optional[UncertaintyModulation] = None
+
+        # === TRUE FEP v4.0: Long-Term Memory ===
+        # 기억 = 미래 F/G를 줄이는 압축 모델
+        # - 저장: memory_gate > threshold일 때 확률적 저장
+        # - 회상: 유사 상황 검색 → G bias (행동 직접 지시 X)
+        # - 압축: 유사 에피소드 병합
+        self.ltm_store: Optional[LTMStore] = None
+        self.memory_enabled = False
+        self._last_recall_result: Optional[RecallResult] = None
+        self._last_store_result: Optional[Dict] = None
+        self._pending_episode_data: Optional[Dict] = None  # 저장 대기 중 에피소드 정보
+
+        # === TRUE FEP v4.1: Memory Consolidation (Sleep) ===
+        # 수면/통합: LTM을 "조언자"에서 "prior"로 변환
+        # - 트리거: low_surprise + high_redundancy + stable_context
+        # - 효과: transition_std 감소, uncertainty 감소, G 감소
+        self.consolidator: Optional[MemoryConsolidator] = None
+        self.consolidation_enabled = False
+        self._last_consolidation_result: Optional[ConsolidationResult] = None
+        self._consolidation_auto = True  # 자동 통합 트리거 여부
+
+        # === TRUE FEP v4.4: Counterfactual + Regret ===
+        # 후회 = 선택한 행동이 대안보다 얼마나 더 큰 G를 초래했는지의 '사후 EFE 차이'
+        # 연결 방식 (FEP스럽게):
+        # - 정책 직접 변경 X
+        # - memory_gate, lr_boost, THINK 비용/편익 보정 O
+        self.counterfactual_engine: Optional[CounterfactualEngine] = None
+        self.regret_enabled = False
+        self._last_cf_result: Optional[CounterfactualResult] = None
+        self._last_G_pred: Dict[int, float] = {}  # 선택 시점 G 저장용
 
     def compute_G(self, Q_s: Optional[np.ndarray] = None, current_obs: Optional[np.ndarray] = None) -> Dict[int, GDecomposition]:
         """
@@ -414,7 +481,25 @@ class ActionSelector:
                 # Internal preference weight modulation
                 self.preferences.internal_pref_weight = mod['internal_pref_weight']
 
-            risk = self.preferences.compute_risk(Q_o, q_uncertainty, risk_weights)
+            # v4.3: Uncertainty-based precision modulation
+            # 불확실성 높음 → precision 낮춤 → 관측을 덜 믿음
+            # 불확실성 낮음 → precision 높임 → 집중/확신
+            risk_sensitivity = 1.0
+            if self.uncertainty_enabled and self._last_uncertainty_modulation is not None:
+                unc_mod = self._last_uncertainty_modulation
+                risk_weights = risk_weights * unc_mod.sensory_precision_mult
+                effective_goal_precision *= unc_mod.goal_precision_mult
+                risk_sensitivity = unc_mod.risk_sensitivity
+
+                # v4.3.1 안전점검: 위험 근접 시 risk_sensitivity 하한 상향
+                # danger_proximity(Q_o[1])가 높으면 → 최소 민감도 올림
+                danger_proximity = Q_o[1] if len(Q_o) > 1 else 0.0
+                if danger_proximity > 0.3:
+                    # 위험 가까울수록 민감도 최소값 상향 (0.6 → 0.9)
+                    min_sensitivity = 0.6 + 0.3 * min(1.0, (danger_proximity - 0.3) / 0.7)
+                    risk_sensitivity = max(min_sensitivity, risk_sensitivity)
+
+            risk = self.preferences.compute_risk(Q_o, q_uncertainty, risk_weights) * risk_sensitivity
 
             # === AMBIGUITY: E_{Q(s'|a)}[H[P(o|s')]] with PRECISION weighting ===
             # FEP 정의: 전이 모델의 불확실성만 사용
@@ -423,6 +508,11 @@ class ActionSelector:
             avg_uncertainty = np.mean(transition_std[:2])  # proximity 차원
             ambiguity_weight = self.precision_learner.get_ambiguity_weight(a)
             ambiguity = self.preferences.compute_ambiguity(avg_uncertainty) * ambiguity_weight
+
+            # v4.3: Exploration bonus from uncertainty
+            # 불확실성 높음 → ambiguity가 낮아짐 → 탐색 행동 장려
+            if self.uncertainty_enabled and self._last_uncertainty_modulation is not None:
+                ambiguity = max(0.0, ambiguity - self._last_uncertainty_modulation.exploration_bonus)
 
             # === COMPLEXITY: KL[Q(s'|a) || P(s')] ===
             # "이 행동을 하면 믿음이 선호 상태에서 얼마나 벗어날 것인가"
@@ -437,6 +527,13 @@ class ActionSelector:
             # Ambiguity: 전이 불확실성 (precision 가중)
             # Complexity: 선호 상태에서 벗어남
             G = risk + ambiguity + self.complexity_weight * complexity
+
+            # === v4.0: Memory Bias ===
+            # 기억이 G를 조정 (행동 직접 지시 X)
+            # memory_bias < 0 → 과거 좋았던 행동 → G ↓ → 더 선택됨
+            # memory_bias > 0 → 과거 나빴던 행동 → G ↑ → 덜 선택됨
+            if self.memory_enabled and self._last_recall_result is not None:
+                G = G + self._last_recall_result.memory_bias[a]
 
             # 최소 G 행동의 예측 관측 저장 (precision 업데이트용)
             min_G_so_far = min((r.G for r in results.values()), default=float('inf'))
@@ -528,7 +625,24 @@ class ActionSelector:
         #
         # 만약 potential_improvement > cost이면 THINK가 유리
 
-        G_think = G_best - potential_improvement + deliberation_cost
+        # === v4.3: Uncertainty-based THINK bias ===
+        # 불확실성이 높으면 THINK가 더 유리해짐
+        think_bias = 0.0
+        if self.uncertainty_enabled and self._last_uncertainty_modulation is not None:
+            think_bias = self._last_uncertainty_modulation.think_bias
+            # think_bias < 0 → THINK 유리, think_bias > 0 → THINK 불리
+
+        # === v4.4: Regret-based THINK benefit boost ===
+        # 누적 regret가 높으면 메타인지 가치 ↑ → potential_improvement 증가
+        think_benefit_boost = 0.0
+        if self.regret_enabled:
+            regret_mod = self.get_regret_modulation()
+            think_benefit_boost = regret_mod.get('think_benefit_boost', 0.0)
+
+        # Apply regret boost to potential improvement
+        effective_improvement = potential_improvement + think_benefit_boost
+
+        G_think = G_best - effective_improvement + deliberation_cost + think_bias
 
         # Risk/Ambiguity/Complexity 분해 (THINK 전용)
         # - Risk: deliberation_cost (시간 비용)
@@ -536,7 +650,7 @@ class ActionSelector:
         # - Complexity: 0 (THINK는 믿음을 직접 바꾸지 않음)
 
         risk_component = deliberation_cost
-        ambiguity_component = -potential_improvement  # 음수: THINK가 불확실성을 줄임
+        ambiguity_component = -effective_improvement  # 음수: THINK가 불확실성을 줄임
 
         # 저장 (디버깅용)
         self._last_expected_improvement = potential_improvement
@@ -555,10 +669,12 @@ class ActionSelector:
 
         P(o'|o, a) - How does action a change observation?
 
-        Online learning:
-        - Observe actual delta = obs_after - obs_before
-        - Update delta_mean toward actual
-        - Update delta_std based on prediction error
+        v4.2: Variance-based std update with volatility detection
+        - var <- (1-β) * var + β * err^2
+        - std = sqrt(var)
+        - Volatility detection: 예측오차 급증 시 lr 일시 증가
+
+        This allows std to INCREASE when prediction errors spike (drift detection).
 
         Args:
             action: Action taken
@@ -576,28 +692,153 @@ class ActionSelector:
 
         # Prediction error
         error = actual_delta - predicted_delta
+        err_sq = error ** 2  # Squared error for variance
 
         # Update count
         self.transition_model['count'][action] += 1
         count = self.transition_model['count'][action]
 
-        # Adaptive learning rate (decays with experience)
-        lr = self.transition_lr / np.sqrt(count)
+        # === v4.2: Volatility-aware learning rate ===
+        # Base learning rate decays with experience
+        base_lr = self.transition_lr / np.sqrt(count)
+
+        # Current std (for volatility detection)
+        # IMPORTANT: Make a copy to preserve original value for debugging
+        current_std = self.transition_model['delta_std'][action].copy()
+
+        # Volatility detection: if |error| >> current_std, increase lr temporarily
+        # This allows rapid adaptation when environment changes (drift)
+        err_magnitude = np.abs(error)
+        volatility_ratio = np.mean(err_magnitude) / (np.mean(current_std) + 1e-6)
+
+        # If error is larger than expected, boost learning rate
+        # v4.2.3: Lowered threshold to 0.4 for realistic drift detection
+        # Observed: volatility_ratio ~0.5-0.6 during drift
+        # For std to increase naturally: need |error| > current_std (ratio > 1.0)
+        # So we need to boost learning when ratio is high but < 1.0
+        if volatility_ratio > 0.4:
+            lr_boost = min(5.0, 1.0 + volatility_ratio)  # 1.4x ~ 5x boost
+            lr = base_lr * lr_boost
+            # Also discount count (partial forgetting for change-point)
+            self.transition_model['count'][action] = max(1, count * 0.8)
+        else:
+            lr = base_lr
+
+        # === v4.4: Regret-based lr boost ===
+        # regret + surprise = 모델 재학습 필요 → lr 증가
+        if self.regret_enabled:
+            regret_mod = self.get_regret_modulation()
+            regret_lr_boost = regret_mod.get('lr_boost_factor', 1.0)
+            lr = lr * regret_lr_boost
+
+        # Ensure minimum learning rate for std updates
+        # v4.2.3: Increased min from 0.05 to 0.1 for faster std adaptation
+        lr_std = max(lr, 0.1)  # At least 10% update rate for std
 
         # Update mean (move toward actual)
         self.transition_model['delta_mean'][action] += lr * error
 
-        # Update std (move toward observed variance)
-        # Simple: std = running average of |error|
-        self.transition_model['delta_std'][action] = (
-            (1 - lr) * self.transition_model['delta_std'][action] +
-            lr * np.abs(error)
+        # === v4.2.3: Variance-based std update with volatility boost ===
+        # var <- (1-β) * var + β * err^2
+        # std = sqrt(var)
+        # This naturally allows std to INCREASE when errors are large
+        current_var = current_std ** 2
+
+        # v4.2.4: When volatility detected, SCALE UP errors to force std increase
+        # Key insight: for std to increase, need err_sq > current_var
+        # With volatility_ratio = |error|/std, if ratio < 1, err_sq < var (std decreases)
+        # So we boost err_sq to ensure it exceeds current variance
+        if volatility_ratio > 0.3:
+            # Boost factor: ensure err_sq_boosted > current_var when volatility detected
+            # err_sq_boosted = err_sq * boost, we want err_sq_boosted > std^2
+            # err = volatility_ratio * std, so err^2 = volatility_ratio^2 * std^2
+            # err_sq_boosted = volatility_ratio^2 * std^2 * boost > std^2
+            # boost > 1/volatility_ratio^2
+            # For safety, use boost = max(2.0, 1/(volatility_ratio^2))
+            boost_factor = max(2.0, 1.5 / (volatility_ratio ** 2 + 0.01))
+            err_sq_boosted = err_sq * boost_factor
+        else:
+            err_sq_boosted = err_sq
+
+        new_var = (1 - lr_std) * current_var + lr_std * err_sq_boosted
+        new_std = np.sqrt(new_var)
+
+        self.transition_model['delta_std'][action] = new_std
+
+        # Clip std to reasonable range (wide range to allow increase)
+        self.transition_model['delta_std'][action] = np.clip(
+            self.transition_model['delta_std'][action], 0.01, 2.0  # Upper limit raised
         )
 
-        # Clip std to reasonable range
-        self.transition_model['delta_std'][action] = np.clip(
-            self.transition_model['delta_std'][action], 0.01, 1.0
-        )
+        # Store last error for debugging
+        std_after = float(np.mean(self.transition_model['delta_std'][action]))
+        std_before = float(np.mean(current_std))
+        boost_active = volatility_ratio > 0.3
+        boost_factor_used = max(2.0, 1.5 / (volatility_ratio ** 2 + 0.01)) if boost_active else 1.0
+        self._last_transition_error = {
+            'action': action,
+            'error_mean': float(np.mean(np.abs(error))),
+            'error_vec': [float(e) for e in error[:4]],  # First 4 dims for debugging
+            'actual_delta': [float(d) for d in actual_delta[:4]],
+            'predicted_delta': [float(d) for d in predicted_delta[:4]],
+            'volatility_ratio': float(volatility_ratio),
+            'volatility_boost': bool(boost_active),
+            'boost_factor': float(boost_factor_used),
+            'lr_used': float(np.mean(lr) if hasattr(lr, '__len__') else lr),
+            'lr_std_used': float(lr_std),
+            'std_before': std_before,
+            'std_after': std_after,
+            'std_change_pct': float((std_after - std_before) / (std_before + 1e-6) * 100),
+        }
+
+    def update_from_replay(self, action: int, obs_delta: np.ndarray, learning_rate: float = 0.1):
+        """
+        Update transition model from memory replay during consolidation.
+
+        v4.1: Sleep consolidation에서 호출
+        - 저장된 에피소드의 delta를 사용하여 transition model 재학습
+        - 반복된 패턴은 delta_std를 줄여 ambiguity 감소
+
+        Args:
+            action: Action that was taken
+            obs_delta: Observed change in observations [delta_energy, delta_pain, ...]
+            learning_rate: Learning rate for consolidation (usually lower than online learning)
+        """
+        if action < 0 or action >= self.n_actions:
+            return
+
+        # Ensure obs_delta matches transition model dimensions
+        obs_dim = self.transition_model['delta_mean'].shape[1]
+        if len(obs_delta) < obs_dim:
+            # Pad with zeros
+            padded = np.zeros(obs_dim)
+            padded[:len(obs_delta)] = obs_delta
+            obs_delta = padded
+        elif len(obs_delta) > obs_dim:
+            obs_delta = obs_delta[:obs_dim]
+
+        # Current prediction
+        predicted_delta = self.transition_model['delta_mean'][action]
+        current_std = self.transition_model['delta_std'][action]
+
+        # Update mean toward replayed value
+        error = obs_delta - predicted_delta
+        self.transition_model['delta_mean'][action] += learning_rate * error
+
+        # Reduce std (consolidation should increase confidence)
+        # Key insight: repeated patterns → lower uncertainty
+        error_magnitude = np.abs(error)
+
+        # If prediction was close, reduce std
+        # If prediction was off, increase std slightly
+        std_update = learning_rate * (error_magnitude - current_std)
+        new_std = current_std + 0.5 * std_update  # Damped update
+
+        # Consolidation should generally reduce std (increase confidence)
+        # Apply a small reduction bias
+        new_std = new_std * 0.98  # 2% reduction per replay
+
+        self.transition_model['delta_std'][action] = np.clip(new_std, 0.01, 1.0)
 
     def select_action(self,
                       Q_s: Optional[np.ndarray] = None,
@@ -631,6 +872,10 @@ class ActionSelector:
         action_1step_physical = int(np.argmin(G_values_physical))
         self._last_1step_action = action_1step_physical
 
+        # v4.4: Store G_pred for counterfactual (regret) calculation
+        if self.regret_enabled:
+            self._last_G_pred = {a: G_all[a].G for a in range(n_physical)}
+
         # === STEP 2: Compute decision uncertainty for physical actions ===
         sorted_G = np.sort(G_values_physical)
         G_best = sorted_G[0]
@@ -654,24 +899,38 @@ class ActionSelector:
         max_ambiguity = max(G_all[a].ambiguity for a in range(n_physical))
         self._last_max_ambiguity = max_ambiguity
 
-        # === STEP 2.5: v3.4 THINK action ===
-        # G(THINK)를 계산하고 물리 행동과 비교
+        # === STEP 2.5: v3.4.1 THINK action (최적화됨) ===
+        # 2단계 게이트: 쿨다운 → entropy/G_spread 체크 → G(THINK) 계산
+        self._think_gate_passed = False
+
         if self.think_enabled and current_obs is not None:
-            G_think = self.compute_G_think(G_all, current_obs, decision_entropy)
-            G_all[self.THINK_ACTION] = G_think
+            # 1) 쿨다운 체크
+            if self._think_cooldown_counter > 0:
+                self._think_cooldown_counter -= 1
+                # 쿨다운 중이면 THINK 평가 스킵
+            else:
+                # 2) 게이트 체크: 정말 애매할 때만 THINK 평가
+                entropy_gate = decision_entropy >= self.think_entropy_threshold
+                spread_gate = G_spread <= self.think_G_spread_threshold
 
-            # THINK가 최선인지 확인
-            if G_think.G < G_best:
-                self._last_think_selected = True
-                self._last_think_reason = (
-                    f"entropy={decision_entropy:.2f}, "
-                    f"improvement={self._last_expected_improvement:.3f}, "
-                    f"G_think={G_think.G:.3f} < G_best={G_best:.3f}"
-                )
-                self._think_count += 1
+                if entropy_gate or spread_gate:
+                    self._think_gate_passed = True
 
-                # THINK 선택 시: rollout 실행하고 물리 행동 재선택
-                # (아래 should_rollout 로직으로 넘어감)
+                    # 3) 게이트 통과 → G(THINK) 계산
+                    G_think = self.compute_G_think(G_all, current_obs, decision_entropy)
+                    G_all[self.THINK_ACTION] = G_think
+
+                    # THINK가 최선인지 확인
+                    if G_think.G < G_best:
+                        self._last_think_selected = True
+                        self._last_think_reason = (
+                            f"gate={'entropy' if entropy_gate else 'spread'}, "
+                            f"entropy={decision_entropy:.2f}, spread={G_spread:.3f}, "
+                            f"G_think={G_think.G:.3f} < G_best={G_best:.3f}"
+                        )
+                        self._think_count += 1
+                        # 쿨다운 시작
+                        self._think_cooldown_counter = self.think_cooldown
 
         # === STEP 3: Decide whether to rollout ===
         should_rollout = False
@@ -715,19 +974,27 @@ class ActionSelector:
 
         # === STEP 4: Execute rollout if needed ===
         if should_rollout and current_obs is not None:
+            # v3.4.1: THINK용 rollout은 예산 제한
+            if self._last_think_selected:
+                use_horizon = self.think_rollout_horizon
+                use_samples = self.think_rollout_samples
+            else:
+                use_horizon = self.rollout_horizon
+                use_samples = self.rollout_n_samples
+
             # Lazy initialization of temporal planner
             if self.temporal_planner is None:
                 self.temporal_planner = TemporalPlanner(
                     self,
-                    horizon=self.rollout_horizon,
+                    horizon=use_horizon,
                     discount=self.rollout_discount,
-                    n_samples=self.rollout_n_samples,
+                    n_samples=use_samples,
                     complexity_decay=self.rollout_complexity_decay
                 )
             else:
-                self.temporal_planner.set_horizon(self.rollout_horizon)
+                self.temporal_planner.set_horizon(use_horizon)
                 self.temporal_planner.set_discount(self.rollout_discount)
-                self.temporal_planner.n_samples = self.rollout_n_samples
+                self.temporal_planner.n_samples = use_samples
                 self.temporal_planner.complexity_decay = self.rollout_complexity_decay
 
             # Rollout 기반 행동 선택 (물리 행동만)
@@ -936,6 +1203,7 @@ class ActionSelector:
         self.transition_model['delta_std'][:, 6:8] = 0.5
         self._last_obs = None
         self._action_history = []
+        self._last_transition_error = None  # v4.2: Volatility tracking
         self.precision_learner.reset()  # Precision도 리셋
 
     def set_temperature(self, temp: float):
@@ -1009,7 +1277,7 @@ class ActionSelector:
         self.think_enabled = False
 
     def get_think_status(self) -> Dict:
-        """THINK 상태 조회"""
+        """THINK 상태 조회 (v3.4.1 최적화 정보 포함)"""
         return {
             'enabled': self.think_enabled,
             'think_count': self._think_count,
@@ -1018,6 +1286,14 @@ class ActionSelector:
             'last_expected_improvement': self._last_expected_improvement,
             'physical_action_after_think': self._physical_action_after_think,
             'energy_cost': self.think_energy_cost,
+            # v3.4.1 최적화 정보
+            'gate_passed': self._think_gate_passed,
+            'cooldown_remaining': self._think_cooldown_counter,
+            'entropy_threshold': self.think_entropy_threshold,
+            'G_spread_threshold': self.think_G_spread_threshold,
+            'rollout_horizon': self.think_rollout_horizon,
+            'rollout_samples': self.think_rollout_samples,
+            'cooldown': self.think_cooldown,
         }
 
     def get_physical_action_after_think(self) -> Optional[int]:
@@ -1186,4 +1462,662 @@ class ActionSelector:
             'delta_ctx_clamp': self.delta_ctx_clamp,
             'use_confidence_alpha': self.use_confidence_alpha,
             'delta_debug': self._last_delta_debug,
+        }
+
+    # === TRUE FEP v3.5: ONLINE PREFERENCE LEARNING ===
+
+    def enable_preference_learning(self,
+                                   mode_lr: float = 0.02,
+                                   concentration_lr: float = 0.01):
+        """
+        온라인 선호 학습 활성화 (v3.5)
+
+        내부 선호(energy, pain)의 Beta 파라미터를 경험에서 학습.
+
+        핵심 원리:
+        - G가 낮았으면 (좋은 결과) → 현재 내부 상태를 더 선호하도록 mode 이동
+        - G가 높았으면 (나쁜 결과) → 현재 내부 상태에서 멀어지도록 mode 이동
+        - 일관된 경험 → concentration 증가 (확신)
+        - 불일치 경험 → concentration 감소 (불확실)
+
+        Args:
+            mode_lr: mode 학습률 (기본 0.02)
+            concentration_lr: concentration 학습률 (기본 0.01)
+        """
+        self.preference_learner = PreferenceLearner(
+            mode_lr=mode_lr,
+            concentration_lr=concentration_lr
+        )
+        self.preference_learning_enabled = True
+
+    def disable_preference_learning(self):
+        """온라인 선호 학습 비활성화"""
+        self.preference_learning_enabled = False
+        # preference_learner는 유지 (상태 보존)
+
+    def update_preference_learning(self,
+                                   current_obs: np.ndarray,
+                                   G_value: float,
+                                   prediction_error: float = 0.0):
+        """
+        선호 분포 업데이트 (매 step 호출)
+
+        Args:
+            current_obs: 현재 관측 (8차원)
+            G_value: 현재 스텝의 G 값
+            prediction_error: 예측 오차
+        """
+        if self.preference_learner is not None and self.preference_learning_enabled:
+            self.preference_learner.update(current_obs, G_value, prediction_error)
+
+            # 학습된 선호를 PreferenceDistributions에 반영
+            self._apply_learned_preferences()
+
+    def _apply_learned_preferences(self):
+        """
+        학습된 Beta 파라미터를 PreferenceDistributions에 적용.
+
+        energy_pref와 pain_pref만 업데이트 (내부 선호).
+        """
+        if self.preference_learner is None:
+            return
+
+        # 학습된 energy 선호 적용
+        learned_energy = self.preference_learner.get_energy_beta()
+        self.preferences.energy_pref = learned_energy
+
+        # 학습된 pain 선호 적용
+        learned_pain = self.preference_learner.get_pain_beta()
+        self.preferences.pain_pref = learned_pain
+
+    def get_preference_learning_status(self) -> Dict:
+        """현재 선호 학습 상태 반환"""
+        if self.preference_learner is None:
+            return {
+                'enabled': False,
+                'initialized': False
+            }
+
+        status = self.preference_learner.get_status()
+        status['enabled'] = self.preference_learning_enabled
+        status['initialized'] = True
+
+        # 현재 적용된 선호 분포 정보 추가
+        status['applied_to_risk'] = {
+            'energy_alpha': self.preferences.energy_pref.alpha,
+            'energy_beta': self.preferences.energy_pref.beta,
+            'pain_alpha': self.preferences.pain_pref.alpha,
+            'pain_beta': self.preferences.pain_pref.beta,
+        }
+
+        return status
+
+    def reset_preference_learning(self):
+        """선호 학습 리셋 (초기값으로)"""
+        if self.preference_learner is not None:
+            self.preference_learner.reset()
+            self._apply_learned_preferences()
+
+    # === TRUE FEP v4.3: UNCERTAINTY/CONFIDENCE CONTROLS ===
+
+    def enable_uncertainty(self,
+                           belief_weight: float = 0.25,
+                           action_weight: float = 0.30,
+                           model_weight: float = 0.20,
+                           surprise_weight: float = 0.25,
+                           sensitivity: float = 1.0):
+        """
+        불확실성 추적 활성화 (v4.3)
+
+        불확실성이 "자동으로" 행동을 바꾸게 만듦:
+        - THINK 선택 확률/비용 연동
+        - Precision 메타-조절
+        - 탐색/회피 균형
+        - 기억 저장 게이트 (v4.0 준비)
+
+        Args:
+            belief_weight: context belief 엔트로피 가중치
+            action_weight: action 선택 엔트로피 가중치
+            model_weight: 전이 모델 불확실성 가중치
+            surprise_weight: 예측 오차 가중치
+            sensitivity: 조절 민감도 (0.0~2.0)
+        """
+        self.uncertainty_tracker = UncertaintyTracker(
+            belief_weight=belief_weight,
+            action_weight=action_weight,
+            model_weight=model_weight,
+            surprise_weight=surprise_weight,
+            modulation_sensitivity=sensitivity
+        )
+        self.uncertainty_enabled = True
+
+    def disable_uncertainty(self):
+        """불확실성 추적 비활성화"""
+        self.uncertainty_enabled = False
+        # tracker는 유지 (상태 보존)
+
+    def update_uncertainty(self,
+                           prediction_error: float = 0.0,
+                           transition_std: float = 0.2):
+        """
+        불확실성 업데이트 (매 step 호출)
+
+        Args:
+            prediction_error: 예측 오차
+            transition_std: 평균 전이 불확실성
+        """
+        if self.uncertainty_tracker is None or not self.uncertainty_enabled:
+            return
+
+        # 1. Context entropy (hierarchy 있으면)
+        context_entropy = None
+        if self.hierarchy_controller is not None:
+            Q_ctx = self.hierarchy_controller.get_context_belief()
+            if Q_ctx is not None:
+                context_entropy = compute_context_entropy(Q_ctx)
+
+        # 2. Decision entropy (이미 계산됨)
+        decision_entropy = self._last_decision_entropy
+
+        # 3. Update tracker
+        self._last_uncertainty_state = self.uncertainty_tracker.update(
+            decision_entropy=decision_entropy,
+            context_entropy=context_entropy,
+            transition_std=transition_std,
+            prediction_error=prediction_error
+        )
+
+        # 4. Get modulation (다음 action selection에 사용)
+        self._last_uncertainty_modulation = self.uncertainty_tracker.get_modulation()
+
+    def get_uncertainty_status(self) -> Dict:
+        """현재 불확실성 상태 반환"""
+        if self.uncertainty_tracker is None:
+            return {
+                'enabled': False,
+                'initialized': False
+            }
+
+        status = self.uncertainty_tracker.get_status()
+        status['enabled'] = self.uncertainty_enabled
+        status['initialized'] = True
+
+        # 마지막 상태 추가
+        if self._last_uncertainty_state is not None:
+            status['last_state'] = self._last_uncertainty_state.to_dict()
+        if self._last_uncertainty_modulation is not None:
+            status['last_modulation'] = self._last_uncertainty_modulation.to_dict()
+
+        return status
+
+    def reset_uncertainty(self):
+        """불확실성 상태 리셋"""
+        if self.uncertainty_tracker is not None:
+            self.uncertainty_tracker.reset()
+            self._last_uncertainty_state = None
+            self._last_uncertainty_modulation = None
+
+    def get_memory_gate(self) -> float:
+        """
+        기억 저장 게이트 값 반환 (v4.0 Memory 준비용)
+
+        0.0 = 저장 안 함 (안정적, 반복적)
+        1.0 = 강하게 저장 (놀라움, 불확실)
+
+        v4.4: regret-based memory_gate_boost 추가
+        - regret 큰 사건 = 저장 우선순위 ↑
+        """
+        base_gate = 0.5  # 기본값
+        if self._last_uncertainty_modulation is not None:
+            base_gate = self._last_uncertainty_modulation.memory_gate
+
+        # v4.4: Regret boost
+        if self.regret_enabled:
+            regret_mod = self.get_regret_modulation()
+            memory_gate_boost = regret_mod.get('memory_gate_boost', 0.0)
+            # Clamp to [0, 1]
+            return min(1.0, base_gate + memory_gate_boost)
+
+        return base_gate
+
+    # === TRUE FEP v4.0: LONG-TERM MEMORY CONTROLS ===
+
+    def enable_memory(self,
+                     max_episodes: int = 1000,
+                     store_threshold: float = 0.5,
+                     store_sharpness: float = 5.0,
+                     similarity_threshold: float = 0.95,
+                     recall_top_k: int = 5):
+        """
+        장기 기억 활성화 (v4.0)
+
+        기억 = 미래 F/G를 줄이는 압축 모델
+        - 저장: memory_gate > threshold일 때 확률적 저장
+        - 회상: 유사 상황 검색 → G bias (행동 직접 지시 X)
+        - 불확실할 때 기억에 더 의존
+
+        Args:
+            max_episodes: 최대 저장 에피소드 수
+            store_threshold: 저장 임계값 (0.5 = memory_gate 50%에서 50% 확률)
+            store_sharpness: sigmoid 기울기 (클수록 임계값 근처에서 급격히 변함)
+            similarity_threshold: 중복 억제 유사도 (0.95 = 95% 유사하면 병합)
+            recall_top_k: 회상 시 상위 k개 에피소드 사용
+        """
+        self.ltm_store = LTMStore(
+            max_episodes=max_episodes,
+            store_threshold=store_threshold,
+            store_sharpness=store_sharpness,
+            similarity_threshold=similarity_threshold,
+            recall_top_k=recall_top_k,
+            n_actions=self.n_actions
+        )
+        self.memory_enabled = True
+
+    def disable_memory(self):
+        """장기 기억 비활성화 (저장소는 유지)"""
+        self.memory_enabled = False
+
+    def recall_from_memory(self, current_obs: np.ndarray) -> Optional[RecallResult]:
+        """
+        현재 상태에서 기억 회상.
+
+        compute_G 전에 호출하여 _last_recall_result 설정.
+        G 계산에서 memory_bias가 적용됨.
+
+        Args:
+            current_obs: 현재 관측 (8차원)
+
+        Returns:
+            RecallResult or None
+        """
+        if self.ltm_store is None or not self.memory_enabled:
+            self._last_recall_result = None
+            return None
+
+        # Context 정보 가져오기
+        context_id = 0
+        if self.hierarchy_controller is not None:
+            Q_ctx = self.hierarchy_controller.get_context_belief()
+            if Q_ctx is not None:
+                context_id = int(np.argmax(Q_ctx))
+
+        # 현재 불확실성
+        current_uncertainty = 0.5
+        if self._last_uncertainty_state is not None:
+            current_uncertainty = self._last_uncertainty_state.global_uncertainty
+
+        # 회상 실행
+        self._last_recall_result = self.ltm_store.recall(
+            current_obs=current_obs,
+            current_context_id=context_id,
+            current_uncertainty=current_uncertainty
+        )
+
+        return self._last_recall_result
+
+    def prepare_episode(self,
+                       t: int,
+                       obs_before: np.ndarray,
+                       action: int,
+                       G_before: float):
+        """
+        에피소드 저장 준비 (행동 선택 후, 결과 전).
+
+        행동 후 결과(obs_after, G_after)를 알게 되면 store_episode로 완료.
+
+        Args:
+            t: 타임스텝
+            obs_before: 행동 전 관측
+            action: 선택한 행동
+            G_before: 행동 전 최소 G값
+        """
+        context_id = 0
+        context_confidence = 1.0
+        if self.hierarchy_controller is not None:
+            Q_ctx = self.hierarchy_controller.get_context_belief()
+            if Q_ctx is not None:
+                context_id = int(np.argmax(Q_ctx))
+                context_confidence = float(Q_ctx[context_id])
+
+        uncertainty_before = 0.5
+        if self._last_uncertainty_state is not None:
+            uncertainty_before = self._last_uncertainty_state.global_uncertainty
+
+        self._pending_episode_data = {
+            't': t,
+            'context_id': context_id,
+            'context_confidence': context_confidence,
+            'obs_before': obs_before.copy(),
+            'action': action,
+            'G_before': G_before,
+            'uncertainty_before': uncertainty_before,
+        }
+
+    def store_episode(self,
+                     obs_after: np.ndarray,
+                     G_after: float) -> Optional[Dict]:
+        """
+        에피소드 저장 시도 (결과 관측 후).
+
+        prepare_episode가 먼저 호출되어야 함.
+        memory_gate로 저장 확률 결정.
+
+        Args:
+            obs_after: 행동 후 관측
+            G_after: 행동 후 최소 G값
+
+        Returns:
+            저장 결과 dict or None
+        """
+        if self.ltm_store is None or not self.memory_enabled:
+            return None
+
+        if self._pending_episode_data is None:
+            return None
+
+        data = self._pending_episode_data
+        self._pending_episode_data = None
+
+        # Delta 계산
+        obs_before = data['obs_before']
+        delta_energy = float(obs_after[6] - obs_before[6]) if len(obs_after) > 6 else 0.0
+        delta_pain = float(obs_after[7] - obs_before[7]) if len(obs_after) > 7 else 0.0
+
+        # Uncertainty 변화
+        uncertainty_after = 0.5
+        if self._last_uncertainty_state is not None:
+            uncertainty_after = self._last_uncertainty_state.global_uncertainty
+        delta_uncertainty = uncertainty_after - data['uncertainty_before']
+
+        # Surprise (prediction error)
+        prediction_error = 0.0
+        if self._last_uncertainty_state is not None:
+            prediction_error = self._last_uncertainty_state.components.surprise
+        delta_surprise = prediction_error  # 현재 surprise 값 사용
+
+        # Outcome score 계산
+        outcome_score = compute_outcome_score(
+            G_before=data['G_before'],
+            G_after=G_after,
+            delta_energy=delta_energy,
+            delta_pain=delta_pain
+        )
+
+        # Episode 생성
+        episode = Episode(
+            t=data['t'],
+            context_id=data['context_id'],
+            context_confidence=data['context_confidence'],
+            obs_summary=obs_before,  # 행동 전 상태 저장
+            action=data['action'],
+            delta_energy=delta_energy,
+            delta_pain=delta_pain,
+            delta_uncertainty=delta_uncertainty,
+            delta_surprise=delta_surprise,
+            outcome_score=outcome_score,
+        )
+
+        # 저장 시도
+        memory_gate = self.get_memory_gate()
+        self._last_store_result = self.ltm_store.store(episode, memory_gate)
+
+        return self._last_store_result
+
+    def get_memory_status(self) -> Dict:
+        """기억 상태 조회"""
+        if self.ltm_store is None:
+            return {
+                'enabled': False,
+                'initialized': False
+            }
+
+        status = {
+            'enabled': self.memory_enabled,
+            'initialized': True,
+            'stats': self.ltm_store.get_stats(),
+        }
+
+        if self._last_recall_result is not None:
+            status['last_recall'] = self._last_recall_result.to_dict()
+
+        if self._last_store_result is not None:
+            status['last_store'] = self._last_store_result
+
+        return status
+
+    def get_recent_episodes(self, limit: int = 10) -> List[Dict]:
+        """최근 에피소드 목록"""
+        if self.ltm_store is None:
+            return []
+        return self.ltm_store.get_episodes_summary(limit)
+
+    def reset_memory(self):
+        """기억 저장소 초기화"""
+        if self.ltm_store is not None:
+            self.ltm_store.reset()
+            self._last_recall_result = None
+            self._last_store_result = None
+            self._pending_episode_data = None
+
+    # ==================== v4.1: Memory Consolidation ====================
+
+    def enable_consolidation(self,
+                             similarity_threshold: float = 0.9,
+                             min_cluster_size: int = 2,
+                             replay_batch_size: int = 20,
+                             auto_trigger: bool = True):
+        """
+        v4.1 Memory Consolidation 활성화
+
+        Args:
+            similarity_threshold: 프로토타입 생성 유사도 기준
+            min_cluster_size: 클러스터링 최소 에피소드 수
+            replay_batch_size: replay 시 처리할 에피소드 수
+            auto_trigger: 자동 sleep 트리거 여부
+        """
+        self.consolidator = MemoryConsolidator(
+            similarity_threshold=similarity_threshold,
+            min_cluster_size=min_cluster_size,
+            replay_batch_size=replay_batch_size
+        )
+        self.consolidation_enabled = True
+        self._consolidation_auto = auto_trigger
+
+        # Memory도 활성화 필요
+        if not self.memory_enabled:
+            self.enable_memory()
+
+    def disable_consolidation(self):
+        """v4.1 Memory Consolidation 비활성화"""
+        self.consolidation_enabled = False
+        # consolidator는 유지 (통계 보존)
+
+    def update_consolidation_trigger(self, surprise: float, merged: bool, context_id: int):
+        """
+        Sleep 트리거 상태 업데이트
+
+        Args:
+            surprise: 현재 스텝의 예측 오차
+            merged: 이번 스텝에서 에피소드가 병합되었는지
+            context_id: 현재 context
+        """
+        if self.consolidator is not None and self.consolidation_enabled:
+            self.consolidator.update_trigger(surprise, merged, context_id)
+
+    def check_and_consolidate(self) -> Optional[ConsolidationResult]:
+        """
+        Sleep 조건 확인 및 통합 실행
+
+        Returns:
+            ConsolidationResult if sleep occurred, None otherwise
+        """
+        if not self.consolidation_enabled or self.consolidator is None:
+            return None
+
+        if not self._consolidation_auto:
+            return None
+
+        should_sleep, signals = self.consolidator.check_sleep_trigger()
+
+        if not should_sleep:
+            return None
+
+        return self.force_consolidate()
+
+    def force_consolidate(self) -> Optional[ConsolidationResult]:
+        """
+        강제 통합 실행 (수동 트리거)
+
+        Returns:
+            ConsolidationResult
+        """
+        if self.consolidator is None or self.ltm_store is None:
+            return None
+
+        result = self.consolidator.consolidate(
+            ltm_store=self.ltm_store,
+            transition_model=self,  # self has update_from_replay and transition_model
+            hierarchy_controller=self.hierarchy_controller
+        )
+
+        self._last_consolidation_result = result
+        return result
+
+    def get_consolidation_status(self) -> Dict:
+        """통합 시스템 상태"""
+        if not self.consolidation_enabled or self.consolidator is None:
+            return {
+                'enabled': False,
+                'initialized': False
+            }
+
+        status = self.consolidator.get_status()
+        status['auto_trigger'] = self._consolidation_auto
+
+        # Add transition_std info
+        status['current_transition_std'] = float(np.mean(self.transition_model['delta_std']))
+
+        return status
+
+    def get_prototype_bias(self, current_obs: np.ndarray, context_id: int) -> np.ndarray:
+        """프로토타입 기반 G bias 계산"""
+        if self.consolidator is None:
+            return np.zeros(6)
+        return self.consolidator.get_prototype_bias(current_obs, context_id)
+
+    def reset_consolidation(self):
+        """통합 시스템 초기화"""
+        if self.consolidator is not None:
+            self.consolidator.reset()
+        self._last_consolidation_result = None
+
+    # === TRUE FEP v4.4: COUNTERFACTUAL + REGRET CONTROLS ===
+
+    def enable_regret(self):
+        """
+        Counterfactual + Regret 활성화 (v4.4)
+
+        후회(regret)는 "감정 변수"가 아니라,
+        선택한 행동이 대안 행동보다 얼마나 더 큰 G를 초래했는지에 대한 '사후 EFE 차이'.
+
+        연결 방식 (FEP스럽게):
+        - 정책 직접 변경 X
+        - memory_gate, lr_boost, THINK 비용/편익 조정 O
+        → "후회가 '학습/추론 자원 배분'을 바꾸는 구조"
+        """
+        self.counterfactual_engine = CounterfactualEngine(
+            action_selector=self,
+            n_actions=self.N_PHYSICAL_ACTIONS  # THINK 제외
+        )
+        self.counterfactual_engine.enable()
+        self.regret_enabled = True
+        self._last_cf_result = None
+        self._last_G_pred = {}
+
+    def disable_regret(self):
+        """Counterfactual + Regret 비활성화"""
+        self.regret_enabled = False
+        if self.counterfactual_engine is not None:
+            self.counterfactual_engine.disable()
+
+    def reset_regret(self):
+        """Regret 상태 초기화"""
+        if self.counterfactual_engine is not None:
+            self.counterfactual_engine = CounterfactualEngine(
+                action_selector=self,
+                n_actions=self.N_PHYSICAL_ACTIONS
+            )
+            self.counterfactual_engine.enable()
+        self._last_cf_result = None
+        self._last_G_pred = {}
+
+    def compute_counterfactual(self,
+                               chosen_action: int,
+                               obs_before: np.ndarray,
+                               obs_after: np.ndarray) -> Optional[CounterfactualResult]:
+        """
+        Counterfactual 계산 (행동 후 호출)
+
+        매 step에서:
+        1. 선택 시점의 G_pred 저장 (action_selection에서 저장됨)
+        2. 관측 후 G_post 계산 (전이 모델 기반 반사실 추론)
+        3. Regret 신호 계산
+
+        Args:
+            chosen_action: 실제로 선택한 행동
+            obs_before: 행동 전 관측
+            obs_after: 행동 후 관측 (실제 결과)
+
+        Returns:
+            CounterfactualResult with regret signals
+        """
+        if not self.regret_enabled or self.counterfactual_engine is None:
+            return None
+
+        if not self._last_G_pred:
+            # G_pred가 없으면 계산 불가
+            return None
+
+        result = self.counterfactual_engine.compute_counterfactual(
+            chosen_action=chosen_action,
+            G_pred=self._last_G_pred,
+            obs_before=obs_before,
+            obs_after=obs_after
+        )
+
+        self._last_cf_result = result
+        return result
+
+    def get_regret_modulation(self) -> Dict:
+        """
+        Regret 기반 조절 파라미터 반환
+
+        연결 대상:
+        1. memory_gate_boost: regret 큰 사건 = 저장 우선순위 ↑
+        2. lr_boost_factor: regret + surprise = 모델 재학습 필요
+        3. think_benefit_boost: regret 누적 = 메타인지 강화 합리적
+        """
+        if not self.regret_enabled or self.counterfactual_engine is None:
+            return {
+                'memory_gate_boost': 0.0,
+                'lr_boost_factor': 1.0,
+                'think_benefit_boost': 0.0,
+                'regret_real': 0.0,
+                'regret_pred': 0.0,
+                'is_spike': False,
+            }
+
+        return self.counterfactual_engine.get_regret_modulation()
+
+    def get_regret_status(self) -> Dict:
+        """Regret 상태 반환"""
+        if not self.regret_enabled or self.counterfactual_engine is None:
+            return {
+                'enabled': False,
+                'engine_status': None
+            }
+
+        return {
+            'enabled': True,
+            'engine_status': self.counterfactual_engine.get_status()
         }

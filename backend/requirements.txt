@@ -1,0 +1,14 @@
+# Genesis Brain - Backend Dependencies
+# v3.8: Pinned versions for reproducibility
+
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+# Scientific Computing
+numpy==2.2.1
+scipy==1.15.0
+
+# Standard library modules used (no install needed):
+# - typing, dataclasses, datetime, pathlib, json, hashlib, random, threading, time, enum
