@@ -108,6 +108,15 @@ class World:
         self.total_food = 0      # Total food eaten
         self.total_deaths = 0    # Total deaths
 
+        # === SERVER-SIDE DRIFT (v4.5) ===
+        # Drift changes action-to-movement mapping
+        self.drift_enabled = False
+        self.drift_type = 'rotate'  # rotate, flip_x, flip_y, reverse, partial, delayed, probabilistic
+        self._drift_delay_counter = 0
+        self._drift_delay_threshold = 10  # for delayed drift
+        self._probabilistic_ratio = 0.7   # for probabilistic drift
+        self._energy_decay_multiplier = 1.0  # for partial drift (2.0 = 2x faster decay)
+
     def _random_pos(self) -> List[int]:
         return [np.random.randint(0, self.size), np.random.randint(0, self.size)]
 
@@ -146,6 +155,109 @@ class World:
             if [x, y] != self.danger_pos:
                 return [x, y]
         return self._random_pos()  # Fallback
+
+    def apply_drift(self, action: int) -> int:
+        """
+        Apply drift to action (v4.5).
+
+        Drift types:
+        - rotate: UP→RIGHT→DOWN→LEFT→UP (방향 90도 회전)
+        - flip_x: LEFT↔RIGHT
+        - flip_y: UP↔DOWN
+        - reverse: UP↔DOWN, LEFT↔RIGHT
+        - partial: 내부 상태(energy)에만 영향 (action은 그대로)
+        - delayed: N스텝 후부터 reverse 적용
+        - probabilistic: 70% 확률로 reverse 적용
+
+        Returns:
+            Modified action (or same action if no drift)
+        """
+        if not self.drift_enabled:
+            return action
+
+        # STAY(0)와 THINK(5)는 영향 없음
+        if action in (0, 5):
+            return action
+
+        if self.drift_type == 'rotate':
+            # UP(1)→RIGHT(4)→DOWN(2)→LEFT(3)→UP(1)
+            mapping = {1: 4, 4: 2, 2: 3, 3: 1}
+            return mapping.get(action, action)
+
+        elif self.drift_type == 'flip_x':
+            # LEFT(3)↔RIGHT(4)
+            mapping = {3: 4, 4: 3}
+            return mapping.get(action, action)
+
+        elif self.drift_type == 'flip_y':
+            # UP(1)↔DOWN(2)
+            mapping = {1: 2, 2: 1}
+            return mapping.get(action, action)
+
+        elif self.drift_type == 'reverse':
+            # UP(1)↔DOWN(2), LEFT(3)↔RIGHT(4)
+            mapping = {1: 2, 2: 1, 3: 4, 4: 3}
+            return mapping.get(action, action)
+
+        elif self.drift_type == 'partial':
+            # 외부 행동은 그대로, 내부 dynamics만 변경
+            # energy_decay_multiplier가 execute_action에서 적용됨
+            # 에이전트가 "세상 규칙이 바뀜"을 transition_std로 감지해야 함
+            return action
+
+        elif self.drift_type == 'delayed':
+            self._drift_delay_counter += 1
+            if self._drift_delay_counter < self._drift_delay_threshold:
+                return action
+            # threshold 이후 reverse 적용
+            mapping = {1: 2, 2: 1, 3: 4, 4: 3}
+            return mapping.get(action, action)
+
+        elif self.drift_type == 'probabilistic':
+            if np.random.random() < self._probabilistic_ratio:
+                mapping = {1: 2, 2: 1, 3: 4, 4: 3}
+                return mapping.get(action, action)
+            return action
+
+        return action
+
+    def enable_drift(self, drift_type: str = 'rotate', energy_decay_mult: float = 2.0):
+        """Enable drift with specified type.
+
+        Args:
+            drift_type: Type of drift
+            energy_decay_mult: For partial drift, multiplier for energy decay (2.0 = 2x faster)
+        """
+        self.drift_enabled = True
+        self.drift_type = drift_type
+        self._drift_delay_counter = 0
+        # partial drift: set energy decay multiplier
+        if drift_type == 'partial':
+            self._energy_decay_multiplier = energy_decay_mult
+        else:
+            self._energy_decay_multiplier = 1.0
+
+    def disable_drift(self):
+        """Disable drift."""
+        self.drift_enabled = False
+        self._drift_delay_counter = 0
+        self._energy_decay_multiplier = 1.0  # Reset to normal
+
+    def get_drift_status(self) -> Dict:
+        """Get current drift status."""
+        status = {
+            'enabled': self.drift_enabled,
+            'type': self.drift_type if self.drift_enabled else None,
+        }
+        if self.drift_enabled:
+            if self.drift_type == 'delayed':
+                status['delay_counter'] = self._drift_delay_counter
+                status['delay_threshold'] = self._drift_delay_threshold
+            elif self.drift_type == 'probabilistic':
+                status['probabilistic_ratio'] = self._probabilistic_ratio
+            elif self.drift_type == 'partial':
+                status['energy_decay_multiplier'] = self._energy_decay_multiplier
+        return status
 
     def get_observation(self) -> np.ndarray:
         """
@@ -196,10 +308,17 @@ class World:
         시간이 흐르면서 energy 감소, danger 이동 가능성 존재.
         이것이 "생각의 자연스러운 비용".
 
+        v4.5: Drift가 활성화되면 action-to-movement 매핑이 변경됨.
+
         Returns dict with outcome info.
         """
         old_pos = self.agent_pos.copy()
+        original_action = action
         is_think = (action == 5)  # v3.4: THINK action
+
+        # === v4.5: Apply drift before movement ===
+        if self.drift_enabled and not is_think:
+            action = self.apply_drift(action)
 
         # Move (THINK는 이동하지 않음)
         if not is_think:
@@ -239,7 +358,9 @@ class World:
 
         # === HOMEOSTATIC DYNAMICS (v2.5) ===
         # Energy decay (slower during infant phase)
-        decay = 0.001 if is_infant else 0.003
+        # v4.5: partial drift applies energy_decay_multiplier
+        base_decay = 0.001 if is_infant else 0.003
+        decay = base_decay * self._energy_decay_multiplier
         self.energy = max(0.0, self.energy - decay)
 
         # Pain naturally decays over time (healing)
@@ -270,6 +391,11 @@ class World:
             'pain': self.pain,  # v2.5
             'died': died,
             'is_think': is_think,  # v3.4: THINK action 여부
+            # v4.5: Drift tracking for reproducibility and learning
+            'drift_active': self.drift_enabled,
+            'intended_action': original_action,  # 에이전트가 의도한 행동
+            'applied_action': action,             # 실제 적용된 행동 (drift 후)
+            'action_modified': action != original_action,
         }
 
     def reset(self):
@@ -325,13 +451,15 @@ def to_python(obj):
     """Convert numpy types to Python types for JSON serialization."""
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    elif isinstance(obj, (np.int64, np.int32, np.int16, np.int8)):
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.integer):
         return int(obj)
-    elif isinstance(obj, (np.float64, np.float32, np.float16)):
+    elif isinstance(obj, np.floating):
         return float(obj)
     elif isinstance(obj, dict):
-        return {k: to_python(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+        return {to_python(k): to_python(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
         return [to_python(v) for v in obj]
     return obj
 
@@ -372,6 +500,9 @@ async def step(params: StepParams):
         else:
             state = agent.step_with_action(obs_modified, last_action)
 
+        # === v4.6: CONTINUOUS DRIFT (phase별 drift 전환) ===
+        apply_continuous_drift_for_step()
+
         # === SCENARIO: DRIFT 체크 (G1 Gate) ===
         drift_just_activated = scenario_manager.check_and_activate_drift()
 
@@ -398,9 +529,11 @@ async def step(params: StepParams):
         # === COUNTERFACTUAL + REGRET (v4.4) ===
         # Counterfactual 계산: 선택한 행동이 대안보다 더 큰 G를 초래했는가?
         # regret 신호는 memory_gate_boost, lr_boost, THINK benefit에 연결됨
+        # v4.5: Use intended_action for regret (what the agent chose, not what was applied)
+        # This way regret reflects "did I make the right choice?" even if drift modified the action
         if agent.action_selector.regret_enabled:
             agent.action_selector.compute_counterfactual(
-                chosen_action=action,
+                chosen_action=intended_action,
                 obs_before=obs_before,
                 obs_after=obs_after
             )
@@ -446,6 +579,19 @@ async def step(params: StepParams):
             transition_std=avg_transition_std
         )
 
+        # === DRIFT-AWARE SUPPRESSION (v4.6) ===
+        # 예측 오차 급증 시 recall 억제
+        # v4.6.2: Regret spike도 함께 고려
+        regret_spike_for_suppression = False
+        if agent.action_selector.regret_enabled:
+            regret_status = agent.action_selector.get_regret_modulation()
+            regret_spike_for_suppression = regret_status.get('is_spike', False)
+
+        agent.action_selector.update_drift_suppression(
+            prediction_error=state.prediction_error,
+            regret_spike=regret_spike_for_suppression
+        )
+
         # === MEMORY STORE (v4.0) ===
         # 에피소드 저장 시도 (memory_gate로 확률 결정)
         G_after = min(g.G for g in state.G_decomposition.values()) if state.G_decomposition else 0.0
@@ -478,19 +624,30 @@ async def step(params: StepParams):
 
         # === SCENARIO: 로깅 ===
         # v4.3: G1 Gate용 확장 로깅 (DRIFT 시나리오)
+        # v4.6: intended_action, transition_error, regret_spike 추가
         if (scenario_manager.current_scenario is not None and
             scenario_manager.current_scenario.type == ScenarioType.DRIFT):
             # Get volatility info from transition model
             trans_error = agent.action_selector._last_transition_error
             volatility_ratio = trans_error.get('volatility_ratio', 0.0) if trans_error else 0.0
             std_change_pct = trans_error.get('std_change_pct', 0.0) if trans_error else 0.0
+            transition_error = trans_error.get('mean_error', 0.0) if trans_error else 0.0
             transition_std = float(np.mean(agent.action_selector.transition_model['delta_std'][:, :2]))
             G_value = float(state.G_decomposition[action].G) if action in state.G_decomposition else 0.0
+
+            # v4.6: Get regret spike status
+            regret_spike = False
+            if agent.action_selector.regret_enabled:
+                regret_status = agent.action_selector.get_regret_modulation()
+                regret_spike = regret_status.get('is_spike', False)
 
             scenario_manager.log_step_g1(
                 state, action, outcome, transition_std, G_value,
                 volatility_ratio=volatility_ratio,
-                std_change_pct=std_change_pct
+                std_change_pct=std_change_pct,
+                intended_action=intended_action,
+                transition_error=transition_error,
+                regret_spike=regret_spike
             )
         else:
             scenario_manager.log_step(state, action, outcome)
@@ -760,6 +917,53 @@ async def scenario_results():
     return {"results": results}
 
 
+# === SERVER-SIDE DRIFT (v4.5) ===
+
+@app.post("/drift/enable")
+async def enable_drift(
+    drift_type: str = 'rotate',
+    delay_threshold: int = 10,
+    probabilistic_ratio: float = 0.7,
+    energy_decay_mult: float = 2.0
+):
+    """
+    환경 drift 활성화
+
+    Drift는 action-to-movement 매핑을 변경하여 환경 dynamics를 바꿈.
+    에이전트의 학습된 모델이 무효화되어 적응이 필요해짐.
+
+    Args:
+        drift_type: rotate, flip_x, flip_y, reverse, partial, delayed, probabilistic
+        delay_threshold: delayed drift일 때 몇 스텝 후 적용할지
+        probabilistic_ratio: probabilistic drift일 때 변경 확률 (0-1)
+        energy_decay_mult: partial drift일 때 energy decay 배율 (2.0 = 2배 빠른 감소)
+
+    Returns:
+        현재 drift 상태
+    """
+    world._drift_delay_threshold = delay_threshold
+    world._probabilistic_ratio = probabilistic_ratio
+    world.enable_drift(drift_type, energy_decay_mult=energy_decay_mult)
+    return {
+        "status": "enabled",
+        "drift_type": drift_type,
+        "message": f"Drift '{drift_type}' activated. Agent's learned model is now invalid."
+    }
+
+
+@app.post("/drift/disable")
+async def disable_drift():
+    """환경 drift 비활성화"""
+    world.disable_drift()
+    return {"status": "disabled", "message": "Drift deactivated. Normal dynamics restored."}
+
+
+@app.get("/drift/status")
+async def drift_status():
+    """현재 drift 상태 조회"""
+    return world.get_drift_status()
+
+
 @app.get("/scenario/g1_gate")
 async def g1_gate_result():
     """
@@ -821,7 +1025,338 @@ async def g1_gate_result():
         # Gate result
         "passed": result.passed,
         "reasons": result.reasons,
+
+        # v4.6 Drift Adaptation Metrics
+        "drift_adaptation": {
+            "policy_mismatch_rate": result.policy_mismatch_rate,
+            "intended_outcome_error": result.intended_outcome_error,
+            "regret_spike_rate": result.regret_spike_rate,
+        },
     }
+
+
+# === v4.6 DRIFT ADAPTATION REPORT API ===
+
+from genesis.scenarios import (
+    DriftAdaptationReport, AblationMatrix, AblationMatrixCell,
+    create_drift_adaptation_report, STANDARD_DRIFT_TYPES, STANDARD_FEATURE_CONFIGS,
+    ContinuousDriftConfig
+)
+
+
+def _get_current_feature_config() -> Dict[str, bool]:
+    """현재 활성화된 기능 조회"""
+    return {
+        'memory': agent.action_selector.memory_enabled,
+        'sleep': agent.action_selector.consolidation_enabled,
+        'think': agent.action_selector.think_enabled,
+        'hierarchy': agent.action_selector.hierarchy_controller is not None,
+        'regret': agent.action_selector.regret_enabled,
+    }
+
+
+@app.get("/scenario/drift_report")
+async def get_drift_adaptation_report():
+    """
+    v4.6 표준화된 Drift 적응 리포트
+
+    G1 Gate 결과를 원인-결과 분석 형태로 재구성:
+    1. Intervention (원인): drift가 실제로 개입한 정도
+    2. Detection (신호): 에이전트가 drift를 "느낀" 정도
+    3. Learning Response (반응): 학습 자원 재배치 여부
+    4. Adaptation (결과): 최종 적응 성과
+
+    Returns:
+        DriftAdaptationReport as JSON with causal chain analysis
+    """
+    g1_result = scenario_manager.get_g1_gate_result()
+    if g1_result is None:
+        return {
+            "error": "DRIFT 시나리오 결과가 없습니다",
+            "hint": "POST /scenario/start/drift?duration=100&drift_after=50 로 시나리오 실행"
+        }
+
+    feature_config = _get_current_feature_config()
+    total_steps = len(scenario_manager._step_logs)
+
+    report = create_drift_adaptation_report(g1_result, feature_config, total_steps)
+    return report.to_dict()
+
+
+@app.get("/scenario/drift_report/summary")
+async def get_drift_report_summary():
+    """v4.6 Drift 리포트 1줄 요약 (ablation 매트릭스용)"""
+    g1_result = scenario_manager.get_g1_gate_result()
+    if g1_result is None:
+        return {"error": "No drift scenario result", "summary": None}
+
+    feature_config = _get_current_feature_config()
+    total_steps = len(scenario_manager._step_logs)
+    report = create_drift_adaptation_report(g1_result, feature_config, total_steps)
+
+    return {
+        "summary": report.get_summary_line(),
+        "verdict": report.final_verdict,
+        "score": AblationMatrixCell(
+            drift_type=report.drift_type,
+            config_name="current",
+            report=report
+        ).get_score()
+    }
+
+
+# === v4.6 ABLATION MATRIX API ===
+
+# In-memory ablation matrix (populated by running tests)
+_ablation_matrix: Dict[str, Dict[str, AblationMatrixCell]] = {}
+
+
+@app.post("/ablation/matrix/record")
+async def record_ablation_result(config_name: str = "baseline"):
+    """
+    현재 drift 테스트 결과를 ablation 매트릭스에 기록
+
+    Usage:
+    1. POST /ablation/apply?memory=true 로 config 설정
+    2. POST /scenario/start/drift?drift_type=rotate 로 테스트 시작
+    3. (run steps)
+    4. POST /ablation/matrix/record?config_name=+memory 로 결과 기록
+    5. 다른 drift_type/config로 반복
+    """
+    global _ablation_matrix
+
+    g1_result = scenario_manager.get_g1_gate_result()
+    if g1_result is None:
+        return {"error": "No G1 Gate result to record"}
+
+    drift_type = g1_result.drift_type
+    feature_config = _get_current_feature_config()
+    total_steps = len(scenario_manager._step_logs)
+
+    report = create_drift_adaptation_report(g1_result, feature_config, total_steps)
+    cell = AblationMatrixCell(drift_type=drift_type, config_name=config_name, report=report)
+
+    # Initialize drift_type dict if needed
+    if drift_type not in _ablation_matrix:
+        _ablation_matrix[drift_type] = {}
+
+    _ablation_matrix[drift_type][config_name] = cell
+
+    return {
+        "status": "recorded",
+        "drift_type": drift_type,
+        "config_name": config_name,
+        "score": cell.get_score(),
+        "verdict": report.final_verdict,
+        "summary": report.get_summary_line()
+    }
+
+
+@app.get("/ablation/matrix")
+async def get_ablation_matrix():
+    """
+    v4.6 Ablation 매트릭스 조회
+
+    행: drift types (rotate, flip_x, delayed, probabilistic)
+    열: feature configs (baseline, +memory, +regret, etc.)
+
+    Returns:
+        - table: Markdown 형식 테이블
+        - best_configs: 각 drift별 최고 config
+        - contributions: 각 feature의 평균 기여도
+    """
+    if not _ablation_matrix:
+        return {
+            "error": "Ablation matrix is empty",
+            "hint": "Use POST /ablation/matrix/record after each test"
+        }
+
+    # Collect all drift types and config names
+    drift_types = list(_ablation_matrix.keys())
+    config_names = set()
+    for configs in _ablation_matrix.values():
+        config_names.update(configs.keys())
+    config_names = sorted(list(config_names))
+
+    matrix = AblationMatrix(
+        drift_types=drift_types,
+        config_names=config_names,
+        cells=_ablation_matrix
+    )
+
+    # Build detailed results
+    detailed = {}
+    for drift in drift_types:
+        detailed[drift] = {}
+        for config in config_names:
+            cell = matrix.get_cell(drift, config)
+            if cell and cell.report:
+                detailed[drift][config] = {
+                    "score": cell.get_score(),
+                    "verdict": cell.report.final_verdict,
+                    "survival": cell.report.survival,
+                    "recovery_steps": cell.report.time_to_recovery,
+                    "retention": cell.report.performance_retention,
+                }
+            else:
+                detailed[drift][config] = None
+
+    return {
+        "table_markdown": matrix.to_markdown_table(),
+        "best_configs": matrix.get_best_config_per_drift(),
+        "feature_contributions": matrix.get_feature_contribution(),
+        "detailed_results": detailed,
+        "drift_types": drift_types,
+        "config_names": config_names
+    }
+
+
+@app.post("/ablation/matrix/reset")
+async def reset_ablation_matrix():
+    """Ablation 매트릭스 초기화"""
+    global _ablation_matrix
+    _ablation_matrix = {}
+    return {"status": "reset", "message": "Ablation matrix cleared"}
+
+
+@app.get("/ablation/standard_configs")
+async def get_standard_configs():
+    """표준 ablation 설정 목록 조회"""
+    return {
+        "drift_types": STANDARD_DRIFT_TYPES,
+        "feature_configs": STANDARD_FEATURE_CONFIGS,
+        "usage": {
+            "1": "POST /ablation/apply with desired config",
+            "2": "POST /scenario/start/drift?drift_type=X",
+            "3": "Run steps",
+            "4": "POST /ablation/matrix/record?config_name=Y",
+            "5": "Repeat for all combinations",
+            "6": "GET /ablation/matrix to see results"
+        }
+    }
+
+
+# === v4.6 CONTINUOUS DRIFT API ===
+
+# In-memory continuous drift state
+_continuous_drift_config: Optional[ContinuousDriftConfig] = None
+_continuous_drift_step: int = 0
+
+
+@app.post("/drift/continuous/start")
+async def start_continuous_drift(
+    sequence: str = "normal,rotate,flip_x,normal",
+    phase_duration: int = 50,
+    overlap: int = 0
+):
+    """
+    v4.6 연속/중첩 Drift 시작
+
+    여러 drift 타입이 시간에 따라 순차적으로 적용됨.
+    에이전트의 연속적 환경 변화 적응 능력 테스트.
+
+    Args:
+        sequence: 콤마로 구분된 drift 시퀀스 (예: "normal,rotate,flip_x,normal")
+                  'normal' = drift 없음
+        phase_duration: 각 phase 길이 (스텝)
+        overlap: 전환 시 overlap 스텝 (점진적 전환)
+
+    Example:
+        sequence="normal,rotate,flip_x,probabilistic,normal"
+        phase_duration=50
+        → 0-50: normal, 50-100: rotate, 100-150: flip_x, 150-200: probabilistic, 200-250: normal
+    """
+    global _continuous_drift_config, _continuous_drift_step
+
+    drift_sequence = [s.strip() for s in sequence.split(',')]
+
+    # Validate drift types
+    valid_types = {'normal', 'rotate', 'flip_x', 'flip_y', 'reverse', 'delayed', 'probabilistic', 'partial'}
+    for dt in drift_sequence:
+        if dt not in valid_types:
+            return {"error": f"Invalid drift type: {dt}", "valid_types": list(valid_types)}
+
+    _continuous_drift_config = ContinuousDriftConfig.from_sequence(
+        drift_sequence, phase_duration, overlap
+    )
+    _continuous_drift_step = 0
+
+    # Reset world
+    world.reset()
+    agent.reset()
+
+    # Start scenario
+    scenario_manager.start_scenario(ScenarioType.DRIFT, duration=_continuous_drift_config.get_total_steps())
+    scenario_manager.current_scenario.params['drift_type'] = 'continuous'
+    scenario_manager.current_scenario.params['continuous_config'] = {
+        'sequence': drift_sequence,
+        'phase_duration': phase_duration,
+        'overlap': overlap
+    }
+
+    return {
+        "status": "started",
+        "sequence": drift_sequence,
+        "phase_duration": phase_duration,
+        "total_steps": _continuous_drift_config.get_total_steps(),
+        "phases": _continuous_drift_config.phases
+    }
+
+
+@app.get("/drift/continuous/status")
+async def get_continuous_drift_status():
+    """현재 continuous drift 상태 조회"""
+    global _continuous_drift_config, _continuous_drift_step
+
+    if _continuous_drift_config is None:
+        return {"active": False, "message": "No continuous drift configured"}
+
+    current_drift = _continuous_drift_config.get_drift_at_step(_continuous_drift_step)
+    current_phase = None
+    for i, phase in enumerate(_continuous_drift_config.phases):
+        if phase['start'] <= _continuous_drift_step < phase['end']:
+            current_phase = i
+            break
+
+    return {
+        "active": True,
+        "current_step": _continuous_drift_step,
+        "total_steps": _continuous_drift_config.get_total_steps(),
+        "current_drift": current_drift,
+        "current_phase": current_phase,
+        "phases": _continuous_drift_config.phases
+    }
+
+
+@app.post("/drift/continuous/stop")
+async def stop_continuous_drift():
+    """Continuous drift 중단"""
+    global _continuous_drift_config, _continuous_drift_step
+
+    _continuous_drift_config = None
+    _continuous_drift_step = 0
+    world.disable_drift()
+
+    return {"status": "stopped", "message": "Continuous drift stopped"}
+
+
+def apply_continuous_drift_for_step():
+    """
+    매 스텝에서 continuous drift 적용 (internal use)
+    main step 함수에서 호출
+    """
+    global _continuous_drift_config, _continuous_drift_step
+
+    if _continuous_drift_config is None:
+        return
+
+    current_drift = _continuous_drift_config.get_drift_at_step(_continuous_drift_step)
+    _continuous_drift_step += 1
+
+    if current_drift is None:
+        world.disable_drift()
+    else:
+        world.enable_drift(current_drift)
 
 
 # === TEMPORAL DEPTH API ===
@@ -1231,7 +1766,9 @@ async def enable_memory(
     store_threshold: float = 0.5,
     store_sharpness: float = 5.0,
     similarity_threshold: float = 0.95,
-    recall_top_k: int = 5
+    recall_top_k: int = 5,
+    store_enabled: bool = True,
+    recall_enabled: bool = True
 ):
     """
     장기 기억 활성화 (v4.0)
@@ -1247,21 +1784,102 @@ async def enable_memory(
         store_sharpness: sigmoid 기울기
         similarity_threshold: 중복 억제 유사도 (0.95 = 95% 유사하면 병합)
         recall_top_k: 회상 시 상위 k개 에피소드 사용
+        store_enabled: v4.6 분해 실험 - 저장 허용
+        recall_enabled: v4.6 분해 실험 - 회상 bias 적용
     """
     agent.action_selector.enable_memory(
         max_episodes=max_episodes,
         store_threshold=store_threshold,
         store_sharpness=store_sharpness,
         similarity_threshold=similarity_threshold,
-        recall_top_k=recall_top_k
+        recall_top_k=recall_top_k,
+        store_enabled=store_enabled,
+        recall_enabled=recall_enabled
     )
     return {
         "status": "enabled",
         "max_episodes": max_episodes,
         "store_threshold": store_threshold,
         "similarity_threshold": similarity_threshold,
-        "recall_top_k": recall_top_k
+        "recall_top_k": recall_top_k,
+        "store_enabled": store_enabled,
+        "recall_enabled": recall_enabled
     }
+
+
+@app.post("/memory/mode")
+async def set_memory_mode(
+    store_enabled: bool = True,
+    recall_enabled: bool = True
+):
+    """
+    v4.6: 메모리 분해 실험 모드 설정
+
+    분해 실험:
+    - store_only: store_enabled=True, recall_enabled=False
+    - recall_only: store_enabled=False, recall_enabled=True
+    - full: store_enabled=True, recall_enabled=True
+
+    Args:
+        store_enabled: 새 에피소드 저장 허용
+        recall_enabled: 회상 bias 적용 허용
+    """
+    agent.action_selector.set_memory_mode(
+        store_enabled=store_enabled,
+        recall_enabled=recall_enabled
+    )
+    return {
+        "status": "mode_set",
+        "store_enabled": store_enabled,
+        "recall_enabled": recall_enabled
+    }
+
+
+@app.post("/memory/drift_suppression/enable")
+async def enable_drift_suppression(
+    spike_threshold: float = 2.0,
+    recovery_rate: float = 0.05,
+    use_regret: bool = True
+):
+    """
+    v4.6: Drift-aware Recall Suppression 활성화
+
+    예측 오차가 급증하면 (drift 감지) recall weight를 자동으로 억제.
+    적응 후 점진적으로 회복.
+
+    v4.6.2: Regret spike 결합
+    - transition error spike + regret spike → 더 강한 억제
+    - regret은 "회상 강화"가 아니라 "억제 보조 신호"로 사용
+
+    Args:
+        spike_threshold: baseline 대비 몇 배면 spike로 간주 (기본 2.0)
+        recovery_rate: 매 step 회복률 (기본 0.05)
+        use_regret: regret spike를 억제 트리거로 사용할지 (기본 True)
+    """
+    agent.action_selector.enable_drift_suppression(
+        spike_threshold=spike_threshold,
+        recovery_rate=recovery_rate,
+        use_regret=use_regret
+    )
+    return {
+        "status": "enabled",
+        "spike_threshold": spike_threshold,
+        "recovery_rate": recovery_rate,
+        "use_regret": use_regret
+    }
+
+
+@app.post("/memory/drift_suppression/disable")
+async def disable_drift_suppression():
+    """Drift-aware suppression 비활성화"""
+    agent.action_selector.disable_drift_suppression()
+    return {"status": "disabled"}
+
+
+@app.get("/memory/drift_suppression/status")
+async def get_drift_suppression_status():
+    """Drift suppression 상태 조회"""
+    return agent.action_selector.get_drift_suppression_status()
 
 
 @app.post("/memory/disable")
@@ -1636,7 +2254,7 @@ async def apply_ablation_config(
 # === REGRET API (v4.4) ===
 
 @app.post("/regret/enable")
-async def enable_regret():
+async def enable_regret(modulation_enabled: bool = True):
     """
     Counterfactual + Regret 활성화 (v4.4)
 
@@ -1647,9 +2265,35 @@ async def enable_regret():
     - 정책 직접 변경 X
     - memory_gate, lr_boost, THINK 비용/편익 조정 O
     → "후회가 '학습/추론 자원 배분'을 바꾸는 구조"
+
+    Args:
+        modulation_enabled: v4.6 분해 실험 - modulation 적용 여부
     """
-    agent.action_selector.enable_regret()
-    return {"status": "enabled", "message": "Counterfactual + Regret system activated"}
+    agent.action_selector.enable_regret(modulation_enabled=modulation_enabled)
+    return {
+        "status": "enabled",
+        "modulation_enabled": modulation_enabled,
+        "message": "Counterfactual + Regret system activated"
+    }
+
+
+@app.post("/regret/mode")
+async def set_regret_mode(modulation_enabled: bool = True):
+    """
+    v4.6: Regret 분해 실험 모드 설정
+
+    분해 실험:
+    - calc_only: modulation_enabled=False (계산만, 적용 안함)
+    - full: modulation_enabled=True (계산 + 적용)
+
+    Args:
+        modulation_enabled: memory_gate_boost, lr_boost, think_benefit 적용 여부
+    """
+    agent.action_selector.set_regret_mode(modulation_enabled=modulation_enabled)
+    return {
+        "status": "mode_set",
+        "modulation_enabled": modulation_enabled
+    }
 
 
 @app.post("/regret/disable")

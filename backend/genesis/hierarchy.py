@@ -107,23 +107,24 @@ class SlowLayerInference:
 
         # Context별 precision modulation 파라미터
         # v3.1: 범위 축소 (0.85~1.15) - 숨은 손 방지
+        # v4.5.1: internal_weight 낮춤 (0.85~1.0 → 0.5~0.7) - 외부 선호 반영
         # [goal_mult, sensory[0..7], internal_weight, rollout_budget]
         self.context_params = np.array([
-            [1.0, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1, 1.0, 0.9, 0.3],  # Context 0
-            [1.1, 1.0, 1.15, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.4],  # Context 1
-            [0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.85, 0.5],  # Context 2
-            [0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.25],  # Context 3
+            [1.0, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.1, 1.0, 0.5, 0.3],  # Context 0: 50% external
+            [1.1, 1.0, 1.15, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.6, 0.4],  # Context 1: 40% external
+            [0.9, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.5],  # Context 2: 50% external
+            [0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.7, 0.25],  # Context 3: 30% external
         ])
 
         # === v3.2: Context별 전이 모델 ===
         # 각 context k가 "세상이 어떻게 작동하는가"를 학습
         # context_transition_delta[k][action] = expected observation delta (8-dim)
         # 초기값: 모든 context가 동일한 prior (물리적 기본값)
-        n_actions = 5
+        n_actions = 6  # 0=stay, 1=up, 2=down, 3=left, 4=right, 5=THINK
         n_obs = 8
         self.context_transition_delta = np.zeros((K, n_actions, n_obs))
         # 초기 prior: 이동 행동의 기본 효과 (약한 prior)
-        # action 0=stay, 1=up, 2=down, 3=left, 4=right
+        # action 0=stay, 1=up, 2=down, 3=left, 4=right, 5=THINK
         # 방향 행동이 위치 관측에 영향을 줄 것이라는 약한 기대
         for k in range(K):
             # 모든 context가 동일하게 시작
@@ -421,10 +422,12 @@ class PrecisionModulator:
         effective_params = Q_context @ context_params
 
         # v3.1: 범위 축소 - 숨은 손 방지
+        # v4.5.1: internal_pref_weight 범위 확장 (0.8→0.4)
+        #         외부 선호(food proximity)가 무시되면 에이전트가 굶어죽음
         return {
             'goal_precision_mult': float(np.clip(effective_params[0], 0.85, 1.15)),
             'sensory_mod': np.clip(effective_params[1:9], 0.9, 1.1),
-            'internal_pref_weight': float(np.clip(effective_params[9], 0.8, 1.0)),
+            'internal_pref_weight': float(np.clip(effective_params[9], 0.4, 1.0)),
             'rollout_budget': float(np.clip(effective_params[10], 0.0, 1.0)),
         }
 

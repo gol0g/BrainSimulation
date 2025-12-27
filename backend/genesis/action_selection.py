@@ -254,6 +254,15 @@ class ActionSelector:
         # - 압축: 유사 에피소드 병합
         self.ltm_store: Optional[LTMStore] = None
         self.memory_enabled = False
+        # v4.6: 분해 실험용 세분화 제어
+        self.memory_store_enabled = True   # 새 에피소드 저장 허용
+        self.memory_recall_enabled = True  # 회상 bias 적용 허용
+        # v4.6: Drift-aware recall suppression
+        self.drift_aware_suppression = False  # drift 감지 시 recall 억제
+        self._recall_suppression_factor = 1.0  # 1.0=정상, 0.0=완전억제
+        self._prediction_error_baseline = 0.3  # EMA baseline
+        self._prediction_error_ema = 0.3
+        self._suppression_recovery_rate = 0.05  # 회복 속도
         self._last_recall_result: Optional[RecallResult] = None
         self._last_store_result: Optional[Dict] = None
         self._pending_episode_data: Optional[Dict] = None  # 저장 대기 중 에피소드 정보
@@ -274,6 +283,8 @@ class ActionSelector:
         # - memory_gate, lr_boost, THINK 비용/편익 보정 O
         self.counterfactual_engine: Optional[CounterfactualEngine] = None
         self.regret_enabled = False
+        # v4.6: 분해 실험용 - regret 계산은 하되 modulation 끄기
+        self.regret_modulation_enabled = True  # memory_gate_boost, lr_boost, think_benefit 적용
         self._last_cf_result: Optional[CounterfactualResult] = None
         self._last_G_pred: Dict[int, float] = {}  # 선택 시점 G 저장용
 
@@ -528,12 +539,27 @@ class ActionSelector:
             # Complexity: 선호 상태에서 벗어남
             G = risk + ambiguity + self.complexity_weight * complexity
 
+            # === v4.5.1: STAY ambiguity floor ===
+            # STAY가 자주 선택되어 ambiguity가 극도로 낮아지는 것을 방지
+            # "움직이지 않으면 안전하다"는 학습이 과적합되는 것을 막음
+            # 최소 ambiguity를 movement와 비슷한 수준으로 유지
+            if a == 0:
+                min_stay_ambiguity = 0.15  # movement 평균의 약 50%
+                if ambiguity < min_stay_ambiguity:
+                    G = G + (min_stay_ambiguity - ambiguity)
+
             # === v4.0: Memory Bias ===
             # 기억이 G를 조정 (행동 직접 지시 X)
             # memory_bias < 0 → 과거 좋았던 행동 → G ↓ → 더 선택됨
             # memory_bias > 0 → 과거 나빴던 행동 → G ↑ → 덜 선택됨
-            if self.memory_enabled and self._last_recall_result is not None:
-                G = G + self._last_recall_result.memory_bias[a]
+            # v4.6: memory_recall_enabled로 회상 bias 적용 분리 제어
+            # v4.6: drift_aware_suppression으로 급성기 recall 억제
+            if self.memory_enabled and self.memory_recall_enabled and self._last_recall_result is not None:
+                memory_bias = self._last_recall_result.memory_bias[a]
+                # Apply drift-aware suppression
+                if self.drift_aware_suppression:
+                    memory_bias = memory_bias * self._recall_suppression_factor
+                G = G + memory_bias
 
             # 최소 G 행동의 예측 관측 저장 (precision 업데이트용)
             min_G_so_far = min((r.G for r in results.values()), default=float('inf'))
@@ -634,8 +660,9 @@ class ActionSelector:
 
         # === v4.4: Regret-based THINK benefit boost ===
         # 누적 regret가 높으면 메타인지 가치 ↑ → potential_improvement 증가
+        # v4.6: regret_modulation_enabled로 분리 제어
         think_benefit_boost = 0.0
-        if self.regret_enabled:
+        if self.regret_enabled and self.regret_modulation_enabled:
             regret_mod = self.get_regret_modulation()
             think_benefit_boost = regret_mod.get('think_benefit_boost', 0.0)
 
@@ -726,7 +753,8 @@ class ActionSelector:
 
         # === v4.4: Regret-based lr boost ===
         # regret + surprise = 모델 재학습 필요 → lr 증가
-        if self.regret_enabled:
+        # v4.6: regret_modulation_enabled로 분리 제어
+        if self.regret_enabled and self.regret_modulation_enabled:
             regret_mod = self.get_regret_modulation()
             regret_lr_boost = regret_mod.get('lr_boost_factor', 1.0)
             lr = lr * regret_lr_boost
@@ -1672,7 +1700,8 @@ class ActionSelector:
             base_gate = self._last_uncertainty_modulation.memory_gate
 
         # v4.4: Regret boost
-        if self.regret_enabled:
+        # v4.6: regret_modulation_enabled로 분리 제어
+        if self.regret_enabled and self.regret_modulation_enabled:
             regret_mod = self.get_regret_modulation()
             memory_gate_boost = regret_mod.get('memory_gate_boost', 0.0)
             # Clamp to [0, 1]
@@ -1687,7 +1716,9 @@ class ActionSelector:
                      store_threshold: float = 0.5,
                      store_sharpness: float = 5.0,
                      similarity_threshold: float = 0.95,
-                     recall_top_k: int = 5):
+                     recall_top_k: int = 5,
+                     store_enabled: bool = True,
+                     recall_enabled: bool = True):
         """
         장기 기억 활성화 (v4.0)
 
@@ -1702,6 +1733,8 @@ class ActionSelector:
             store_sharpness: sigmoid 기울기 (클수록 임계값 근처에서 급격히 변함)
             similarity_threshold: 중복 억제 유사도 (0.95 = 95% 유사하면 병합)
             recall_top_k: 회상 시 상위 k개 에피소드 사용
+            store_enabled: v4.6 분해 실험 - 저장 허용 여부
+            recall_enabled: v4.6 분해 실험 - 회상 bias 적용 여부
         """
         self.ltm_store = LTMStore(
             max_episodes=max_episodes,
@@ -1712,6 +1745,139 @@ class ActionSelector:
             n_actions=self.n_actions
         )
         self.memory_enabled = True
+        # v4.6: 분해 실험용 세분화 제어
+        self.memory_store_enabled = store_enabled
+        self.memory_recall_enabled = recall_enabled
+
+    def set_memory_mode(self, store_enabled: bool = True, recall_enabled: bool = True):
+        """
+        v4.6: 메모리 분해 실험 모드 설정
+
+        - store_only: store_enabled=True, recall_enabled=False
+        - recall_only: store_enabled=False, recall_enabled=True
+        - full: store_enabled=True, recall_enabled=True
+        """
+        self.memory_store_enabled = store_enabled
+        self.memory_recall_enabled = recall_enabled
+
+    def enable_drift_suppression(self, spike_threshold: float = 2.0, recovery_rate: float = 0.05,
+                                   use_regret: bool = True):
+        """
+        v4.6: Drift-aware Recall Suppression 활성화
+
+        예측 오차가 급증하면 (drift 감지) recall weight를 억제.
+        시간이 지나면 점진적으로 회복.
+
+        v4.6.2: Regret spike 결합
+        - transition error spike + regret spike → 더 강한/빠른 억제
+        - regret은 "회상 강화"가 아니라 "억제 보조 신호"로 사용
+
+        Args:
+            spike_threshold: baseline 대비 몇 배면 spike로 간주 (기본 2.0)
+            recovery_rate: 매 step 회복률 (기본 0.05)
+            use_regret: regret spike를 억제 트리거로 사용할지 (기본 True)
+        """
+        self.drift_aware_suppression = True
+        self._spike_threshold = spike_threshold
+        self._suppression_recovery_rate = recovery_rate
+        self._recall_suppression_factor = 1.0
+        self._use_regret_for_suppression = use_regret
+        self._regret_spike_boost = 0.0  # regret spike로 인한 추가 억제
+
+    def disable_drift_suppression(self):
+        """Drift-aware suppression 비활성화"""
+        self.drift_aware_suppression = False
+        self._recall_suppression_factor = 1.0
+        self._regret_spike_boost = 0.0
+
+    def update_drift_suppression(self, prediction_error: float = None, regret_spike: bool = False):
+        """
+        v4.6: 예측 오차 기반 suppression factor 업데이트
+
+        호출 시점: 매 step, 관측 후
+
+        v4.6.1 변경: transition model error 사용
+        - state.prediction_error는 연속 관측과 호환 안됨 (항상 0)
+        - _last_transition_error['error_mean']이 실제 drift 감지에 적합
+
+        v4.6.2 변경: Regret spike 결합
+        - transition error spike + regret spike → 더 강한 억제
+        - regret spike만 있으면 약한 추가 억제
+
+        Args:
+            prediction_error: 무시됨 (하위 호환성)
+            regret_spike: regret이 spike인지 (v4.6.2)
+        """
+        if not self.drift_aware_suppression:
+            return
+
+        # v4.6.1: Use transition model error instead
+        # This accurately reflects drift (intended action vs actual outcome mismatch)
+        if self._last_transition_error is None:
+            return
+
+        trans_error = self._last_transition_error.get('error_mean', 0.0)
+
+        # Update EMA baseline (slow) - tracks normal error level
+        alpha_baseline = 0.02
+        self._prediction_error_baseline = (
+            (1 - alpha_baseline) * self._prediction_error_baseline +
+            alpha_baseline * trans_error
+        )
+
+        # Update current EMA (fast) - responds quickly to spikes
+        alpha_current = 0.3
+        self._prediction_error_ema = (
+            (1 - alpha_current) * self._prediction_error_ema +
+            alpha_current * trans_error
+        )
+
+        # Detect spike: current >> baseline
+        spike_ratio = self._prediction_error_ema / max(0.01, self._prediction_error_baseline)
+        trans_spike = spike_ratio > self._spike_threshold
+
+        # v4.6.2: Regret spike 처리
+        # regret spike는 "회상 강화"가 아니라 "억제 보조 신호"
+        if self._use_regret_for_suppression and regret_spike:
+            if trans_spike:
+                # transition error spike + regret spike = 강한 억제 (drift 확실)
+                self._regret_spike_boost = 0.3  # 추가 30% 억제
+            else:
+                # regret spike만 = 약한 추가 억제 (다른 원인일 수 있음)
+                self._regret_spike_boost = min(0.15, self._regret_spike_boost + 0.05)
+        else:
+            # regret spike 없으면 점진적 감소
+            self._regret_spike_boost = max(0.0, self._regret_spike_boost - 0.02)
+
+        if trans_spike:
+            # Transition error spike detected → suppress recall
+            # suppression = 1 - (spike_ratio - threshold) / threshold, clamped to [0.1, 1.0]
+            base_suppression = 1.0 - (spike_ratio - self._spike_threshold) / self._spike_threshold
+            # v4.6.2: regret spike boost 적용
+            suppression = base_suppression - self._regret_spike_boost
+            self._recall_suppression_factor = max(0.1, min(1.0, suppression))
+        elif self._regret_spike_boost > 0.1:
+            # v4.6.2: transition spike 없어도 regret spike 강하면 약간 억제
+            self._recall_suppression_factor = max(0.5, 1.0 - self._regret_spike_boost)
+        else:
+            # No spike → gradually recover
+            self._recall_suppression_factor = min(
+                1.0,
+                self._recall_suppression_factor + self._suppression_recovery_rate
+            )
+
+    def get_drift_suppression_status(self) -> dict:
+        """Drift suppression 상태 조회"""
+        return {
+            'enabled': self.drift_aware_suppression,
+            'suppression_factor': self._recall_suppression_factor,
+            'prediction_error_ema': self._prediction_error_ema,
+            'prediction_error_baseline': self._prediction_error_baseline,
+            'is_suppressed': self._recall_suppression_factor < 0.9,
+            # v4.6.2
+            'use_regret': getattr(self, '_use_regret_for_suppression', False),
+            'regret_spike_boost': getattr(self, '_regret_spike_boost', 0.0),
+        }
 
     def disable_memory(self):
         """장기 기억 비활성화 (저장소는 유지)"""
@@ -1809,7 +1975,8 @@ class ActionSelector:
         Returns:
             저장 결과 dict or None
         """
-        if self.ltm_store is None or not self.memory_enabled:
+        # v4.6: memory_store_enabled로 저장 분리 제어
+        if self.ltm_store is None or not self.memory_enabled or not self.memory_store_enabled:
             return None
 
         if self._pending_episode_data is None:
@@ -1874,6 +2041,9 @@ class ActionSelector:
         status = {
             'enabled': self.memory_enabled,
             'initialized': True,
+            # v4.6: 분해 실험용 플래그
+            'store_enabled': self.memory_store_enabled,
+            'recall_enabled': self.memory_recall_enabled,
             'stats': self.ltm_store.get_stats(),
         }
 
@@ -2013,7 +2183,7 @@ class ActionSelector:
 
     # === TRUE FEP v4.4: COUNTERFACTUAL + REGRET CONTROLS ===
 
-    def enable_regret(self):
+    def enable_regret(self, modulation_enabled: bool = True):
         """
         Counterfactual + Regret 활성화 (v4.4)
 
@@ -2024,6 +2194,9 @@ class ActionSelector:
         - 정책 직접 변경 X
         - memory_gate, lr_boost, THINK 비용/편익 조정 O
         → "후회가 '학습/추론 자원 배분'을 바꾸는 구조"
+
+        Args:
+            modulation_enabled: v4.6 분해 실험 - modulation 적용 여부
         """
         self.counterfactual_engine = CounterfactualEngine(
             action_selector=self,
@@ -2031,8 +2204,19 @@ class ActionSelector:
         )
         self.counterfactual_engine.enable()
         self.regret_enabled = True
+        # v4.6: 분해 실험용 - 계산만 하고 modulation 끄기
+        self.regret_modulation_enabled = modulation_enabled
         self._last_cf_result = None
         self._last_G_pred = {}
+
+    def set_regret_mode(self, modulation_enabled: bool = True):
+        """
+        v4.6: Regret 분해 실험 모드 설정
+
+        - calc_only: modulation_enabled=False (계산만, 적용 안함)
+        - full: modulation_enabled=True (계산 + 적용)
+        """
+        self.regret_modulation_enabled = modulation_enabled
 
     def disable_regret(self):
         """Counterfactual + Regret 비활성화"""
@@ -2114,10 +2298,13 @@ class ActionSelector:
         if not self.regret_enabled or self.counterfactual_engine is None:
             return {
                 'enabled': False,
+                'modulation_enabled': False,
                 'engine_status': None
             }
 
         return {
             'enabled': True,
+            # v4.6: 분해 실험용 플래그
+            'modulation_enabled': self.regret_modulation_enabled,
             'engine_status': self.counterfactual_engine.get_status()
         }

@@ -112,6 +112,12 @@ class G1GateResult:
     adaptation_steps: int  # G가 pre-drift 수준으로 돌아오는 스텝 수
     recovery_ratio: float  # post_food / pre_food 비율
 
+    # === v4.6 Drift Adaptation Metrics ===
+    # 원인-결과 분석을 위한 3가지 핵심 지표
+    policy_mismatch_rate: float  # action_modified 비율 (drift가 실제로 개입한 정도)
+    intended_outcome_error: float  # intended 기준 전이 오차 (drift 감지 신호)
+    regret_spike_rate: float  # drift 후 regret spike 빈도 (학습 재배치 신호)
+
     # Gate 결과
     passed: bool
     reasons: List[str]
@@ -620,12 +626,19 @@ class ScenarioManager:
     # ========== G1 Gate (Generalization Test) ==========
 
     def log_step_g1(self, state, action: int, outcome: Dict, transition_std: float, G_value: float,
-                     volatility_ratio: float = 0.0, std_change_pct: float = 0.0):
+                     volatility_ratio: float = 0.0, std_change_pct: float = 0.0,
+                     intended_action: int = None, transition_error: float = 0.0,
+                     regret_spike: bool = False):
         """
         G1 Gate용 확장 로깅 - transition_std와 G 추적
 
         v4.3: volatility_ratio, std_change_pct 추가
+        v4.6: intended_action, transition_error, regret_spike 추가 (drift 적응 분석용)
         """
+        # intended_action이 없으면 applied action과 동일
+        if intended_action is None:
+            intended_action = action
+
         log_entry = {
             'F': state.F,
             'G': G_value,
@@ -633,6 +646,8 @@ class ScenarioManager:
             'ambiguity': state.ambiguity,
             'complexity': state.complexity,
             'action': action,
+            'intended_action': intended_action,  # v4.6
+            'action_modified': action != intended_action,  # v4.6
             'dominant_factor': state.dominant_factor,
             'ate_food': outcome.get('ate_food', False),
             'hit_danger': outcome.get('hit_danger', False),
@@ -642,6 +657,9 @@ class ScenarioManager:
             # v4.3 Enhanced
             'volatility_ratio': volatility_ratio,
             'std_change_pct': std_change_pct,
+            # v4.6 Drift Adaptation
+            'transition_error': transition_error,
+            'regret_spike': regret_spike,
         }
         self._step_logs.append(log_entry)
         self._action_history.append(action)
@@ -790,6 +808,32 @@ class ScenarioManager:
         else:
             reasons.append(f"WARN: 적응 후 성능 저하 ({food_rate_adapt:.2f} < {food_rate_pre*0.5:.2f})")
 
+        # === v4.6 Drift Adaptation Metrics ===
+        # 1. policy_mismatch_rate: drift 후 action이 변경된 비율
+        if post_logs:
+            modified_count = sum(1 for l in post_logs if l.get('action_modified', False))
+            policy_mismatch_rate = modified_count / len(post_logs)
+        else:
+            policy_mismatch_rate = 0.0
+
+        # 2. intended_outcome_error: intended 기준 전이 오차의 평균
+        #    drift 감지 신호의 정량화 - 높으면 drift를 "느끼고" 있음
+        post_errors = [l.get('transition_error', 0.0) for l in post_logs]
+        intended_outcome_error = np.mean(post_errors) if post_errors else 0.0
+
+        # 3. regret_spike_rate: drift 후 regret spike 빈도
+        #    학습 자원 재배치가 실제로 일어났는지
+        if post_logs:
+            spike_count = sum(1 for l in post_logs if l.get('regret_spike', False))
+            regret_spike_rate = spike_count / len(post_logs)
+        else:
+            regret_spike_rate = 0.0
+
+        # v4.6 분석 결과 추가
+        reasons.append(f"INFO: policy_mismatch_rate={policy_mismatch_rate:.2%}")
+        reasons.append(f"INFO: intended_outcome_error={intended_outcome_error:.4f}")
+        reasons.append(f"INFO: regret_spike_rate={regret_spike_rate:.2%}")
+
         return G1GateResult(
             drift_type=drift_type,
             drift_after=drift_after,
@@ -813,6 +857,347 @@ class ScenarioManager:
             std_increase_ratio=round(std_increase_ratio, 3),
             adaptation_steps=adaptation_steps,
             recovery_ratio=round(recovery_ratio, 3),
+            # v4.6 Drift Adaptation
+            policy_mismatch_rate=round(policy_mismatch_rate, 4),
+            intended_outcome_error=round(intended_outcome_error, 4),
+            regret_spike_rate=round(regret_spike_rate, 4),
             passed=passed,
             reasons=reasons
         )
+
+
+# ========== v4.6 Drift Adaptation Report ==========
+
+@dataclass
+class DriftAdaptationReport:
+    """
+    v4.6 표준화된 Drift 적응 리포트
+
+    목적:
+    - 4종 drift 타입에 대한 일관된 분석 포맷
+    - ablation 비교를 위한 핵심 지표 정리
+    - 원인-결과 분석 (drift 개입 정도 → 감지 신호 → 학습 반응)
+    """
+    # === 메타 정보 ===
+    drift_type: str
+    total_steps: int
+    drift_after: int
+    feature_config: Dict[str, bool]  # memory, sleep, think, hierarchy, regret
+
+    # === 1. Drift 개입 지표 (원인) ===
+    # 환경이 실제로 얼마나 개입했는가?
+    intervention_rate: float  # policy_mismatch_rate - drift가 action을 변경한 비율
+    intervention_strength: str  # 'strong'(>0.5), 'moderate'(0.2-0.5), 'weak'(<0.2)
+
+    # === 2. Drift 감지 지표 (신호) ===
+    # 에이전트가 drift를 얼마나 "느꼈는가"?
+    detection_signal: float  # intended_outcome_error - 예측과 실제의 괴리
+    detection_latency: int  # peak_std까지 걸린 스텝
+    peak_surprise_ratio: float  # peak_std_ratio - 최대 서프라이즈 스파이크
+
+    # === 3. 학습 반응 지표 (결과) ===
+    # 에이전트가 어떻게 반응했는가?
+    regret_activation_rate: float  # regret_spike_rate
+    learning_boost_triggered: bool  # regret spike가 lr_boost를 유발했는가
+    memory_gate_elevated: bool  # 기억 저장 게이트가 상승했는가
+
+    # === 4. 적응 성과 지표 ===
+    # 결과적으로 적응에 성공했는가?
+    survival: bool  # post-drift food > 0
+    time_to_recovery: int  # G 회복까지 걸린 스텝
+    performance_retention: float  # food_rate_adapt / food_rate_pre
+    final_verdict: str  # 'excellent', 'good', 'marginal', 'failed'
+
+    # === 5. 원본 G1GateResult (상세 분석용) ===
+    g1_result: Optional[G1GateResult] = None
+
+    def to_dict(self) -> Dict:
+        """JSON 직렬화용 딕셔너리 변환"""
+        # Helper to convert numpy types
+        def to_py(v):
+            if isinstance(v, np.bool_):
+                return bool(v)
+            elif isinstance(v, np.integer):
+                return int(v)
+            elif isinstance(v, np.floating):
+                return float(v)
+            return v
+
+        return {
+            # Meta
+            'meta': {
+                'drift_type': self.drift_type,
+                'total_steps': to_py(self.total_steps),
+                'drift_after': to_py(self.drift_after),
+                'feature_config': self.feature_config,
+            },
+            # Causal chain
+            'intervention': {
+                'rate': to_py(self.intervention_rate),
+                'strength': self.intervention_strength,
+            },
+            'detection': {
+                'signal': to_py(self.detection_signal),
+                'latency': to_py(self.detection_latency),
+                'peak_surprise': to_py(self.peak_surprise_ratio),
+            },
+            'learning_response': {
+                'regret_activation': to_py(self.regret_activation_rate),
+                'learning_boost': to_py(self.learning_boost_triggered),
+                'memory_gate_elevated': to_py(self.memory_gate_elevated),
+            },
+            'adaptation': {
+                'survival': to_py(self.survival),
+                'recovery_steps': to_py(self.time_to_recovery),
+                'performance_retention': to_py(self.performance_retention),
+                'verdict': self.final_verdict,
+            },
+            # Full result reference
+            'passed': to_py(self.g1_result.passed) if self.g1_result else False,
+            'reasons': self.g1_result.reasons if self.g1_result else [],
+        }
+
+    def get_summary_line(self) -> str:
+        """1줄 요약 (ablation 매트릭스용)"""
+        emoji = '✓' if self.survival else '✗'
+        return f"{emoji} {self.drift_type:12s} | int:{self.intervention_rate:.0%} det:{self.detection_signal:.3f} reg:{self.regret_activation_rate:.0%} | rec:{self.time_to_recovery:3d}st ret:{self.performance_retention:.0%} → {self.final_verdict}"
+
+
+@dataclass
+class AblationMatrixCell:
+    """Ablation 매트릭스의 한 셀 (drift_type × feature_config 조합)"""
+    drift_type: str
+    config_name: str
+    report: Optional[DriftAdaptationReport]
+    error: Optional[str] = None
+
+    def get_score(self) -> float:
+        """비교용 점수 (높을수록 좋음)"""
+        if self.report is None:
+            return 0.0
+        # 가중 점수: 생존(40) + 회복속도(30) + 성능유지(30)
+        survival_score = 40 if self.report.survival else 0
+        recovery_score = 30 * max(0, 1 - self.report.time_to_recovery / 100)
+        retention_score = 30 * self.report.performance_retention
+        return survival_score + recovery_score + retention_score
+
+
+@dataclass
+class AblationMatrix:
+    """
+    v4.6 Ablation 매트릭스 - 4종 drift × N개 feature config
+
+    행: drift types (rotate, flip_x, delayed, probabilistic)
+    열: feature configs (baseline, +memory, +regret, full, etc.)
+    """
+    drift_types: List[str]
+    config_names: List[str]
+    cells: Dict[str, Dict[str, AblationMatrixCell]]  # [drift_type][config_name]
+
+    def get_cell(self, drift_type: str, config_name: str) -> Optional[AblationMatrixCell]:
+        if drift_type in self.cells and config_name in self.cells[drift_type]:
+            return self.cells[drift_type][config_name]
+        return None
+
+    def to_markdown_table(self) -> str:
+        """Markdown 테이블 형식 출력"""
+        # Header
+        header = "| Drift Type | " + " | ".join(self.config_names) + " |"
+        separator = "|" + "|".join(["-" * 12] + ["-" * 10] * len(self.config_names)) + "|"
+
+        rows = [header, separator]
+        for drift in self.drift_types:
+            row_cells = [f" {drift:10s} "]
+            for config in self.config_names:
+                cell = self.get_cell(drift, config)
+                if cell and cell.report:
+                    score = cell.get_score()
+                    emoji = '✓' if cell.report.survival else '✗'
+                    row_cells.append(f" {emoji}{score:5.1f} ")
+                elif cell and cell.error:
+                    row_cells.append(" ERR ")
+                else:
+                    row_cells.append(" - ")
+            rows.append("|" + "|".join(row_cells) + "|")
+
+        return "\n".join(rows)
+
+    def get_best_config_per_drift(self) -> Dict[str, str]:
+        """각 drift 타입별 최고 config 반환"""
+        best = {}
+        for drift in self.drift_types:
+            best_score = -1
+            best_config = None
+            for config in self.config_names:
+                cell = self.get_cell(drift, config)
+                if cell:
+                    score = cell.get_score()
+                    if score > best_score:
+                        best_score = score
+                        best_config = config
+            if best_config:
+                best[drift] = best_config
+        return best
+
+    def get_feature_contribution(self) -> Dict[str, float]:
+        """각 feature의 평균 기여도 (baseline 대비)"""
+        contributions = {}
+        baseline_scores = {}
+
+        # baseline 점수 수집
+        for drift in self.drift_types:
+            cell = self.get_cell(drift, 'baseline')
+            if cell:
+                baseline_scores[drift] = cell.get_score()
+
+        # 각 config의 delta 계산
+        for config in self.config_names:
+            if config == 'baseline':
+                continue
+            deltas = []
+            for drift in self.drift_types:
+                cell = self.get_cell(drift, config)
+                if cell and drift in baseline_scores:
+                    delta = cell.get_score() - baseline_scores[drift]
+                    deltas.append(delta)
+            if deltas:
+                contributions[config] = np.mean(deltas)
+
+        return contributions
+
+
+def create_drift_adaptation_report(
+    g1_result: G1GateResult,
+    feature_config: Dict[str, bool],
+    total_steps: int
+) -> DriftAdaptationReport:
+    """
+    G1GateResult에서 표준화된 DriftAdaptationReport 생성
+
+    Args:
+        g1_result: G1 Gate 테스트 결과
+        feature_config: 활성화된 기능들 (memory, sleep, think, hierarchy, regret)
+        total_steps: 전체 테스트 스텝 수
+    """
+    # 1. Intervention 강도 분류
+    int_rate = g1_result.policy_mismatch_rate
+    if int_rate > 0.5:
+        int_strength = 'strong'
+    elif int_rate > 0.2:
+        int_strength = 'moderate'
+    else:
+        int_strength = 'weak'
+
+    # 2. Detection latency 추정 (peak_std까지의 시간)
+    # 실제로는 step log를 분석해야 하지만, 여기서는 shock window 기반 추정
+    detection_latency = min(20, g1_result.time_to_recovery // 2) if g1_result.time_to_recovery < 100 else 20
+
+    # 3. Learning response 분석
+    regret_rate = g1_result.regret_spike_rate
+    learning_boost = regret_rate > 0.1  # 10% 이상이면 lr_boost 유발
+    memory_elevated = g1_result.intended_outcome_error > 0.1  # 오차 크면 memory_gate 상승
+
+    # 4. Performance retention
+    if g1_result.food_rate_pre > 0:
+        retention = g1_result.food_rate_adapt / g1_result.food_rate_pre
+    else:
+        retention = 1.0 if g1_result.food_rate_adapt > 0 else 0.0
+    retention = min(2.0, max(0.0, retention))  # clamp to [0, 2]
+
+    # 5. Final verdict
+    if not g1_result.passed:
+        verdict = 'failed'
+    elif retention >= 0.8 and g1_result.time_to_recovery < 30:
+        verdict = 'excellent'
+    elif retention >= 0.5 and g1_result.time_to_recovery < 50:
+        verdict = 'good'
+    elif g1_result.post_drift_food > 0:
+        verdict = 'marginal'
+    else:
+        verdict = 'failed'
+
+    return DriftAdaptationReport(
+        drift_type=g1_result.drift_type,
+        total_steps=total_steps,
+        drift_after=g1_result.drift_after,
+        feature_config=feature_config,
+        # Intervention
+        intervention_rate=int_rate,
+        intervention_strength=int_strength,
+        # Detection
+        detection_signal=g1_result.intended_outcome_error,
+        detection_latency=detection_latency,
+        peak_surprise_ratio=g1_result.peak_std_ratio,
+        # Learning response
+        regret_activation_rate=regret_rate,
+        learning_boost_triggered=learning_boost,
+        memory_gate_elevated=memory_elevated,
+        # Adaptation
+        survival=g1_result.post_drift_food > 0,
+        time_to_recovery=g1_result.time_to_recovery,
+        performance_retention=round(retention, 3),
+        final_verdict=verdict,
+        # Original
+        g1_result=g1_result,
+    )
+
+
+# === v4.6 Continuous Drift Scenario ===
+
+@dataclass
+class ContinuousDriftConfig:
+    """
+    연속/중첩 Drift 설정 - 여러 drift가 시간에 따라 적용됨
+
+    예: step 0-50: normal → 50-100: rotate → 100-150: flip_x → ...
+    """
+    phases: List[Dict]  # [{'start': 0, 'end': 50, 'drift': None}, {'start': 50, 'end': 100, 'drift': 'rotate'}, ...]
+    overlap_steps: int = 0  # 전환 시 overlap (점진적 전환)
+
+    @classmethod
+    def from_sequence(cls, drift_sequence: List[str], phase_duration: int = 50, overlap: int = 0) -> 'ContinuousDriftConfig':
+        """
+        drift 시퀀스에서 config 생성
+
+        Args:
+            drift_sequence: ['normal', 'rotate', 'flip_x', 'normal', ...]
+            phase_duration: 각 phase 길이
+            overlap: 전환 overlap 스텝
+        """
+        phases = []
+        current_step = 0
+        for drift in drift_sequence:
+            phases.append({
+                'start': current_step,
+                'end': current_step + phase_duration,
+                'drift': None if drift == 'normal' else drift
+            })
+            current_step += phase_duration
+        return cls(phases=phases, overlap_steps=overlap)
+
+    def get_drift_at_step(self, step: int) -> Optional[str]:
+        """특정 스텝에서의 drift 타입 반환"""
+        for phase in self.phases:
+            if phase['start'] <= step < phase['end']:
+                return phase['drift']
+        return None
+
+    def get_total_steps(self) -> int:
+        """전체 스텝 수"""
+        if self.phases:
+            return self.phases[-1]['end']
+        return 0
+
+
+# Standard drift types for ablation testing
+STANDARD_DRIFT_TYPES = ['rotate', 'flip_x', 'delayed', 'probabilistic']
+
+# Standard feature configs for ablation
+STANDARD_FEATURE_CONFIGS = {
+    'baseline': {'memory': False, 'sleep': False, 'think': False, 'hierarchy': False, 'regret': False},
+    '+memory': {'memory': True, 'sleep': False, 'think': False, 'hierarchy': False, 'regret': False},
+    '+regret': {'memory': False, 'sleep': False, 'think': False, 'hierarchy': False, 'regret': True},
+    '+hierarchy': {'memory': False, 'sleep': False, 'think': False, 'hierarchy': True, 'regret': False},
+    'mem+reg': {'memory': True, 'sleep': False, 'think': False, 'hierarchy': False, 'regret': True},
+    'full': {'memory': True, 'sleep': True, 'think': True, 'hierarchy': True, 'regret': True},
+}

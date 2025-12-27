@@ -480,6 +480,7 @@ const ControlPanel = ({ state }) => {
   const [memory, setMemory] = useState({ enabled: false });  // v4.0
   const [consolidation, setConsolidation] = useState({ enabled: false });  // v4.1
   const [regret, setRegret] = useState({ enabled: false });  // v4.4
+  const [drift, setDrift] = useState({ enabled: false, type: 'rotate' });  // v4.5
   const [internalWeight, setInternalWeight] = useState(0.5);
   const [checkpoints, setCheckpoints] = useState([]);
   const [checkpointName, setCheckpointName] = useState('');
@@ -620,6 +621,33 @@ const ControlPanel = ({ state }) => {
     } catch (e) { console.error(e); }
   };
 
+  // v4.5: Drift toggle
+  const toggleDrift = async () => {
+    try {
+      if (drift.enabled) {
+        await axios.post(`${API_URL}/drift/disable`);
+        setDrift(prev => ({ ...prev, enabled: false }));
+      } else {
+        await axios.post(`${API_URL}/drift/enable`, null, {
+          params: { drift_type: drift.type }
+        });
+        setDrift(prev => ({ ...prev, enabled: true }));
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  // v4.5: Change drift type
+  const changeDriftType = async (newType) => {
+    setDrift(prev => ({ ...prev, type: newType }));
+    if (drift.enabled) {
+      try {
+        await axios.post(`${API_URL}/drift/enable`, null, {
+          params: { drift_type: newType }
+        });
+      } catch (e) { console.error(e); }
+    }
+  };
+
   const updateInternalWeight = async (val) => {
     try {
       await axios.post(`${API_URL}/preference/internal_weight`, null, { params: { weight: val } });
@@ -755,6 +783,54 @@ const ControlPanel = ({ state }) => {
               label="Regret (v4.4)"
               color="#ff6b6b"
             />
+            <ToggleSwitch
+              enabled={drift.enabled}
+              onChange={toggleDrift}
+              label="Drift (v4.5)"
+              color="#ffd700"
+            />
+          </div>
+
+          {/* Drift Control - v4.5 */}
+          <div style={{
+            marginBottom: '15px',
+            padding: '10px',
+            background: '#111',
+            borderRadius: '6px',
+            border: drift.enabled ? '1px solid #ffd70066' : '1px solid #333'
+          }}>
+            <div style={{ fontSize: '0.65rem', color: '#ffd700', marginBottom: '8px' }}>
+              환경 Drift (v4.5)
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              {['rotate', 'flip_x', 'flip_y', 'reverse', 'probabilistic', 'delayed'].map(type => (
+                <button
+                  key={type}
+                  onClick={() => changeDriftType(type)}
+                  style={{
+                    padding: '4px 8px',
+                    fontSize: '0.5rem',
+                    background: drift.type === type ? '#ffd700' : '#222',
+                    color: drift.type === type ? '#000' : '#888',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            {drift.enabled && (
+              <div style={{ marginTop: '8px', fontSize: '0.5rem', color: '#ffd700' }}>
+                ACTIVE: 행동 매핑이 변경됨
+              </div>
+            )}
+            {state?.outcome?.action_modified && (
+              <div style={{ marginTop: '4px', fontSize: '0.45rem', color: '#ff3e3e' }}>
+                이번 스텝: action이 drift로 변경됨
+              </div>
+            )}
           </div>
 
           {/* Uncertainty Display - v4.3 */}

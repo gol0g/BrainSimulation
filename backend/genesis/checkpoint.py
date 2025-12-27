@@ -286,8 +286,8 @@ class BrainCheckpoint:
         action_selector._apply_learned_preferences()
 
     def _save_world(self, world) -> Dict:
-        """World 상태 저장"""
-        return {
+        """World 상태 저장 (v4.5: drift 포함)"""
+        data = {
             'agent_pos': list(world.agent_pos),
             'food_pos': list(world.food_pos),
             'danger_pos': list(world.danger_pos),
@@ -296,9 +296,20 @@ class BrainCheckpoint:
             'total_food': world.total_food,
             'total_deaths': world.total_deaths
         }
+        # v4.5: Drift 상태 저장
+        if hasattr(world, 'drift_enabled'):
+            data['drift'] = {
+                'enabled': world.drift_enabled,
+                'type': world.drift_type,
+                'delay_counter': world._drift_delay_counter,
+                'delay_threshold': world._drift_delay_threshold,
+                'probabilistic_ratio': world._probabilistic_ratio,
+                'energy_decay_multiplier': getattr(world, '_energy_decay_multiplier', 1.0)
+            }
+        return data
 
     def _load_world(self, world, data: Dict):
-        """World 상태 복원"""
+        """World 상태 복원 (v4.5: drift 포함)"""
         world.agent_pos = data['agent_pos']
         world.food_pos = data['food_pos']
         world.danger_pos = data['danger_pos']
@@ -306,6 +317,15 @@ class BrainCheckpoint:
         world.step_count = data['step_count']
         world.total_food = data['total_food']
         world.total_deaths = data['total_deaths']
+        # v4.5: Drift 상태 복원
+        if 'drift' in data and hasattr(world, 'drift_enabled'):
+            drift = data['drift']
+            world.drift_enabled = drift['enabled']
+            world.drift_type = drift['type']
+            world._drift_delay_counter = drift['delay_counter']
+            world._drift_delay_threshold = drift['delay_threshold']
+            world._probabilistic_ratio = drift['probabilistic_ratio']
+            world._energy_decay_multiplier = drift.get('energy_decay_multiplier', 1.0)
 
 
 # === Headless Evaluation Runner ===

@@ -31,6 +31,8 @@ class SimulationFingerprint:
     agent_pos: tuple
     avg_G: float
     action_counts: Dict[int, int]
+    # v4.5: Drift 상태 포함 (재현성 보장)
+    drift_state: Optional[Dict[str, Any]] = None
 
     def to_hash(self) -> str:
         """상태를 해시로 변환 (비교용)"""
@@ -43,7 +45,8 @@ class SimulationFingerprint:
             'final_energy': round(self.final_energy, 4),
             'agent_pos': self.agent_pos,
             'avg_G': round(self.avg_G, 4),
-            'action_counts': self.action_counts
+            'action_counts': self.action_counts,
+            'drift_state': self.drift_state  # v4.5
         }
         json_str = json.dumps(data, sort_keys=True)
         return hashlib.md5(json_str.encode()).hexdigest()[:12]
@@ -190,7 +193,11 @@ def run_reproducibility_test(
 
             last_action = action
 
-        # 지문 생성
+        # 지문 생성 (v4.5: drift_state 포함)
+        drift_state = None
+        if hasattr(world, 'get_drift_status'):
+            drift_state = world.get_drift_status()
+
         fingerprint = SimulationFingerprint(
             seed=seed,
             step_count=world.step_count,
@@ -199,7 +206,8 @@ def run_reproducibility_test(
             final_energy=world.energy,
             agent_pos=tuple(world.agent_pos),
             avg_G=np.mean(G_values) if G_values else 0.0,
-            action_counts=action_counts
+            action_counts=action_counts,
+            drift_state=drift_state
         )
 
         fingerprints.append(fingerprint.to_hash())

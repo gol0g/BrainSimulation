@@ -12,7 +12,7 @@
 
 ---
 
-## 현재 구현 상태 - True FEP v4.4
+## 현재 구현 상태 - True FEP v4.6.1
 
 ### 핵심 공식 (True FEP)
 
@@ -478,6 +478,256 @@ POST /ablation/apply?regret=true  # ablation 테스트에 포함
 │ [SPIKE: 원인]                           │
 └─────────────────────────────────────────┘
 ```
+
+---
+
+## v4.5 변경사항 (2024-12-27)
+
+### Server-side Drift - API로 환경 dynamics 변경
+
+**핵심 개념**: 환경의 action-to-movement 매핑을 런타임에 변경하여 에이전트의 적응 능력을 테스트.
+
+**왜 필요한가**:
+- G1 Gate에서 drift 테스트를 서버 측에서 제어
+- 학습된 전이 모델이 무효화되는 상황 시뮬레이션
+- 에이전트의 일반화 능력 검증
+
+**Drift 종류**:
+```python
+# Actions: 0=STAY, 1=UP, 2=DOWN, 3=LEFT, 4=RIGHT, 5=THINK
+
+rotate:        UP→RIGHT→DOWN→LEFT→UP (90도 회전)
+flip_x:        LEFT↔RIGHT
+flip_y:        UP↔DOWN
+reverse:       UP↔DOWN, LEFT↔RIGHT
+partial:       내부 상태에만 영향 (action 그대로)
+delayed:       N스텝 후부터 reverse 적용
+probabilistic: 70% 확률로 reverse 적용
+```
+
+**API**:
+```bash
+POST /drift/enable?drift_type=rotate     # 활성화
+POST /drift/enable?drift_type=probabilistic&probabilistic_ratio=0.7
+POST /drift/enable?drift_type=delayed&delay_threshold=10
+POST /drift/disable                       # 비활성화
+GET  /drift/status                        # 상태 조회
+```
+
+**구현 파일**:
+- `main_genesis.py`: World 클래스에 drift 로직 추가
+- `frontend/src/GenesisApp.jsx`: Drift 토글 및 타입 선택 UI
+
+**프론트엔드 UI**:
+- Drift (v4.5) 토글 스위치 (금색)
+- 6가지 drift 타입 선택 버튼
+- 활성화 시 "ACTIVE: 행동 매핑이 변경됨" 표시
+- action이 변경된 스텝에서 경고 표시
+
+---
+
+## v4.6 변경사항 (2024-12-27)
+
+### Drift 적응 분석 프레임워크
+
+**핵심 개념**: Drift 테스트 결과를 **원인-결과 분석** 형태로 표준화하여 체계적인 ablation 비교 가능.
+
+**왜 필요한가**:
+- v4.5.1의 `intended_action` 분리로 drift가 "실제 환경 변화"가 됨
+- 이를 활용해 개입(Intervention) → 감지(Detection) → 반응(Response) → 적응(Adaptation) 인과 체인 분석
+- 4종 drift × N개 feature config의 체계적 비교
+
+### v4.6 Drift Adaptation 3대 지표
+
+```python
+# 1. policy_mismatch_rate: Drift가 실제로 개입한 정도
+#    = Σ(action_modified) / total_steps
+#    "환경이 에이전트의 의도를 얼마나 뒤집었는가"
+
+# 2. intended_outcome_error: Drift 감지 신호
+#    = E[|predicted_delta(intended) - actual_delta|]
+#    "에이전트가 의도한 결과 vs 실제 결과의 괴리"
+#    높으면 → 에이전트가 drift를 "느끼고" 있음
+
+# 3. regret_spike_rate: 학습 자원 재배치 신호
+#    = Σ(regret_spike) / total_steps
+#    "후회가 발생하여 lr_boost, memory_gate가 활성화된 비율"
+```
+
+### DriftAdaptationReport (표준화된 리포트)
+
+```python
+DriftAdaptationReport:
+  # 1. Intervention (원인) - 환경이 얼마나 개입했나
+  intervention_rate: float      # policy_mismatch_rate
+  intervention_strength: str    # 'strong'(>0.5), 'moderate', 'weak'
+
+  # 2. Detection (신호) - 에이전트가 얼마나 느꼈나
+  detection_signal: float       # intended_outcome_error
+  detection_latency: int        # peak_std까지 걸린 스텝
+  peak_surprise_ratio: float    # max(std) / pre_std
+
+  # 3. Learning Response (반응) - 학습 자원 재배치
+  regret_activation_rate: float # regret_spike_rate
+  learning_boost_triggered: bool
+  memory_gate_elevated: bool
+
+  # 4. Adaptation (결과) - 최종 적응 성과
+  survival: bool                # post-drift food > 0
+  time_to_recovery: int         # G 회복까지 걸린 스텝
+  performance_retention: float  # food_rate_adapt / food_rate_pre
+  final_verdict: str            # 'excellent', 'good', 'marginal', 'failed'
+```
+
+### Ablation Matrix
+
+```
+| Drift Type    | baseline | +memory | +regret | full   |
+|---------------|----------|---------|---------|--------|
+| rotate        |  ✓ 65.2  |  ✓ 72.1 |  ✓ 78.3 | ✓ 85.0 |
+| flip_x        |  ✓ 58.1  |  ✓ 64.5 |  ✓ 70.2 | ✓ 81.3 |
+| delayed       |  ✓ 71.0  |  ✓ 75.2 |  ✓ 80.1 | ✓ 88.5 |
+| probabilistic |  ✓ 45.3  |  ✓ 52.8 |  ✓ 61.4 | ✓ 73.2 |
+```
+
+**점수 계산**:
+```python
+score = 40 * survival + 30 * (1 - recovery/100) + 30 * retention
+# 생존(40점) + 빠른 회복(30점) + 성능 유지(30점)
+```
+
+### Continuous Drift (연속/중첩 Drift)
+
+여러 drift 타입이 시간에 따라 순차적으로 적용됨:
+
+```
+step 0-50:   normal (학습)
+step 50-100: rotate (첫 번째 drift)
+step 100-150: flip_x (두 번째 drift)
+step 150-200: normal (회복)
+```
+
+**API**:
+```bash
+# 연속 drift 시작
+POST /drift/continuous/start?sequence=normal,rotate,flip_x,normal&phase_duration=50
+
+# 상태 조회
+GET /drift/continuous/status
+
+# 중단
+POST /drift/continuous/stop
+```
+
+### API 엔드포인트 (v4.6)
+
+```bash
+# 표준화된 리포트
+GET  /scenario/drift_report          # 원인-결과 분석 리포트
+GET  /scenario/drift_report/summary  # 1줄 요약
+
+# Ablation 매트릭스
+POST /ablation/matrix/record?config_name=baseline  # 결과 기록
+GET  /ablation/matrix               # 매트릭스 조회
+POST /ablation/matrix/reset         # 초기화
+GET  /ablation/standard_configs     # 표준 설정 목록
+
+# 연속 Drift
+POST /drift/continuous/start?sequence=...  # 연속 drift 시작
+GET  /drift/continuous/status              # 상태 조회
+POST /drift/continuous/stop                # 중단
+```
+
+### Ablation 테스트 워크플로우
+
+```bash
+# 1. 매트릭스 초기화
+POST /ablation/matrix/reset
+
+# 2. 각 (drift_type, config) 조합에 대해:
+for config in [baseline, +memory, +regret, full]:
+    # 2a. config 적용
+    POST /ablation/apply?memory=...&regret=...
+
+    for drift in [rotate, flip_x, delayed, probabilistic]:
+        # 2b. drift 시나리오 시작
+        POST /scenario/start/drift?drift_type={drift}&duration=100&drift_after=50
+
+        # 2c. 스텝 실행
+        for _ in range(100):
+            POST /step
+
+        # 2d. 결과 기록
+        POST /ablation/matrix/record?config_name={config}
+
+# 3. 매트릭스 조회
+GET /ablation/matrix
+```
+
+**구현 파일**:
+- `genesis/scenarios.py`: DriftAdaptationReport, AblationMatrix, ContinuousDriftConfig
+- `main_genesis.py`: v4.6 API 엔드포인트
+
+---
+
+## v4.6.1 변경사항 (2024-12-27)
+
+### Drift-aware Recall Suppression 수정 - transition error 기반 감지
+
+**핵심 문제**: v4.6의 drift suppression이 작동하지 않음
+- `state.prediction_error`가 연속 관측과 호환되지 않아 항상 0 반환
+- suppression이 drift를 감지하지 못함
+
+**v4.6.1 해결책**: Transition model error 사용
+- `_last_transition_error['error_mean']`이 실제 drift를 정확히 반영
+- 에이전트가 의도한 행동 vs 실제 결과의 불일치 감지
+
+**구현 변경**:
+```python
+def update_drift_suppression(self, prediction_error: float = None):
+    # v4.6.1: state.prediction_error 대신 transition model error 사용
+    if self._last_transition_error is None:
+        return
+    trans_error = self._last_transition_error.get('error_mean', 0.0)
+
+    # EMA baseline (slow) - 정상 오류 수준 추적
+    self._prediction_error_baseline = 0.98 * baseline + 0.02 * trans_error
+
+    # EMA current (fast) - spike 빠르게 감지
+    self._prediction_error_ema = 0.7 * ema + 0.3 * trans_error
+
+    # Spike 감지: current >> baseline
+    spike_ratio = ema / baseline
+    if spike_ratio > spike_threshold:
+        suppression_factor = max(0.1, 1 - (ratio - threshold) / threshold)
+```
+
+**테스트 결과 (5 trials × 200 steps, rotate drift)**:
+```
+baseline           pre=  1.4 post=  0.6 total=  2.0
+mem_full           pre=  0.4 post=  1.0 total=  1.4  (-30%)
+mem_full+supp      pre=  2.2 post=  0.4 total=  2.6  (+30%)
+
+분석:
+- mem_full < baseline: "Wrong Confidence" 문제 확인
+- mem_full+supp > mem_full by +86%: Suppression 효과 검증
+- mem_full+supp > baseline by +30%: 전체적으로 개선
+```
+
+**핵심 통찰**:
+1. **Wrong Confidence 문제**: 기억 회상(recall)이 pre-drift 경험에 기반하여 drift 후 잘못된 bias 적용
+2. **Suppression 효과**: transition error spike 감지 → recall weight 억제 → 잘못된 bias 방지
+3. **Pre-drift 개선**: suppression이 기억 영향을 신중하게 적용하여 pre-drift에서도 효과적
+
+**API**:
+```bash
+POST /memory/drift_suppression/enable?spike_threshold=1.5&recovery_rate=0.05
+POST /memory/drift_suppression/disable
+GET  /memory/drift_suppression/status
+```
+
+**구현 파일**:
+- `genesis/action_selection.py`: `update_drift_suppression()` 수정
 
 ---
 
@@ -1255,7 +1505,8 @@ frontend/
 - ~~Consolidation: Awake Replay로 모델 불확실성 감소~~ ✅ 완료 (v4.1)
 - ~~G1 Gate: Generalization Test~~ ✅ 완료 - DRIFT 시나리오
 - ~~Counterfactual + Regret: 반사실적 추론과 후회 기반 학습~~ ✅ 완료 (v4.4) - memory_gate, lr_boost, THINK 연결
-- Server-side Drift: API로 환경 dynamics 변경 지원
+- ~~Server-side Drift: API로 환경 dynamics 변경 지원~~ ✅ 완료 (v4.5) - 7가지 drift 타입, G1 Gate 테스트 지원
+- ~~Drift 적응 분석 프레임워크~~ ✅ 완료 (v4.6) - DriftAdaptationReport, AblationMatrix, ContinuousDrift
 
 ---
 

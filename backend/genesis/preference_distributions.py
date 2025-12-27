@@ -103,11 +103,11 @@ class PreferenceDistributions:
     v2.5: 8차원 (6 exteroception + 2 interoception)
     """
 
-    def __init__(self, internal_pref_weight: float = 1.0):
+    def __init__(self, internal_pref_weight: float = 0.5):
         """
         Args:
             internal_pref_weight: Phase 0-2 전환용 lambda (0.0 = 외부만, 1.0 = 내부만)
-                                 v2.5: 기본값 1.0 (내부 선호만) - 테스트에서 더 좋은 성능
+                                 v3.5: 기본값 0.5 (혼합) - 전이 모델 학습 전에는 외부 선호도 필요
         """
         # === EXTEROCEPTION PREFERENCES (외부 세계) ===
 
@@ -545,3 +545,266 @@ class StatePreferenceDistribution:
         complexity = complexity * 0.3
 
         return max(0.0, complexity)
+
+
+# ============================================================================
+# v3.5: Online Preference Learning
+# ============================================================================
+
+@dataclass
+class LearnableBetaParams:
+    """
+    학습 가능한 Beta 분포 파라미터.
+
+    mode와 concentration으로 파라미터화:
+    - mode (m): 분포의 최빈값 (0 < m < 1)
+    - concentration (c): 분포의 뾰족함 (c > 2)
+
+    α = m * (c - 2) + 1
+    β = (1 - m) * (c - 2) + 1
+    """
+    mode: float  # 0 < mode < 1
+    concentration: float  # c > 2 (higher = sharper)
+
+    # 초기값 저장 (리셋용)
+    initial_mode: float = 0.5
+    initial_concentration: float = 5.0
+
+    def __post_init__(self):
+        self.initial_mode = self.mode
+        self.initial_concentration = self.concentration
+
+    @property
+    def alpha(self) -> float:
+        return self.mode * (self.concentration - 2) + 1
+
+    @property
+    def beta(self) -> float:
+        return (1 - self.mode) * (self.concentration - 2) + 1
+
+    def to_beta_params(self) -> BetaParams:
+        return BetaParams(alpha=self.alpha, beta=self.beta)
+
+    def mean(self) -> float:
+        return self.alpha / (self.alpha + self.beta)
+
+    def variance(self) -> float:
+        a, b = self.alpha, self.beta
+        return (a * b) / ((a + b) ** 2 * (a + b + 1))
+
+    def reset(self):
+        """초기값으로 리셋"""
+        self.mode = self.initial_mode
+        self.concentration = self.initial_concentration
+
+
+class PreferenceLearner:
+    """
+    v3.5: Online Preference Learning
+
+    내부 선호(energy, pain)의 Beta 파라미터를 경험에서 학습.
+
+    핵심 원리:
+    - G가 낮았으면 (좋은 결과) → 현재 내부 상태를 더 선호하도록 mode 이동
+    - G가 높았으면 (나쁜 결과) → 현재 내부 상태에서 멀어지도록 mode 이동
+    - 일관된 경험 → concentration 증가 (확신)
+    - 불일치 경험 → concentration 감소 (불확실)
+
+    학습 대상:
+    - energy_pref: 항상성 목표 (~0.6)
+    - pain_pref: 통증 회피 (~0.0)
+
+    안정화:
+    - EMA smoothing (lr = 0.01~0.05)
+    - Parameter clamps (mode: 0.1~0.9, concentration: 3~15)
+    - Learning inertia (급격한 변화 방지)
+    """
+
+    def __init__(self,
+                 mode_lr: float = 0.02,
+                 concentration_lr: float = 0.01,
+                 mode_clamp: Tuple[float, float] = (0.1, 0.9),
+                 concentration_clamp: Tuple[float, float] = (3.0, 15.0),
+                 energy_mode_clamp: Tuple[float, float] = (0.5, 0.75)):
+        """
+        Args:
+            mode_lr: mode 학습률
+            concentration_lr: concentration 학습률
+            mode_clamp: mode 범위 [min, max] (일반)
+            concentration_clamp: concentration 범위 [min, max]
+            energy_mode_clamp: energy 전용 mode 범위 (항상성 ~0.6 근처로 제한)
+        """
+        self.mode_lr = mode_lr
+        self.concentration_lr = concentration_lr
+        self.mode_clamp = mode_clamp
+        self.concentration_clamp = concentration_clamp
+        self.energy_mode_clamp = energy_mode_clamp  # v3.5.1: 에너지 전용 범위
+
+        # 학습 가능한 선호 분포
+        # energy: 초기 mode ~0.67 (Beta(3,2)의 mode)
+        self.energy_pref = LearnableBetaParams(
+            mode=0.67,  # (3-1)/(3+2-2) = 2/3
+            concentration=5.0  # 3+2
+        )
+
+        # pain: 초기 mode ~0.0 (Beta(1,5)는 mode 없음, 대신 0 근처 집중)
+        # mode = 0이면 α = 1이 됨 (경계), 작은 값 사용
+        self.pain_pref = LearnableBetaParams(
+            mode=0.05,  # 0 근처
+            concentration=6.0  # 1+5
+        )
+
+        # 학습 히스토리 (디버깅/분석용)
+        self._update_count = 0
+        self._last_energy_delta = 0.0
+        self._last_pain_delta = 0.0
+        self._last_G_signal = 0.0
+
+        # G baseline (EMA로 추적)
+        self._G_baseline = 1.0
+        self._G_baseline_ema = 0.1
+
+    def update(self,
+               current_obs: np.ndarray,
+               G_value: float,
+               prediction_error: float = 0.0) -> Dict:
+        """
+        선호 분포 업데이트.
+
+        Args:
+            current_obs: 현재 관측 (8차원, [6]=energy, [7]=pain)
+            G_value: 현재 스텝의 G (낮을수록 좋음)
+            prediction_error: 예측 오차 (높을수록 불확실)
+
+        Returns:
+            업데이트 정보 dict
+        """
+        if len(current_obs) < 8:
+            return {'updated': False, 'reason': 'obs too short'}
+
+        current_energy = current_obs[6]
+        current_pain = current_obs[7]
+
+        # === G baseline 업데이트 (EMA) ===
+        self._G_baseline = (
+            (1 - self._G_baseline_ema) * self._G_baseline +
+            self._G_baseline_ema * G_value
+        )
+
+        # === "surprise" 신호 계산 ===
+        # G가 baseline보다 낮으면 좋은 상황 (positive surprise)
+        # G가 baseline보다 높으면 나쁜 상황 (negative surprise)
+        G_surprise = self._G_baseline - G_value  # positive = good
+        self._last_G_signal = G_surprise
+
+        # surprise를 [-1, 1] 범위로 정규화
+        G_surprise_norm = np.tanh(G_surprise)
+
+        # === Energy 선호 업데이트 ===
+        # Good outcome → mode를 current_energy 쪽으로
+        # Bad outcome → mode를 current_energy 반대쪽으로
+        energy_target = current_energy if G_surprise_norm > 0 else (1 - current_energy)
+        energy_delta = self.mode_lr * G_surprise_norm * (energy_target - self.energy_pref.mode)
+
+        # Inertia: 급격한 변화 방지
+        energy_delta = np.clip(energy_delta, -0.02, 0.02)
+        self._last_energy_delta = energy_delta
+
+        new_energy_mode = self.energy_pref.mode + energy_delta
+        # v3.5.1: energy 전용 범위 사용 (항상성 ~0.6 근처로 제한)
+        new_energy_mode = np.clip(new_energy_mode, *self.energy_mode_clamp)
+        self.energy_pref.mode = new_energy_mode
+
+        # === Pain 선호 업데이트 ===
+        # pain은 항상 낮은 게 좋음, 하지만 경험에서 "얼마나" 낮아야 하는지 학습
+        # Good outcome + low pain → pain 선호 강화 (mode 더 낮게)
+        # Bad outcome + high pain → pain 선호 더 강화 (mode 더 낮게)
+        # Bad outcome + low pain → 별로 배울 게 없음
+
+        if current_pain > 0.1:  # pain이 있을 때만 업데이트
+            # pain이 높으면 → mode를 더 낮게 (pain 회피 강화)
+            pain_delta = -self.mode_lr * current_pain * 0.5
+        else:
+            # pain이 낮으면 → good outcome일 때 현 상태 유지
+            pain_delta = self.mode_lr * G_surprise_norm * 0.1
+
+        pain_delta = np.clip(pain_delta, -0.01, 0.01)
+        self._last_pain_delta = pain_delta
+
+        new_pain_mode = self.pain_pref.mode + pain_delta
+        new_pain_mode = np.clip(new_pain_mode, 0.02, 0.3)  # pain mode는 항상 낮게
+        self.pain_pref.mode = new_pain_mode
+
+        # === Concentration 업데이트 ===
+        # prediction_error 낮으면 → concentration 증가 (확신)
+        # prediction_error 높으면 → concentration 감소 (불확실)
+        pred_error_signal = -np.tanh(prediction_error - 0.3)  # 0.3 기준
+
+        conc_delta = self.concentration_lr * pred_error_signal
+        conc_delta = np.clip(conc_delta, -0.1, 0.1)
+
+        # Energy concentration
+        new_energy_conc = self.energy_pref.concentration + conc_delta
+        new_energy_conc = np.clip(new_energy_conc, *self.concentration_clamp)
+        self.energy_pref.concentration = new_energy_conc
+
+        # Pain concentration
+        new_pain_conc = self.pain_pref.concentration + conc_delta
+        new_pain_conc = np.clip(new_pain_conc, *self.concentration_clamp)
+        self.pain_pref.concentration = new_pain_conc
+
+        self._update_count += 1
+
+        return {
+            'updated': True,
+            'energy_mode': self.energy_pref.mode,
+            'energy_concentration': self.energy_pref.concentration,
+            'pain_mode': self.pain_pref.mode,
+            'pain_concentration': self.pain_pref.concentration,
+            'G_surprise': G_surprise_norm,
+            'energy_delta': energy_delta,
+            'pain_delta': pain_delta,
+        }
+
+    def get_energy_beta(self) -> BetaParams:
+        """현재 energy 선호의 Beta 파라미터"""
+        return self.energy_pref.to_beta_params()
+
+    def get_pain_beta(self) -> BetaParams:
+        """현재 pain 선호의 Beta 파라미터"""
+        return self.pain_pref.to_beta_params()
+
+    def get_status(self) -> Dict:
+        """현재 학습 상태"""
+        return {
+            'update_count': self._update_count,
+            'energy': {
+                'mode': self.energy_pref.mode,
+                'concentration': self.energy_pref.concentration,
+                'alpha': self.energy_pref.alpha,
+                'beta': self.energy_pref.beta,
+            },
+            'pain': {
+                'mode': self.pain_pref.mode,
+                'concentration': self.pain_pref.concentration,
+                'alpha': self.pain_pref.alpha,
+                'beta': self.pain_pref.beta,
+            },
+            'G_baseline': self._G_baseline,
+            'last_G_signal': self._last_G_signal,
+            'last_energy_delta': self._last_energy_delta,
+            'last_pain_delta': self._last_pain_delta,
+            # v3.5.1: clamp 설정값 출력
+            'energy_mode_clamp': self.energy_mode_clamp,
+            'mode_clamp': self.mode_clamp,
+        }
+
+    def reset(self):
+        """학습 리셋"""
+        self.energy_pref.reset()
+        self.pain_pref.reset()
+        self._update_count = 0
+        self._G_baseline = 1.0
+        self._last_energy_delta = 0.0
+        self._last_pain_delta = 0.0
+        self._last_G_signal = 0.0
