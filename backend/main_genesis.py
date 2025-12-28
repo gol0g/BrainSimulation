@@ -768,6 +768,12 @@ async def reset():
         # v4.6.2 fix: drift도 리셋
         world.drift_enabled = False
         world.drift_type = None
+        # v4.6.2 fix: scenario manager도 리셋
+        scenario_manager.current_scenario = None
+        scenario_manager._step_logs = []
+        scenario_manager._drift_active = False
+        scenario_manager._drift_just_activated = False
+        scenario_manager._g1_step_logs = []
         last_action = 0
         last_state = None
         sim_clock.tick_id = 0
