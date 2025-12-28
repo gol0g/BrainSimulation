@@ -592,6 +592,10 @@ async def step(params: StepParams):
             regret_spike=regret_spike_for_suppression
         )
 
+        # === REGIME UPDATE (v4.7) ===
+        # 레짐 트래커 업데이트 (transition error 기반 레짐 전환 감지)
+        regime_update = agent.action_selector.update_regime()
+
         # === MEMORY STORE (v4.0) ===
         # 에피소드 저장 시도 (memory_gate로 확률 결정)
         G_after = min(g.G for g in state.G_decomposition.values()) if state.G_decomposition else 0.0
@@ -744,6 +748,9 @@ async def step(params: StepParams):
 
             'regret': agent.action_selector.get_regret_status(),  # v4.4
 
+            # v4.7: Regime-tagged Memory status
+            'regime': agent.action_selector.get_regime_status(),
+
             # v4.2: Transition model learning info for G1 Gate debugging
             'transition_learning': {
                 'avg_std': float(np.mean(agent.action_selector.transition_model['delta_std'][:, :2])),
@@ -774,6 +781,8 @@ async def reset():
         scenario_manager._drift_active = False
         scenario_manager._drift_just_activated = False
         scenario_manager._g1_step_logs = []
+        # v4.7 fix: regime memory도 리셋
+        agent.action_selector.reset_regime_memory()
         last_action = 0
         last_state = None
         sim_clock.tick_id = 0
@@ -1925,6 +1934,81 @@ async def get_episodes(limit: int = 10):
     return {
         "episodes": agent.action_selector.get_recent_episodes(limit)
     }
+
+
+# === REGIME MEMORY API (v4.7) ===
+
+@app.post("/regime/enable")
+async def enable_regime_memory(
+    n_regimes: int = 2,
+    max_episodes_per_regime: int = 500,
+    store_threshold: float = 0.5,
+    spike_threshold: float = 2.0,
+    persistence_required: int = 5,
+    grace_period_length: int = 15
+):
+    """
+    v4.7 Regime-tagged Memory 활성화
+
+    핵심: 레짐별 메모리 분리로 "wrong confidence" 문제 해결.
+    - pre-drift 기억이 post-drift에서 독이 되지 않음
+    - 현재 레짐 뱅크에서만 회상 (MVP)
+
+    Args:
+        n_regimes: 레짐 수 (기본 2: pre/post drift)
+        max_episodes_per_regime: 레짐당 최대 에피소드 수
+        spike_threshold: 레짐 전환 임계값 (baseline 대비 배수)
+        persistence_required: 연속 spike 필요 횟수
+        grace_period_length: 전환 후 grace period (회상 추가 억제)
+
+    Returns:
+        활성화 상태
+    """
+    agent.action_selector.enable_regime_memory(
+        n_regimes=n_regimes,
+        max_episodes_per_regime=max_episodes_per_regime,
+        store_threshold=store_threshold,
+        spike_threshold=spike_threshold,
+        persistence_required=persistence_required,
+        grace_period_length=grace_period_length
+    )
+    return {
+        "status": "enabled",
+        "n_regimes": n_regimes,
+        "spike_threshold": spike_threshold,
+        "persistence_required": persistence_required,
+        "grace_period_length": grace_period_length
+    }
+
+
+@app.post("/regime/disable")
+async def disable_regime_memory():
+    """v4.7 Regime-tagged memory 비활성화 (상태 유지)"""
+    agent.action_selector.disable_regime_memory()
+    return {"status": "disabled"}
+
+
+@app.post("/regime/reset")
+async def reset_regime_memory():
+    """v4.7 Regime memory 완전 초기화"""
+    agent.action_selector.reset_regime_memory()
+    return {"status": "reset"}
+
+
+@app.get("/regime/status")
+async def regime_status():
+    """
+    v4.7 레짐 상태 조회
+
+    Returns:
+        - current_regime: 현재 레짐 ID
+        - Q: 레짐 belief 분포
+        - confidence: 현재 레짐 확신도
+        - switch_count: 레짐 전환 횟수
+        - in_grace_period: grace period 진행 중 여부
+        - memory_stats: 레짐별 메모리 통계
+    """
+    return agent.action_selector.get_regime_status()
 
 
 # === CONSOLIDATION API (v4.1) ===

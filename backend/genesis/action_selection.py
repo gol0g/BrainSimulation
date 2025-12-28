@@ -36,9 +36,10 @@ from .precision import PrecisionLearner, PrecisionState
 from .temporal import TemporalPlanner, RolloutResult
 from .hierarchy import HierarchicalController
 from .uncertainty import UncertaintyTracker, UncertaintyState, UncertaintyModulation, compute_context_entropy
-from .memory import LTMStore, Episode, RecallResult, compute_outcome_score
+from .memory import LTMStore, Episode, RecallResult, compute_outcome_score, RegimeLTMStore
 from .consolidation import MemoryConsolidator, ConsolidationResult
 from .regret import CounterfactualEngine, CounterfactualResult, RegretState
+from .regime import RegimeTracker, RegimeConfig, RegimeState
 
 
 @dataclass
@@ -266,6 +267,16 @@ class ActionSelector:
         self._last_recall_result: Optional[RecallResult] = None
         self._last_store_result: Optional[Dict] = None
         self._pending_episode_data: Optional[Dict] = None  # 저장 대기 중 에피소드 정보
+
+        # === TRUE FEP v4.7: Regime-tagged Memory ===
+        # 레짐별 메모리 분리 - pre-drift 기억이 post-drift에서 독이 되는 문제 해결
+        # - regime_tracker: Q(r) belief 기반 레짐 감지
+        # - regime_ltm: 레짐별 분리된 메모리 뱅크
+        # - 현재 레짐 뱅크에서만 회상 (MVP)
+        self.regime_tracker: Optional[RegimeTracker] = None
+        self.regime_ltm: Optional[RegimeLTMStore] = None
+        self.regime_memory_enabled = False
+        self._last_regime_update: Optional[Dict] = None
 
         # === TRUE FEP v4.1: Memory Consolidation (Sleep) ===
         # 수면/통합: LTM을 "조언자"에서 "prior"로 변환
@@ -1882,6 +1893,110 @@ class ActionSelector:
     def disable_memory(self):
         """장기 기억 비활성화 (저장소는 유지)"""
         self.memory_enabled = False
+        self.regime_memory_enabled = False
+
+    # === TRUE FEP v4.7: REGIME-TAGGED MEMORY CONTROLS ===
+
+    def enable_regime_memory(self,
+                            n_regimes: int = 2,
+                            max_episodes_per_regime: int = 500,
+                            store_threshold: float = 0.5,
+                            store_sharpness: float = 5.0,
+                            similarity_threshold: float = 0.95,
+                            recall_top_k: int = 5,
+                            spike_threshold: float = 2.0,
+                            persistence_required: int = 5,
+                            grace_period_length: int = 15):
+        """
+        v4.7 Regime-tagged Memory 활성화.
+
+        핵심: 레짐별 메모리 분리로 "wrong confidence" 문제 해결.
+        - pre-drift 기억이 post-drift에서 독이 되지 않음
+        - 현재 레짐 뱅크에서만 회상 (MVP)
+
+        Args:
+            n_regimes: 레짐 수 (기본 2: pre/post drift)
+            max_episodes_per_regime: 레짐당 최대 에피소드 수
+            spike_threshold: 레짐 전환 트리거 임계값
+            persistence_required: 연속 spike 필요 횟수
+            grace_period_length: 전환 후 grace period (회상 추가 억제)
+            기타: LTMStore 파라미터와 동일
+        """
+        # 레짐 트래커 설정
+        config = RegimeConfig(
+            K=n_regimes,
+            spike_threshold=spike_threshold,
+            persistence_required=persistence_required,
+            grace_period_length=grace_period_length
+        )
+        self.regime_tracker = RegimeTracker(config)
+
+        # 레짐별 메모리 뱅크
+        self.regime_ltm = RegimeLTMStore(
+            n_regimes=n_regimes,
+            max_episodes_per_regime=max_episodes_per_regime,
+            store_threshold=store_threshold,
+            store_sharpness=store_sharpness,
+            similarity_threshold=similarity_threshold,
+            recall_top_k=recall_top_k,
+            n_actions=self.n_actions
+        )
+
+        self.regime_memory_enabled = True
+
+        # 기존 memory도 활성화 상태로 (API 호환성)
+        self.memory_enabled = True
+        self.memory_store_enabled = True
+        self.memory_recall_enabled = True
+
+    def update_regime(self) -> Optional[Dict]:
+        """
+        v4.7: 레짐 트래커 업데이트 (매 step 호출).
+
+        transition error를 사용해 레짐 변화 감지.
+        호출 시점: step 완료 후 (transition_error 업데이트 이후)
+
+        Returns:
+            레짐 업데이트 결과 or None
+        """
+        if not self.regime_memory_enabled or self.regime_tracker is None:
+            return None
+
+        # transition error 가져오기
+        trans_error = 0.0
+        volatility = 0.0
+        if self._last_transition_error is not None:
+            trans_error = self._last_transition_error.get('error_mean', 0.0)
+            volatility = self._last_transition_error.get('volatility_ratio', 0.0)
+
+        # 레짐 업데이트
+        self._last_regime_update = self.regime_tracker.update(trans_error, volatility)
+        return self._last_regime_update
+
+    def get_regime_status(self) -> Dict:
+        """v4.7: 현재 레짐 상태 조회"""
+        if not self.regime_memory_enabled or self.regime_tracker is None:
+            return {
+                'enabled': False,
+                'initialized': False
+            }
+
+        status = self.regime_tracker.get_status()
+        status['memory_stats'] = self.regime_ltm.get_stats() if self.regime_ltm else {}
+        return status
+
+    def disable_regime_memory(self):
+        """v4.7: Regime-tagged memory 비활성화"""
+        self.regime_memory_enabled = False
+        # 레짐 트래커와 뱅크는 유지 (상태 보존)
+
+    def reset_regime_memory(self):
+        """v4.7: Regime memory 완전 초기화"""
+        if self.regime_tracker:
+            self.regime_tracker.reset()
+        if self.regime_ltm:
+            self.regime_ltm.reset()
+        self._last_regime_update = None
 
     def recall_from_memory(self, current_obs: np.ndarray) -> Optional[RecallResult]:
         """
@@ -1890,12 +2005,51 @@ class ActionSelector:
         compute_G 전에 호출하여 _last_recall_result 설정.
         G 계산에서 memory_bias가 적용됨.
 
+        v4.7: regime_memory_enabled면 현재 레짐 뱅크에서만 회상.
+
         Args:
             current_obs: 현재 관측 (8차원)
 
         Returns:
             RecallResult or None
         """
+        # v4.7: Regime-tagged memory 사용
+        if self.regime_memory_enabled and self.regime_ltm is not None and self.regime_tracker is not None:
+            # Context 정보 가져오기
+            context_id = 0
+            if self.hierarchy_controller is not None:
+                Q_ctx = self.hierarchy_controller.get_context_belief()
+                if Q_ctx is not None:
+                    context_id = int(np.argmax(Q_ctx))
+
+            # 현재 불확실성
+            current_uncertainty = 0.5
+            if self._last_uncertainty_state is not None:
+                current_uncertainty = self._last_uncertainty_state.global_uncertainty
+
+            # 현재 레짐
+            current_regime = self.regime_tracker.get_current_regime()
+
+            # 레짐 기반 recall weight modifier
+            # grace period나 낮은 confidence면 회상 가중치 하향
+            recall_weight_modifier = self.regime_tracker.get_recall_weight_modifier()
+
+            # v4.6 drift suppression도 함께 적용
+            if self.drift_aware_suppression:
+                recall_weight_modifier *= self._recall_suppression_factor
+
+            # 레짐별 뱅크에서 회상
+            self._last_recall_result = self.regime_ltm.recall(
+                current_obs=current_obs,
+                current_context_id=context_id,
+                current_uncertainty=current_uncertainty,
+                current_regime=current_regime,
+                recall_weight_modifier=recall_weight_modifier
+            )
+
+            return self._last_recall_result
+
+        # 기존 LTM 사용 (v4.0~v4.6)
         if self.ltm_store is None or not self.memory_enabled:
             self._last_recall_result = None
             return None
@@ -1976,7 +2130,9 @@ class ActionSelector:
             저장 결과 dict or None
         """
         # v4.6: memory_store_enabled로 저장 분리 제어
-        if self.ltm_store is None or not self.memory_enabled or not self.memory_store_enabled:
+        # v4.7: regime_memory_enabled도 확인
+        has_memory = (self.ltm_store is not None) or (self.regime_ltm is not None)
+        if not has_memory or not self.memory_enabled or not self.memory_store_enabled:
             return None
 
         if self._pending_episode_data is None:
@@ -2026,6 +2182,27 @@ class ActionSelector:
 
         # 저장 시도
         memory_gate = self.get_memory_gate()
+
+        # v4.7: Regime-tagged memory 사용
+        if self.regime_memory_enabled and self.regime_ltm is not None and self.regime_tracker is not None:
+            # 저장 가능 여부와 레짐 확인
+            should_store, regime_id = self.regime_tracker.should_store_memory()
+
+            if not should_store:
+                # grace period 초기에는 저장 스킵
+                self._last_store_result = {
+                    'attempted': True,
+                    'stored': False,
+                    'merged': False,
+                    'reason': 'grace_period_skip',
+                    'regime_id': regime_id
+                }
+                return self._last_store_result
+
+            self._last_store_result = self.regime_ltm.store(episode, memory_gate, regime_id)
+            return self._last_store_result
+
+        # 기존 LTM 사용 (v4.0~v4.6)
         self._last_store_result = self.ltm_store.store(episode, memory_gate)
 
         return self._last_store_result

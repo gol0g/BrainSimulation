@@ -434,3 +434,230 @@ def compute_outcome_score(
 
     # 클램프
     return float(np.clip(score, -1.0, 1.0))
+
+
+# =============================================================================
+# v4.7 Regime-tagged Memory
+# =============================================================================
+
+class RegimeLTMStore:
+    """
+    v4.7 Regime-tagged Long-Term Memory.
+
+    핵심 개념:
+    - 레짐별로 별도 메모리 뱅크 유지
+    - 현재 레짐의 메모리만 회상에 사용 (MVP)
+    - pre-drift 기억이 post-drift에서 독이 되는 문제 해결
+
+    Future extension:
+    - 소프트 믹스 (Q(r) 가중 회상)
+    - 레짐 간 부분 공유 (외부/내부 분리)
+    """
+
+    def __init__(self,
+                 n_regimes: int = 2,
+                 max_episodes_per_regime: int = 500,
+                 store_threshold: float = 0.5,
+                 store_sharpness: float = 5.0,
+                 similarity_threshold: float = 0.95,
+                 recall_top_k: int = 5,
+                 n_actions: int = 6):
+        """
+        Args:
+            n_regimes: 레짐 수 (기본 2: pre/post drift)
+            max_episodes_per_regime: 레짐당 최대 에피소드 수
+            기타: LTMStore와 동일
+        """
+        self.n_regimes = n_regimes
+        self.n_actions = n_actions
+
+        # 레짐별 메모리 뱅크
+        self.banks: Dict[int, LTMStore] = {}
+        for r in range(n_regimes):
+            self.banks[r] = LTMStore(
+                max_episodes=max_episodes_per_regime,
+                store_threshold=store_threshold,
+                store_sharpness=store_sharpness,
+                similarity_threshold=similarity_threshold,
+                recall_top_k=recall_top_k,
+                n_actions=n_actions
+            )
+
+        # 글로벌 통계
+        self.total_store_attempts = 0
+        self.total_stored = 0
+        self.total_recalls = 0
+
+    def store(self,
+              episode: Episode,
+              memory_gate: float,
+              regime_id: int) -> Dict:
+        """
+        에피소드를 해당 레짐 뱅크에 저장.
+
+        Args:
+            episode: 저장할 에피소드
+            memory_gate: 저장 확률 조절 값
+            regime_id: 에피소드가 속한 레짐
+
+        Returns:
+            저장 결과 정보
+        """
+        self.total_store_attempts += 1
+
+        if regime_id not in self.banks:
+            # 새 레짐 뱅크 동적 생성 (K 초과 시)
+            self.banks[regime_id] = LTMStore(
+                max_episodes=self.banks[0].max_episodes,
+                store_threshold=self.banks[0].store_threshold,
+                store_sharpness=self.banks[0].store_sharpness,
+                similarity_threshold=self.banks[0].similarity_threshold,
+                recall_top_k=self.banks[0].recall_top_k,
+                n_actions=self.n_actions
+            )
+
+        result = self.banks[regime_id].store(episode, memory_gate)
+        result['regime_id'] = regime_id
+
+        if result['stored'] or result['merged']:
+            self.total_stored += 1
+
+        return result
+
+    def recall(self,
+              current_obs: np.ndarray,
+              current_context_id: int,
+              current_uncertainty: float,
+              current_regime: int,
+              recall_weight_modifier: float = 1.0) -> RecallResult:
+        """
+        현재 레짐 뱅크에서만 기억 회상 (MVP).
+
+        Args:
+            current_obs: 현재 관측
+            current_context_id: 현재 context
+            current_uncertainty: 현재 불확실성
+            current_regime: 현재 레짐 (이 레짐 뱅크만 사용)
+            recall_weight_modifier: 레짐 트래커에서 제공하는 가중치 조절
+
+        Returns:
+            RecallResult with memory bias
+        """
+        self.total_recalls += 1
+
+        # 현재 레짐 뱅크가 없으면 빈 결과
+        if current_regime not in self.banks:
+            return RecallResult(
+                memory_bias=np.zeros(self.n_actions),
+                recalled_episodes=[],
+                similarity_scores=[],
+                recall_weight=0.0
+            )
+
+        # 해당 레짐 뱅크에서 회상
+        result = self.banks[current_regime].recall(
+            current_obs,
+            current_context_id,
+            current_uncertainty
+        )
+
+        # 레짐 기반 recall_weight 조절 적용
+        result.memory_bias *= recall_weight_modifier
+        result.recall_weight *= recall_weight_modifier
+
+        return result
+
+    def recall_soft(self,
+                   current_obs: np.ndarray,
+                   current_context_id: int,
+                   current_uncertainty: float,
+                   regime_belief: np.ndarray,
+                   recall_weight_modifier: float = 1.0) -> RecallResult:
+        """
+        Q(r) 가중 소프트 믹스 회상 (확장용).
+
+        모든 레짐 뱅크에서 회상하고 Q(r)로 가중 평균.
+
+        Args:
+            regime_belief: Q(r) 분포 (shape: n_regimes)
+            기타: recall과 동일
+
+        Returns:
+            소프트 믹스된 RecallResult
+        """
+        self.total_recalls += 1
+
+        mixed_bias = np.zeros(self.n_actions)
+        all_recalled = []
+        all_similarities = []
+        total_weight = 0.0
+
+        for r, bank in self.banks.items():
+            if r >= len(regime_belief):
+                continue
+
+            q_r = regime_belief[r]
+            if q_r < 0.05:  # 너무 낮은 확률은 무시
+                continue
+
+            result = bank.recall(
+                current_obs,
+                current_context_id,
+                current_uncertainty
+            )
+
+            # Q(r) 가중
+            mixed_bias += q_r * result.memory_bias
+            total_weight += q_r * result.recall_weight
+
+            all_recalled.extend([(r, idx) for idx in result.recalled_episodes])
+            all_similarities.extend(result.similarity_scores)
+
+        # 정규화
+        if np.sum(regime_belief) > 0:
+            mixed_bias /= np.sum(regime_belief)
+
+        # 조절 적용
+        mixed_bias *= recall_weight_modifier
+        total_weight *= recall_weight_modifier
+
+        return RecallResult(
+            memory_bias=mixed_bias,
+            recalled_episodes=all_recalled,  # (regime_id, episode_idx) 튜플
+            similarity_scores=all_similarities,
+            recall_weight=total_weight
+        )
+
+    def get_stats(self) -> Dict:
+        """전체 및 레짐별 통계"""
+        per_regime = {}
+        total_episodes = 0
+
+        for r, bank in self.banks.items():
+            stats = bank.get_stats()
+            per_regime[f'regime_{r}'] = stats
+            total_episodes += stats['total_episodes']
+
+        return {
+            'total_episodes': total_episodes,
+            'n_regimes': self.n_regimes,
+            'active_regimes': len([b for b in self.banks.values() if b.episodes]),
+            'total_store_attempts': self.total_store_attempts,
+            'total_stored': self.total_stored,
+            'total_recalls': self.total_recalls,
+            'per_regime': per_regime
+        }
+
+    def get_episodes_summary(self, regime_id: int, limit: int = 10) -> List[Dict]:
+        """특정 레짐의 최근 에피소드 요약"""
+        if regime_id not in self.banks:
+            return []
+        return self.banks[regime_id].get_episodes_summary(limit)
+
+    def reset(self):
+        """모든 뱅크 초기화"""
+        for bank in self.banks.values():
+            bank.reset()
+        self.total_store_attempts = 0
+        self.total_stored = 0
+        self.total_recalls = 0
