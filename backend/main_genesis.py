@@ -765,6 +765,9 @@ async def reset():
     with sim_clock.lock:
         world.reset()
         agent.reset()
+        # v4.6.2 fix: drift도 리셋
+        world.drift_enabled = False
+        world.drift_type = None
         last_action = 0
         last_state = None
         sim_clock.tick_id = 0
