@@ -10,7 +10,7 @@
 
 ---
 
-## 현재 버전: v4.6.2
+## 현재 버전: v4.6.3
 
 ### 핵심 공식
 
@@ -63,6 +63,7 @@ pain:   Beta(1,5) → mode ~0.0  (통증 회피)
 | v4.6 | Drift Adaptation Report, Ablation Matrix |
 | v4.6.1 | Drift Suppression (transition error 기반) |
 | v4.6.2 | Regret + Suppression 결합 |
+| v4.6.3 | **수치 안정성 개선 + 버그 수정** |
 
 ---
 
