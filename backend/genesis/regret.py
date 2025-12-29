@@ -83,9 +83,16 @@ class RegretState:
         else:
             self.suboptimal_choices += 1
 
-        # Baseline 업데이트 (느리게)
-        if len(self.recent_regret) >= 10:
+        # Baseline 업데이트 (느리게) - 버그 수정 v4.6.3
+        if len(self.recent_regret) >= 20:
+            # 충분한 데이터: 최근 20개 평균
             self.regret_baseline = np.mean(self.recent_regret[-20:])
+        elif len(self.recent_regret) >= 5:
+            # 중간: 전체 평균
+            self.regret_baseline = np.mean(self.recent_regret)
+        else:
+            # 초기: 기본값 유지
+            self.regret_baseline = 0.1
 
     def is_regret_spike(self, regret: float) -> bool:
         """현재 regret가 spike인지"""

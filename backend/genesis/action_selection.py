@@ -155,6 +155,7 @@ class ActionSelector:
         self._last_action = 0
         self._last_obs = None
         self._action_history = []
+        self._action_history_max = 1000  # v4.6.3: 메모리 제한 추가
 
         # === TRANSITION MODEL (learned, not hardcoded) ===
         # P(o'|o, a): 각 행동이 관측을 어떻게 바꾸는지 학습
@@ -452,6 +453,8 @@ class ActionSelector:
                 # 3. Blend separately for external and internal
                 # External: food_prox, danger_prox (indices 0, 1)
                 delta_blended_ext = (1 - alpha_ext) * delta_physics[:2] + alpha_ext * delta_ctx[:2]
+                # v4.6.3: 최종 안전장치 (블렌딩 후 재클리핑)
+                delta_blended_ext = np.clip(delta_blended_ext, -0.15, 0.15)
 
                 total_delta_food = delta_blended_ext[0]
                 total_delta_danger = delta_blended_ext[1]
@@ -464,6 +467,8 @@ class ActionSelector:
                 # v3.3.1: 내부 상태는 더 보수적인 alpha_internal 사용
                 if alpha_int > 0:
                     delta_blended_int = alpha_int * delta_ctx[6:8]  # physics는 0이라 가정
+                    # v4.6.3: 내부 상태도 클리핑
+                    delta_blended_int = np.clip(delta_blended_int, -0.1, 0.1)
                     Q_o[6] = np.clip(current_obs[6] + delta_blended_int[0], 0.0, 1.0)
                     Q_o[7] = np.clip(current_obs[7] + delta_blended_int[1], 0.0, 1.0)
 

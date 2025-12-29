@@ -41,6 +41,36 @@ from typing import Dict, Tuple, Optional
 from dataclasses import dataclass
 
 
+# === 수치 안정성 유틸리티 (v4.6.3) ===
+def safe_log(x: np.ndarray, eps: float = 1e-10) -> np.ndarray:
+    """
+    안전한 로그 계산 (NaN/Inf 방지).
+    
+    Args:
+        x: 입력 배열
+        eps: 최소값 (0 방지)
+        
+    Returns:
+        로그 계산 결과
+    """
+    return np.log(np.clip(x, eps, None))
+
+
+def safe_divide(a: np.ndarray, b: np.ndarray, eps: float = 1e-10) -> np.ndarray:
+    """
+    안전한 나눗셈 (0으로 나누기 방지).
+    
+    Args:
+        a: 분자
+        b: 분모
+        eps: 분모 최소값
+        
+    Returns:
+        나눗셈 결과
+    """
+    return a / (b + eps)
+
+
 @dataclass
 class BetaParams:
     """Beta distribution parameters."""
@@ -60,9 +90,16 @@ class BetaParams:
         return stats.beta.pdf(x, self.alpha, self.beta)
 
     def log_pdf(self, x: float) -> float:
-        """Log probability density at x."""
+        """Log probability density at x (수치 안정성 개선)."""
         x = np.clip(x, 1e-10, 1 - 1e-10)
-        return stats.beta.logpdf(x, self.alpha, self.beta)
+        try:
+            result = stats.beta.logpdf(x, self.alpha, self.beta)
+            # NaN/Inf 체크
+            if not np.isfinite(result):
+                return -10.0  # fallback: 낮은 확률
+            return result
+        except (ValueError, RuntimeWarning):
+            return -10.0
 
     def entropy(self) -> float:
         """Differential entropy of the distribution."""
@@ -81,9 +118,9 @@ class CategoricalParams:
         return 0.0
 
     def log_pmf(self, x: int) -> float:
-        """Log probability mass at x."""
+        """Log probability mass at x (수치 안정성 개선)."""
         p = self.pmf(x)
-        return np.log(p + 1e-10)
+        return safe_log(np.array([p + 1e-10]))[0]
 
     def entropy(self) -> float:
         """Entropy of the distribution."""
