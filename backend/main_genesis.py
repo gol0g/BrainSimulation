@@ -28,6 +28,12 @@ from genesis.reproducibility import (
     set_global_seed, get_global_seed, get_seed_manager,
     run_reproducibility_test, SimulationFingerprint
 )
+# v5.1: Action Competition Circuit
+from genesis.action_circuit import (
+    ActionCompetitionCircuit, ActionCircuitConfig,
+    FEPActionOracle, compare_rankings, compare_distributions
+)
+from genesis.circuit_controller import CircuitController, DisagreementType
 
 
 
@@ -437,6 +443,27 @@ agent = GenesisAgent(N_STATES, N_OBSERVATIONS, N_ACTIONS, preferred_obs)
 # === SCENARIO MANAGER ===
 scenario_manager = ScenarioManager(world, agent)
 
+# === v5.1: ACTION COMPETITION CIRCUIT ===
+action_circuit = ActionCompetitionCircuit()
+fep_oracle = FEPActionOracle(agent)
+use_action_circuit = False  # Legacy toggle: False=FEP, True=Circuit (for backward compat)
+
+# === v5.2: CIRCUIT CONTROLLER (P2) ===
+# Circuit이 메인, FEP는 teacher/logger
+circuit_controller = CircuitController(
+    action_circuit=action_circuit,
+    fep_oracle=fep_oracle,
+    agent=agent,
+    fep_compare_interval=5,  # 매 5스텝마다 FEP 비교
+    fallback_threshold=0.7,  # danger_prox > 0.7이면 fallback 검토
+    fallback_duration=2,  # fallback 시 2스텝 동안 FEP 사용
+)
+use_circuit_controller = False  # P2 모드 토글
+
+# 실패 케이스 수집 (Gate B-3 재현용) - Legacy
+avoidance_failures: list = []
+MAX_FAILURE_HISTORY = 100
+
 # Track last action
 last_action = 0
 last_state: Optional[AgentState] = None
@@ -507,7 +534,69 @@ async def step(params: StepParams):
         drift_just_activated = scenario_manager.check_and_activate_drift()
 
         # === SCENARIO: 행동 수정 (미끄러짐, DRIFT 등) ===
-        intended_action = int(state.action)
+        fep_action = int(state.action)
+
+        # === v5.2: CIRCUIT CONTROLLER (P2 모드) ===
+        circuit_result = None
+        circuit_action = None
+        circuit_controller_info = None
+
+        if use_circuit_controller:
+            # P2 모드: Circuit이 메인, FEP가 teacher
+            uncertainty = agent.action_selector._last_decision_entropy if hasattr(agent.action_selector, '_last_decision_entropy') else 0.0
+            intended_action, circuit_controller_info = circuit_controller.select_action(obs_modified, uncertainty)
+            circuit_action = circuit_controller_info.get('circuit_action')
+            # circuit_result는 controller 내부에서 처리됨
+
+        # === v5.1: LEGACY ACTION CIRCUIT TOGGLE ===
+        elif use_action_circuit:
+            # Legacy: Circuit으로 action 선택 (FEP 대신)
+            action_circuit.pc_core.reset()
+            circuit_action, circuit_result = action_circuit.select_action(
+                obs_modified,
+                uncertainty=agent.action_selector._last_decision_entropy if hasattr(agent.action_selector, '_last_decision_entropy') else 0.0
+            )
+            intended_action = circuit_action
+        else:
+            # Default: FEP 사용
+            intended_action = fep_action
+
+        # 양쪽 비교 (디버그/수집용) - P2 모드가 아닐 때만
+        if not use_circuit_controller and not use_action_circuit:
+            action_circuit.pc_core.reset()
+            circuit_action, circuit_result = action_circuit.select_action(
+                obs_modified,
+                uncertainty=agent.action_selector._last_decision_entropy if hasattr(agent.action_selector, '_last_decision_entropy') else 0.0
+            )
+
+        # 회피 실패 케이스 수집 (Legacy - P2에서는 circuit_controller가 처리)
+        if not use_circuit_controller:
+            danger_prox = obs_modified[1]
+            if danger_prox > 0.5:
+                danger_dx, danger_dy = obs_modified[4], obs_modified[5]
+                worst_action = None
+                if abs(danger_dx) > abs(danger_dy):
+                    worst_action = 4 if danger_dx > 0 else 3
+                else:
+                    worst_action = 2 if danger_dy > 0 else 1
+
+                fep_failed = (fep_action == worst_action)
+                circuit_failed = (circuit_action == worst_action) if circuit_action is not None else False
+
+                if fep_failed or circuit_failed:
+                    avoidance_failures.append({
+                        'step': sim_clock.tick_id,
+                        'obs': obs_modified.tolist(),
+                        'danger_prox': float(danger_prox),
+                        'fep_action': fep_action,
+                        'circuit_action': circuit_action,
+                        'worst_action': worst_action,
+                        'fep_failed': fep_failed,
+                        'circuit_failed': circuit_failed,
+                    })
+                    if len(avoidance_failures) > MAX_FAILURE_HISTORY:
+                        avoidance_failures.pop(0)
+
         action = scenario_manager.modify_action(intended_action)
 
         # === MEMORY PREPARE (v4.0) ===
@@ -750,6 +839,36 @@ async def step(params: StepParams):
 
             # v4.7: Regime-tagged Memory status
             'regime': agent.action_selector.get_regime_status(),
+
+            # v5.1: Action Competition Circuit
+            'circuit': {
+                'enabled': use_action_circuit,
+                'fep_action': fep_action,
+                'circuit_action': circuit_action,
+                'match': fep_action == circuit_action if circuit_action is not None else None,
+                # 원인 지표
+                'epsilon_spike': action_circuit.pc_core.state.initial_error if circuit_result else None,
+                'lambda_prior': action_circuit.pc_core.state.lambda_prior if circuit_result else None,
+                # 중간 지표
+                'margin': circuit_result.margin if circuit_result else None,
+                'deliberation_steps': circuit_result.competition_iterations if circuit_result else None,
+                'extended': circuit_result.extended_deliberation if circuit_result else None,
+                'winner_energy': circuit_result.action_energies[0].energy if circuit_result and circuit_result.action_energies else None,
+                # 결과 지표
+                'top2_actions': [ae.action for ae in circuit_result.action_energies[:2]] if circuit_result and circuit_result.action_energies else None,
+                'avoidance_failures_count': len(avoidance_failures),
+            },
+
+            # v5.2: Circuit Controller (P2 모드)
+            'p2_controller': {
+                'enabled': use_circuit_controller,
+                'controller': circuit_controller_info.get('controller') if circuit_controller_info else None,
+                'fallback': circuit_controller_info.get('fallback') if circuit_controller_info else False,
+                'fallback_reason': circuit_controller_info.get('fallback_reason') if circuit_controller_info else None,
+                'disagreement': circuit_controller_info.get('disagreement') if circuit_controller_info else False,
+                'compared_fep': circuit_controller_info.get('compared_fep') if circuit_controller_info else False,
+                'metrics': circuit_controller.metrics.to_dict() if use_circuit_controller else None,
+            } if use_circuit_controller else {'enabled': False},
 
             # v4.2: Transition model learning info for G1 Gate debugging
             'transition_learning': {
@@ -2460,6 +2579,270 @@ async def info():
         'n_states': N_STATES,
         'n_observations': N_OBSERVATIONS,
         'n_actions': N_ACTIONS
+    }
+
+
+# =============================================================================
+# v5.1: ACTION COMPETITION CIRCUIT API
+# =============================================================================
+
+@app.post("/action_circuit/enable")
+async def enable_action_circuit():
+    """
+    v5.1 Action Competition Circuit 활성화
+
+    FEP 대신 Neural PC 기반 Circuit으로 action 선택
+    """
+    global use_action_circuit
+    use_action_circuit = True
+    return {
+        "status": "enabled",
+        "mode": "circuit",
+        "message": "Action selection now uses Neural PC circuit instead of FEP"
+    }
+
+
+@app.post("/action_circuit/disable")
+async def disable_action_circuit():
+    """
+    v5.1 Action Competition Circuit 비활성화
+
+    FEP로 action 선택 복귀
+    """
+    global use_action_circuit
+    use_action_circuit = False
+    return {
+        "status": "disabled",
+        "mode": "fep",
+        "message": "Action selection now uses FEP"
+    }
+
+
+@app.get("/action_circuit/status")
+async def get_action_circuit_status():
+    """
+    v5.1 Circuit 상태 조회
+    """
+    diag = action_circuit.get_diagnostics()
+    return {
+        "enabled": use_action_circuit,
+        "mode": "circuit" if use_action_circuit else "fep",
+        "diagnostics": diag,
+        "avoidance_failures_count": len(avoidance_failures),
+    }
+
+
+@app.get("/action_circuit/failures")
+async def get_avoidance_failures(limit: int = 20):
+    """
+    v5.1 회피 실패 케이스 조회 (Gate B-3 재현용)
+
+    Args:
+        limit: 최근 N개 반환
+
+    Returns:
+        list of failure cases with obs, actions, danger_prox
+    """
+    return {
+        "total": len(avoidance_failures),
+        "recent": avoidance_failures[-limit:] if avoidance_failures else [],
+        "summary": {
+            "fep_failures": sum(1 for f in avoidance_failures if f.get('fep_failed')),
+            "circuit_failures": sum(1 for f in avoidance_failures if f.get('circuit_failed')),
+            "both_failures": sum(1 for f in avoidance_failures if f.get('fep_failed') and f.get('circuit_failed')),
+        }
+    }
+
+
+@app.post("/action_circuit/clear_failures")
+async def clear_avoidance_failures():
+    """회피 실패 케이스 초기화"""
+    global avoidance_failures
+    count = len(avoidance_failures)
+    avoidance_failures = []
+    return {"status": "cleared", "count": count}
+
+
+@app.get("/action_circuit/compare")
+async def compare_fep_circuit():
+    """
+    v5.1 FEP vs Circuit 실시간 비교
+
+    현재 상태에서 두 시스템의 선택 비교
+    """
+    obs = world.get_observation()
+
+    # FEP
+    fep_action, fep_info = fep_oracle.get_action(obs)
+    fep_probs = fep_oracle.get_action_probs(obs)
+
+    # Circuit
+    action_circuit.pc_core.reset()
+    circuit_action, circuit_result = action_circuit.select_action(obs)
+
+    # 비교
+    ranking_sim = compare_rankings(
+        fep_info['ranking'],
+        [ae.action for ae in sorted(circuit_result.action_energies, key=lambda x: x.energy)]
+    )
+
+    return {
+        "observation": obs.tolist(),
+        "fep": {
+            "action": fep_action,
+            "probs": fep_probs.tolist(),
+            "ranking": fep_info['ranking'],
+        },
+        "circuit": {
+            "action": circuit_action,
+            "margin": circuit_result.margin,
+            "extended": circuit_result.extended_deliberation,
+            "energies": {ae.action: ae.energy for ae in circuit_result.action_energies},
+        },
+        "comparison": {
+            "match": fep_action == circuit_action,
+            "ranking_similarity": ranking_sim,
+        }
+    }
+
+
+# =============================================================================
+# v5.2: CIRCUIT CONTROLLER (P2) API
+# =============================================================================
+
+@app.post("/p2/enable")
+async def enable_p2_controller():
+    """
+    v5.2 P2 모드 활성화: Circuit이 메인, FEP가 teacher
+    """
+    global use_circuit_controller, use_action_circuit
+    use_circuit_controller = True
+    use_action_circuit = False  # Legacy 모드 비활성화
+    circuit_controller.enabled = True
+    return {
+        "status": "P2 mode enabled",
+        "mode": "circuit_main_fep_teacher",
+        "metrics": circuit_controller.metrics.to_dict()
+    }
+
+
+@app.post("/p2/disable")
+async def disable_p2_controller():
+    """
+    v5.2 P2 모드 비활성화: FEP가 메인으로 복귀
+    """
+    global use_circuit_controller
+    use_circuit_controller = False
+    circuit_controller.enabled = False
+    return {
+        "status": "P2 mode disabled",
+        "mode": "fep_main",
+        "final_metrics": circuit_controller.metrics.to_dict()
+    }
+
+
+@app.get("/p2/status")
+async def get_p2_status():
+    """
+    v5.2 P2 상태 및 완료 기준(N0-N3) 조회
+    """
+    status = circuit_controller.get_status()
+    return {
+        "enabled": use_circuit_controller,
+        "mode": "circuit_main" if use_circuit_controller else "fep_main",
+        "status": status,
+        "completion_gates": {
+            "N0_stability": {
+                "passed": status['n0_passed'],
+                "criteria": "1000+ steps without crash",
+                "current": f"{status['metrics']['total_steps']} steps, {status['metrics']['crashes']} crashes"
+            },
+            "N1_alignment": {
+                "passed": status['n1_passed'],
+                "criteria": "70-95% agreement rate",
+                "current": f"{status['metrics']['agreement_rate']*100:.1f}%"
+            },
+            "N2_safety": {
+                "passed": status['n2_passed'],
+                "criteria": "Circuit danger avoidance >= FEP baseline",
+                "current": f"Circuit: {status['metrics']['circuit_danger_avoidance']*100:.1f}%, FEP: {status['metrics']['fep_danger_avoidance']*100:.1f}%"
+            },
+            "N3_mapping": {
+                "passed": status['n3_passed'],
+                "criteria": "200+ disagreements, 3+ types",
+                "current": f"{status['disagreement_count']} cases, {len(status['type_distribution'])} types"
+            }
+        }
+    }
+
+
+@app.get("/p2/disagreements")
+async def get_p2_disagreements(limit: int = 50, dtype: Optional[str] = None):
+    """
+    v5.2 Disagreement 케이스 조회
+
+    Args:
+        limit: 최대 반환 개수
+        dtype: 필터링할 유형 (danger_approach, food_ignore, energy_waste, exploration_diff)
+    """
+    cases = circuit_controller.get_disagreements(limit, dtype)
+    type_dist = circuit_controller.type_counts
+    return {
+        "count": len(cases),
+        "type_distribution": {k.value: v for k, v in type_dist.items()},
+        "cases": cases
+    }
+
+
+@app.get("/p2/fallbacks")
+async def get_p2_fallbacks(limit: int = 20):
+    """
+    v5.2 Fallback 이벤트 조회
+    """
+    events = circuit_controller.get_fallback_events(limit)
+    return {
+        "total_count": circuit_controller.metrics.fallback_count,
+        "events": events
+    }
+
+
+@app.post("/p2/reset_metrics")
+async def reset_p2_metrics():
+    """
+    v5.2 P2 메트릭 리셋
+    """
+    circuit_controller.reset_metrics()
+    return {"status": "P2 metrics reset"}
+
+
+@app.post("/p2/configure")
+async def configure_p2(
+    fep_compare_interval: Optional[int] = None,
+    fallback_threshold: Optional[float] = None,
+    fallback_duration: Optional[int] = None
+):
+    """
+    v5.2 P2 설정 변경
+
+    Args:
+        fep_compare_interval: FEP 비교 주기 (스텝)
+        fallback_threshold: Fallback 트리거 danger_prox 임계값
+        fallback_duration: Fallback 지속 스텝 수
+    """
+    if fep_compare_interval is not None:
+        circuit_controller.fep_compare_interval = fep_compare_interval
+    if fallback_threshold is not None:
+        circuit_controller.fallback_threshold = fallback_threshold
+    if fallback_duration is not None:
+        circuit_controller.fallback_duration = fallback_duration
+
+    return {
+        "status": "P2 configured",
+        "settings": {
+            "fep_compare_interval": circuit_controller.fep_compare_interval,
+            "fallback_threshold": circuit_controller.fallback_threshold,
+            "fallback_duration": circuit_controller.fallback_duration,
+        }
     }
 
 
