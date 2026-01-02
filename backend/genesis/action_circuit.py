@@ -41,16 +41,35 @@ class ActionCircuitConfig:
     full_eval_iterations: int = 25  # Full competition iterations
 
     # Energy weights
-    error_weight: float = 1.0       # Weight for prediction error in energy
-    prior_weight: float = 0.5       # Weight for prior penalty in energy
+    error_weight: float = 0.3       # Weight for prediction error (낮춤)
+    prior_weight: float = 0.3       # Weight for prior penalty
+    preference_weight: float = 1.0  # Weight for preference violation (핵심!)
 
     # Deliberation budget (THINK mode)
     base_budget: float = 1.0        # Normal deliberation budget
     max_budget: float = 3.0         # Maximum budget (extended deliberation)
-    budget_threshold: float = 0.05  # Energy margin to trigger extended deliberation (lowered)
+    budget_threshold: float = 0.05  # RELATIVE margin threshold (margin / winner_energy)
 
     # Softmax temperature for soft competition
     temperature: float = 0.5
+
+    # Preference targets (FEP의 P(o) 역할)
+    # [food_prox, danger_prox, food_dx, food_dy, danger_dx, danger_dy, energy, pain]
+    preferred_obs: np.ndarray = None  # Set in __post_init__
+
+    def __post_init__(self):
+        if self.preferred_obs is None:
+            # 선호 관측: 음식 가까움, 위험 멀음, 에너지 높음, 통증 없음
+            self.preferred_obs = np.array([
+                1.0,   # food_prox: 높을수록 좋음
+                0.0,   # danger_prox: 낮을수록 좋음
+                0.0,   # food_dx: 0에 가까울수록 좋음 (음식 위에)
+                0.0,   # food_dy: 0에 가까울수록 좋음
+                0.5,   # danger_dx: 멀면 좋음 (중립)
+                0.5,   # danger_dy: 멀면 좋음 (중립)
+                0.8,   # energy: 높을수록 좋음
+                0.0,   # pain: 낮을수록 좋음
+            ])
 
 
 @dataclass
@@ -131,35 +150,70 @@ class ActionCompetitionCircuit:
         self._set_action_priors()
 
     def _set_action_priors(self):
-        """Set prior expectations for each action's effect"""
+        """Set prior expectations for each action's effect
+
+        관측 공간: [food_prox, danger_prox, food_dx, food_dy, danger_dx, danger_dy, energy, pain]
+
+        좌표 의미:
+        - food_dx > 0: 음식이 오른쪽에 있음 → RIGHT로 가면 dx 감소
+        - food_dx < 0: 음식이 왼쪽에 있음 → LEFT로 가면 dx 증가 (0에 가까워짐)
+        - food_dy > 0: 음식이 아래에 있음 → DOWN로 가면 dy 감소
+        - food_dy < 0: 음식이 위에 있음 → UP로 가면 dy 증가 (0에 가까워짐)
+
+        핵심: 행동이 관측을 "음식에 가까워지는 방향"으로 바꾸면 food_prox 증가, dx/dy는 0에 가까워짐
+        """
         # Action indices: 0=STAY, 1=UP, 2=DOWN, 3=LEFT, 4=RIGHT, 5=THINK
 
-        # STAY: minimal change, small energy decay
-        self.transition_deltas[0] = np.array([0, 0, 0, 0, 0, 0, -0.01, -0.02])
+        # STAY: 약간의 에너지 감소, 통증 자연 감소
+        # food/danger 위치는 변화 없음
+        self.transition_deltas[0] = np.array([0, 0, 0, 0, 0, 0, -0.02, -0.01])
 
-        # UP: food_dy decreases if food above, danger_dy changes
-        self.transition_deltas[1] = np.array([0.1, -0.02, 0, -0.15, 0, 0.05, -0.01, 0])
+        # UP: y 방향으로 위로 이동
+        # food_dy < 0 (음식이 위)이면: dy가 0에 가까워짐 (+0.2)
+        # food_dy > 0 (음식이 아래)이면: dy가 더 커짐 (+0.2) → 음식에서 멀어짐
+        # danger도 마찬가지
+        self.transition_deltas[1] = np.array([
+            0.0,    # food_prox: 상황에 따라 다름 (학습으로 조정)
+            0.0,    # danger_prox: 상황에 따라 다름
+            0.0,    # food_dx: 변화 없음
+            0.2,    # food_dy: 위로 가면 dy 증가 (y좌표 감소 = dy가 0에 가까워지거나 양수로)
+            0.0,    # danger_dx
+            0.2,    # danger_dy
+            -0.02,  # energy: 이동 비용
+            0.0     # pain
+        ])
 
-        # DOWN: food_dy increases if food below
-        self.transition_deltas[2] = np.array([0.1, -0.02, 0, 0.15, 0, -0.05, -0.01, 0])
+        # DOWN: y 방향으로 아래로 이동
+        self.transition_deltas[2] = np.array([
+            0.0, 0.0, 0.0, -0.2, 0.0, -0.2, -0.02, 0.0
+        ])
 
-        # LEFT: food_dx decreases
-        self.transition_deltas[3] = np.array([0.1, -0.02, -0.15, 0, 0.05, 0, -0.01, 0])
+        # LEFT: x 방향으로 왼쪽으로 이동
+        # food_dx > 0 (음식이 오른쪽)이면: 음식에서 멀어짐 → dx 증가
+        # food_dx < 0 (음식이 왼쪽)이면: 음식에 가까워짐 → dx가 0에 가까워짐 (+0.2)
+        self.transition_deltas[3] = np.array([
+            0.0, 0.0, 0.2, 0.0, 0.2, 0.0, -0.02, 0.0
+        ])
 
-        # RIGHT: food_dx increases
-        self.transition_deltas[4] = np.array([0.1, -0.02, 0.15, 0, -0.05, 0, -0.01, 0])
+        # RIGHT: x 방향으로 오른쪽으로 이동
+        # food_dx > 0 (음식이 오른쪽)이면: 음식에 가까워짐 → dx 감소
+        # food_dx < 0 (음식이 왼쪽)이면: 음식에서 멀어짐 → dx 더 음수
+        self.transition_deltas[4] = np.array([
+            0.0, 0.0, -0.2, 0.0, -0.2, 0.0, -0.02, 0.0
+        ])
 
-        # THINK: no physical change, higher energy cost (deliberation has cost)
-        self.transition_deltas[5] = np.array([0, 0, 0, 0, 0, 0, -0.05, 0.02])
+        # THINK: 물리적 변화 없음, 에너지 소모
+        self.transition_deltas[5] = np.array([0, 0, 0, 0, 0, 0, -0.03, 0])
 
-        # Action costs (added to energy)
+        # Action costs (에너지에 추가됨)
+        # STAY도 약간의 비용 부여 (안 움직이는 것도 최적은 아님)
         self.action_costs = {
-            0: 0.0,    # STAY: free
-            1: 0.02,   # Movement: small cost
-            2: 0.02,
-            3: 0.02,
-            4: 0.02,
-            5: 0.15,   # THINK: deliberation has significant cost
+            0: 0.02,   # STAY: 작은 비용 (편향 방지)
+            1: 0.03,   # Movement: 약간 더 큰 비용
+            2: 0.03,
+            3: 0.03,
+            4: 0.03,
+            5: 0.10,   # THINK: deliberation 비용
         }
 
     def imagine_observation(
@@ -171,9 +225,34 @@ class ActionCompetitionCircuit:
         Imagine what observation would result from taking action
 
         This is the "forward model" that predicts consequences
+
+        핵심: dx/dy 변화에 따라 proximity도 함께 변해야 함
+        - 음식 쪽으로 이동하면 food_prox 증가
+        - 위험에서 멀어지면 danger_prox 감소
         """
         delta = self.transition_deltas.get(action, np.zeros(self.config.n_obs))
         imagined = current_obs + delta
+
+        # food_dx, food_dy 변화에 따른 food_prox 조정
+        # dx/dy가 0에 가까워지면 food_prox 증가
+        old_food_dist = np.sqrt(current_obs[2]**2 + current_obs[3]**2)
+        new_food_dist = np.sqrt(imagined[2]**2 + imagined[3]**2)
+
+        if old_food_dist > 0.01:  # 0으로 나누기 방지
+            # 거리가 줄었으면 proximity 증가
+            dist_change = old_food_dist - new_food_dist
+            prox_change = dist_change * 0.5  # 거리 감소 → proximity 증가
+            imagined[0] = current_obs[0] + prox_change
+
+        # danger도 마찬가지
+        old_danger_dist = np.sqrt(current_obs[4]**2 + current_obs[5]**2)
+        new_danger_dist = np.sqrt(imagined[4]**2 + imagined[5]**2)
+
+        if old_danger_dist > 0.01:
+            dist_change = old_danger_dist - new_danger_dist
+            prox_change = dist_change * 0.5
+            imagined[1] = current_obs[1] + prox_change
+
         return np.clip(imagined, 0, 1)
 
     def compute_action_energy(
@@ -187,10 +266,12 @@ class ActionCompetitionCircuit:
         """
         Compute internal energy for an action candidate
 
-        Energy = error_norm + lambda * prior_penalty
+        Energy = preference_penalty + error_norm + prior_penalty + action_cost
 
-        This is NOT G(a) mimicry - it's the actual internal energy
-        of the circuit when processing imagined future observation.
+        핵심 변경: G(a)의 Risk처럼 "예측된 관측이 선호에서 얼마나 벗어나는가"를 평가
+
+        preference_penalty = weighted distance from preferred observation
+        - 이게 낮을수록 "좋은 미래"
         """
         # Use specified iterations or default
         if iterations is not None:
@@ -198,7 +279,6 @@ class ActionCompetitionCircuit:
             self.pc_config.max_iterations = iterations
 
         # Run PC circuit on imagined observation
-        # Keep state from previous to maintain context
         state = self.pc_core.infer(
             imagined_obs,
             mu_prior=mu_prior,
@@ -210,26 +290,76 @@ class ActionCompetitionCircuit:
         if iterations is not None:
             self.pc_config.max_iterations = old_max
 
-        # Compute energy components
+        # ============================================
+        # 핵심: Preference Penalty (FEP의 Risk 역할)
+        # ============================================
+        # 예측된 관측이 선호에서 얼마나 벗어나는가?
+        pref = self.config.preferred_obs
+        obs_diff = imagined_obs - pref
+
+        # 가중치: 각 관측 차원별 중요도
+        # [food_prox, danger_prox, food_dx, food_dy, danger_dx, danger_dy, energy, pain]
+        importance = np.array([
+            2.0,   # food_prox: 매우 중요
+            3.0,   # danger_prox: 가장 중요 (생존)
+            0.5,   # food_dx: 보조
+            0.5,   # food_dy: 보조
+            0.3,   # danger_dx: 보조
+            0.3,   # danger_dy: 보조
+            2.0,   # energy: 매우 중요
+            2.5,   # pain: 매우 중요
+        ])
+
+        # 방향 조정: food_prox, energy는 높을수록 좋음 (부호 반전)
+        # danger_prox, pain은 낮을수록 좋음 (부호 유지)
+        # dx, dy는 절대값이 작을수록 좋음
+        direction = np.array([
+            -1.0,  # food_prox: 높으면 좋음 → 차이가 음수면 좋음
+            1.0,   # danger_prox: 낮으면 좋음 → 차이가 양수면 좋음
+            1.0,   # food_dx: |dx|가 작으면 좋음 (절대값)
+            1.0,   # food_dy: |dy|가 작으면 좋음
+            -1.0,  # danger_dx: 멀면 좋음
+            -1.0,  # danger_dy: 멀면 좋음
+            -1.0,  # energy: 높으면 좋음
+            1.0,   # pain: 낮으면 좋음
+        ])
+
+        # Preference penalty 계산
+        # food_dx, food_dy는 절대값 사용 (0에 가까울수록 좋음)
+        weighted_diff = np.zeros(8)
+        for i in range(8):
+            if i in [2, 3]:  # food_dx, food_dy
+                weighted_diff[i] = abs(imagined_obs[i]) * importance[i]
+            else:
+                weighted_diff[i] = obs_diff[i] * direction[i] * importance[i]
+
+        preference_penalty = np.sum(np.maximum(weighted_diff, 0))  # 양수만 페널티
+
+        # Error component (PC 회로의 prediction error)
         error_component = state.error_norm * self.config.error_weight
 
-        # Prior penalty: how far is current state from prior?
+        # Prior penalty: 상태가 prior에서 얼마나 벗어났는가
         if mu_prior is not None:
             prior_diff = np.linalg.norm(state.mu - mu_prior)
         else:
-            prior_diff = np.linalg.norm(state.mu)  # Distance from origin
+            prior_diff = np.linalg.norm(state.mu) * 0.1  # 약하게
         prior_component = prior_diff * lambda_prior * self.config.prior_weight
 
         # Action cost
         action_cost = self.action_costs.get(action, 0.0)
 
         # Total energy
-        total_energy = error_component + prior_component + action_cost
+        total_energy = (
+            preference_penalty * self.config.preference_weight +
+            error_component +
+            prior_component +
+            action_cost
+        )
 
         return ActionEnergy(
             action=action,
             energy=total_energy,
-            error_component=error_component,
+            error_component=error_component + preference_penalty,  # 호환성
             prior_component=prior_component,
             converged=state.converged,
             iterations=state.iterations,
@@ -320,12 +450,15 @@ class ActionCompetitionCircuit:
         action_energies.sort(key=lambda e: e.energy)
 
         # Compute margin (gap between winner and runner-up)
+        # 상대적 margin 사용: margin / winner_energy
         if len(action_energies) >= 2:
-            margin = action_energies[1].energy - action_energies[0].energy
+            abs_margin = action_energies[1].energy - action_energies[0].energy
+            winner_energy = max(action_energies[0].energy, 0.1)  # 0으로 나누기 방지
+            margin = abs_margin / winner_energy  # 상대적 margin
         else:
             margin = float('inf')
 
-        # Adaptive deliberation: extend if margin is small
+        # Adaptive deliberation: extend if relative margin is small
         extended = force_extended or (margin < self.config.budget_threshold)
 
         if extended and len(action_energies) >= 2:
@@ -451,27 +584,139 @@ class FEPActionOracle:
     Wraps existing FEP action selection as oracle
 
     Used for:
-    1. Comparison (Gate B quality check)
+    1. Comparison (Gate B quality check) - 랭킹/분포 유사도
     2. Initial training signal
+
+    Gate B 평가 기준 (단순 일치율이 아님):
+    - 랭킹 유사도: action 순위가 얼마나 비슷한가
+    - 분포 유사도: softmax 확률 분포의 유사도
+    - 방향성: 둘 다 같은 "나쁜 action"을 피하는가
     """
 
-    def __init__(self, action_selector):
+    def __init__(self, agent_or_selector):
         """
         Args:
-            action_selector: The existing ActionSelector from action_selection.py
+            agent_or_selector: GenesisAgent or ActionSelector
         """
-        self.selector = action_selector
+        # GenesisAgent면 action_selector 추출
+        if hasattr(agent_or_selector, 'action_selector'):
+            self.selector = agent_or_selector.action_selector
+            self.agent = agent_or_selector
+        else:
+            self.selector = agent_or_selector
+            self.agent = None
 
-    def get_action(self, observation: np.ndarray) -> Tuple[int, Dict]:
-        """Get FEP's action choice and G values"""
-        # This would call the existing action selection logic
-        # For now, return placeholder
-        return 0, {'G': {}}
+        self.temperature = 0.3  # softmax temperature
 
     def get_g_values(self, observation: np.ndarray) -> Dict[int, float]:
-        """Get G(a) values for all actions"""
-        # Placeholder - would call actual FEP computation
-        return {a: 0.0 for a in range(6)}
+        """
+        Get G(a) values for all actions from FEP ActionSelector
+
+        Returns:
+            Dict[action_id, G_value]
+        """
+        # Compute G for all actions (observation is passed directly)
+        G_all = self.selector.compute_G(current_obs=observation)
+
+        return {a: G_all[a].G for a in G_all}
+
+    def get_action_ranking(self, observation: np.ndarray) -> List[int]:
+        """
+        Get action ranking (best to worst) from FEP
+
+        Returns:
+            List of action indices, sorted by G (lowest first = best)
+        """
+        G_values = self.get_g_values(observation)
+        return sorted(G_values.keys(), key=lambda a: G_values[a])
+
+    def get_action_probs(self, observation: np.ndarray) -> np.ndarray:
+        """
+        Get action probabilities via softmax over -G
+
+        Returns:
+            numpy array of probabilities for each action
+        """
+        G_values = self.get_g_values(observation)
+        n_actions = len(G_values)
+        G_array = np.array([G_values[a] for a in range(n_actions)])
+
+        # Softmax over negative G (lower G = higher prob)
+        log_probs = -G_array / self.temperature
+        log_probs = log_probs - np.max(log_probs)
+        probs = np.exp(log_probs)
+        probs = probs / (probs.sum() + 1e-10)
+
+        return probs
+
+    def get_action(self, observation: np.ndarray) -> Tuple[int, Dict]:
+        """
+        Get FEP's action choice and full info
+
+        Returns:
+            (selected_action, info_dict)
+        """
+        G_values = self.get_g_values(observation)
+        probs = self.get_action_probs(observation)
+        ranking = self.get_action_ranking(observation)
+
+        best_action = ranking[0]
+
+        return best_action, {
+            'G_values': G_values,
+            'probs': probs,
+            'ranking': ranking
+        }
+
+
+def compare_rankings(ranking1: List[int], ranking2: List[int]) -> float:
+    """
+    Compare two action rankings using Kendall's tau-like metric
+
+    Returns:
+        Score from 0 (completely different) to 1 (identical)
+    """
+    n = len(ranking1)
+    if n <= 1:
+        return 1.0
+
+    concordant = 0
+    total = 0
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            # ranking1에서 i가 j보다 앞이면 (i < j)
+            # ranking2에서도 같은 순서인지 확인
+            pos1_i = ranking1.index(i) if i in ranking1 else n
+            pos1_j = ranking1.index(j) if j in ranking1 else n
+            pos2_i = ranking2.index(i) if i in ranking2 else n
+            pos2_j = ranking2.index(j) if j in ranking2 else n
+
+            if (pos1_i < pos1_j) == (pos2_i < pos2_j):
+                concordant += 1
+            total += 1
+
+    return concordant / total if total > 0 else 1.0
+
+
+def compare_distributions(probs1: np.ndarray, probs2: np.ndarray) -> float:
+    """
+    Compare two probability distributions using Jensen-Shannon divergence
+
+    Returns:
+        Similarity score from 0 (very different) to 1 (identical)
+    """
+    # Clip to avoid log(0)
+    p1 = np.clip(probs1, 1e-10, 1.0)
+    p2 = np.clip(probs2, 1e-10, 1.0)
+
+    # Jensen-Shannon divergence
+    m = 0.5 * (p1 + p2)
+    js = 0.5 * np.sum(p1 * np.log(p1 / m)) + 0.5 * np.sum(p2 * np.log(p2 / m))
+
+    # Convert to similarity (JS is between 0 and ln(2))
+    similarity = 1.0 - js / np.log(2)
+    return float(similarity)
 
 
 # =============================================================================
