@@ -1,5 +1,5 @@
 """
-v5.6 Self-model: Internal Latent State for Resource Allocation
+v5.10 Self-model: Internal Latent State for Resource Allocation
 
 핵심 철학:
 - 라벨/태그/감정명 금지 → latent state z ∈ {0..M-1}
@@ -81,7 +81,14 @@ class SelfModelConfig:
     # v5.6-tune2: 더 보수적으로 (83% → 목표 40-60%)
     regime_score_z1_weight: float = 0.15  # z=1에 가산할 비중 (0.25 → 0.15)
     regime_score_z3_suppress: float = 0.10  # z=3에서 감산할 비중 (0.15 → 0.10)
-    regime_score_threshold: float = 0.35  # 이 이상이면 효과 적용 (0.25 → 0.35)
+    regime_score_threshold: float = 0.35  # 이 이상이면 효과 적용
+
+    # v5.10: PC signals → evidence 연결
+    pc_epsilon_spike_z1_weight: float = 0.20  # ε_spike → z=1
+    pc_convergence_cost_z1_weight: float = 0.12  # 수렴비용 → z=1
+    pc_residual_error_z1_weight: float = 0.08  # 잔차오차 → z=1
+    pc_margin_z3_weight: float = 0.15  # action_margin↓ → z=3
+    pc_signal_threshold: float = 0.4  # PC signal threshold
 
 
 @dataclass
@@ -106,6 +113,12 @@ class SelfState:
 
     # v5.6: Regime change score tracking
     regime_score_ema: float = 0.0  # EMA smoothed score
+
+    # v5.10: PC signals tracking
+    pc_epsilon_spike_ema: float = 0.0
+    pc_convergence_cost_ema: float = 0.0
+    pc_residual_error_ema: float = 0.0
+    pc_action_margin_ema: float = 1.0
 
 
 @dataclass
@@ -231,6 +244,14 @@ class SelfModel:
         # v5.6: regime_change_score EMA
         regime_score = signals.get('regime_change_score', 0.0)
         state.regime_score_ema = alpha * regime_score + (1 - alpha) * state.regime_score_ema
+
+        # v5.10: PC signals EMA
+        pc_signals = signals.get('pc_signals', {})
+        if pc_signals:
+            state.pc_epsilon_spike_ema = alpha * pc_signals.get('epsilon_spike', 0.0) + (1 - alpha) * state.pc_epsilon_spike_ema
+            state.pc_convergence_cost_ema = alpha * pc_signals.get('convergence_cost', 0.0) + (1 - alpha) * state.pc_convergence_cost_ema
+            state.pc_residual_error_ema = alpha * pc_signals.get('residual_error', 0.0) + (1 - alpha) * state.pc_residual_error_ema
+            state.pc_action_margin_ema = alpha * pc_signals.get('action_margin', 1.0) + (1 - alpha) * state.pc_action_margin_ema
 
         # === 2. Compute evidence for each state ===
         evidence = self._compute_evidence(signals)
@@ -364,6 +385,11 @@ class SelfModel:
         # 높은 움직임 + 낮은 효율
         evidence[3] = m * inefficiency_amp * (1 - r * 0.5)
 
+        # v5.11: Fatigue suppresses stable
+        # High movement + low efficiency = not stable, even if uncertainty is low
+        fatigue_signal = m * max(0, 1 - e) * 0.3  # 0~0.24
+        evidence[0] = max(0.1, evidence[0] - fatigue_signal)
+
         # === A) Conflict boost 적용 ===
         if conflict_factor > 0:
             # Conflict 상황에서 z=1(탐색)과 z=3(피로)에 가산
@@ -379,22 +405,38 @@ class SelfModel:
                 evidence[3] += conflict_factor * 0.7
 
         # === v5.6: Regime change score → evidence 연결 ===
-        # "세계 변화 신호가 곧바로 자원 배분을 건드리는 대신,
-        #  먼저 self-state를 바꾸고, 그 self-state가 자원을 바꾸게 만든다"
         score = state.regime_score_ema
-
         if score > cfg.regime_score_threshold:
-            # score가 threshold 이상이면 효과 적용
-            # 효과 강도는 (score - threshold) / (1 - threshold)로 정규화
             effect = (score - cfg.regime_score_threshold) / (1 - cfg.regime_score_threshold)
-
-            # z=1 (탐색/변화감지) evidence 가산
-            # "세상이 바뀌었다" → "탐색/학습 모드로"
             evidence[1] += cfg.regime_score_z1_weight * effect
-
-            # z=3 (피로) evidence 감산
-            # drift shock을 피로로 오인해서 act를 과도하게 닫는 걸 방지
             evidence[3] = max(0.05, evidence[3] - cfg.regime_score_z3_suppress * effect)
+
+        # === v5.10: PC signals → evidence (Sensor Fusion) ===
+        eps_spike = state.pc_epsilon_spike_ema
+        conv_cost = state.pc_convergence_cost_ema
+        residual = state.pc_residual_error_ema
+        margin = state.pc_action_margin_ema
+
+        # ε_spike → z=1
+        if eps_spike > cfg.pc_signal_threshold:
+            effect = (eps_spike - cfg.pc_signal_threshold) / (1 - cfg.pc_signal_threshold)
+            evidence[1] += cfg.pc_epsilon_spike_z1_weight * effect
+
+        # convergence_cost → z=1
+        if conv_cost > cfg.pc_signal_threshold:
+            effect = (conv_cost - cfg.pc_signal_threshold) / (1 - cfg.pc_signal_threshold)
+            evidence[1] += cfg.pc_convergence_cost_z1_weight * effect
+
+        # residual_error → z=1
+        if residual > cfg.pc_signal_threshold:
+            effect = (residual - cfg.pc_signal_threshold) / (1 - cfg.pc_signal_threshold)
+            evidence[1] += cfg.pc_residual_error_z1_weight * effect
+
+        # action_margin↓ → z=3
+        margin_deficit = max(0, 1 - margin)
+        if margin_deficit > cfg.pc_signal_threshold:
+            effect = (margin_deficit - cfg.pc_signal_threshold) / (1 - cfg.pc_signal_threshold)
+            evidence[3] += cfg.pc_margin_z3_weight * effect
 
         # === Temperature scaling (기존 B') ===
         T = cfg.evidence_temperature
@@ -498,6 +540,11 @@ class SelfModel:
         self.state.conflict_streak = 0
         self.state.in_conflict = False
         self.state.regime_score_ema = 0.0  # v5.6
+        # v5.10: reset PC signals
+        self.state.pc_epsilon_spike_ema = 0.0
+        self.state.pc_convergence_cost_ema = 0.0
+        self.state.pc_residual_error_ema = 0.0
+        self.state.pc_action_margin_ema = 1.0
         self._step_count = 0
         self._transition_history.clear()
 

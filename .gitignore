@@ -33,3 +33,33 @@ build/
 
 # Secrets
 .github_token
+
+# Checkpoints & Training
+checkpoints/
+backend/checkpoints/
+backend/genesis/checkpoints/
+backend/genesis/training_logs/
+*.pkl
+*.pt
+*.pth
+
+# Generated data/reports
+backend/batch_reports/
+backend/eval/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# Debug images
+debug_*.png
+dino_*.png
+dream_*.png
+*.gif
+
+# Claude Code
+.claude/
+
+# Misc
+nul
+agony

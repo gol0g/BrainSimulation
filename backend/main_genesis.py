@@ -35,6 +35,12 @@ from genesis.action_circuit import (
 )
 from genesis.circuit_controller import CircuitController, DisagreementType
 
+# v5.9: PC-Z Bridge (Neural Predictive Coding <-> Z-State Integration)
+from genesis.neural_pc import NeuralPCLayer, PCConfig
+from genesis.pc_z_bridge import PCZBridge, PCZBridgeConfig
+from genesis.pc_z_dynamics import PCZDynamics  # v5.13: Dynamic past_regime + monitoring
+from v513_ops_monitor import OpsMonitor  # v5.13: Operations monitoring
+
 
 
 # === SIMULATION CLOCK ===
@@ -460,6 +466,21 @@ circuit_controller = CircuitController(
 )
 use_circuit_controller = False  # P2 모드 토글
 
+# === v5.9: PC-Z BRIDGE ===
+# Neural Predictive Coding layer
+neural_pc = NeuralPCLayer(PCConfig(n_obs=N_OBSERVATIONS, n_state=16))
+
+# PC-Z Bridge: connects PC error to Z-state modulation
+pc_z_bridge = PCZBridge(
+    pc_layer=neural_pc,
+    action_circuit=action_circuit,
+)
+use_pc_z_bridge = False  # PC-Z 통합 모드 토글
+
+# v5.13: Dynamic past_regime with recovery monitoring
+pc_z_dynamics = PCZDynamics()
+ops_monitor = OpsMonitor()  # v5.13: Ops monitoring for shadow deployment
+
 # 실패 케이스 수집 (Gate B-3 재현용) - Legacy
 avoidance_failures: list = []
 MAX_FAILURE_HISTORY = 100
@@ -536,6 +557,60 @@ async def step(params: StepParams):
         # === SCENARIO: 행동 수정 (미끄러짐, DRIFT 등) ===
         fep_action = int(state.action)
 
+        # === v5.9: PC-Z BRIDGE ===
+        pc_z_info = None
+        lambda_prior = 1.0
+        if use_pc_z_bridge:
+            # Run Neural PC inference
+            pc_state = neural_pc.infer(obs_modified)
+            
+            # Get volatility from agent (transition std)
+            volatility = 0.0
+            if hasattr(agent, 'action_selector') and hasattr(agent.action_selector, 'temporal'):
+                if agent.action_selector.temporal:
+                    volatility = agent.action_selector.temporal.transition_std
+            
+            # Bridge step: PC error -> regime_score, Z -> lambda
+            # z-state is cycled based on conditions (simplified for now)
+            z_state = pc_z_bridge.state.last_z
+            
+            # Auto z-state: high error -> exploring, low error -> stable
+            if pc_state.error_norm > 0.8:
+                z_state = 1  # exploring
+            elif pc_state.error_norm < 0.3:
+                z_state = 0  # stable
+            
+            pc_z_info = pc_z_bridge.step(
+                pc_state=pc_state,
+                z=z_state,
+                volatility=volatility,
+            )
+            lambda_prior = pc_z_info['lambda_prior']
+
+            # v5.13: Shadow monitoring - feed data to pc_z_dynamics
+            pc_z_dynamics.compute_pc_signals(
+                epsilon=pc_state.epsilon,
+                error_norm=pc_state.epsilon.mean() if hasattr(pc_state.epsilon, 'mean') else float(np.mean(pc_state.epsilon)),
+                iterations=pc_state.iterations,
+                max_iterations=30,
+                converged=pc_state.converged,
+                prior_force_norm=pc_state.lambda_prior,
+                data_force_norm=pc_state.epsilon.mean() if hasattr(pc_state.epsilon, 'mean') else float(np.mean(pc_state.epsilon)),
+                action_margin=1.0 - pc_z_info.get('regime_score', 0.0),
+            )
+            pc_z_dynamics.get_modulation_for_pc(
+                z=z_state,
+                z_confidence=0.8,
+                regime_change_score=pc_z_info.get('regime_score', 0.0),
+            )
+
+            # v5.13: Feed to ops monitor (every 100 steps to reduce overhead)
+            if sim_clock.tick_id % 100 == 0:
+                report = pc_z_dynamics.get_monitoring_report()
+                scenario = scenario_manager.current_scenario or "default"
+                ops_monitor.ingest_monitoring_report(report, scenario)
+                ops_monitor.check_thresholds(report, scenario=scenario, seed=0)
+
         # === v5.2: CIRCUIT CONTROLLER (P2 모드) ===
         circuit_result = None
         circuit_action = None
@@ -554,6 +629,7 @@ async def step(params: StepParams):
             action_circuit.pc_core.reset()
             circuit_action, circuit_result = action_circuit.select_action(
                 obs_modified,
+                lambda_prior=lambda_prior,  # v5.9: PC-Z Bridge lambda
                 uncertainty=agent.action_selector._last_decision_entropy if hasattr(agent.action_selector, '_last_decision_entropy') else 0.0
             )
             intended_action = circuit_action
@@ -566,6 +642,7 @@ async def step(params: StepParams):
             action_circuit.pc_core.reset()
             circuit_action, circuit_result = action_circuit.select_action(
                 obs_modified,
+                lambda_prior=lambda_prior,  # v5.9: PC-Z Bridge lambda
                 uncertainty=agent.action_selector._last_decision_entropy if hasattr(agent.action_selector, '_last_decision_entropy') else 0.0
             )
 
@@ -902,6 +979,8 @@ async def reset():
         scenario_manager._g1_step_logs = []
         # v4.7 fix: regime memory도 리셋
         agent.action_selector.reset_regime_memory()
+        # v5.13: reset pc_z_dynamics monitoring
+        pc_z_dynamics.reset()
         last_action = 0
         last_state = None
         sim_clock.tick_id = 0
@@ -2844,6 +2923,123 @@ async def configure_p2(
             "fallback_duration": circuit_controller.fallback_duration,
         }
     }
+
+
+# === v5.9: PC-Z BRIDGE ENDPOINTS ===
+
+@app.post("/pc_z/enable")
+async def enable_pc_z():
+    """Enable PC-Z Bridge integration"""
+    global use_pc_z_bridge
+    use_pc_z_bridge = True
+    return {"status": "PC-Z Bridge enabled", "use_pc_z_bridge": use_pc_z_bridge}
+
+
+@app.post("/pc_z/disable")
+async def disable_pc_z():
+    """Disable PC-Z Bridge integration"""
+    global use_pc_z_bridge
+    use_pc_z_bridge = False
+    return {"status": "PC-Z Bridge disabled", "use_pc_z_bridge": use_pc_z_bridge}
+
+
+@app.get("/pc_z/status")
+async def get_pc_z_status():
+    """Get PC-Z Bridge status and diagnostics"""
+    diag = pc_z_bridge.get_diagnostics()
+    return {
+        "enabled": use_pc_z_bridge,
+        "diagnostics": diag,
+        "current_lambda": pc_z_bridge.state.current_lambda_prior,
+        "current_budget": pc_z_bridge.state.current_budget_modifier,
+        "error_ema": pc_z_bridge.state.error_ema,
+    }
+
+
+@app.get("/pc_z/monitoring")
+async def get_pc_z_monitoring():
+    """v5.13: Get recovery monitoring report for shadow deployment"""
+    report = pc_z_dynamics.get_monitoring_report()
+    should_upgrade, reason = pc_z_dynamics.dynamic_past_regime.should_upgrade_to_v514()
+    return {
+        "version": "v5.13",
+        "monitoring_report": report,
+        "v514_recommendation": {
+            "should_upgrade": should_upgrade,
+            "reason": reason,
+        },
+        "current_weight": pc_z_dynamics.dynamic_past_regime.w_applied,
+        "diagnostics": pc_z_dynamics.get_diagnostics(),
+    }
+
+
+@app.get("/pc_z/ops/dashboard")
+async def get_ops_dashboard():
+    """v5.13: Get operations dashboard metrics (5-panel + 3-stage trigger)"""
+    n_early = len(ops_monitor.weekly_metrics.early_recovery_events)
+    n_total = len(ops_monitor.weekly_metrics.zone_distributions)
+    early_rate = n_early / max(n_total, 1)
+
+    bad_patterns = ops_monitor.weekly_metrics.bad_phase_patterns
+    bad_rate = sum(p['rate'] for p in bad_patterns) / max(len(bad_patterns), 1) if bad_patterns else 0
+
+    lag_values = ops_monitor.weekly_metrics.lag_metrics
+    lag_mean = sum(lag_values) / max(len(lag_values), 1) if lag_values else 0
+
+    n_impact = len([i for i in ops_monitor.weekly_metrics.premature_impacts if i.get('cost_detected')])
+    impact_rate = n_impact / max(n_total, 1)
+
+    # Zone-tagged impact
+    zone_costs = {'stable': 0, 'transition': 0, 'shock': 0}
+    for impact in ops_monitor.weekly_metrics.zone_tagged_impacts:
+        if impact.get('has_cost', False):
+            zone = impact.get('zone', 'shock')
+            zone_costs[zone] = zone_costs.get(zone, 0) + 1
+
+    should_trigger, reason, evidence = ops_monitor.evaluate_v514_trigger()
+
+    return {
+        "version": "v5.13",
+        "dashboard": {
+            "early_recovery_rate": early_rate,
+            "bad_phase_pattern_rate": bad_rate,
+            "lag_metric_mean": lag_mean,
+            "premature_impact_rate": impact_rate,
+            "zone_tagged_impact": zone_costs,
+        },
+        "v514_trigger": {
+            "stage": evidence.get('stage', 'HEALTHY'),
+            "should_deploy": should_trigger,
+            "reason": reason,
+            "checklist": {
+                "warning_detected": evidence.get('warning_detected', False),
+                "candidate_detected": evidence.get('candidate_detected', False),
+                "cost_verified": evidence.get('cost_verified', False),
+                "reproducibility": evidence.get('reproducibility', False),
+            },
+        },
+        "alerts": ops_monitor.alerts[-10:],
+        "sample_count": n_total,
+    }
+
+
+@app.get("/pc_z/ops/report")
+async def get_ops_weekly_report():
+    """v5.13: Get weekly report text"""
+    return {
+        "version": "v5.13",
+        "report": ops_monitor.generate_weekly_report(),
+    }
+
+
+@app.post("/pc_z/set_z")
+async def set_pc_z_state(z: int = 0):
+    """Manually set z-state (0=stable, 1=exploring, 2=reflecting, 3=fatigued)"""
+    if z < 0 or z > 3:
+        return {"error": "z must be 0-3"}
+    # Store for next step
+    pc_z_bridge.state.last_z = z
+    return {"status": f"z-state set to {z}", "lambda": pc_z_bridge.get_lambda_prior_from_z(z)}
 
 
 if __name__ == "__main__":

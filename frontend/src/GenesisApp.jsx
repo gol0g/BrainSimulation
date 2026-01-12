@@ -469,6 +469,302 @@ const ToggleSwitch = ({ enabled, onChange, label, color = '#00f3ff' }) => (
   </div>
 );
 
+// v5.13 Ops Monitor Panel
+const OpsMonitorPanel = () => {
+  const [expanded, setExpanded] = useState(false);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [pcZEnabled, setPcZEnabled] = useState(false);
+
+  const fetchDashboard = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/pc_z/ops/dashboard`);
+      setDashboardData(res.data);
+    } catch (e) {
+      console.error('Failed to fetch ops dashboard:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const togglePcZ = async () => {
+    try {
+      if (pcZEnabled) {
+        await axios.post(`${API_URL}/pc_z/disable`);
+        setPcZEnabled(false);
+      } else {
+        await axios.post(`${API_URL}/pc_z/enable`);
+        setPcZEnabled(true);
+      }
+    } catch (e) {
+      console.error('Failed to toggle PC-Z:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (expanded) {
+      fetchDashboard();
+      const interval = setInterval(fetchDashboard, 5000); // Refresh every 5s
+      return () => clearInterval(interval);
+    }
+  }, [expanded]);
+
+  const getStageColor = (stage) => {
+    switch (stage) {
+      case 'HEALTHY': return '#00ff88';
+      case 'WARNING': return '#ffaa00';
+      case 'UPGRADE_CANDIDATE': return '#ff6b6b';
+      case 'UPGRADE_CONFIRMED': return '#ff0000';
+      default: return '#888';
+    }
+  };
+
+  const getStageIcon = (stage) => {
+    switch (stage) {
+      case 'HEALTHY': return '✓';
+      case 'WARNING': return '⚠';
+      case 'UPGRADE_CANDIDATE': return '⬆';
+      case 'UPGRADE_CONFIRMED': return '🚨';
+      default: return '?';
+    }
+  };
+
+  return (
+    <div style={{
+      padding: '15px',
+      background: '#0a0a0a',
+      borderRadius: '8px',
+      border: `1px solid ${dashboardData?.v514_trigger?.stage === 'UPGRADE_CONFIRMED' ? '#ff0000' : '#00f3ff'}`,
+      marginBottom: '15px'
+    }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer'
+        }}
+      >
+        <h3 style={{ margin: 0, color: '#00f3ff', fontSize: '0.8rem' }}>
+          📊 v5.13 Ops Monitor
+        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {dashboardData && (
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '0.6rem',
+              background: getStageColor(dashboardData.v514_trigger?.stage) + '22',
+              color: getStageColor(dashboardData.v514_trigger?.stage)
+            }}>
+              {getStageIcon(dashboardData.v514_trigger?.stage)} {dashboardData.v514_trigger?.stage}
+            </span>
+          )}
+          <span style={{ color: '#666' }}>{expanded ? '▼' : '▶'}</span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: '15px' }}>
+          {/* PC-Z Toggle */}
+          <div style={{ marginBottom: '15px' }}>
+            <ToggleSwitch
+              enabled={pcZEnabled}
+              onChange={togglePcZ}
+              label="PC-Z Bridge (데이터 수집)"
+              color="#00f3ff"
+            />
+          </div>
+
+          {loading && !dashboardData ? (
+            <div style={{ textAlign: 'center', color: '#666', fontSize: '0.7rem' }}>
+              로딩 중...
+            </div>
+          ) : dashboardData ? (
+            <div>
+              {/* 4-Panel Dashboard */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                marginBottom: '12px'
+              }}>
+                {/* Early Recovery Rate */}
+                <div style={{
+                  padding: '10px',
+                  background: '#111',
+                  borderRadius: '6px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.55rem', color: '#666', marginBottom: '4px' }}>
+                    Early Recovery Rate
+                  </div>
+                  <div style={{
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    color: dashboardData.dashboard.early_recovery_rate > 0.1 ? '#ff6b6b' : '#00ff88'
+                  }}>
+                    {(dashboardData.dashboard.early_recovery_rate * 100).toFixed(1)}%
+                  </div>
+                </div>
+
+                {/* Bad Phase Pattern Rate */}
+                <div style={{
+                  padding: '10px',
+                  background: '#111',
+                  borderRadius: '6px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.55rem', color: '#666', marginBottom: '4px' }}>
+                    Bad Pattern Rate
+                  </div>
+                  <div style={{
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    color: dashboardData.dashboard.bad_phase_pattern_rate > 0.05 ? '#ffaa00' : '#00ff88'
+                  }}>
+                    {(dashboardData.dashboard.bad_phase_pattern_rate * 100).toFixed(1)}%
+                  </div>
+                </div>
+
+                {/* Lag Metric */}
+                <div style={{
+                  padding: '10px',
+                  background: '#111',
+                  borderRadius: '6px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.55rem', color: '#666', marginBottom: '4px' }}>
+                    Lag Metric
+                  </div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#00f3ff' }}>
+                    {dashboardData.dashboard.lag_metric_mean?.toFixed(1) || '0'} steps
+                  </div>
+                </div>
+
+                {/* Premature Impact Rate */}
+                <div style={{
+                  padding: '10px',
+                  background: '#111',
+                  borderRadius: '6px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.55rem', color: '#666', marginBottom: '4px' }}>
+                    Premature Impact
+                  </div>
+                  <div style={{
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    color: dashboardData.dashboard.premature_impact_rate > 0.1 ? '#ff6b6b' : '#00ff88'
+                  }}>
+                    {(dashboardData.dashboard.premature_impact_rate * 100).toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Zone-Tagged Impact */}
+              {dashboardData.dashboard.zone_tagged_impact && (
+                <div style={{
+                  padding: '10px',
+                  background: '#111',
+                  borderRadius: '6px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ fontSize: '0.55rem', color: '#666', marginBottom: '6px' }}>
+                    Zone-Tagged Impact (cost occurred in)
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.7rem' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#ff6b6b', fontWeight: 'bold' }}>
+                        {dashboardData.dashboard.zone_tagged_impact.stable || 0}
+                      </div>
+                      <div style={{ fontSize: '0.5rem', color: '#888' }}>stable</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#ffaa00', fontWeight: 'bold' }}>
+                        {dashboardData.dashboard.zone_tagged_impact.transition || 0}
+                      </div>
+                      <div style={{ fontSize: '0.5rem', color: '#888' }}>transition</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ color: '#00ff88', fontWeight: 'bold' }}>
+                        {dashboardData.dashboard.zone_tagged_impact.shock || 0}
+                      </div>
+                      <div style={{ fontSize: '0.5rem', color: '#888' }}>shock</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* v5.14 Trigger Checklist */}
+              <div style={{
+                padding: '10px',
+                background: '#111',
+                borderRadius: '6px',
+                marginBottom: '12px'
+              }}>
+                <div style={{ fontSize: '0.55rem', color: '#666', marginBottom: '6px' }}>
+                  v5.14 Trigger Checklist
+                </div>
+                <div style={{ fontSize: '0.6rem' }}>
+                  {dashboardData.v514_trigger?.checklist && Object.entries(dashboardData.v514_trigger.checklist).map(([key, value]) => (
+                    <div key={key} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginBottom: '3px'
+                    }}>
+                      <span style={{ color: '#888' }}>{key.replace(/_/g, ' ')}</span>
+                      <span style={{ color: value ? '#00ff88' : '#666' }}>
+                        {value ? '✓' : '✗'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status & Reason */}
+              <div style={{
+                padding: '10px',
+                background: getStageColor(dashboardData.v514_trigger?.stage) + '11',
+                borderRadius: '6px',
+                border: `1px solid ${getStageColor(dashboardData.v514_trigger?.stage)}33`
+              }}>
+                <div style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 'bold',
+                  color: getStageColor(dashboardData.v514_trigger?.stage),
+                  marginBottom: '4px'
+                }}>
+                  {getStageIcon(dashboardData.v514_trigger?.stage)} {dashboardData.v514_trigger?.stage}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: '#888' }}>
+                  {dashboardData.v514_trigger?.reason}
+                </div>
+              </div>
+
+              {/* Sample Count */}
+              <div style={{
+                marginTop: '10px',
+                fontSize: '0.5rem',
+                color: '#555',
+                textAlign: 'right'
+              }}>
+                Samples: {dashboardData.sample_count || 0} | Last updated: {new Date().toLocaleTimeString()}
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', color: '#666', fontSize: '0.7rem' }}>
+              PC-Z를 활성화하고 시뮬레이션을 실행하세요
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Control Panel Component - v3.6
 const ControlPanel = ({ state }) => {
   const [expanded, setExpanded] = useState(false);
@@ -1584,6 +1880,9 @@ function GenesisApp() {
               onStart={() => setScenarioStatus({ active: true })}
               onStop={() => setScenarioStatus(null)}
             />
+
+            {/* v5.13 Ops Monitor Panel */}
+            <OpsMonitorPanel />
 
             {/* Why This Action */}
             <div style={{
