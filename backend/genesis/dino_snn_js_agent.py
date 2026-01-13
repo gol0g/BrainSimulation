@@ -1,8 +1,10 @@
 """
-Chrome Dino SNN Agent - JS API + SNN Brain Hybrid
+Chrome Dino SNN Agent - JS API + snnTorch Brain Hybrid
 
 Uses JavaScript API for precise obstacle detection,
-SNN brain for learning and decision making.
+snnTorch-based SNN brain for learning and decision making.
+
+Backend: snnTorch (GPU accelerated LIF neurons)
 """
 
 import asyncio
@@ -38,12 +40,13 @@ class DinoConfig:
 
 
 class DinoSNNBrain:
-    """SNN brain that learns optimal jump timing"""
+    """SNN brain that learns optimal jump timing (snnTorch backend)"""
 
     def __init__(self, config: DinoConfig):
         self.config = config
 
-        lif_config = ScalableSNNConfig(tau_mem=20.0, v_threshold=0.5)
+        # snnTorch uses beta (decay) and threshold
+        lif_config = ScalableSNNConfig(beta=0.9, threshold=1.0)
 
         self.sensory = SparseLIFLayer(config.n_sensory, lif_config)
         self.hidden = SparseLIFLayer(config.n_hidden, lif_config)

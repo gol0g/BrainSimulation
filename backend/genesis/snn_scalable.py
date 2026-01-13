@@ -1,16 +1,15 @@
 """
-Scalable SNN - 꿀벌 스케일 (100만 뉴런)
+Scalable SNN - snnTorch 기반 (100만 뉴런 목표)
+
+snnTorch 사용:
+- 최적화된 LIF 뉴런 구현
+- GPU 가속 자동 지원
+- Surrogate gradient 지원
 
 RTX 3070 8GB에서 100만 뉴런을 목표로 설계:
 - 희소 연결 (0.1% connectivity)
 - Float16 가중치
-- 최소 상태 LIF 뉴런
 - DA-STDP 지역 학습 (backprop 없음)
-
-메모리 계산:
-- Full: 1M x 1M x 4B = 4TB (불가능)
-- Sparse 0.1%: 1M x 1000 x 2B = 2GB (가능)
-- 뉴런 상태: 1M x 4B = 4MB (무시 가능)
 
 생물학적 제약 준수:
 - Dale's Law: 흥분/억제 뉴런 분리
@@ -20,7 +19,8 @@ RTX 3070 8GB에서 100만 뉴런을 목표로 설계:
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import snntorch as snn
+from snntorch import surrogate
 import numpy as np
 from typing import Dict, Optional, Tuple, List
 from dataclasses import dataclass
@@ -41,10 +41,9 @@ class ScalableSNNConfig:
     # 희소 연결
     sparsity: float = 0.001     # 0.1% 연결
 
-    # LIF 파라미터
-    tau_mem: float = 50.0       # 막전위 시상수 (ms) - 더 긴 통합 시간
-    v_threshold: float = 0.5    # 발화 역치 - 낮춰서 희소 입력에 반응
-    v_reset: float = 0.0        # 리셋 전위
+    # LIF 파라미터 (snnTorch)
+    beta: float = 0.9           # 막전위 감쇠 (beta = exp(-dt/tau))
+    threshold: float = 1.0      # 발화 역치
 
     # STDP 파라미터
     tau_plus: float = 20.0      # LTP 시상수
@@ -143,7 +142,6 @@ class SparseSynapses:
             (n_post,) 포스트시냅스 입력 전류
         """
         # Sparse matrix-vector multiplication
-        # Note: CUDA sparse doesn't support float16, use float32 for computation
         sparse_f32 = self.sparse_weights.float()
         result = torch.sparse.mm(sparse_f32.t(), pre_spikes.unsqueeze(1).float()).squeeze()
         return result
@@ -214,60 +212,54 @@ class SparseSynapses:
         self._rebuild_sparse()
 
 
-class SparseLIFLayer:
+class SNNTorchLayer(nn.Module):
     """
-    희소 연결 LIF 뉴런 레이어
+    snnTorch 기반 LIF 레이어
 
-    최소 상태:
-    - v: 막전위 (n_neurons,)
-    - spikes: 현재 스파이크 (n_neurons,)
-    - trace: 스파이크 흔적 (n_neurons,) - STDP용
+    snnTorch.Leaky 사용:
+    - 자동 GPU 최적화
+    - Surrogate gradient 지원
+    - 더 효율적인 메모리 사용
     """
 
     def __init__(self, n_neurons: int, config: ScalableSNNConfig):
+        super().__init__()
         self.n_neurons = n_neurons
         self.config = config
 
-        # 뉴런 상태
-        self.v = torch.zeros(n_neurons, device=DEVICE)
-        self.spikes = torch.zeros(n_neurons, device=DEVICE)
-        self.trace = torch.zeros(n_neurons, device=DEVICE)
+        # snnTorch Leaky 뉴런 (surrogate gradient 포함)
+        spike_grad = surrogate.fast_sigmoid(slope=25)
+        self.lif = snn.Leaky(
+            beta=config.beta,
+            threshold=config.threshold,
+            spike_grad=spike_grad,
+            init_hidden=False,  # 수동으로 mem 관리
+            reset_mechanism='zero'
+        )
 
-        # 파라미터
-        self.tau_mem = config.tau_mem
-        self.v_threshold = config.v_threshold
-        self.v_reset = config.v_reset
-        self.dt = config.dt
+        # 상태 저장 (외부 접근용)
+        self.spikes = torch.zeros(n_neurons, device=DEVICE)
+        self.mem = torch.zeros(n_neurons, device=DEVICE)
+        self.trace = torch.zeros(n_neurons, device=DEVICE)
 
     def forward(self, input_current: torch.Tensor) -> torch.Tensor:
         """
-        LIF 업데이트
-
-        dv/dt = (-v + I) / tau_mem
-        spike if v > threshold
+        LIF 업데이트 (snnTorch)
         """
-        # 막전위 업데이트
-        dv = (-self.v + input_current) * (self.dt / self.tau_mem)
-        self.v = self.v + dv
-
-        # 스파이크 발생
-        self.spikes = (self.v > self.v_threshold).float()
-
-        # 리셋
-        self.v = torch.where(self.spikes > 0,
-                            torch.full_like(self.v, self.v_reset),
-                            self.v)
+        # snnTorch forward (mem 명시적 전달)
+        self.spikes, self.mem = self.lif(input_current, self.mem)
 
         # 스파이크 흔적 업데이트
-        self.trace = self.trace * np.exp(-self.dt / self.config.tau_plus) + self.spikes
+        trace_decay = np.exp(-self.config.dt / self.config.tau_plus)
+        self.trace = self.trace * trace_decay + self.spikes
 
         return self.spikes
 
     def reset(self):
         """상태 초기화"""
-        self.v.zero_()
-        self.spikes.zero_()
-        self.trace.zero_()
+        self.spikes = torch.zeros(self.n_neurons, device=DEVICE)
+        self.mem = torch.zeros(self.n_neurons, device=DEVICE)
+        self.trace = torch.zeros(self.n_neurons, device=DEVICE)
 
 
 class DopamineSystem:
@@ -326,9 +318,9 @@ class DopamineSystem:
         return self.level
 
 
-class ScalableSNN:
+class ScalableSNN(nn.Module):
     """
-    스케일러블 SNN - 100만 뉴런 목표
+    스케일러블 SNN - snnTorch 기반 100만 뉴런 목표
 
     아키텍처:
     Sensory (10K) → Hidden (100K~1M) → Motor (1K)
@@ -337,12 +329,13 @@ class ScalableSNN:
     """
 
     def __init__(self, config: Optional[ScalableSNNConfig] = None):
+        super().__init__()
         self.config = config or ScalableSNNConfig()
 
-        # 레이어
-        self.sensory = SparseLIFLayer(self.config.n_sensory, self.config)
-        self.hidden = SparseLIFLayer(self.config.n_hidden, self.config)
-        self.motor = SparseLIFLayer(self.config.n_motor, self.config)
+        # snnTorch 레이어
+        self.sensory = SNNTorchLayer(self.config.n_sensory, self.config)
+        self.hidden = SNNTorchLayer(self.config.n_hidden, self.config)
+        self.motor = SNNTorchLayer(self.config.n_motor, self.config)
 
         # 시냅스 (희소)
         self.syn_sensory_hidden = SparseSynapses(
@@ -387,8 +380,8 @@ class ScalableSNN:
         Returns:
             (n_motor,) 운동 출력 스파이크
         """
-        # Sensory layer - 입력을 직접 전류로 사용
-        sensory_spikes = self.sensory.forward(sensory_input * 5.0)  # Scale input for threshold
+        # Sensory layer
+        sensory_spikes = self.sensory(sensory_input * 5.0)
         hidden_input = self.syn_sensory_hidden.forward(sensory_spikes)
 
         # Recurrent in Hidden
@@ -396,12 +389,12 @@ class ScalableSNN:
             recurrent_input = self.syn_hidden_hidden.forward(self.hidden.spikes)
             hidden_input = hidden_input + 0.5 * recurrent_input
 
-        # Hidden processing - amplify sparse input
-        hidden_spikes = self.hidden.forward(hidden_input * 5.0)
+        # Hidden processing
+        hidden_spikes = self.hidden(hidden_input * 5.0)
 
-        # Hidden → Motor - amplify sparse input significantly
+        # Hidden → Motor
         motor_input = self.syn_hidden_motor.forward(hidden_spikes)
-        motor_spikes = self.motor.forward(motor_input * 20.0)
+        motor_spikes = self.motor(motor_input * 20.0)
 
         # 통계 업데이트
         self.spike_counts['sensory'] += sensory_spikes.sum().item()
@@ -493,10 +486,16 @@ class ScalableSNN:
         return total / (1024 * 1024)
 
 
+# ============================================================================
+# Backward Compatibility: SparseLIFLayer alias
+# ============================================================================
+SparseLIFLayer = SNNTorchLayer
+
+
 def benchmark_scalable_snn():
     """스케일러블 SNN 벤치마크"""
     print("=" * 70)
-    print("Scalable SNN Benchmark - 꿀벌 스케일 목표")
+    print("Scalable SNN Benchmark (snnTorch) - 꿀벌 스케일 목표")
     print("=" * 70)
 
     # GPU 정보
@@ -527,7 +526,7 @@ def benchmark_scalable_snn():
             torch.cuda.empty_cache() if torch.cuda.is_available() else None
 
             start_time = time.time()
-            snn = ScalableSNN(config)
+            snn = ScalableSNN(config).to(DEVICE)
             init_time = time.time() - start_time
 
             stats = snn.get_statistics()
@@ -572,51 +571,17 @@ def benchmark_scalable_snn():
                 'error': str(e)
             })
 
-    # 최대 가능한 규모 탐색
-    print(f"\n{'='*50}")
-    print("Maximum Scale Search (within 8GB VRAM)")
-    print(f"{'='*50}")
-
-    max_hidden = 100000
-    for hidden in [200000, 300000, 400000, 500000]:
-        try:
-            torch.cuda.empty_cache() if torch.cuda.is_available() else None
-
-            config = ScalableSNNConfig(
-                n_sensory=int(hidden * 0.1),
-                n_hidden=hidden,
-                n_motor=int(hidden * 0.01)
-            )
-
-            print(f"\n  Trying {hidden:,} hidden neurons...")
-            snn = ScalableSNN(config)
-            stats = snn.get_statistics()
-
-            # 간단한 테스트
-            sensory = torch.rand(config.n_sensory, device=DEVICE)
-            output = snn.forward(sensory)
-
-            print(f"    SUCCESS! Total: {stats['total_neurons']:,} neurons")
-            print(f"    Memory: {stats['memory_mb']:.1f} MB est")
-            if torch.cuda.is_available():
-                print(f"    VRAM: {torch.cuda.max_memory_allocated()/1e9:.2f} GB")
-
-            max_hidden = hidden
-            del snn
-
-        except Exception as e:
-            print(f"    FAILED at {hidden:,}: {e}")
-            break
-
     # 요약
     print(f"\n{'='*70}")
-    print("SUMMARY")
+    print("SUMMARY (snnTorch Backend)")
     print(f"{'='*70}")
-    print(f"\nMaximum achievable scale: ~{max_hidden:,} hidden neurons")
 
-    if max_hidden >= 1000000:
+    max_neurons = max([r.get('neurons', 0) for r in results if r.get('success', False)], default=0)
+    print(f"\nMaximum achievable scale: ~{max_neurons:,} neurons")
+
+    if max_neurons >= 1000000:
         print("SUCCESS: Bee-scale (1M) achievable!")
-    elif max_hidden >= 100000:
+    elif max_neurons >= 100000:
         print("Fruit fly scale (100K) achievable")
     else:
         print("Limited to C. elegans scale")
@@ -627,31 +592,20 @@ def benchmark_scalable_snn():
 def test_learning():
     """학습 테스트"""
     print("=" * 70)
-    print("DA-STDP Learning Test")
+    print("DA-STDP Learning Test (snnTorch)")
     print("=" * 70)
 
-    # 더 높은 connectivity로 테스트
     config = ScalableSNNConfig(
         n_sensory=1000,
         n_hidden=10000,
         n_motor=100,
-        sparsity=0.01,  # 1% connectivity (vs 0.1%)
+        sparsity=0.01,
     )
 
-    snn = ScalableSNN(config)
+    snn = ScalableSNN(config).to(DEVICE)
 
     # 연속 입력 패턴
     sensory_pattern = torch.rand(config.n_sensory, device=DEVICE) * 0.8 + 0.2
-
-    # 초기 활동 확인
-    print("\n[Initial Activity Check]")
-    snn.reset()
-    for step in range(20):
-        output = snn.forward(sensory_pattern)
-        if step % 5 == 0:
-            print(f"  Step {step}: sensory={snn.sensory.spikes.sum():.0f}, "
-                  f"hidden={snn.hidden.spikes.sum():.0f}, "
-                  f"motor={snn.motor.spikes.sum():.0f}")
 
     # 학습 전 반응
     print("\n[Before Learning]")
@@ -674,7 +628,7 @@ def test_learning():
         episode_spikes = 0
         for _ in range(100):
             output = snn.forward(sensory_pattern)
-            snn.learn(reward=0.8)  # 강한 양의 보상
+            snn.learn(reward=0.8)
             episode_spikes += output.sum().item()
         if ep % 2 == 0:
             print(f"  Episode {ep+1}: motor spikes = {episode_spikes:.0f}, DA = {snn.dopamine.level:.3f}")
@@ -697,12 +651,8 @@ def test_learning():
     delta = np.mean(final_response) - np.mean(initial_response)
     print(f"\n  Delta: {delta:+.1f} spikes")
 
-    # 통계
     stats = snn.get_statistics()
-    print(f"\n  Total spike counts: sensory={stats['spike_counts']['sensory']:,.0f}, "
-          f"hidden={stats['spike_counts']['hidden']:,.0f}, "
-          f"motor={stats['spike_counts']['motor']:,.0f}")
-    print(f"  Potentiation events: {snn.syn_sensory_hidden.total_potentiation + snn.syn_hidden_motor.total_potentiation:,.0f}")
+    print(f"\n  Potentiation events: {snn.syn_sensory_hidden.total_potentiation + snn.syn_hidden_motor.total_potentiation:,.0f}")
     print(f"  Depression events: {snn.syn_sensory_hidden.total_depression + snn.syn_hidden_motor.total_depression:,.0f}")
     print(f"  Final dopamine: {stats['dopamine_level']:.3f}")
 

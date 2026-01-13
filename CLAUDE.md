@@ -140,9 +140,10 @@ Phase F: 주체적 의식 [완료] ✓
    - 메커니즘: DMN (자기 참조), AIC (내부 인식), PCC (자기 반성), TPJ (자기-타자 구분)
 
 Phase G: Scalable SNN & Real-World Tasks [진행중] 🔄
-   - 확장 가능한 SNN 아키텍처 ✓ (snn_scalable.py)
+   - 확장 가능한 SNN 아키텍처 ✓ (snn_scalable.py + snnTorch)
    - Chrome Dino 게임 플레이 ✓ (High: 453, Avg: 269)
    - 핵심: 순수 생물학적 메커니즘으로 실시간 반응 학습
+   - Backend: snnTorch (GPU 가속 LIF 뉴런)
    - 메커니즘: LIF 뉴런, Sparse 시냅스, DA-STDP, Eligibility Trace
 ```
 
@@ -405,22 +406,21 @@ Phase B 진행 순서:
 
 | 컴포넌트 | 파일 | 설명 |
 |---------|------|------|
-| ScalableSNNConfig | `genesis/snn_scalable.py` | SNN 설정 (tau, threshold) |
-| SparseLIFLayer | `genesis/snn_scalable.py` | Sparse LIF 뉴런 레이어 |
+| ScalableSNNConfig | `genesis/snn_scalable.py` | SNN 설정 (beta, threshold) |
+| SNNTorchLayer | `genesis/snn_scalable.py` | snnTorch 기반 LIF 레이어 |
 | SparseSynapses | `genesis/snn_scalable.py` | 1% 희소 연결 시냅스 |
 | DinoSNNAgent | `genesis/dino_snn_agent.py` | 픽셀 기반 Dino 에이전트 |
 | DinoJSAgent | `genesis/dino_snn_js_agent.py` | JS API + SNN 하이브리드 |
 
-#### 핵심 아키텍처: Scalable SNN
+#### 핵심 아키텍처: Scalable SNN (snnTorch Backend)
 
 ```python
-# SparseLIFLayer: Leaky Integrate-and-Fire 뉴런
-class SparseLIFLayer:
-    tau_mem: float = 20.0      # 막전위 시간 상수
-    v_threshold: float = 0.5   # 스파이크 임계값
-    v_reset: float = 0.0       # 리셋 전위
+# SNNTorchLayer: snnTorch.Leaky 기반 LIF 뉴런
+class SNNTorchLayer:
+    beta: float = 0.9          # 막전위 감쇠 (decay)
+    threshold: float = 1.0     # 스파이크 임계값
 
-    # Forward: v = v * decay + input, spike if v > threshold
+    # snnTorch: GPU 최적화, Surrogate Gradient 지원
 
 # SparseSynapses: 1% 희소 연결
 class SparseSynapses:
@@ -429,6 +429,16 @@ class SparseSynapses:
     eligibility: Tensor        # STDP eligibility trace
 
     # DA-STDP: eligibility trace + dopamine modulation
+```
+
+#### 벤치마크 결과 (RTX 3070 8GB)
+
+```
+C. elegans:     300 neurons,    133 steps/sec
+Fruit fly 1%:   6,000 neurons,  149 steps/sec
+Fruit fly 10%:  24,000 neurons, 144 steps/sec
+Honeybee 1%:    60,000 neurons, 118 steps/sec
+Honeybee 10%:   120,000 neurons, 53 steps/sec, 0.22 GB VRAM
 ```
 
 #### Chrome Dino 에이전트
@@ -1003,7 +1013,7 @@ POST /evaluate?n_episodes=100
 7. **E7 시간-기하 분석**: Reactive만으로는 TTC-short 위협에 취약, TTC trigger가 예측 제어로 전환
 8. **E8 도메인 전이**: 스택 범용성 확인, TTC는 위협 예측 가능성에 비례해 정당화
 9. **MiniGrid 외부 검증**: DIP ZONE(애매한 추적) 현상이 외부 벤치마크에서 재현됨
-10. **Phase G 실시간 학습**: LIF + DA-STDP만으로 실시간 반응 과제(Chrome Dino) 학습 가능, 점프 타이밍이 핵심
+10. **Phase G 실시간 학습**: snnTorch + DA-STDP만으로 실시간 반응 과제(Chrome Dino) 학습 가능, 12만 뉴런 53 steps/sec
 
 ### E6→E7→E8→MiniGrid 최종 결론
 

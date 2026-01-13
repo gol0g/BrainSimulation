@@ -1,5 +1,5 @@
 """
-Chrome Dino SNN Agent - 공룡 게임을 플레이하는 곤충 뇌
+Chrome Dino SNN Agent - 공룡 게임을 플레이하는 곤충 뇌 (snnTorch)
 
 핵심 차이점 (빨간 점 vs 공룡):
 - 빨간 점: "어디에(Where)" - 공간 탐색
@@ -12,6 +12,8 @@ SNN의 LIF 뉴런 특성을 최대한 활용:
 학습 메커니즘:
 - 생존 = 도파민 (DA-STDP 강화)
 - 죽음 = 도파민 차단 + 벌칙
+
+Backend: snnTorch (GPU accelerated LIF neurons)
 """
 
 import asyncio
@@ -78,13 +80,13 @@ class DinoSNNBrain:
     def __init__(self, config: DinoConfig):
         self.config = config
 
-        # LIF 설정
+        # snnTorch LIF 설정 (beta=decay, threshold)
         lif_config = ScalableSNNConfig(
-            tau_mem=20.0,      # 빠른 반응 (낮은 시간 상수)
-            v_threshold=0.5,
+            beta=0.85,         # 빠른 반응 (높은 감쇠 = 짧은 시간 상수)
+            threshold=1.0,
         )
 
-        # 뉴런 레이어
+        # 뉴런 레이어 (snnTorch backend)
         self.sensory = SparseLIFLayer(config.n_sensory, lif_config)
         self.hidden = SparseLIFLayer(config.n_hidden, lif_config)
         self.motor = SparseLIFLayer(config.n_motor, lif_config)
