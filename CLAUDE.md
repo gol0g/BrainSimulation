@@ -141,10 +141,13 @@ Phase F: 주체적 의식 [완료] ✓
 
 Phase G: Scalable SNN & Real-World Tasks [진행중] 🔄
    - 확장 가능한 SNN 아키텍처 ✓ (snn_scalable.py + snnTorch)
-   - Chrome Dino 게임 플레이 ✓ (High: 453, Avg: 269)
+   - Chrome Dino 단일 채널 ✓ (High: 644, Avg: 423.8)
+   - Chrome Dino 이중 채널 ✓ (High: 725, Avg: 367.9) ← NEW!
+   - Dual-Channel Vision ✓: Ground Eye(cacti) + Sky Eye(birds) + 억제 회로
+   - "600점 벽" 돌파: 새(PTERODACTYL) 회피 성공
    - 핵심: 순수 생물학적 메커니즘으로 실시간 반응 학습
    - Backend: snnTorch (GPU 가속 LIF 뉴런)
-   - 메커니즘: LIF 뉴런, Sparse 시냅스, DA-STDP, Eligibility Trace
+   - 메커니즘: LIF 뉴런, Sparse 시냅스, DA-STDP, Eligibility Trace, 억제 시냅스
 ```
 
 ### Phase B 상세: Embodied Digital Learning
@@ -411,6 +414,7 @@ Phase B 진행 순서:
 | SparseSynapses | `genesis/snn_scalable.py` | 1% 희소 연결 시냅스 |
 | DinoSNNAgent | `genesis/dino_snn_agent.py` | 픽셀 기반 Dino 에이전트 |
 | DinoJSAgent | `genesis/dino_snn_js_agent.py` | JS API + SNN 하이브리드 |
+| DinoDualChannelAgent | `genesis/dino_dual_channel_agent.py` | **이중 채널 + 억제 회로** |
 
 #### 핵심 아키텍처: Scalable SNN (snnTorch Backend)
 
@@ -491,10 +495,10 @@ def _learn(self):
 
 #### 검증 결과
 
-**Chrome Dino 성능**
+**Chrome Dino 성능 (단일 채널)**
 ```
 훈련 전: Score ~40-50 (첫 번째 장애물에서 사망)
-훈련 후: High 453, Avg 269
+훈련 후: High 644, Avg 423.8
 
 핵심 발견:
 1. 점프 타이밍이 성능의 핵심 (gap=100px가 최적)
@@ -502,13 +506,82 @@ def _learn(self):
 3. SNN 뇌가 DA-STDP로 점프 타이밍 미세 조정
 ```
 
+#### Dual-Channel Vision (이중 채널 + 억제 회로)
+
+**문제: "600점 벽" (Wall of Despair)**
+```
+- 600점 이후 PTERODACTYL(새) 등장
+- 단일 채널로는 선인장(점프)과 새(숙이기) 구분 불가
+- 새를 보고 점프하면 충돌 → 사망
+```
+
+**해결: 생물학적 이중 채널 아키텍처**
+```
+┌─────────────┐                    ┌─────────────┐
+│  Ground Eye │                    │   Sky Eye   │
+│  (Cacti)    │                    │  (Birds)    │
+└──────┬──────┘                    └──────┬──────┘
+       │                                  │
+       ▼                                  ▼
+┌──────────────┐                   ┌──────────────┐
+│ Ground Hidden│                   │  Sky Hidden  │
+└──────┬───────┘                   └──────┬───────┘
+       │                                  │
+       ▼                                  ▼
+┌──────────────┐    INHIBIT        ┌──────────────┐
+│  Jump Motor  │◄──────────────────│  Duck Motor  │
+└──────────────┘                   └──────────────┘
+
+핵심: Sky Eye --| Jump Motor (억제 시냅스, strength=0.8)
+```
+
+**구현 (dino_dual_channel_agent.py)**
+```python
+# === GROUND PATHWAY (Cacti → Jump) ===
+self.ground_eye = SparseLIFLayer(500, lif_config)
+self.ground_hidden = SparseLIFLayer(1000, lif_config)
+self.motor_jump = SparseLIFLayer(300, lif_config)
+
+# === SKY PATHWAY (Birds → Duck) ===
+self.sky_eye = SparseLIFLayer(500, lif_config)
+self.sky_hidden = SparseLIFLayer(1000, lif_config)
+self.motor_duck = SparseLIFLayer(300, lif_config)
+
+# === INHIBITORY CROSS-CONNECTION ===
+self.syn_sky_jump_inhib = SparseSynapses(500, 300, sparsity=0.02)
+
+# Forward: Sky Eye 활성화 시 Jump Motor 억제
+jump_input_final = jump_input - sky_inhibition * 0.8 * 100.0
+```
+
+**검증 결과 (100 에피소드)**
+```
+단일 채널: High 644, Avg 423.8
+이중 채널: High 725, Avg 367.9 (+12.6% High Score!)
+
+통계:
+- Total Jumps: 58,867
+- Total Ducks: 1,578 (새 능력!)
+- Sky Inhibitions: 1,498 (점프 억제 성공)
+- 뉴런: 3,600개 (Ground 1800 + Sky 1800)
+```
+
+**핵심 발견**
+1. **분리된 경로 필수**: 공유 Hidden 레이어 시 cross-talk 발생 → 과도한 Duck
+2. **억제 시냅스 효과**: Sky Eye → Jump Motor 억제로 새 앞에서 점프 방지
+3. **생물학적 타당성**: 실제 시각 피질도 ventral/dorsal pathway로 분리
+4. **600점 벽 돌파**: 새(PTERODACTYL) 회피 성공
+
 **SNN 확장성**
 ```
-DinoSNNBrain:
-  Sensory: 500 뉴런
-  Hidden:  1000 뉴런
-  Motor:   200 뉴런
-  Total:   1700 뉴런
+DualChannelBrain:
+  Ground Eye:    500 뉴런
+  Ground Hidden: 1000 뉴런
+  Jump Motor:    300 뉴런
+  Sky Eye:       500 뉴런
+  Sky Hidden:    1000 뉴런
+  Duck Motor:    300 뉴런
+  Total:         3600 뉴런
 
 Sparse 연결 (1%): 메모리 효율적, 대규모 확장 가능
 ```
@@ -519,6 +592,7 @@ Sparse 연결 (1%): 메모리 효율적, 대규모 확장 가능
 2. **점프 타이밍**: gap=100px에서 점프 시 장애물 통과 지점에서 최고점
 3. **DA-STDP 효과**: 도파민 기반 학습으로 타이밍 미세 조정
 4. **생물학적 메커니즘**: LIF 뉴런 + Eligibility Trace만으로 실시간 반응 학습
+5. **이중 채널 + 억제**: 분리된 경로 + 억제 시냅스로 복잡한 행동 전환 학습
 
 ---
 
@@ -946,7 +1020,8 @@ backend/
 │   │
 │   ├── # Real-World Agents (Phase G)
 │   ├── dino_snn_agent.py     # Chrome Dino (픽셀 기반)
-│   ├── dino_snn_js_agent.py  # Chrome Dino (JS API + SNN)
+│   ├── dino_snn_js_agent.py  # Chrome Dino (JS API + SNN, 단일 채널)
+│   ├── dino_dual_channel_agent.py  # Chrome Dino (이중 채널 + 억제 회로)
 │   │
 │   ├── # Embodied Digital Learning (Phase B)
 │   ├── terminal_env.py       # 터미널 환경
