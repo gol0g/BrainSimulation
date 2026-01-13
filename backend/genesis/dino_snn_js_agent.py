@@ -22,18 +22,22 @@ from snn_scalable import ScalableSNNConfig, SparseSynapses, SparseLIFLayer, DEVI
 @dataclass
 class DinoConfig:
     """Agent configuration"""
-    # Brain size
-    n_sensory: int = 500
-    n_hidden: int = 1000
-    n_motor: int = 200
+    # Brain size (larger for better learning)
+    n_sensory: int = 1000
+    n_hidden: int = 3000
+    n_motor: int = 500
 
     # Timing (discovered from JS API testing)
-    jump_gap: int = 100  # Jump when obstacle is this far - jump later to be at peak when passing
+    jump_gap: int = 100  # Jump when obstacle is this far
+    duck_gap: int = 150  # Duck when bird is this far
     min_jump_interval: int = 300  # ms between jumps
 
     # Learning
     survival_reward: float = 0.1
     death_penalty: float = -5.0
+
+    # Adaptive timing
+    speed_scale: float = 1.0  # Increases as game speeds up
 
     # SNN
     sparsity: float = 0.01
@@ -173,7 +177,7 @@ class DinoJSAgent:
             };
         }""")
 
-    async def run_episode(self, max_frames: int = 2000) -> int:
+    async def run_episode(self, max_frames: int = 5000) -> int:
         """Run one episode"""
         # Start game
         await self.page.click('body')
@@ -182,7 +186,9 @@ class DinoJSAgent:
 
         self.brain.reset()
         last_jump_time = 0
+        last_duck_time = 0
         frame = 0
+        speed_scale = 1.0
 
         while frame < max_frames:
             state = await self.get_game_state()
@@ -197,40 +203,66 @@ class DinoJSAgent:
                 self.brain.process(0, self.config.death_penalty)
                 return state['distance']
 
-            # Calculate gap
+            # Speed adaptation (game speeds up over time)
+            if state['distance'] > 0:
+                speed_scale = 1.0 + state['distance'] / 1000.0  # Gradually increase
+                speed_scale = min(speed_scale, 2.0)  # Cap at 2x
+
+            # Calculate gap with speed adjustment
             gap = 0
+            obs_type = None
+            obs_h = 0
             if state['firstObs']:
                 gap = state['firstObs']['x'] - state['tRexX']
+                obs_type = state['firstObs'].get('type', '')
+                obs_h = state['firstObs'].get('h', 0)
+
+            # Detect if it's a bird (PTERODACTYL)
+            is_bird = obs_type and 'PTERO' in str(obs_type).upper()
 
             # Debug: log when obstacle is close
-            if gap > 0 and gap < 500 and frame % 5 == 0:
-                jmp = "AIR" if state['jumping'] else "GND"
-                obs_type = state['firstObs'].get('type', '?') if state['firstObs'] else '?'
-                obs_h = state['firstObs'].get('h', 0) if state['firstObs'] else 0
+            if gap > 0 and gap < 500 and frame % 10 == 0:
+                jmp = "AIR" if state['jumping'] else ("DCK" if state.get('ducking') else "GND")
                 trex_y = state.get('tRexY', 0)
-                print(f"  [{frame:3d}] Gap={gap:4.0f} {jmp} Y={trex_y:.0f} Obs:{obs_type}(h={obs_h})")
+                print(f"  [{frame:3d}] Gap={gap:4.0f} {jmp} Y={trex_y:.0f} {obs_type}(h={obs_h}) spd={speed_scale:.2f}")
 
             # SNN processes the gap signal
             current_time = frame * 16  # ms
             should_jump_snn = self.brain.process(gap, self.config.survival_reward)
 
-            # Check if jump is allowed
+            # Adjust timing based on speed
+            adjusted_jump_gap = int(self.config.jump_gap * speed_scale)
+            adjusted_duck_gap = int(self.config.duck_gap * speed_scale)
+
+            # Check if actions are allowed
             can_jump = (
                 not state['jumping'] and
+                not state.get('ducking', False) and
                 current_time - last_jump_time > self.config.min_jump_interval
             )
+            can_duck = (
+                not state['jumping'] and
+                current_time - last_duck_time > self.config.min_jump_interval
+            )
 
-            # Rule-based jump trigger (primary)
-            should_jump_rule = can_jump and gap > 0 and gap < self.config.jump_gap
+            # Bird handling - duck instead of jump
+            if is_bird and obs_h < 60:  # Low flying bird
+                if can_duck and gap > 0 and gap < adjusted_duck_gap:
+                    await self.page.keyboard.down('ArrowDown')
+                    last_duck_time = current_time
+                    print(f"  >>> DUCK at Gap={gap:.0f} (bird)")
+                    await asyncio.sleep(0.3)  # Hold duck
+                    await self.page.keyboard.up('ArrowDown')
+            else:
+                # Cactus or high bird - jump
+                should_jump_rule = can_jump and gap > 0 and gap < adjusted_jump_gap
+                should_jump_snn_allowed = can_jump and should_jump_snn and gap > 0 and gap < adjusted_jump_gap
 
-            # SNN can also trigger jump (use same gap threshold)
-            should_jump_snn_allowed = can_jump and should_jump_snn and gap > 0 and gap < self.config.jump_gap
-
-            # Combined decision
-            if should_jump_rule or should_jump_snn_allowed:
-                await self.page.keyboard.press('Space')
-                last_jump_time = current_time
-                print(f"  >>> JUMP at Gap={gap:.0f}")
+                if should_jump_rule or should_jump_snn_allowed:
+                    await self.page.keyboard.press('Space')
+                    last_jump_time = current_time
+                    if frame % 5 == 0:  # Less verbose
+                        print(f"  >>> JUMP at Gap={gap:.0f}")
 
             frame += 1
             await asyncio.sleep(0.016)
@@ -265,15 +297,15 @@ class DinoJSAgent:
 
 
 async def main():
-    print("Chrome Dino SNN Agent (JS API)")
-    print("Mission: Survive as long as possible!")
+    print("Chrome Dino SNN Agent v2 (snnTorch + Speed Adapt + Duck)")
+    print("Brain: 4500 neurons, 100 episodes")
     print()
 
     agent = DinoJSAgent()
     await agent.connect()
 
     try:
-        await agent.train(n_episodes=20)
+        await agent.train(n_episodes=100)
     finally:
         await agent.close()
 

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SNN Training Arena</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 512px;
+            height: 512px;
+            background: #ffffff;
+            overflow: hidden;
+            cursor: none;
+        }
+        #target {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: #ff0000;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        #cursor {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #00ff00;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1000;
+            transition: left 0.05s linear, top 0.05s linear;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #333;
+        }
+        #status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="target"></div>
+    <div id="cursor"></div>
+    <div id="score">Score: 0 | Clicks: 0 | Hits: 0</div>
+    <div id="status">Waiting for agent...</div>
+
+    <script>
+        const target = document.getElementById('target');
+        const cursor = document.getElementById('cursor');
+        const scoreDiv = document.getElementById('score');
+        const statusDiv = document.getElementById('status');
+
+        let score = 0;
+        let clicks = 0;
+        let hits = 0;
+        let cursorX = 256;
+        let cursorY = 256;
+
+        // Initialize target position
+        function moveTarget() {
+            const x = Math.random() * (512 - 40);
+            const y = Math.random() * (512 - 40);
+            target.style.left = x + 'px';
+            target.style.top = y + 'px';
+            return {x: x + 20, y: y + 20}; // center
+        }
+
+        let targetPos = moveTarget();
+
+        // Update cursor position (called by Playwright)
+        window.moveCursor = function(dx, dy) {
+            cursorX = Math.max(0, Math.min(512, cursorX + dx));
+            cursorY = Math.max(0, Math.min(512, cursorY + dy));
+            cursor.style.left = (cursorX - 5) + 'px';
+            cursor.style.top = (cursorY - 5) + 'px';
+
+            // Check if cursor is over target
+            const dist = Math.sqrt(
+                Math.pow(cursorX - targetPos.x, 2) +
+                Math.pow(cursorY - targetPos.y, 2)
+            );
+
+            // Return reward based on proximity
+            if (dist < 25) {
+                return 1.0; // On target
+            } else if (dist < 50) {
+                return 0.3; // Close
+            } else if (dist < 100) {
+                return 0.1; // Getting warmer
+            }
+            return 0.0;
+        };
+
+        // Click action (called by Playwright)
+        window.clickAction = function() {
+            clicks++;
+
+            const dist = Math.sqrt(
+                Math.pow(cursorX - targetPos.x, 2) +
+                Math.pow(cursorY - targetPos.y, 2)
+            );
+
+            if (dist < 25) {
+                // HIT!
+                hits++;
+                score += 10;
+                targetPos = moveTarget();
+                updateScore();
+                return 10.0; // Big reward
+            }
+
+            updateScore();
+            return -0.5; // Penalty for miss-click
+        };
+
+        // Get current state
+        window.getState = function() {
+            return {
+                cursor: {x: cursorX, y: cursorY},
+                target: targetPos,
+                score: score,
+                clicks: clicks,
+                hits: hits
+            };
+        };
+
+        // Reset game
+        window.resetGame = function() {
+            score = 0;
+            clicks = 0;
+            hits = 0;
+            cursorX = 256;
+            cursorY = 256;
+            cursor.style.left = '251px';
+            cursor.style.top = '251px';
+            targetPos = moveTarget();
+            updateScore();
+        };
+
+        function updateScore() {
+            scoreDiv.textContent = `Score: ${score} | Clicks: ${clicks} | Hits: ${hits}`;
+        }
+
+        // Update status
+        window.setStatus = function(text) {
+            statusDiv.textContent = text;
+        };
+
+        // Initial cursor position
+        cursor.style.left = '251px';
+        cursor.style.top = '251px';
+    </script>
+</body>
+</html>
