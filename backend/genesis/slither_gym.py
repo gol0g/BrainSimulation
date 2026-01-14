@@ -66,11 +66,11 @@ class Food:
 @dataclass
 class SlitherConfig:
     """Environment configuration"""
-    width: int = 800
-    height: int = 600
+    width: int = 2000
+    height: int = 2000
 
     # Food
-    n_food: int = 100
+    n_food: int = 500  # More food for bigger map
     food_spawn_rate: float = 0.1  # Per frame
 
     # Agent
@@ -597,7 +597,8 @@ class SlitherGym:
 # Demo / Test
 if __name__ == "__main__":
     print("Slither Gym - Demo Mode")
-    print("Use arrow keys or WASD to control")
+    print("Control with MOUSE (like real slither.io)")
+    print("Hold SPACE or CLICK for boost")
     print()
 
     # Create environment with pygame
@@ -608,28 +609,101 @@ if __name__ == "__main__":
         import pygame
         pygame.init()
 
+        # Viewport settings (camera follows player)
+        VIEWPORT_W, VIEWPORT_H = 800, 600
+        screen = pygame.display.set_mode((VIEWPORT_W, VIEWPORT_H))
+        pygame.display.set_caption("Slither Gym - Mouse Control")
+        clock = pygame.time.Clock()
+        env.screen = screen  # Override env screen
+
         done = False
         total_reward = 0
 
         while not done:
-            # Get keyboard input
+            # Get mouse position relative to viewport center
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+
+            # Convert to world coordinates (camera centered on player)
+            head = env.agent.head
+            cam_x = head.x - VIEWPORT_W / 2
+            cam_y = head.y - VIEWPORT_H / 2
+
+            world_mouse_x = cam_x + mouse_x
+            world_mouse_y = cam_y + mouse_y
+
+            # Normalize to 0-1 for action
+            target_x = world_mouse_x / env.config.width
+            target_y = world_mouse_y / env.config.height
+
+            # Boost on mouse click or space
+            mouse_buttons = pygame.mouse.get_pressed()
             keys = pygame.key.get_pressed()
-            angle_delta = 0
-            boost = False
+            boost = mouse_buttons[0] or keys[pygame.K_SPACE]
 
-            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-                angle_delta = -0.15
-            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-                angle_delta = 0.15
-            if keys[pygame.K_SPACE] or keys[pygame.K_LSHIFT]:
-                boost = True
-
-            # Step
-            obs, reward, done, info = env.step((angle_delta, boost))
+            # Step with mouse target
+            obs, reward, done, info = env.step((target_x, target_y, boost))
             total_reward += reward
 
-            # Render
-            env.render()
+            # Render with camera offset
+            screen.fill((20, 20, 30))
+
+            # Draw food (offset by camera)
+            for food in env.foods:
+                fx = food.x - cam_x
+                fy = food.y - cam_y
+                if -10 < fx < VIEWPORT_W + 10 and -10 < fy < VIEWPORT_H + 10:
+                    pygame.draw.circle(screen, food.color, (int(fx), int(fy)), 5)
+
+            # Draw enemies
+            for enemy in env.enemies:
+                if enemy.alive:
+                    for seg in enemy.segments:
+                        sx = seg.x - cam_x
+                        sy = seg.y - cam_y
+                        if -10 < sx < VIEWPORT_W + 10 and -10 < sy < VIEWPORT_H + 10:
+                            pygame.draw.circle(screen, enemy.color, (int(sx), int(sy)), 8)
+
+            # Draw agent
+            if env.agent.alive:
+                for i, seg in enumerate(env.agent.segments):
+                    sx = seg.x - cam_x
+                    sy = seg.y - cam_y
+                    brightness = max(100, 200 - i * 3)
+                    color = (0, brightness, 0)
+                    radius = max(5, 10 - i * 0.2)
+                    pygame.draw.circle(screen, color, (int(sx), int(sy)), int(radius))
+
+                # Direction line to mouse
+                pygame.draw.line(screen, (100, 100, 100),
+                               (VIEWPORT_W // 2, VIEWPORT_H // 2),
+                               (mouse_x, mouse_y), 1)
+
+            # Draw wall boundary indicator
+            # Left wall
+            if cam_x < 50:
+                pygame.draw.rect(screen, (255, 0, 0), (0, 0, 5, VIEWPORT_H))
+            # Right wall
+            if cam_x + VIEWPORT_W > env.config.width - 50:
+                pygame.draw.rect(screen, (255, 0, 0), (VIEWPORT_W - 5, 0, 5, VIEWPORT_H))
+            # Top wall
+            if cam_y < 50:
+                pygame.draw.rect(screen, (255, 0, 0), (0, 0, VIEWPORT_W, 5))
+            # Bottom wall
+            if cam_y + VIEWPORT_H > env.config.height - 50:
+                pygame.draw.rect(screen, (255, 0, 0), (0, VIEWPORT_H - 5, VIEWPORT_W, 5))
+
+            # HUD
+            font = pygame.font.Font(None, 36)
+            text = font.render(f"Length: {env.agent.length}  Steps: {env.steps}", True, (255, 255, 255))
+            screen.blit(text, (10, 10))
+
+            boost_text = "BOOST!" if boost else ""
+            if boost_text:
+                bt = font.render(boost_text, True, (255, 255, 0))
+                screen.blit(bt, (10, 50))
+
+            pygame.display.flip()
+            clock.tick(60)
 
             # Check quit
             for event in pygame.event.get():
@@ -647,11 +721,12 @@ if __name__ == "__main__":
         print("pygame not installed. Running headless demo...")
 
         for _ in range(1000):
-            # Random action
-            angle_delta = np.random.uniform(-0.1, 0.1)
+            # Random target
+            target_x = np.random.uniform(0.3, 0.7)
+            target_y = np.random.uniform(0.3, 0.7)
             boost = np.random.random() < 0.1
 
-            obs, reward, done, info = env.step((angle_delta, boost))
+            obs, reward, done, info = env.step((target_x, target_y, boost))
             env.render()
 
             if done:

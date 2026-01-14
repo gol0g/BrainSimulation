@@ -166,6 +166,7 @@ class SlitherBrain:
         self.dopamine = 0.5
         self.fear_level = 0.0
         self.hunger_level = 0.5
+        self.current_heading = 0.0  # Current heading angle
         self.steps = 0
 
         # Statistics
@@ -187,7 +188,7 @@ class SlitherBrain:
         print(f"  Total: {self.config.total_neurons:,} neurons")
         print(f"  Sparsity: {sp*100:.1f}%")
 
-    def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, bool]:
+    def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
         """
         Process sensor input and return action
 
@@ -195,11 +196,11 @@ class SlitherBrain:
             sensor_input: (3, n_rays) array from SlitherGym.get_sensor_input()
                 - [0, :] = food signals (0-1, closer = higher)
                 - [1, :] = enemy signals
-                - [2, :] = body signals
+                - [2, :] = body signals (wall proximity)
             reward: Learning signal
 
         Returns:
-            (angle_delta, boost): Action tuple
+            (target_x, target_y, boost): Action tuple (normalized 0-1)
         """
         # Unpack sensor input
         food_signal = sensor_input[0]  # (n_rays,)
@@ -268,9 +269,19 @@ class SlitherBrain:
         food_direction = self._compute_direction_bias(food_signal)
         enemy_direction = self._compute_direction_bias(enemy_signal)
 
+        # Compute target direction (relative angle)
         angle_delta = (right_rate - left_rate) * 0.3
-        angle_delta += food_direction * 0.1 * self.hunger_level  # Seek food
-        angle_delta -= enemy_direction * 0.2 * self.fear_level   # Avoid enemy
+        angle_delta += food_direction * 0.15 * self.hunger_level  # Seek food
+        angle_delta -= enemy_direction * 0.25 * self.fear_level   # Avoid enemy
+
+        # Convert angle_delta to target position (normalized 0-1)
+        # Target is ahead of current heading + angle_delta
+        target_angle = self.current_heading + angle_delta
+        # Target point at distance 0.1 (10% of map) in target direction
+        target_x = 0.5 + 0.1 * np.cos(target_angle)
+        target_y = 0.5 + 0.1 * np.sin(target_angle)
+        target_x = np.clip(target_x, 0.05, 0.95)
+        target_y = np.clip(target_y, 0.05, 0.95)
 
         # Boost decision
         boost = boost_rate > 0.3 or self.fear_level > 0.5
@@ -294,7 +305,7 @@ class SlitherBrain:
             self.dopamine = 0.5 + 0.1 * self.hunger_level - 0.1 * self.fear_level
 
         self.steps += 1
-        return angle_delta, boost
+        return target_x, target_y, boost
 
     def _encode_rays(self, ray_signal: np.ndarray, n_neurons: int) -> torch.Tensor:
         """Encode ray signals to population activity"""
@@ -371,6 +382,7 @@ class SlitherBrain:
         self.dopamine = 0.5
         self.fear_level = 0.0
         self.hunger_level = 0.5
+        self.current_heading = 0.0
 
     def save(self, path: Path):
         """Save all synapse weights"""
@@ -435,14 +447,17 @@ class SlitherAgent:
         step = 0
 
         while step < max_steps:
+            # Update brain's heading from environment
+            self.brain.current_heading = obs.get('heading', 0.0)
+
             # Get sensor input
             sensor = self.env.get_sensor_input(self.brain.config.n_rays)
 
             # Process through brain
-            angle_delta, boost = self.brain.process(sensor)
+            target_x, target_y, boost = self.brain.process(sensor)
 
             # Step environment
-            obs, reward, done, info = self.env.step((angle_delta, boost))
+            obs, reward, done, info = self.env.step((target_x, target_y, boost))
             total_reward += reward
 
             # Learn from reward
