@@ -48,7 +48,58 @@
 
 ---
 
-## 현재 상태: Scalable SNN + Chrome Dino
+## 현재 상태: Slither.io (153K neurons)
+
+### 진화 경로
+
+| 단계 | 환경 | 뉴런 | 성과 |
+|------|------|------|------|
+| 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
+| **2단계** | **Slither.io** | **153,000** | **진행중** |
+
+### Slither.io 아키텍처 (153K neurons)
+
+```
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│   Food Eye   │  │  Enemy Eye   │  │   Body Eye   │
+│    (8K)      │  │    (8K)      │  │    (4K)      │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │
+       ▼                 ▼                 ▼
+┌──────────────┐  ┌──────────────┐
+│Hunger Circuit│  │ Fear Circuit │
+│    (10K)     │  │    (10K)     │
+└──────┬───────┘  └──────┬───────┘
+       │                 │
+       └────────┬────────┘
+                ▼
+     ┌────────────────────┐
+     │   Integration 1    │
+     │       (50K)        │
+     └─────────┬──────────┘
+               ▼
+     ┌────────────────────┐
+     │   Integration 2    │
+     │       (50K)        │
+     └─────────┬──────────┘
+               │
+    ┌──────────┼──────────┐
+    ▼          ▼          ▼
+┌───────┐  ┌───────┐  ┌───────┐
+│ Left  │  │ Right │  │ Boost │
+│ (5K)  │  │ (5K)  │  │ (3K)  │
+└───────┘  └───────┘  └───────┘
+```
+
+**핵심 메커니즘**:
+- **3채널 시각**: Food Eye (attract), Enemy Eye (avoid), Body Eye (self)
+- **공포 회로**: 적 감지 시 Hunger 억제 (Fear --| Hunger)
+- **직접 반사**: Fear → Boost (위기 탈출)
+- **Ray-cast 센서**: 32방향 레이로 주변 감지
+
+---
+
+## Chrome Dino 졸업 (3,600 neurons)
 
 ### 핵심 아키텍처: snnTorch 기반 Scalable SNN
 
@@ -128,17 +179,16 @@ backend/
 │   ├── snn_scalable.py           # SparseLIFLayer, SparseSynapses (snnTorch)
 │   ├── snn_brain.py              # BiologicalBrain (original)
 │   ├── snn_brain_biological.py   # STDP 기반 생물학적 뇌
-│   ├── snn_verification.py       # SNN 검증 도구
 │   │
-│   ├── # Chrome Dino Agents
-│   ├── dino_snn_agent.py         # 픽셀 기반 에이전트
-│   ├── dino_snn_js_agent.py      # JS API + SNN (단일 채널)
-│   ├── dino_dual_channel_agent.py # 이중 채널 + 억제 회로
+│   ├── # Slither.io (Current)
+│   ├── slither_gym.py            # Python 훈련 환경
+│   ├── slither_snn_agent.py      # 153K neuron 에이전트
 │   │
-│   ├── # Other SNN Agents
-│   ├── snn_browser_agent.py      # 브라우저 탐색 에이전트
-│   ├── browser_snn_agent.py      # 브라우저 SNN 에이전트
-│   └── snn_desktop_agent.py      # 데스크톱 에이전트
+│   ├── # Chrome Dino (Graduated)
+│   ├── dino_dual_channel_agent.py # 이중 채널 + 억제 회로 (725점)
+│   ├── dino_snn_js_agent.py      # JS API + SNN (644점)
+│   │
+│   └── checkpoints/              # 저장된 모델들
 │
 ├── Dockerfile
 └── requirements.txt
@@ -148,18 +198,26 @@ backend/
 
 ## 실행 방법
 
-### Chrome Dino 이중 채널 에이전트
+### Slither.io (현재 진행중)
 
 ```bash
 cd backend/genesis
-python dino_dual_channel_agent.py
+
+# Phase 1: 청소부 (먹이만, 적 없음)
+python slither_snn_agent.py --render pygame
+
+# Phase 2: 겁쟁이 (적 추가)
+python slither_snn_agent.py --enemies 3 --render pygame
+
+# 이어서 훈련
+python slither_snn_agent.py --resume
 ```
 
-### 단일 채널 에이전트
+### Chrome Dino (졸업)
 
 ```bash
 cd backend/genesis
-python dino_snn_js_agent.py
+python dino_dual_channel_agent.py --eval  # 저장된 모델 평가
 ```
 
 ---
