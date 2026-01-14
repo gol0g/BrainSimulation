@@ -11,11 +11,17 @@ This solves the "Wall of Despair" at 600+ points where birds appear.
 import asyncio
 import numpy as np
 import torch
+import os
+from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 from playwright.async_api import async_playwright, Page, Browser
 
 from snn_scalable import ScalableSNNConfig, SparseSynapses, SparseLIFLayer, DEVICE
+
+# Checkpoint directory
+CHECKPOINT_DIR = Path(__file__).parent / "checkpoints" / "dino_dual"
+CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @dataclass
@@ -292,6 +298,35 @@ class DualChannelBrain:
             'steps': self.steps
         }
 
+    def save(self, path: Path):
+        """Save all synapse weights"""
+        state = {
+            'syn_ground_ghid': self.syn_ground_ghid.weights.cpu(),
+            'syn_ghid_jump': self.syn_ghid_jump.weights.cpu(),
+            'syn_sky_shid': self.syn_sky_shid.weights.cpu(),
+            'syn_shid_duck': self.syn_shid_duck.weights.cpu(),
+            'syn_sky_jump_inhib': self.syn_sky_jump_inhib.weights.cpu(),
+            'stats': self.get_stats(),
+        }
+        torch.save(state, path)
+        print(f"  Model saved: {path}")
+
+    def load(self, path: Path):
+        """Load synapse weights"""
+        if not path.exists():
+            print(f"  No checkpoint found: {path}")
+            return False
+        state = torch.load(path, map_location=DEVICE)
+        self.syn_ground_ghid.weights = state['syn_ground_ghid'].to(DEVICE)
+        self.syn_ghid_jump.weights = state['syn_ghid_jump'].to(DEVICE)
+        self.syn_sky_shid.weights = state['syn_sky_shid'].to(DEVICE)
+        self.syn_shid_duck.weights = state['syn_shid_duck'].to(DEVICE)
+        self.syn_sky_jump_inhib.weights = state['syn_sky_jump_inhib'].to(DEVICE)
+        print(f"  Model loaded: {path}")
+        if 'stats' in state:
+            print(f"  Stats: {state['stats']}")
+        return True
+
 
 class DinoDualChannelAgent:
     """Chrome Dino Agent with Dual-Channel Vision"""
@@ -303,6 +338,28 @@ class DinoDualChannelAgent:
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
         self.scores = []
+        self.best_score = 0
+
+    def save_model(self, name: str = "model"):
+        """Save model to checkpoint"""
+        path = CHECKPOINT_DIR / f"{name}.pt"
+        self.brain.save(path)
+
+    def load_model(self, name: str = "model") -> bool:
+        """Load model from checkpoint"""
+        path = CHECKPOINT_DIR / f"{name}.pt"
+        return self.brain.load(path)
+
+    def save_best(self, score: int):
+        """Save if this is the best score"""
+        if score > self.best_score:
+            self.best_score = score
+            path = CHECKPOINT_DIR / f"best_{score}.pt"
+            self.brain.save(path)
+            # Also save as 'best.pt' for easy loading
+            self.brain.save(CHECKPOINT_DIR / "best.pt")
+            return True
+        return False
 
     async def connect(self):
         """Connect to browser"""
@@ -450,16 +507,25 @@ class DinoDualChannelAgent:
 
         return 0
 
-    async def train(self, n_episodes: int = 100):
+    async def train(self, n_episodes: int = 100, resume: bool = False):
         """Train the agent"""
         print("\n" + "="*60)
         print("Dino DUAL-CHANNEL Training (Ground Eye + Sky Eye)")
         print("="*60)
 
+        # Resume from best model if requested
+        if resume:
+            if self.load_model("best"):
+                print("  Resumed from best model!")
+
         for ep in range(n_episodes):
             print(f"\nStarting episode {ep+1}...")
             score = await self.run_episode()
             self.scores.append(score)
+
+            # Auto-save best model
+            if self.save_best(score):
+                print(f"  ★ NEW BEST! Saved model (score={score})")
 
             high = max(self.scores)
             avg = sum(self.scores[-10:]) / min(len(self.scores), 10)
@@ -470,6 +536,9 @@ class DinoDualChannelAgent:
 
             await asyncio.sleep(1)
 
+        # Final save
+        self.save_model("final")
+
         print("\n" + "="*60)
         print(f"Training Complete!")
         print(f"  High Score: {max(self.scores)}")
@@ -477,6 +546,7 @@ class DinoDualChannelAgent:
         stats = self.brain.get_stats()
         print(f"  Total Jumps: {stats['jumps']}, Ducks: {stats['ducks']}")
         print(f"  Sky Inhibitions: {stats['inhibitions_applied']}")
+        print(f"  Models saved to: {CHECKPOINT_DIR}")
         print("="*60)
 
     async def close(self):
@@ -486,18 +556,37 @@ class DinoDualChannelAgent:
 
 
 async def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--resume', action='store_true', help='Resume from best model')
+    parser.add_argument('--episodes', type=int, default=100, help='Number of episodes')
+    parser.add_argument('--eval', action='store_true', help='Evaluation mode (load best, no training)')
+    args = parser.parse_args()
+
     print("Chrome Dino DUAL-CHANNEL Agent")
     print("Architecture: Ground Eye (cacti) + Sky Eye (birds)")
     print("Key Feature: Sky Eye --| Jump Motor (Inhibitory)")
+    print(f"Checkpoints: {CHECKPOINT_DIR}")
     print()
 
     agent = DinoDualChannelAgent()
-    await agent.connect()
 
-    try:
-        await agent.train(n_episodes=100)
-    finally:
-        await agent.close()
+    if args.eval:
+        # Evaluation mode
+        agent.load_model("best")
+        await agent.connect()
+        try:
+            score = await agent.run_episode()
+            print(f"\nEvaluation Score: {score}")
+        finally:
+            await agent.close()
+    else:
+        # Training mode
+        await agent.connect()
+        try:
+            await agent.train(n_episodes=args.episodes, resume=args.resume)
+        finally:
+            await agent.close()
 
 
 if __name__ == "__main__":
