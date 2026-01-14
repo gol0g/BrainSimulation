@@ -174,19 +174,38 @@ class SlitherGym:
         )
         self.enemies.append(enemy)
 
-    def step(self, action: Tuple[float, bool]) -> Tuple[dict, float, bool, dict]:
+    def step(self, action: Tuple[float, float, bool]) -> Tuple[dict, float, bool, dict]:
         """
         Take a step in the environment
 
         Args:
-            action: (angle_delta, boost)
-                - angle_delta: Change in heading (-pi to pi)
+            action: (target_x, target_y, boost) - normalized 0-1 coordinates
+                - target_x: Target X position (0-1, maps to screen width)
+                - target_y: Target Y position (0-1, maps to screen height)
                 - boost: Whether to boost (True/False)
+
+            OR for backwards compatibility:
+            action: (angle_delta, boost) - if only 2 elements
 
         Returns:
             observation, reward, done, info
         """
-        angle_delta, boost = action
+        # Handle both action formats
+        if len(action) == 3:
+            target_x, target_y, boost = action
+            # Convert normalized coords to screen coords
+            screen_x = target_x * self.config.width
+            screen_y = target_y * self.config.height
+            # Calculate angle to target
+            head = self.agent.head
+            dx = screen_x - head.x
+            dy = screen_y - head.y
+            target_angle = math.atan2(dy, dx)
+            # Smoothly turn toward target (like real slither.io)
+            angle_diff = (target_angle - self.agent.angle + math.pi) % (2 * math.pi) - math.pi
+            angle_delta = np.clip(angle_diff * 0.3, -0.3, 0.3)  # Smooth turning
+        else:
+            angle_delta, boost = action
 
         # Update agent
         reward = self._update_agent(angle_delta, boost)
@@ -246,9 +265,10 @@ class SlitherGym:
         new_x = head.x + speed * np.cos(self.agent.angle)
         new_y = head.y + speed * np.sin(self.agent.angle)
 
-        # Wrap around arena (or wall collision)
-        new_x = new_x % self.config.width
-        new_y = new_y % self.config.height
+        # No wrap - wall collision handled in _check_collisions
+        # Just clamp to prevent going too far out
+        new_x = np.clip(new_x, 0, self.config.width)
+        new_y = np.clip(new_y, 0, self.config.height)
 
         # Add new head position
         self.agent.segments.insert(0, SnakeSegment(new_x, new_y))
@@ -295,9 +315,14 @@ class SlitherGym:
         new_x = head.x + enemy.speed * np.cos(enemy.angle)
         new_y = head.y + enemy.speed * np.sin(enemy.angle)
 
-        # Wrap
-        new_x = new_x % self.config.width
-        new_y = new_y % self.config.height
+        # Bounce off walls
+        margin = 30
+        if new_x < margin or new_x > self.config.width - margin:
+            enemy.angle = math.pi - enemy.angle  # Reflect horizontally
+            new_x = np.clip(new_x, margin, self.config.width - margin)
+        if new_y < margin or new_y > self.config.height - margin:
+            enemy.angle = -enemy.angle  # Reflect vertically
+            new_y = np.clip(new_y, margin, self.config.height - margin)
 
         enemy.segments.insert(0, SnakeSegment(new_x, new_y))
 
@@ -318,14 +343,17 @@ class SlitherGym:
         """Check for fatal collisions, return penalty if dead"""
         head = self.agent.head
 
-        # Collision with own body (skip first few segments)
-        for seg in self.agent.segments[10:]:
-            dist = math.sqrt((head.x - seg.x)**2 + (head.y - seg.y)**2)
-            if dist < self.config.head_radius:
-                self.agent.alive = False
-                return self.config.death_penalty
+        # NO self-collision in real slither.io!
+        # (Removed self-body collision check)
 
-        # Collision with enemy bodies
+        # Collision with map boundary (wall death)
+        margin = 10
+        if (head.x < margin or head.x > self.config.width - margin or
+            head.y < margin or head.y > self.config.height - margin):
+            self.agent.alive = False
+            return self.config.death_penalty
+
+        # Collision with enemy bodies (head hits enemy body = death)
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
@@ -333,9 +361,21 @@ class SlitherGym:
                 dist = math.sqrt((head.x - seg.x)**2 + (head.y - seg.y)**2)
                 if dist < self.config.head_radius + 5:
                     self.agent.alive = False
+                    # In real slither.io, dead snake becomes food
+                    self._spawn_death_food(self.agent)
                     return self.config.death_penalty
 
         return 0.0
+
+    def _spawn_death_food(self, dead_snake: Snake):
+        """Spawn food where snake died (like real slither.io)"""
+        for seg in dead_snake.segments[::3]:  # Every 3rd segment
+            self.foods.append(Food(
+                seg.x + np.random.uniform(-5, 5),
+                seg.y + np.random.uniform(-5, 5),
+                value=2,  # Death food is more valuable
+                color=(255, 100, 100)
+            ))
 
     def _get_observation(self) -> dict:
         """
