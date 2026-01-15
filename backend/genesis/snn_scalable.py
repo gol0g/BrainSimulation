@@ -122,7 +122,7 @@ class SparseSynapses:
         self._rebuild_sparse()
 
     def _rebuild_sparse(self):
-        """Sparse tensor 재구성"""
+        """Sparse tensor 재구성 (lazy rebuild for performance)"""
         self.sparse_weights = torch.sparse_coo_tensor(
             self.indices.long(),
             self.weights,
@@ -130,6 +130,14 @@ class SparseSynapses:
             dtype=self.dtype,
             device=DEVICE
         ).coalesce()
+        # Cache transposed float32 version for fast forward pass
+        self._sparse_t_f32 = self.sparse_weights.float().t()
+        self._needs_rebuild = False
+
+    def _ensure_sparse(self):
+        """Lazy rebuild: only rebuild when needed"""
+        if getattr(self, '_needs_rebuild', True):
+            self._rebuild_sparse()
 
     def forward(self, pre_spikes: torch.Tensor) -> torch.Tensor:
         """
@@ -141,9 +149,11 @@ class SparseSynapses:
         Returns:
             (n_post,) 포스트시냅스 입력 전류
         """
-        # Sparse matrix-vector multiplication
-        sparse_f32 = self.sparse_weights.float()
-        result = torch.sparse.mm(sparse_f32.t(), pre_spikes.unsqueeze(1).float()).squeeze()
+        # Ensure sparse tensor is up to date
+        self._ensure_sparse()
+
+        # Sparse matrix-vector multiplication (use cached transposed float32)
+        result = torch.sparse.mm(self._sparse_t_f32, pre_spikes.unsqueeze(1).float()).squeeze()
         return result
 
     def update_eligibility(self, pre_spikes: torch.Tensor, post_spikes: torch.Tensor,
@@ -208,8 +218,8 @@ class SparseSynapses:
         self.total_potentiation += (delta > 0).sum().item()
         self.total_depression += (delta < 0).sum().item()
 
-        # Sparse tensor 재구성
-        self._rebuild_sparse()
+        # Mark for lazy rebuild (will rebuild on next forward pass)
+        self._needs_rebuild = True
 
 
 class SNNTorchLayer(nn.Module):
@@ -484,6 +494,97 @@ class ScalableSNN(nn.Module):
 
         total = syn_memory + neuron_memory + index_memory
         return total / (1024 * 1024)
+
+
+# ============================================================================
+# Adaptive LIF Layer - Neural Adaptation (Short-term Synaptic Depression)
+# ============================================================================
+class AdaptiveLIFLayer(nn.Module):
+    """
+    적응형 LIF 뉴런 - 신경 순응 (Neural Adaptation) 구현
+
+    생물학적 원리:
+    - 뉴런이 반복 발화하면 "피로"가 쌓여 발화가 어려워짐
+    - 시간이 지나면 피로가 회복됨
+    - 이로 인해 같은 행동을 계속 반복하지 않고 자연스럽게 행동 전환
+
+    수식:
+    - effective_threshold = base_threshold + adaptation
+    - 발화 시: adaptation += adapt_beta
+    - 매 스텝: adaptation *= exp(-dt/tau_adapt)
+    """
+
+    def __init__(self, n_neurons: int, config: ScalableSNNConfig,
+                 tau_adapt: float = 100.0, adapt_beta: float = 0.5):
+        """
+        Args:
+            n_neurons: 뉴런 수
+            config: SNN 설정
+            tau_adapt: 피로 회복 시상수 (ms) - 클수록 천천히 회복
+            adapt_beta: 발화당 피로 증가량 - 클수록 빨리 피로해짐
+        """
+        super().__init__()
+        self.n_neurons = n_neurons
+        self.config = config
+        self.tau_adapt = tau_adapt
+        self.adapt_beta = adapt_beta
+
+        # snnTorch Leaky 뉴런 (기본)
+        spike_grad = surrogate.fast_sigmoid(slope=25)
+        self.lif = snn.Leaky(
+            beta=config.beta,
+            threshold=config.threshold,
+            spike_grad=spike_grad,
+            init_hidden=False,
+            reset_mechanism='zero'
+        )
+
+        # 상태
+        self.spikes = torch.zeros(n_neurons, device=DEVICE)
+        self.mem = torch.zeros(n_neurons, device=DEVICE)
+        self.trace = torch.zeros(n_neurons, device=DEVICE)
+
+        # 적응 상태 (피로도)
+        self.adaptation = torch.zeros(n_neurons, device=DEVICE)
+
+    def forward(self, input_current: torch.Tensor) -> torch.Tensor:
+        """
+        적응형 LIF 업데이트
+
+        1. 피로도만큼 입력 전류 감소 (effective threshold 증가 효과)
+        2. 발화 시 피로도 증가
+        3. 시간에 따라 피로도 자연 감소
+        """
+        # 피로도에 따라 입력 감소 (임계값 증가와 동일 효과)
+        # adaptation이 높으면 발화하기 어려워짐
+        effective_input = input_current - self.adaptation
+
+        # snnTorch forward
+        self.spikes, self.mem = self.lif(effective_input, self.mem)
+
+        # 발화한 뉴런의 피로도 증가
+        self.adaptation = self.adaptation + self.spikes * self.adapt_beta
+
+        # 시간에 따른 피로도 자연 감소 (회복)
+        decay = np.exp(-self.config.dt / self.tau_adapt)
+        self.adaptation = self.adaptation * decay
+
+        # 스파이크 흔적 업데이트
+        trace_decay = np.exp(-self.config.dt / self.config.tau_plus)
+        self.trace = self.trace * trace_decay + self.spikes
+
+        return self.spikes
+
+    def reset(self):
+        """상태 초기화"""
+        self.spikes = torch.zeros(self.n_neurons, device=DEVICE)
+        self.mem = torch.zeros(self.n_neurons, device=DEVICE)
+        self.trace = torch.zeros(self.n_neurons, device=DEVICE)
+        self.adaptation = torch.zeros(self.n_neurons, device=DEVICE)
+
+    def get_fatigue_level(self) -> float:
+        """평균 피로도 반환 (디버깅용)"""
+        return self.adaptation.mean().item()
 
 
 # ============================================================================

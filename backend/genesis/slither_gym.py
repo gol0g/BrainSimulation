@@ -294,21 +294,32 @@ class SlitherGym:
         return reward
 
     def _update_enemy(self, enemy: Snake):
-        """Update enemy bot with simple AI"""
+        """Update enemy bot with hunting AI"""
         if not enemy.alive:
             return
 
-        # Simple behavior: wander + occasionally turn toward food
-        if np.random.random() < 0.02:
-            # Random turn
+        # Calculate distance to player
+        player_head = self.agent.head
+        dx = player_head.x - enemy.head.x
+        dy = player_head.y - enemy.head.y
+        dist_to_player = math.sqrt(dx*dx + dy*dy)
+
+        # Hunting behavior: Chase player if within 400px
+        if dist_to_player < 400 and np.random.random() < 0.15:
+            # Turn toward player
+            target_angle = math.atan2(dy, dx)
+            angle_diff = (target_angle - enemy.angle + math.pi) % (2 * math.pi) - math.pi
+            enemy.angle += 0.15 * angle_diff
+        elif np.random.random() < 0.02:
+            # Random wander when far from player
             enemy.angle += np.random.uniform(-0.5, 0.5)
 
-        # Move toward nearest food occasionally
-        if np.random.random() < 0.05 and self.foods:
+        # Also occasionally go for food
+        if np.random.random() < 0.03 and self.foods:
             nearest = min(self.foods,
                          key=lambda f: (f.x - enemy.head.x)**2 + (f.y - enemy.head.y)**2)
             target_angle = math.atan2(nearest.y - enemy.head.y, nearest.x - enemy.head.x)
-            enemy.angle += 0.1 * (target_angle - enemy.angle)
+            enemy.angle += 0.08 * (target_angle - enemy.angle)
 
         # Move
         head = enemy.head
@@ -353,7 +364,7 @@ class SlitherGym:
             self.agent.alive = False
             return self.config.death_penalty
 
-        # Collision with enemy bodies (head hits enemy body = death)
+        # Collision with enemy bodies (my head hits enemy body = I die)
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
@@ -365,7 +376,23 @@ class SlitherGym:
                     self._spawn_death_food(self.agent)
                     return self.config.death_penalty
 
-        return 0.0
+        # Enemy head hits MY body = Enemy dies and becomes food (slither.io rule!)
+        reward_bonus = 0.0
+        for enemy in self.enemies:
+            if not enemy.alive:
+                continue
+            enemy_head = enemy.head
+            # Check against my body segments (skip head area)
+            for seg in self.agent.segments[3:]:
+                dist = math.sqrt((enemy_head.x - seg.x)**2 + (enemy_head.y - seg.y)**2)
+                if dist < self.config.head_radius + 5:
+                    # Enemy dies!
+                    enemy.alive = False
+                    self._spawn_death_food(enemy)
+                    reward_bonus += 5.0  # Reward for killing enemy
+                    break
+
+        return reward_bonus
 
     def _spawn_death_food(self, dead_snake: Snake):
         """Spawn food where snake died (like real slither.io)"""
@@ -460,7 +487,7 @@ class SlitherGym:
             return np.zeros((3, n_rays))
 
         head = self.agent.head
-        view_range = 150.0
+        view_range = 300.0  # Increased for larger map (2000x2000)
 
         food_rays = np.ones(n_rays)  # 1 = nothing, 0 = close
         enemy_rays = np.ones(n_rays)

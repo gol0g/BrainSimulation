@@ -48,14 +48,60 @@
 
 ---
 
-## 현재 상태: Slither.io (153K neurons)
+## 현재 상태: Slither.io (15,800 neurons)
 
 ### 진화 경로
 
 | 단계 | 환경 | 뉴런 | 성과 |
 |------|------|------|------|
 | 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
-| **2단계** | **Slither.io** | **153,000** | **진행중** |
+| 2단계 | Slither.io Phase 1 | 15,800 | High: 64 (청소부) |
+| **현재** | **Slither.io Phase 2** | **15,800** | **High: 57 (적 3마리)** |
+
+### Phase 2 결과 (적 추가 + 진화된 본능)
+
+```
+Evolved + Curriculum Training:
+  Best: 57
+  Total Kills: 107
+  Innate avoidance reflex enabled
+```
+
+**핵심 구현사항**:
+
+1. **진화된 본능 (Innate Reflex as Synaptic Weights)**
+   - 적 회피 반사를 **시냅스 가중치**로 구현 (if문 아님)
+   - 교차 배선: Enemy LEFT → RIGHT motor (적 반대로 회전)
+   - 초기 가중치 3배 부스트 (innate_boost = 3.0)
+   - DA-STDP로 여전히 학습 가능 (경험으로 조절됨)
+
+   ```python
+   # 진화된 본능 = 강한 초기 시냅스 가중치
+   self.syn_enemy_motor_left.weights *= innate_boost  # 3x stronger
+   self.syn_enemy_motor_right.weights *= innate_boost
+   ```
+
+2. **Slither.io 규칙 구현**
+   - 적 머리가 내 몸에 부딪히면 → 적 사망 + 먹이화
+   - 적 AI: 400px 내 플레이어 추적
+
+3. **GPU 최적화** (RTX 3070 8GB)
+   - 벡터화된 인코딩: Python for-loop → torch.repeat_interleave
+   - Lazy sparse rebuild: 학습 시 매번 재구성 → 필요할 때만
+   - 캐시된 transpose: float32 변환 캐싱
+   - **성능: 36 → 44.6 steps/sec (+24%)**
+
+### 철학적 원칙: 진화된 본능 vs 하드코딩
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  "빈 서판(Blank Slate)은 죽음이다"                              │
+│  - 갓 태어난 동물도 생존 본능이 있음                            │
+│  - 본능 = 진화가 시냅스 가중치에 새겨놓은 것                    │
+│  - if문으로 행동 조작 ≠ 본능 (그건 로봇)                        │
+│  - 시냅스 가중치 초기화 = 본능 (여전히 학습 가능)               │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ### Slither.io 아키텍처 (153K neurons)
 

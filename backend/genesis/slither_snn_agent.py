@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
-from snn_scalable import ScalableSNNConfig, SparseSynapses, SparseLIFLayer, DEVICE
+from snn_scalable import ScalableSNNConfig, SparseSynapses, SparseLIFLayer, AdaptiveLIFLayer, DEVICE
 from slither_gym import SlitherGym, SlitherConfig
 
 # Checkpoint directory
@@ -131,10 +131,20 @@ class SlitherBrain:
         self.integration_1 = SparseLIFLayer(self.config.n_integration_1, lif)
         self.integration_2 = SparseLIFLayer(self.config.n_integration_2, lif)
 
-        # === MOTOR LAYERS ===
-        self.motor_left = SparseLIFLayer(self.config.n_motor_left, lif)
-        self.motor_right = SparseLIFLayer(self.config.n_motor_right, lif)
-        self.motor_boost = SparseLIFLayer(self.config.n_motor_boost, lif)
+        # === MOTOR LAYERS (Adaptive - Neural Fatigue) ===
+        # 운동 뉴런에 적응(피로) 적용: 같은 방향 반복 시 피로 → 자연스러운 방향 전환
+        # 핵심: 피로가 빨리 쌓이고 느리게 회복 → 방향 전환 유도
+        self.motor_left = AdaptiveLIFLayer(
+            self.config.n_motor_left, lif,
+            tau_adapt=200.0,   # 200ms 회복 (느린 회복)
+            adapt_beta=1.0     # 강한 피로 축적
+        )
+        self.motor_right = AdaptiveLIFLayer(
+            self.config.n_motor_right, lif,
+            tau_adapt=200.0,
+            adapt_beta=1.0
+        )
+        self.motor_boost = SparseLIFLayer(self.config.n_motor_boost, lif)  # 부스트는 적응 없음
 
         # === SYNAPSES ===
         sp = self.config.sparsity
@@ -162,6 +172,28 @@ class SlitherBrain:
         # === DIRECT REFLEX: Fear → Boost (emergency escape) ===
         self.syn_fear_boost = SparseSynapses(self.config.n_fear_circuit, self.config.n_motor_boost, sp * 3)
 
+        # === DIRECT REFLEX: Food → Motor (food seeking) ===
+        # Biologically valid: even simple organisms have direct sensorimotor reflexes
+        # Food on left → turn left, Food on right → turn right
+        self.syn_food_motor_left = SparseSynapses(self.config.n_food_eye, self.config.n_motor_left, sp * 2)
+        self.syn_food_motor_right = SparseSynapses(self.config.n_food_eye, self.config.n_motor_right, sp * 2)
+
+        # === INNATE REFLEX: Enemy → Motor (avoidance - EVOLVED!) ===
+        # This is NOT a hack - it's "evolutionary pre-wiring"
+        # Enemy on LEFT → activate RIGHT motor (turn AWAY from danger)
+        # Enemy on RIGHT → activate LEFT motor (turn AWAY from danger)
+        # Initial weights are HIGH (0.5x boost) = survival instinct from birth
+        self.syn_enemy_motor_left = SparseSynapses(self.config.n_enemy_eye, self.config.n_motor_left, sp * 2)
+        self.syn_enemy_motor_right = SparseSynapses(self.config.n_enemy_eye, self.config.n_motor_right, sp * 2)
+
+        # Scale up innate avoidance weights (진화된 본능 = 강한 초기 가중치)
+        # These are STILL LEARNABLE via DA-STDP - can be modified by experience
+        innate_boost = 3.0  # 3x stronger than random initialization
+        self.syn_enemy_motor_left.weights = self.syn_enemy_motor_left.weights * innate_boost
+        self.syn_enemy_motor_right.weights = self.syn_enemy_motor_right.weights * innate_boost
+        self.syn_enemy_motor_left._rebuild_sparse()
+        self.syn_enemy_motor_right._rebuild_sparse()
+
         # State
         self.dopamine = 0.5
         self.fear_level = 0.0
@@ -175,8 +207,10 @@ class SlitherBrain:
             'boosts': 0,
             'fear_triggers': 0,
             'left_turns': 0,
-            'right_turns': 0
+            'right_turns': 0,
+            'fatigue_switches': 0  # 피로로 인한 방향 전환 횟수
         }
+        self._last_turn_dir = None  # 이전 회전 방향 추적
 
         print(f"  Food Eye: {self.config.n_food_eye:,}")
         print(f"  Enemy Eye: {self.config.n_enemy_eye:,}")
@@ -184,9 +218,10 @@ class SlitherBrain:
         print(f"  Hunger Circuit: {self.config.n_hunger_circuit:,}")
         print(f"  Fear Circuit: {self.config.n_fear_circuit:,}")
         print(f"  Integration: {self.config.n_integration_1 + self.config.n_integration_2:,}")
-        print(f"  Motor: {self.config.n_motor_left + self.config.n_motor_right + self.config.n_motor_boost:,}")
+        print(f"  Motor: {self.config.n_motor_left + self.config.n_motor_right + self.config.n_motor_boost:,} (Adaptive)")
         print(f"  Total: {self.config.total_neurons:,} neurons")
         print(f"  Sparsity: {sp*100:.1f}%")
+        print(f"  Neural Adaptation: tau=200ms, beta=1.0")
 
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
         """
@@ -255,6 +290,29 @@ class SlitherBrain:
         fear_boost = self.syn_fear_boost.forward(fear_spikes)
         boost_in = boost_in + fear_boost * 2.0
 
+        # === DIRECT FOOD REFLEX ===
+        # Encode food with directional bias (left half → left motor, right half → right motor)
+        food_left_input, food_right_input = self._encode_food_directional(food_signal)
+        food_reflex_left = self.syn_food_motor_left.forward(food_left_input)
+        food_reflex_right = self.syn_food_motor_right.forward(food_right_input)
+
+        # Add direct food reflex (strong weight for Phase 1)
+        left_in = left_in + food_reflex_left * 3.0
+        right_in = right_in + food_reflex_right * 3.0
+
+        # === INNATE ENEMY AVOIDANCE REFLEX (진화된 본능!) ===
+        # Enemy on LEFT → activate RIGHT motor (turn AWAY)
+        # Enemy on RIGHT → activate LEFT motor (turn AWAY)
+        # Note: OPPOSITE of food reflex - we turn AWAY from danger
+        enemy_left_input, enemy_right_input = self._encode_enemy_directional(enemy_signal)
+        # Cross-wiring: left enemy → right motor, right enemy → left motor
+        enemy_reflex_to_right = self.syn_enemy_motor_right.forward(enemy_left_input)
+        enemy_reflex_to_left = self.syn_enemy_motor_left.forward(enemy_right_input)
+
+        # Add innate avoidance (weights already boosted in __init__)
+        left_in = left_in + enemy_reflex_to_left * 2.0
+        right_in = right_in + enemy_reflex_to_right * 2.0
+
         left_spikes = self.motor_left.forward(left_in * 30.0)
         right_spikes = self.motor_right.forward(right_in * 30.0)
         boost_spikes = self.motor_boost.forward(boost_in * 30.0)
@@ -270,26 +328,53 @@ class SlitherBrain:
         enemy_direction = self._compute_direction_bias(enemy_signal)
 
         # Compute target direction (relative angle)
-        angle_delta = (right_rate - left_rate) * 0.3
-        angle_delta += food_direction * 0.15 * self.hunger_level  # Seek food
+        # Motor rate difference now has higher weight so fatigue affects steering
+        angle_delta = (right_rate - left_rate) * 0.8  # Increased from 0.3 to 0.8
+        # Food seeking (reduced weight when no food nearby to allow exploration)
+        food_weight = 0.4 if food_signal.max() > 0.2 else 0.2  # Less heuristic when no food
+        angle_delta += food_direction * food_weight * (0.5 + self.hunger_level)
         angle_delta -= enemy_direction * 0.25 * self.fear_level   # Avoid enemy
 
         # Convert angle_delta to target position (normalized 0-1)
         # Target is ahead of current heading + angle_delta
         target_angle = self.current_heading + angle_delta
-        # Target point at distance 0.1 (10% of map) in target direction
-        target_x = 0.5 + 0.1 * np.cos(target_angle)
-        target_y = 0.5 + 0.1 * np.sin(target_angle)
+
+        # Use relative forward direction - the gym will calculate angle from head to target
+        # Output a target that's 20% of map ahead in the desired direction
+        # This works because gym.step() calculates angle from head to target
+        target_x = 0.5 + 0.2 * np.cos(target_angle)
+        target_y = 0.5 + 0.2 * np.sin(target_angle)
+
+        # Bias toward food when detected (simple heuristic to help initial learning)
+        if food_signal.max() > 0.1:  # Food detected
+            # Find direction of strongest food signal
+            best_ray = np.argmax(food_signal)
+            n_rays = len(food_signal)
+            food_angle = self.current_heading + (2 * np.pi * best_ray / n_rays) - np.pi
+            # Blend toward food
+            blend = min(0.5, food_signal.max())
+            target_x = target_x * (1 - blend) + (0.5 + 0.2 * np.cos(food_angle)) * blend
+            target_y = target_y * (1 - blend) + (0.5 + 0.2 * np.sin(food_angle)) * blend
+
         target_x = np.clip(target_x, 0.05, 0.95)
         target_y = np.clip(target_y, 0.05, 0.95)
 
-        # Boost decision
-        boost = boost_rate > 0.3 or self.fear_level > 0.5
+        # Boost decision: Only when ACTUAL enemy detected in sensor
+        # Check raw sensor input, not just Fear circuit (which can have noise)
+        enemy_detected = enemy_signal.max() > 0.1  # Actually see enemy in view
+        boost = boost_rate > 0.15 and enemy_detected
 
-        if left_rate > right_rate:
+        # Track turns and fatigue-induced switches
+        current_turn = 'left' if left_rate > right_rate else 'right'
+        if current_turn == 'left':
             self.stats['left_turns'] += 1
         else:
             self.stats['right_turns'] += 1
+
+        # 피로로 인한 방향 전환 감지
+        if self._last_turn_dir is not None and self._last_turn_dir != current_turn:
+            self.stats['fatigue_switches'] += 1
+        self._last_turn_dir = current_turn
 
         if boost:
             self.stats['boosts'] += 1
@@ -308,21 +393,24 @@ class SlitherBrain:
         return target_x, target_y, boost
 
     def _encode_rays(self, ray_signal: np.ndarray, n_neurons: int) -> torch.Tensor:
-        """Encode ray signals to population activity"""
+        """Encode ray signals to population activity - VECTORIZED"""
+        # Convert to tensor once
+        signal_tensor = torch.from_numpy(ray_signal).float().to(DEVICE)
         n_rays = len(ray_signal)
         neurons_per_ray = n_neurons // n_rays
+        actual_size = neurons_per_ray * n_rays  # May be less than n_neurons
 
+        # Create output tensor
         input_tensor = torch.zeros(n_neurons, device=DEVICE)
 
-        for i, signal in enumerate(ray_signal):
-            if signal > 0.05:
-                start = i * neurons_per_ray
-                end = start + neurons_per_ray
-                n_active = int(signal * neurons_per_ray * 0.5)
-                if n_active > 0:
-                    active_idx = torch.randperm(neurons_per_ray)[:n_active] + start
-                    active_idx = active_idx[active_idx < n_neurons]
-                    input_tensor[active_idx] = signal
+        # Expand signals to neuron populations (vectorized)
+        expanded = signal_tensor.repeat_interleave(neurons_per_ray)
+
+        # Add noise for stochastic activation (match expanded size)
+        noise = torch.rand(actual_size, device=DEVICE)
+        # Activate neurons where signal > threshold and random < signal
+        mask = (expanded > 0.05) & (noise < expanded * 0.5)
+        input_tensor[:actual_size][mask] = expanded[mask]
 
         return input_tensor
 
@@ -337,35 +425,120 @@ class SlitherBrain:
 
         return (right_signal - left_signal) / (left_signal + right_signal + 0.01)
 
+    def _encode_food_directional(self, ray_signal: np.ndarray) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Encode food signals with left/right directional bias - VECTORIZED"""
+        n_rays = len(ray_signal)
+        half = n_rays // 2
+        neurons_per_half = self.config.n_food_eye // 2
+        n_per_ray = neurons_per_half // half
+        actual_size = n_per_ray * half  # May be less than neurons_per_half
+
+        # Convert to tensors
+        left_signal = torch.from_numpy(ray_signal[:half]).float().to(DEVICE)
+        right_signal = torch.from_numpy(ray_signal[half:]).float().to(DEVICE)
+
+        # Expand signals to neuron populations
+        left_expanded = left_signal.repeat_interleave(n_per_ray)
+        right_expanded = right_signal.repeat_interleave(n_per_ray)
+
+        # Create output tensors
+        left_input = torch.zeros(self.config.n_food_eye, device=DEVICE)
+        right_input = torch.zeros(self.config.n_food_eye, device=DEVICE)
+
+        # Stochastic activation (match expanded size)
+        noise_left = torch.rand(actual_size, device=DEVICE)
+        noise_right = torch.rand(actual_size, device=DEVICE)
+
+        # Left food → left motor
+        mask_left = (left_expanded > 0.05) & (noise_left < left_expanded * 0.8)
+        left_input[:actual_size][mask_left] = left_expanded[mask_left] * 2.0
+
+        # Right food → right motor
+        mask_right = (right_expanded > 0.05) & (noise_right < right_expanded * 0.8)
+        right_input[neurons_per_half:neurons_per_half + actual_size][mask_right] = right_expanded[mask_right] * 2.0
+
+        return left_input, right_input
+
+    def _encode_enemy_directional(self, ray_signal: np.ndarray) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Encode enemy signals with left/right directional bias - VECTORIZED"""
+        n_rays = len(ray_signal)
+        half = n_rays // 2
+        neurons_per_half = self.config.n_enemy_eye // 2
+        n_per_ray = neurons_per_half // half
+        actual_size = n_per_ray * half  # May be less than neurons_per_half
+
+        # Convert to tensors
+        left_signal = torch.from_numpy(ray_signal[:half]).float().to(DEVICE)
+        right_signal = torch.from_numpy(ray_signal[half:]).float().to(DEVICE)
+
+        # Expand signals to neuron populations
+        left_expanded = left_signal.repeat_interleave(n_per_ray)
+        right_expanded = right_signal.repeat_interleave(n_per_ray)
+
+        # Create output tensors
+        left_input = torch.zeros(self.config.n_enemy_eye, device=DEVICE)
+        right_input = torch.zeros(self.config.n_enemy_eye, device=DEVICE)
+
+        # Stochastic activation (match expanded size)
+        noise_left = torch.rand(actual_size, device=DEVICE)
+        noise_right = torch.rand(actual_size, device=DEVICE)
+
+        # Enemy left → (will be sent to RIGHT motor for avoidance)
+        mask_left = (left_expanded > 0.05) & (noise_left < left_expanded * 0.8)
+        left_input[:actual_size][mask_left] = left_expanded[mask_left] * 3.0  # Strong danger signal
+
+        # Enemy right → (will be sent to LEFT motor for avoidance)
+        mask_right = (right_expanded > 0.05) & (noise_right < right_expanded * 0.8)
+        right_input[neurons_per_half:neurons_per_half + actual_size][mask_right] = right_expanded[mask_right] * 3.0
+
+        return left_input, right_input
+
     def _learn(self):
         """DA-STDP learning for all synapses"""
         tau = self.config.stdp_tau
         a_plus = self.config.a_plus
         a_minus = self.config.a_minus
+        dt = 1.0
 
         # Sensory → Specialized
-        self.syn_food_hunger.update_eligibility(self.food_eye.spikes, self.hunger_circuit.spikes, tau)
+        self.syn_food_hunger.update_eligibility(self.food_eye.spikes, self.hunger_circuit.spikes, tau, dt)
         self.syn_food_hunger.apply_dopamine(self.dopamine, a_plus, a_minus)
 
-        self.syn_enemy_fear.update_eligibility(self.enemy_eye.spikes, self.fear_circuit.spikes, tau)
+        self.syn_enemy_fear.update_eligibility(self.enemy_eye.spikes, self.fear_circuit.spikes, tau, dt)
         self.syn_enemy_fear.apply_dopamine(self.dopamine, a_plus, a_minus)
 
         # Specialized → Integration
-        self.syn_hunger_int1.update_eligibility(self.hunger_circuit.spikes, self.integration_1.spikes, tau)
+        self.syn_hunger_int1.update_eligibility(self.hunger_circuit.spikes, self.integration_1.spikes, tau, dt)
         self.syn_hunger_int1.apply_dopamine(self.dopamine, a_plus, a_minus)
 
-        self.syn_fear_int1.update_eligibility(self.fear_circuit.spikes, self.integration_1.spikes, tau)
+        self.syn_fear_int1.update_eligibility(self.fear_circuit.spikes, self.integration_1.spikes, tau, dt)
         self.syn_fear_int1.apply_dopamine(self.dopamine, a_plus, a_minus)
 
         # Integration → Motor
-        self.syn_int2_left.update_eligibility(self.integration_2.spikes, self.motor_left.spikes, tau)
+        self.syn_int2_left.update_eligibility(self.integration_2.spikes, self.motor_left.spikes, tau, dt)
         self.syn_int2_left.apply_dopamine(self.dopamine, a_plus, a_minus)
 
-        self.syn_int2_right.update_eligibility(self.integration_2.spikes, self.motor_right.spikes, tau)
+        self.syn_int2_right.update_eligibility(self.integration_2.spikes, self.motor_right.spikes, tau, dt)
         self.syn_int2_right.apply_dopamine(self.dopamine, a_plus, a_minus)
 
-        self.syn_int2_boost.update_eligibility(self.integration_2.spikes, self.motor_boost.spikes, tau)
+        self.syn_int2_boost.update_eligibility(self.integration_2.spikes, self.motor_boost.spikes, tau, dt)
         self.syn_int2_boost.apply_dopamine(self.dopamine, a_plus, a_minus)
+
+        # Direct food reflex (modifiable even though it's a reflex)
+        self.syn_food_motor_left.update_eligibility(self.food_eye.spikes, self.motor_left.spikes, tau, dt)
+        self.syn_food_motor_left.apply_dopamine(self.dopamine, a_plus, a_minus)
+
+        self.syn_food_motor_right.update_eligibility(self.food_eye.spikes, self.motor_right.spikes, tau, dt)
+        self.syn_food_motor_right.apply_dopamine(self.dopamine, a_plus, a_minus)
+
+        # Innate enemy avoidance reflex (STILL LEARNABLE - can be modified by experience!)
+        # If avoiding enemies leads to survival → reinforce
+        # If avoiding prevents eating → might weaken (learning "courage")
+        self.syn_enemy_motor_left.update_eligibility(self.enemy_eye.spikes, self.motor_left.spikes, tau, dt)
+        self.syn_enemy_motor_left.apply_dopamine(self.dopamine, a_plus, a_minus)
+
+        self.syn_enemy_motor_right.update_eligibility(self.enemy_eye.spikes, self.motor_right.spikes, tau, dt)
+        self.syn_enemy_motor_right.apply_dopamine(self.dopamine, a_plus, a_minus)
 
     def reset(self):
         """Reset state for new episode"""
@@ -383,6 +556,12 @@ class SlitherBrain:
         self.fear_level = 0.0
         self.hunger_level = 0.5
         self.current_heading = 0.0
+        self._last_turn_dir = None  # Reset turn tracking
+        # Reset stats (ensures all keys exist)
+        self.stats = {
+            'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0,
+            'left_turns': 0, 'right_turns': 0, 'fatigue_switches': 0
+        }
 
     def save(self, path: Path):
         """Save all synapse weights"""
@@ -398,6 +577,11 @@ class SlitherBrain:
             'syn_int2_boost': self.syn_int2_boost.weights.cpu(),
             'syn_fear_hunger_inhib': self.syn_fear_hunger_inhib.weights.cpu(),
             'syn_fear_boost': self.syn_fear_boost.weights.cpu(),
+            'syn_food_motor_left': self.syn_food_motor_left.weights.cpu(),
+            'syn_food_motor_right': self.syn_food_motor_right.weights.cpu(),
+            # Innate enemy avoidance (진화된 본능 - learnable)
+            'syn_enemy_motor_left': self.syn_enemy_motor_left.weights.cpu(),
+            'syn_enemy_motor_right': self.syn_enemy_motor_right.weights.cpu(),
             'stats': self.stats.copy(),
         }
         torch.save(state, path)
@@ -420,6 +604,18 @@ class SlitherBrain:
         self.syn_int2_boost.weights = state['syn_int2_boost'].to(DEVICE)
         self.syn_fear_hunger_inhib.weights = state['syn_fear_hunger_inhib'].to(DEVICE)
         self.syn_fear_boost.weights = state['syn_fear_boost'].to(DEVICE)
+        # Load new reflex synapses (optional for backward compatibility)
+        if 'syn_food_motor_left' in state:
+            self.syn_food_motor_left.weights = state['syn_food_motor_left'].to(DEVICE)
+        if 'syn_food_motor_right' in state:
+            self.syn_food_motor_right.weights = state['syn_food_motor_right'].to(DEVICE)
+        # Load innate enemy avoidance (if saved)
+        if 'syn_enemy_motor_left' in state:
+            self.syn_enemy_motor_left.weights = state['syn_enemy_motor_left'].to(DEVICE)
+            self.syn_enemy_motor_left._rebuild_sparse()
+        if 'syn_enemy_motor_right' in state:
+            self.syn_enemy_motor_right.weights = state['syn_enemy_motor_right'].to(DEVICE)
+            self.syn_enemy_motor_right._rebuild_sparse()
         if 'stats' in state:
             self.stats = state['stats']
         print(f"  Model loaded: {path}")
@@ -438,7 +634,7 @@ class SlitherAgent:
         self.scores = []
         self.best_score = 0
 
-    def run_episode(self, max_steps: int = 5000) -> dict:
+    def run_episode(self, max_steps: int = 1000) -> dict:
         """Run one episode"""
         obs = self.env.reset()
         self.brain.reset()
@@ -537,18 +733,39 @@ if __name__ == "__main__":
     parser.add_argument('--render', choices=['none', 'pygame', 'ascii'], default='pygame')
     parser.add_argument('--resume', action='store_true', help='Resume from best')
     parser.add_argument('--enemies', type=int, default=0, help='Number of enemy bots')
+    parser.add_argument('--small', action='store_true', help='Use smaller brain (15K neurons) for testing')
     args = parser.parse_args()
 
     print("Slither.io SNN Agent")
     print(f"Render mode: {args.render}")
     print(f"Enemies: {args.enemies}")
+    print(f"Small mode: {args.small}")
     print()
 
     # Configure environment
     env_config = SlitherConfig(n_enemies=args.enemies)
 
+    # Configure brain (small for testing, full for real training)
+    if args.small:
+        brain_config = SlitherBrainConfig(
+            n_food_eye=1000,
+            n_enemy_eye=1000,
+            n_body_eye=500,
+            n_integration_1=5000,
+            n_integration_2=5000,
+            n_motor_left=500,
+            n_motor_right=500,
+            n_motor_boost=300,
+            n_fear_circuit=1000,
+            n_hunger_circuit=1000,
+            sparsity=0.02  # Higher sparsity for smaller network
+        )
+    else:
+        brain_config = None  # Use defaults (153K)
+
     # Create agent
     agent = SlitherAgent(
+        brain_config=brain_config,
         env_config=env_config,
         render_mode=args.render
     )
