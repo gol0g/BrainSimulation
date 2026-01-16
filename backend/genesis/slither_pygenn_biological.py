@@ -86,7 +86,7 @@ class BiologicalConfig:
     v_thresh: float = -50.0
     tau_refrac: float = 2.0
 
-    # STDP parameters
+    # STDP parameters (원래 값 복원)
     tau_plus: float = 20.0
     tau_minus: float = 20.0
     a_plus: float = 0.005
@@ -98,6 +98,10 @@ class BiologicalConfig:
     innate_boost: float = 3.0       # 선천적 회피 본능 강도
     fear_inhibition: float = 0.8    # 공포가 배고픔 억제하는 강도
     inhibitory_weight: float = -2.0 # 억제 시냅스 가중치
+
+    # === WTA (Winner-Take-All) 측면 억제 ===
+    wta_inhibition: float = -3.0    # WTA 억제 강도 (강할수록 승자 독식)
+    wta_sparsity: float = 0.02      # WTA 연결 희소성
 
     dt: float = 1.0
 
@@ -332,6 +336,80 @@ class BiologicalBrain:
 
         self.all_synapses.extend([self.syn_food_motor_left, self.syn_food_motor_right])
 
+        # === WTA (Winner-Take-All) 측면 억제 회로 ===
+        # 가장 강하게 발화한 모터 뉴런이 나머지를 억제 → 깨끗한 STDP 학습
+        print(f"  WTA Lateral Inhibition: Motor neurons (weight={self.config.wta_inhibition})")
+
+        # 억제 시냅스용 파라미터 (STDP 비활성화 - 억제 연결은 고정)
+        inhib_params = {
+            "tauPlus": self.config.tau_plus,
+            "tauMinus": self.config.tau_minus,
+            "aPlus": 0.0,  # 학습 없음 (고정된 억제)
+            "aMinus": 0.0,
+            "wMin": self.config.wta_inhibition,  # 음수 가중치
+            "wMax": 0.0,
+            "dopamine": 0.5,
+        }
+
+        # Left ↔ Right 상호 억제 (음수 가중치 = 억제)
+        self.syn_left_right_inhib = self.model.add_synapse_population(
+            "left_right_inhib", "SPARSE",
+            self.motor_left, self.motor_right,
+            init_weight_update(da_stdp_model, inhib_params,
+                               {"g": self.config.wta_inhibition, "eligibility": 0.0}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": self.config.wta_sparsity})
+        )
+
+        self.syn_right_left_inhib = self.model.add_synapse_population(
+            "right_left_inhib", "SPARSE",
+            self.motor_right, self.motor_left,
+            init_weight_update(da_stdp_model, inhib_params,
+                               {"g": self.config.wta_inhibition, "eligibility": 0.0}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": self.config.wta_sparsity})
+        )
+
+        # Left ↔ Boost 상호 억제
+        self.syn_left_boost_inhib = self.model.add_synapse_population(
+            "left_boost_inhib", "SPARSE",
+            self.motor_left, self.motor_boost,
+            init_weight_update(da_stdp_model, inhib_params,
+                               {"g": self.config.wta_inhibition * 0.5, "eligibility": 0.0}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": self.config.wta_sparsity})
+        )
+
+        self.syn_boost_left_inhib = self.model.add_synapse_population(
+            "boost_left_inhib", "SPARSE",
+            self.motor_boost, self.motor_left,
+            init_weight_update(da_stdp_model, inhib_params,
+                               {"g": self.config.wta_inhibition * 0.5, "eligibility": 0.0}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": self.config.wta_sparsity})
+        )
+
+        # Right ↔ Boost 상호 억제
+        self.syn_right_boost_inhib = self.model.add_synapse_population(
+            "right_boost_inhib", "SPARSE",
+            self.motor_right, self.motor_boost,
+            init_weight_update(da_stdp_model, inhib_params,
+                               {"g": self.config.wta_inhibition * 0.5, "eligibility": 0.0}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": self.config.wta_sparsity})
+        )
+
+        self.syn_boost_right_inhib = self.model.add_synapse_population(
+            "boost_right_inhib", "SPARSE",
+            self.motor_boost, self.motor_right,
+            init_weight_update(da_stdp_model, inhib_params,
+                               {"g": self.config.wta_inhibition * 0.5, "eligibility": 0.0}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": self.config.wta_sparsity})
+        )
+
+        # WTA 시냅스는 all_synapses에 추가하지 않음 (도파민 학습 불필요)
+
         # 빌드 및 로드
         print("  Compiling CUDA code...")
         self.model.build()
@@ -343,6 +421,7 @@ class BiologicalBrain:
         self.fear_level = 0.0
         self.hunger_level = 0.5
         self.steps = 0
+        self.generation = 0  # 윤회 세대
         self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0}
 
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
@@ -359,9 +438,9 @@ class BiologicalBrain:
         enemy_encoded = self._encode_to_population(enemy_signal, self.config.n_enemy_eye)
         body_encoded = self._encode_to_population(body_signal, self.config.n_body_eye)
 
-        # Set sensory input (voltage injection) - 더 강한 입력
+        # Set sensory input (voltage injection)
         self.food_eye.vars["V"].view[:] = self.config.v_rest + food_encoded * 40.0
-        self.enemy_eye.vars["V"].view[:] = self.config.v_rest + enemy_encoded * 50.0  # Much higher gain for danger
+        self.enemy_eye.vars["V"].view[:] = self.config.v_rest + enemy_encoded * 50.0
         self.body_eye.vars["V"].view[:] = self.config.v_rest + body_encoded * 25.0
 
         self.food_eye.vars["V"].push_to_device()
@@ -461,13 +540,31 @@ class BiologicalBrain:
         for syn in self.all_synapses:
             syn.set_dynamic_param_value("dopamine", self.dopamine)
 
-    def reset(self):
-        """상태 초기화"""
+    def apply_death_penalty(self):
+        """죽음 시 Death Penalty (비활성화됨)
+
+        STDP eligibility trace는 죽기 직전 행동만 기억하지 않고,
+        이전 좋은 행동까지 같이 약화시킴 → 비활성화
+        """
+        # Death Penalty 비활성화: 역효과 확인됨
+        # - eligibility trace가 직전 행동뿐 아니라 좋은 행동도 포함
+        # - LTD가 모든 최근 시냅스를 약화시켜 학습 저하
+        self.generation += 1
+        pass
+
+    def reset(self, keep_weights: bool = True):
+        """상태 초기화 (윤회 시스템)
+
+        Args:
+            keep_weights: True면 시냅스 가중치 유지 (윤회)
+                         False면 완전 초기화
+        """
         all_pops = [self.food_eye, self.enemy_eye, self.body_eye,
                     self.hunger, self.fear,
                     self.integration_1, self.integration_2,
                     self.motor_left, self.motor_right, self.motor_boost]
 
+        # 막전위만 초기화 (가중치는 유지!)
         for pop in all_pops:
             pop.vars["V"].view[:] = self.config.v_rest
             pop.vars["V"].push_to_device()
@@ -491,9 +588,9 @@ class BiologicalAgent:
         self.best_score = 0
 
     def run_episode(self, max_steps: int = 1000) -> dict:
-        """한 에피소드 실행"""
+        """한 에피소드 실행 (윤회 시스템 적용)"""
         obs = self.env.reset()
-        self.brain.reset()
+        self.brain.reset(keep_weights=True)  # 가중치 유지!
 
         total_reward = 0
         step = 0
@@ -512,6 +609,8 @@ class BiologicalAgent:
             step += 1
 
             if done:
+                # 죽음! Death Penalty 적용 (윤회)
+                self.brain.apply_death_penalty()
                 break
 
         return {
@@ -520,7 +619,8 @@ class BiologicalAgent:
             'reward': total_reward,
             'food_eaten': info.get('foods_eaten', 0),
             'fear_triggers': self.brain.stats['fear_triggers'],
-            'boosts': self.brain.stats['boosts']
+            'boosts': self.brain.stats['boosts'],
+            'generation': self.brain.generation
         }
 
     def train(self, n_episodes: int = 100):
@@ -529,6 +629,8 @@ class BiologicalAgent:
 
         print("\n" + "=" * 60)
         print(f"Biological PyGeNN Training ({self.brain.config.total_neurons:,} neurons)")
+        print(f"  STDP: τ={self.brain.config.tau_plus}ms, η={self.brain.config.a_plus}")
+        print(f"  WTA: inhibition={self.brain.config.wta_inhibition}, sparsity={self.brain.config.wta_sparsity}")
         print("=" * 60)
 
         monitor = start_monitoring(interval=1.0)
@@ -548,10 +650,10 @@ class BiologicalAgent:
             if ep % 10 == 0:
                 monitor.print_status()
 
-            print(f"[Ep {ep+1:3d}] Length: {result['length']:3d} | "
+            gen = result.get('generation', 0)
+            print(f"[Ep {ep+1:3d}] Gen:{gen:3d} | Length: {result['length']:3d} | "
                   f"High: {high} | Avg(10): {avg:.0f} | "
-                  f"Food: {result['food_eaten']} | Fear: {result['fear_triggers']} | "
-                  f"Boost: {result['boosts']}")
+                  f"Food: {result['food_eaten']} | Fear: {result['fear_triggers']}")
 
         elapsed = time.time() - start_time
 
