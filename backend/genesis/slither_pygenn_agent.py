@@ -56,11 +56,12 @@ class SlitherPyGeNNConfig:
     """PyGeNN Slither Brain 설정"""
     n_rays: int = 32
 
-    # Sensory (간소화)
-    n_sensory: int = 10000      # 3채널 통합 (food, enemy, body)
-    n_hidden_1: int = 30000     # Hidden layer 1
-    n_hidden_2: int = 30000     # Hidden layer 2
-    n_motor: int = 5000         # Motor (left, right, boost 통합)
+    # Scaled up for RTX 3070 8GB (~6GB target)
+    n_sensory: int = 40000      # 3채널 통합 (food, enemy, body)
+    n_hidden_1: int = 120000    # Hidden layer 1
+    n_hidden_2: int = 120000    # Hidden layer 2
+    n_motor: int = 20000        # Motor (left, right, boost 통합)
+    # Total: 300K neurons (4x scale from 75K)
 
     sparsity: float = 0.01
 
