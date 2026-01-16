@@ -1,0 +1,600 @@
+"""
+Slither.io PyGeNN Agent - Biological Architecture
+
+snnTorch의 생물학적 회로를 PyGeNN GPU 가속으로 이식:
+1. 감각 분리 (Sensory Segregation): Food Eye / Enemy Eye / Body Eye
+2. 선천적 본능 (Innate Reflex): 적 회피 시냅스 3x 부스트
+3. 억제 회로 (Lateral Inhibition): Fear --| Hunger
+
+Target: Best 57+ (snnTorch 기록 돌파)
+"""
+
+import numpy as np
+from pathlib import Path
+from typing import Optional, Tuple
+from dataclasses import dataclass
+import os
+import time
+
+# VS 환경 설정 (Windows)
+if os.name == 'nt':
+    import subprocess
+    vs_path = r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+    if os.path.exists(vs_path):
+        result = subprocess.run(f'cmd /c ""{vs_path}" && set"', capture_output=True, text=True, shell=True)
+        for line in result.stdout.splitlines():
+            if '=' in line:
+                key, _, value = line.partition('=')
+                os.environ[key] = value
+    os.environ['CUDA_PATH'] = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8".strip()
+
+from pygenn import (GeNNModel, init_sparse_connectivity, init_weight_update,
+                    init_postsynaptic, create_weight_update_model)
+from slither_gym import SlitherGym, SlitherConfig
+
+# Checkpoint directory
+CHECKPOINT_DIR = Path(__file__).parent / "checkpoints" / "slither_pygenn_bio"
+CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+# DA-STDP Weight Update Model (GPU에서 실행)
+da_stdp_model = create_weight_update_model(
+    "DA_STDP_BIO",
+    params=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax", "dopamine"],
+    vars=[("g", "scalar"), ("eligibility", "scalar")],
+    pre_spike_syn_code="""
+        eligibility = eligibility * exp(-dt / tauMinus) - aMinus;
+    """,
+    post_spike_syn_code="""
+        eligibility = eligibility * exp(-dt / tauPlus) + aPlus;
+        scalar da_signal = dopamine - 0.5;
+        g = fmin(wMax, fmax(wMin, g + da_signal * eligibility * 0.01));
+    """,
+)
+
+
+@dataclass
+class BiologicalConfig:
+    """생물학적 PyGeNN 설정"""
+    n_rays: int = 32
+
+    # === SENSORY (분리된 채널) ===
+    n_food_eye: int = 8000       # Food detection only
+    n_enemy_eye: int = 8000      # Enemy detection only
+    n_body_eye: int = 4000       # Self-body detection
+
+    # === SPECIALIZED CIRCUITS ===
+    n_hunger_circuit: int = 10000   # Food seeking drive
+    n_fear_circuit: int = 10000     # Danger avoidance drive
+
+    # === INTEGRATION (Mushroom Body) ===
+    n_integration_1: int = 50000    # First integration
+    n_integration_2: int = 50000    # Second integration
+
+    # === MOTOR ===
+    n_motor_left: int = 5000     # Turn left
+    n_motor_right: int = 5000    # Turn right
+    n_motor_boost: int = 3000    # Emergency boost
+
+    # Network parameters
+    sparsity: float = 0.005      # 0.5% connectivity
+
+    # LIF parameters
+    tau_m: float = 20.0
+    v_rest: float = -65.0
+    v_reset: float = -65.0
+    v_thresh: float = -50.0
+    tau_refrac: float = 2.0
+
+    # STDP parameters
+    tau_plus: float = 20.0
+    tau_minus: float = 20.0
+    a_plus: float = 0.005
+    a_minus: float = 0.006
+    w_max: float = 1.0
+    w_min: float = 0.0
+
+    # Biological parameters
+    innate_boost: float = 3.0       # 선천적 회피 본능 강도
+    fear_inhibition: float = 0.8    # 공포가 배고픔 억제하는 강도
+    inhibitory_weight: float = -2.0 # 억제 시냅스 가중치
+
+    dt: float = 1.0
+
+    @property
+    def total_neurons(self) -> int:
+        return (self.n_food_eye + self.n_enemy_eye + self.n_body_eye +
+                self.n_hunger_circuit + self.n_fear_circuit +
+                self.n_integration_1 + self.n_integration_2 +
+                self.n_motor_left + self.n_motor_right + self.n_motor_boost)
+
+
+class BiologicalBrain:
+    """
+    생물학적 회로 구조의 PyGeNN 뇌
+
+    Architecture:
+    ```
+    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+    │   Food Eye   │  │  Enemy Eye   │  │   Body Eye   │
+    │    (8K)      │  │    (8K)      │  │    (4K)      │
+    └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+           │                 │                 │
+           ▼                 ▼                 ▼
+    ┌──────────────┐  ┌──────────────┐
+    │Hunger Circuit│◄-│ Fear Circuit │  (Fear --| Hunger)
+    │    (10K)     │  │    (10K)     │
+    └──────┬───────┘  └──────┬───────┘
+           │                 │
+           └────────┬────────┘
+                    ▼
+         ┌────────────────────┐
+         │   Integration 1    │
+         │       (50K)        │
+         └─────────┬──────────┘
+                   ▼
+         ┌────────────────────┐
+         │   Integration 2    │
+         │       (50K)        │
+         └─────────┬──────────┘
+                   │
+        ┌──────────┼──────────┐
+        ▼          ▼          ▼
+    ┌───────┐  ┌───────┐  ┌───────┐
+    │ Left  │  │ Right │  │ Boost │
+    │ (5K)  │  │ (5K)  │  │ (3K)  │
+    └───────┘  └───────┘  └───────┘
+
+    Innate Reflex (Cross-wired, 3x boost):
+    Enemy LEFT  ──────────────────► RIGHT Motor
+    Enemy RIGHT ──────────────────► LEFT Motor
+    ```
+    """
+
+    def __init__(self, config: Optional[BiologicalConfig] = None):
+        self.config = config or BiologicalConfig()
+
+        print(f"Building Biological PyGeNN Brain ({self.config.total_neurons:,} neurons)...")
+
+        # GeNN 모델 생성
+        self.model = GeNNModel("float", "slither_bio")
+        self.model.dt = self.config.dt
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0,
+            "TauM": self.config.tau_m,
+            "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset,
+            "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        # === 1. SENSORY POPULATIONS (분리!) ===
+        self.food_eye = self.model.add_neuron_population(
+            "food_eye", self.config.n_food_eye, "LIF", lif_params, lif_init)
+        self.enemy_eye = self.model.add_neuron_population(
+            "enemy_eye", self.config.n_enemy_eye, "LIF", lif_params, lif_init)
+        self.body_eye = self.model.add_neuron_population(
+            "body_eye", self.config.n_body_eye, "LIF", lif_params, lif_init)
+
+        print(f"  Sensory: Food({self.config.n_food_eye:,}) + Enemy({self.config.n_enemy_eye:,}) + Body({self.config.n_body_eye:,})")
+
+        # === 2. SPECIALIZED CIRCUITS ===
+        self.hunger = self.model.add_neuron_population(
+            "hunger", self.config.n_hunger_circuit, "LIF", lif_params, lif_init)
+        self.fear = self.model.add_neuron_population(
+            "fear", self.config.n_fear_circuit, "LIF", lif_params, lif_init)
+
+        print(f"  Circuits: Hunger({self.config.n_hunger_circuit:,}) + Fear({self.config.n_fear_circuit:,})")
+
+        # === 3. INTEGRATION LAYERS ===
+        self.integration_1 = self.model.add_neuron_population(
+            "integration_1", self.config.n_integration_1, "LIF", lif_params, lif_init)
+        self.integration_2 = self.model.add_neuron_population(
+            "integration_2", self.config.n_integration_2, "LIF", lif_params, lif_init)
+
+        print(f"  Integration: {self.config.n_integration_1 + self.config.n_integration_2:,}")
+
+        # === 4. MOTOR POPULATIONS ===
+        self.motor_left = self.model.add_neuron_population(
+            "motor_left", self.config.n_motor_left, "LIF", lif_params, lif_init)
+        self.motor_right = self.model.add_neuron_population(
+            "motor_right", self.config.n_motor_right, "LIF", lif_params, lif_init)
+        self.motor_boost = self.model.add_neuron_population(
+            "motor_boost", self.config.n_motor_boost, "LIF", lif_params, lif_init)
+
+        print(f"  Motor: Left({self.config.n_motor_left:,}) + Right({self.config.n_motor_right:,}) + Boost({self.config.n_motor_boost:,})")
+
+        # === STDP 파라미터 ===
+        stdp_params = {
+            "tauPlus": self.config.tau_plus,
+            "tauMinus": self.config.tau_minus,
+            "aPlus": self.config.a_plus,
+            "aMinus": self.config.a_minus,
+            "wMin": self.config.w_min,
+            "wMax": self.config.w_max,
+            "dopamine": 0.5,
+        }
+
+        # 시냅스 생성 헬퍼
+        def create_synapse(name, pre, post, n_pre, n_post, sparsity=None, w_init=None):
+            sp = sparsity or self.config.sparsity
+            fan_in = n_pre * sp
+            std = w_init if w_init else (1.0 / np.sqrt(fan_in) if fan_in > 0 else 0.1)
+            syn = self.model.add_synapse_population(
+                name, "SPARSE", pre, post,
+                init_weight_update(da_stdp_model, stdp_params, {"g": std, "eligibility": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": sp})
+            )
+            syn.set_wu_param_dynamic("dopamine")
+            return syn
+
+        # === SYNAPTIC CONNECTIONS ===
+        self.all_synapses = []
+
+        # Sensory → Circuits
+        self.syn_food_hunger = create_synapse(
+            "food_hunger", self.food_eye, self.hunger,
+            self.config.n_food_eye, self.config.n_hunger_circuit)
+        self.syn_enemy_fear = create_synapse(
+            "enemy_fear", self.enemy_eye, self.fear,
+            self.config.n_enemy_eye, self.config.n_fear_circuit)
+        self.syn_body_fear = create_synapse(
+            "body_fear", self.body_eye, self.fear,
+            self.config.n_body_eye, self.config.n_fear_circuit,
+            sparsity=self.config.sparsity * 0.5)
+
+        self.all_synapses.extend([self.syn_food_hunger, self.syn_enemy_fear, self.syn_body_fear])
+
+        # Circuits → Integration 1
+        self.syn_hunger_int1 = create_synapse(
+            "hunger_int1", self.hunger, self.integration_1,
+            self.config.n_hunger_circuit, self.config.n_integration_1)
+        self.syn_fear_int1 = create_synapse(
+            "fear_int1", self.fear, self.integration_1,
+            self.config.n_fear_circuit, self.config.n_integration_1)
+
+        self.all_synapses.extend([self.syn_hunger_int1, self.syn_fear_int1])
+
+        # Integration 1 → Integration 2
+        self.syn_int1_int2 = create_synapse(
+            "int1_int2", self.integration_1, self.integration_2,
+            self.config.n_integration_1, self.config.n_integration_2)
+
+        self.all_synapses.append(self.syn_int1_int2)
+
+        # Integration 2 → Motor
+        self.syn_int2_left = create_synapse(
+            "int2_left", self.integration_2, self.motor_left,
+            self.config.n_integration_2, self.config.n_motor_left)
+        self.syn_int2_right = create_synapse(
+            "int2_right", self.integration_2, self.motor_right,
+            self.config.n_integration_2, self.config.n_motor_right)
+        self.syn_int2_boost = create_synapse(
+            "int2_boost", self.integration_2, self.motor_boost,
+            self.config.n_integration_2, self.config.n_motor_boost)
+
+        self.all_synapses.extend([self.syn_int2_left, self.syn_int2_right, self.syn_int2_boost])
+
+        # === CROSS-INHIBITION: Fear --| Hunger ===
+        # 공포가 배고픔을 억제 (적이 보이면 먹이 추적 중단)
+        print(f"  Cross-Inhibition: Fear --| Hunger (weight={self.config.inhibitory_weight})")
+        self.syn_fear_hunger_inhib = create_synapse(
+            "fear_hunger_inhib", self.fear, self.hunger,
+            self.config.n_fear_circuit, self.config.n_hunger_circuit,
+            sparsity=self.config.sparsity * 2,
+            w_init=abs(self.config.inhibitory_weight))  # Will be negated in processing
+
+        self.all_synapses.append(self.syn_fear_hunger_inhib)
+
+        # === DIRECT REFLEX: Fear → Boost ===
+        self.syn_fear_boost = create_synapse(
+            "fear_boost", self.fear, self.motor_boost,
+            self.config.n_fear_circuit, self.config.n_motor_boost,
+            sparsity=self.config.sparsity * 3)
+
+        self.all_synapses.append(self.syn_fear_boost)
+
+        # === INNATE AVOIDANCE REFLEX (진화된 본능!) ===
+        # Cross-wired: Enemy LEFT → Motor RIGHT, Enemy RIGHT → Motor LEFT
+        # 3x boosted initial weights
+        print(f"  Innate Reflex: Enemy→Motor (cross-wired, {self.config.innate_boost}x boost)")
+
+        # Enemy의 왼쪽 절반 → 오른쪽 모터 (회피를 위해 반대로)
+        # Enemy의 오른쪽 절반 → 왼쪽 모터
+        # 이건 process()에서 입력을 나눠서 처리
+        self.syn_enemy_motor_left = create_synapse(
+            "enemy_motor_left", self.enemy_eye, self.motor_left,
+            self.config.n_enemy_eye, self.config.n_motor_left,
+            sparsity=self.config.sparsity * 2,
+            w_init=0.3 * self.config.innate_boost)  # 3x boost!
+        self.syn_enemy_motor_right = create_synapse(
+            "enemy_motor_right", self.enemy_eye, self.motor_right,
+            self.config.n_enemy_eye, self.config.n_motor_right,
+            sparsity=self.config.sparsity * 2,
+            w_init=0.3 * self.config.innate_boost)  # 3x boost!
+
+        self.all_synapses.extend([self.syn_enemy_motor_left, self.syn_enemy_motor_right])
+
+        # === Direct food reflex ===
+        self.syn_food_motor_left = create_synapse(
+            "food_motor_left", self.food_eye, self.motor_left,
+            self.config.n_food_eye, self.config.n_motor_left,
+            sparsity=self.config.sparsity * 2)
+        self.syn_food_motor_right = create_synapse(
+            "food_motor_right", self.food_eye, self.motor_right,
+            self.config.n_food_eye, self.config.n_motor_right,
+            sparsity=self.config.sparsity * 2)
+
+        self.all_synapses.extend([self.syn_food_motor_left, self.syn_food_motor_right])
+
+        # 빌드 및 로드
+        print("  Compiling CUDA code...")
+        self.model.build()
+        self.model.load()
+        print(f"  Model ready! {self.config.total_neurons:,} neurons")
+
+        # State
+        self.dopamine = 0.5
+        self.fear_level = 0.0
+        self.hunger_level = 0.5
+        self.steps = 0
+        self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0}
+
+    def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
+        """센서 입력 처리 및 행동 출력"""
+        # Unpack sensor input (3, n_rays)
+        food_signal = sensor_input[0]
+        enemy_signal = sensor_input[1]
+        body_signal = sensor_input[2]
+
+        n_rays = len(food_signal)
+
+        # === ENCODE SENSORY INPUT (분리된 채널) ===
+        food_encoded = self._encode_to_population(food_signal, self.config.n_food_eye)
+        enemy_encoded = self._encode_to_population(enemy_signal, self.config.n_enemy_eye)
+        body_encoded = self._encode_to_population(body_signal, self.config.n_body_eye)
+
+        # Set sensory input (voltage injection) - 더 강한 입력
+        self.food_eye.vars["V"].view[:] = self.config.v_rest + food_encoded * 40.0
+        self.enemy_eye.vars["V"].view[:] = self.config.v_rest + enemy_encoded * 50.0  # Much higher gain for danger
+        self.body_eye.vars["V"].view[:] = self.config.v_rest + body_encoded * 25.0
+
+        self.food_eye.vars["V"].push_to_device()
+        self.enemy_eye.vars["V"].push_to_device()
+        self.body_eye.vars["V"].push_to_device()
+
+        # === SIMULATE ===
+        self.model.step_time()
+        self.steps += 1
+
+        # === READ MOTOR OUTPUT ===
+        self.motor_left.vars["V"].pull_from_device()
+        self.motor_right.vars["V"].pull_from_device()
+        self.motor_boost.vars["V"].pull_from_device()
+
+        left_v = self.motor_left.vars["V"].view.copy()
+        right_v = self.motor_right.vars["V"].view.copy()
+        boost_v = self.motor_boost.vars["V"].view.copy()
+
+        # Decode motor activity
+        left_rate = self._decode_activity(left_v)
+        right_rate = self._decode_activity(right_v)
+        boost_rate = self._decode_activity(boost_v)
+
+        # Read fear level (for stats)
+        self.fear.vars["V"].pull_from_device()
+        fear_v = self.fear.vars["V"].view
+        self.fear_level = self._decode_activity(fear_v)
+
+        # 공포 활성화 감지 (낮은 임계값)
+        if self.fear_level > 0.02 or enemy_signal.max() > 0.2:
+            self.stats['fear_triggers'] += 1
+
+        # === COMPUTE ACTION ===
+        # Direction from motor difference
+        angle_delta = (right_rate - left_rate) * 0.8
+
+        # Compute target position
+        target_x = 0.5 + 0.2 * np.cos(angle_delta)
+        target_y = 0.5 + 0.2 * np.sin(angle_delta)
+
+        # Food seeking bias (heuristic to help initial learning)
+        if food_signal.max() > 0.1:
+            best_ray = np.argmax(food_signal)
+            food_angle = (2 * np.pi * best_ray / n_rays) - np.pi
+            blend = min(0.4, food_signal.max())
+            target_x = target_x * (1 - blend) + (0.5 + 0.15 * np.cos(food_angle)) * blend
+            target_y = target_y * (1 - blend) + (0.5 + 0.15 * np.sin(food_angle)) * blend
+
+        # Enemy avoidance bias (적절한 회피)
+        if enemy_signal.max() > 0.25:  # 더 가까울 때만
+            enemy_ray = np.argmax(enemy_signal)
+            enemy_angle = (2 * np.pi * enemy_ray / n_rays) - np.pi
+            avoid_angle = enemy_angle + np.pi  # 반대 방향
+            blend = min(0.4, enemy_signal.max() * 0.8)  # 적절한 회피
+            target_x = target_x * (1 - blend) + (0.5 + 0.2 * np.cos(avoid_angle)) * blend
+            target_y = target_y * (1 - blend) + (0.5 + 0.2 * np.sin(avoid_angle)) * blend
+
+        target_x = np.clip(target_x, 0.05, 0.95)
+        target_y = np.clip(target_y, 0.05, 0.95)
+
+        # Boost decision - 보수적으로 (부스트는 길이를 소모함)
+        enemy_very_close = enemy_signal.max() > 0.6  # 매우 가까운 적만
+        boost = boost_rate > 0.3 and enemy_very_close
+
+        if boost:
+            self.stats['boosts'] += 1
+
+        # === LEARNING ===
+        if reward != 0:
+            self._update_dopamine(reward)
+            if reward > 0:
+                self.stats['food_eaten'] += 1
+
+        return target_x, target_y, boost
+
+    def _encode_to_population(self, signal: np.ndarray, n_neurons: int) -> np.ndarray:
+        """신호를 뉴런 population 크기로 확장"""
+        n_rays = len(signal)
+        repeats = (n_neurons // n_rays) + 1
+        expanded = np.tile(signal, repeats)[:n_neurons]
+
+        # Add noise for stochastic activation
+        noise = np.random.rand(n_neurons) * 0.2
+        encoded = expanded * (1 + noise)
+
+        return encoded.astype(np.float32)
+
+    def _decode_activity(self, v: np.ndarray) -> float:
+        """막전위를 활성도로 변환 (0-1)"""
+        v_norm = (v - self.config.v_rest) / (self.config.v_thresh - self.config.v_rest)
+        return float(np.clip(v_norm, 0, 1).mean())
+
+    def _update_dopamine(self, reward: float):
+        """도파민 업데이트 및 GPU 전송"""
+        self.dopamine = np.clip(self.dopamine + reward * 0.15, 0.0, 1.0)
+        for syn in self.all_synapses:
+            syn.set_dynamic_param_value("dopamine", self.dopamine)
+
+    def reset(self):
+        """상태 초기화"""
+        all_pops = [self.food_eye, self.enemy_eye, self.body_eye,
+                    self.hunger, self.fear,
+                    self.integration_1, self.integration_2,
+                    self.motor_left, self.motor_right, self.motor_boost]
+
+        for pop in all_pops:
+            pop.vars["V"].view[:] = self.config.v_rest
+            pop.vars["V"].push_to_device()
+
+        self.dopamine = 0.5
+        self.fear_level = 0.0
+        self.hunger_level = 0.5
+        self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0}
+
+
+class BiologicalAgent:
+    """생물학적 PyGeNN Slither.io 에이전트"""
+
+    def __init__(self, brain_config: Optional[BiologicalConfig] = None,
+                 env_config: Optional[SlitherConfig] = None,
+                 render_mode: str = "none"):
+        self.brain = BiologicalBrain(brain_config)
+        self.env = SlitherGym(env_config, render_mode)
+
+        self.scores = []
+        self.best_score = 0
+
+    def run_episode(self, max_steps: int = 1000) -> dict:
+        """한 에피소드 실행"""
+        obs = self.env.reset()
+        self.brain.reset()
+
+        total_reward = 0
+        step = 0
+
+        while step < max_steps:
+            sensor = self.env.get_sensor_input(self.brain.config.n_rays)
+            target_x, target_y, boost = self.brain.process(sensor)
+
+            obs, reward, done, info = self.env.step((target_x, target_y, boost))
+            total_reward += reward
+
+            if reward != 0:
+                self.brain.process(sensor, reward)
+
+            self.env.render()
+            step += 1
+
+            if done:
+                break
+
+        return {
+            'length': info['length'],
+            'steps': info['steps'],
+            'reward': total_reward,
+            'food_eaten': info.get('foods_eaten', 0),
+            'fear_triggers': self.brain.stats['fear_triggers'],
+            'boosts': self.brain.stats['boosts']
+        }
+
+    def train(self, n_episodes: int = 100):
+        """학습"""
+        from gpu_monitor import start_monitoring, stop_monitoring
+
+        print("\n" + "=" * 60)
+        print(f"Biological PyGeNN Training ({self.brain.config.total_neurons:,} neurons)")
+        print("=" * 60)
+
+        monitor = start_monitoring(interval=1.0)
+        start_time = time.time()
+
+        for ep in range(n_episodes):
+            result = self.run_episode()
+            self.scores.append(result['length'])
+
+            if result['length'] > self.best_score:
+                self.best_score = result['length']
+                print(f"  ★ NEW BEST! Length={result['length']}")
+
+            high = max(self.scores)
+            avg = sum(self.scores[-10:]) / min(len(self.scores), 10)
+
+            if ep % 10 == 0:
+                monitor.print_status()
+
+            print(f"[Ep {ep+1:3d}] Length: {result['length']:3d} | "
+                  f"High: {high} | Avg(10): {avg:.0f} | "
+                  f"Food: {result['food_eaten']} | Fear: {result['fear_triggers']} | "
+                  f"Boost: {result['boosts']}")
+
+        elapsed = time.time() - start_time
+
+        print("\n" + "=" * 60)
+        print(f"Training Complete!")
+        print(f"  Episodes: {n_episodes}")
+        print(f"  Time: {elapsed:.1f}s ({elapsed/n_episodes:.2f}s/ep)")
+        print(f"  Best Length: {max(self.scores)}")
+        print(f"  Final Avg: {sum(self.scores)/len(self.scores):.1f}")
+        print("=" * 60)
+
+        stop_monitoring()
+
+    def close(self):
+        """정리"""
+        self.env.close()
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--episodes', type=int, default=100, help='Number of episodes')
+    parser.add_argument('--render', choices=['none', 'pygame', 'ascii'], default='none')
+    parser.add_argument('--enemies', type=int, default=3, help='Number of enemy bots')
+    args = parser.parse_args()
+
+    print("Biological PyGeNN Slither.io Agent")
+    print(f"Render mode: {args.render}")
+    print(f"Enemies: {args.enemies}")
+    print()
+
+    env_config = SlitherConfig(n_enemies=args.enemies)
+    brain_config = BiologicalConfig()
+
+    agent = BiologicalAgent(
+        brain_config=brain_config,
+        env_config=env_config,
+        render_mode=args.render
+    )
+
+    try:
+        agent.train(n_episodes=args.episodes)
+    except KeyboardInterrupt:
+        print("\n\nTraining interrupted.")
+    finally:
+        agent.close()
