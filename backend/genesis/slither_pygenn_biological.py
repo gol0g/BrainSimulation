@@ -29,7 +29,7 @@ if os.name == 'nt':
     os.environ['CUDA_PATH'] = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8".strip()
 
 from pygenn import (GeNNModel, init_sparse_connectivity, init_weight_update,
-                    init_postsynaptic, create_weight_update_model)
+                    init_postsynaptic, create_weight_update_model, create_neuron_model)
 from slither_gym import SlitherGym, SlitherConfig
 
 # Checkpoint directory
@@ -50,6 +50,33 @@ da_stdp_model = create_weight_update_model(
         scalar da_signal = dopamine - 0.5;
         g = fmin(wMax, fmax(wMin, g + da_signal * eligibility * 0.01));
     """,
+)
+
+# === Adaptive LIF Model (Motor neurons only) ===
+# 승자 독식 방지: 많이 발화할수록 임계값 상승 → 피로 → 다른 뉴런에게 기회
+adaptive_lif_model = create_neuron_model(
+    "AdaptiveLIF",
+    params=["C", "TauM", "Vrest", "Vreset", "VthreshBase", "TauAdapt", "Beta", "Ioffset", "TauRefrac"],
+    vars=[("V", "scalar"), ("Vthresh", "scalar"), ("RefracTime", "scalar")],
+    sim_code="""
+        // Refractory period check
+        if (RefracTime > 0.0) {
+            RefracTime -= dt;
+        } else {
+            // Threshold adaptation decay (towards baseline)
+            Vthresh += (VthreshBase - Vthresh) * (dt / TauAdapt);
+            // Standard LIF dynamics
+            V += (-(V - Vrest) + Ioffset) * (dt / TauM);
+        }
+    """,
+    threshold_condition_code="""
+        RefracTime <= 0.0 && V >= Vthresh
+    """,
+    reset_code="""
+        V = Vreset;
+        Vthresh += Beta;  // Threshold increases on spike (fatigue)
+        RefracTime = TauRefrac;
+    """
 )
 
 
@@ -102,6 +129,12 @@ class BiologicalConfig:
     # === WTA (Winner-Take-All) 측면 억제 ===
     wta_inhibition: float = -3.0    # WTA 억제 강도 (강할수록 승자 독식)
     wta_sparsity: float = 0.02      # WTA 연결 희소성
+
+    # === Adaptive Threshold (Motor neurons only) ===
+    # "고인 물은 썩는다" - 승자도 지쳐야 교대가 일어남
+    # NOTE: WTA와 함께 사용 시 역효과 발생 - 비활성화
+    tau_adaptation: float = 2000.0  # 피로 회복 시간상수 (ms) - 2초
+    beta_adaptation: float = 0.0    # 0 = 비활성화 (WTA only mode)
 
     dt: float = 1.0
 
@@ -202,7 +235,8 @@ class BiologicalBrain:
 
         print(f"  Integration: {self.config.n_integration_1 + self.config.n_integration_2:,}")
 
-        # === 4. MOTOR POPULATIONS ===
+        # === 4. MOTOR POPULATIONS (Standard LIF + WTA) ===
+        # Adaptive Threshold 실험 결과: 역효과 확인됨 → Standard LIF 사용
         self.motor_left = self.model.add_neuron_population(
             "motor_left", self.config.n_motor_left, "LIF", lif_params, lif_init)
         self.motor_right = self.model.add_neuron_population(
