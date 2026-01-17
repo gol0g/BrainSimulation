@@ -58,10 +58,13 @@ class SlitherBrainConfig:
     lif_beta: float = 0.9
     lif_threshold: float = 1.0
 
-    # Learning
-    stdp_tau: float = 500.0
-    a_plus: float = 0.005   # Smaller for larger network
-    a_minus: float = 0.006
+    # Learning (R-STDP with Long Eligibility Trace)
+    # 핵심 변경: τ=500ms → τ=3000ms (3초 전 행동도 기억)
+    # 이유: 먹이를 먹기 3초 전의 "우회전"에도 보상 크레딧이 할당됨
+    # exp(-3000/3000) ≈ 0.37 → 3초 전 행동도 37% 보상
+    stdp_tau: float = 3000.0  # 3초 eligibility trace (핵심!)
+    a_plus: float = 0.005     # LTP 강도
+    a_minus: float = 0.006    # LTD 강도
 
     # Inhibition
     fear_inhibition: float = 0.9  # Strong inhibition when enemy near
