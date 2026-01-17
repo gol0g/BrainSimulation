@@ -113,11 +113,12 @@ class BiologicalConfig:
     v_thresh: float = -50.0
     tau_refrac: float = 2.0
 
-    # STDP parameters (원래 값 복원)
-    tau_plus: float = 20.0
-    tau_minus: float = 20.0
-    a_plus: float = 0.005
-    a_minus: float = 0.006
+    # STDP parameters (최적값 - 실험으로 검증됨)
+    # Slow Learning (τ=10, η=0.001) 실험: Best 20 → 역효과 확인
+    tau_plus: float = 20.0    # 20ms 윈도우가 최적
+    tau_minus: float = 20.0   # 대칭
+    a_plus: float = 0.005     # 이 학습률이 WTA와 최적 조합
+    a_minus: float = 0.006    # LTD 약간 강하게 (안정성)
     w_max: float = 1.0
     w_min: float = 0.0
 
