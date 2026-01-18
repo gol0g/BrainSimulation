@@ -769,6 +769,35 @@ class BiologicalBrain:
         self.hunger_level = 0.5
         self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
 
+    def save_weights(self, path: Path):
+        """시냅스 가중치 저장"""
+        weights = {}
+        for syn in self.all_synapses:
+            syn.vars["g"].pull_from_device()
+            # Sparse connectivity uses .values, not .view
+            weights[syn.name] = np.array(syn.vars["g"].values)
+
+        np.savez(path, **weights)
+        print(f"  Saved weights: {path}")
+
+    def load_weights(self, path: Path) -> bool:
+        """시냅스 가중치 로드"""
+        if not path.exists():
+            print(f"  No checkpoint: {path}")
+            return False
+
+        try:
+            data = np.load(path)
+            for syn in self.all_synapses:
+                if syn.name in data:
+                    syn.vars["g"].values[:] = data[syn.name]
+                    syn.vars["g"].push_to_device()
+            print(f"  Loaded weights: {path}")
+            return True
+        except Exception as e:
+            print(f"  Load failed: {e}")
+            return False
+
 
 class BiologicalAgent:
     """생물학적 PyGeNN Slither.io 에이전트"""
@@ -781,6 +810,16 @@ class BiologicalAgent:
 
         self.scores = []
         self.best_score = 0
+
+    def save_model(self, name: str):
+        """모델 저장"""
+        path = CHECKPOINT_DIR / f"{name}.npz"
+        self.brain.save_weights(path)
+
+    def load_model(self, name: str) -> bool:
+        """모델 로드"""
+        path = CHECKPOINT_DIR / f"{name}.npz"
+        return self.brain.load_weights(path)
 
     def run_episode(self, max_steps: int = 1000) -> dict:
         """한 에피소드 실행 (윤회 시스템 적용)"""
@@ -819,9 +858,21 @@ class BiologicalAgent:
             'generation': self.brain.generation
         }
 
-    def train(self, n_episodes: int = 100):
+    def train(self, n_episodes: int = 100, resume: bool = False):
         """학습"""
         from gpu_monitor import start_monitoring, stop_monitoring
+
+        # Resume from checkpoint
+        if resume:
+            if self.load_model("best"):
+                print("  ★ Resumed from best checkpoint")
+                # Try to get previous best from filename
+                import glob
+                checkpoints = glob.glob(str(CHECKPOINT_DIR / "best_*.npz"))
+                if checkpoints:
+                    scores = [int(p.split('_')[-1].replace('.npz', '')) for p in checkpoints]
+                    self.best_score = max(scores)
+                    print(f"  Previous Best: {self.best_score}")
 
         print("\n" + "=" * 60)
         print(f"Biological PyGeNN Training ({self.brain.config.total_neurons:,} neurons)")
@@ -839,6 +890,9 @@ class BiologicalAgent:
             if result['length'] > self.best_score:
                 self.best_score = result['length']
                 print(f"  ★ NEW BEST! Length={result['length']}")
+                # Save best model
+                self.save_model("best")
+                self.save_model(f"best_{result['length']}")
 
             high = max(self.scores)
             avg = sum(self.scores[-10:]) / min(len(self.scores), 10)
@@ -853,12 +907,16 @@ class BiologicalAgent:
 
         elapsed = time.time() - start_time
 
+        # Save final model
+        self.save_model("final")
+
         print("\n" + "=" * 60)
         print(f"Training Complete!")
         print(f"  Episodes: {n_episodes}")
         print(f"  Time: {elapsed:.1f}s ({elapsed/n_episodes:.2f}s/ep)")
         print(f"  Best Length: {max(self.scores)}")
         print(f"  Final Avg: {sum(self.scores)/len(self.scores):.1f}")
+        print(f"  Saved to: {CHECKPOINT_DIR}")
         print("=" * 60)
 
         stop_monitoring()
@@ -874,6 +932,7 @@ if __name__ == "__main__":
     parser.add_argument('--episodes', type=int, default=100, help='Number of episodes')
     parser.add_argument('--render', choices=['none', 'pygame', 'ascii'], default='none')
     parser.add_argument('--enemies', type=int, default=3, help='Number of enemy bots')
+    parser.add_argument('--resume', action='store_true', help='Resume from best checkpoint')
     parser.add_argument('--lite', action='store_true', help='Use lite config (50K neurons) - GPU safe')
     parser.add_argument('--dev', action='store_true', help='Use dev config (15K neurons) - debugging')
     args = parser.parse_args()
@@ -904,8 +963,9 @@ if __name__ == "__main__":
     )
 
     try:
-        agent.train(n_episodes=args.episodes)
+        agent.train(n_episodes=args.episodes, resume=args.resume)
     except KeyboardInterrupt:
         print("\n\nTraining interrupted.")
+        agent.save_model("interrupted")
     finally:
         agent.close()
