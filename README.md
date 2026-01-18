@@ -57,25 +57,29 @@
 
 ## 빠른 시작
 
-### 환경 설정
+### 요구사항
 
-```powershell
-# PyGeNN 환경 (Windows)
-C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe
+```bash
+# PyGeNN (GPU 가속)
+pip install pygenn
+
+# snnTorch (CPU/GPU)
+pip install torch snntorch numpy
+
+# 시각화
+pip install pygame
 ```
 
 ### Slither.io 실행
 
-```powershell
-# 훈련 (headless, 300 에피소드)
-& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
-    'backend\genesis\slither_pygenn_biological.py' `
-    --episodes 300 --enemies 7 --render none
+```bash
+cd backend/genesis
+
+# 훈련 (headless)
+python slither_pygenn_biological.py --episodes 300 --enemies 7 --render none
 
 # 시각화 모드
-& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
-    'backend\genesis\slither_pygenn_biological.py' `
-    --episodes 10 --enemies 7 --render pygame
+python slither_pygenn_biological.py --episodes 10 --enemies 7 --render pygame
 ```
 
 ### Chrome Dino (졸업)
