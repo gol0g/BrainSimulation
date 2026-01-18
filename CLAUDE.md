@@ -2,6 +2,84 @@
 
 ---
 
+## 환경 설정 (CRITICAL - 반드시 읽을 것)
+
+```bash
+# PyGeNN 환경 (GPU SNN 실행용) - 시스템 Python이 아님!
+C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe
+
+# 실행 예시 (PowerShell)
+& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
+    'C:\Users\JungHyun\Desktop\brain\BrainSimulation\backend\genesis\slither_pygenn_biological.py' `
+    --episodes 300 --enemies 7 --render none
+```
+
+**주의**: `conda activate` 아님! 독립 venv 환경.
+
+---
+
+## 현재 상태: PyGeNN Slither.io (158K neurons)
+
+### 최신 결과 (2025-01-19)
+
+```
+============================================================
+Training Results (300 Episodes, 7 Enemies)
+============================================================
+  Best Length: 16
+  Final Avg:   7.1
+  Time:        1406.6s (4.69s/ep)
+
+  GPU Status:
+    Util: 65.6% avg (compute-bound, not memory-bound)
+    Temp: 55.2°C avg, 58°C max (안정)
+    Memory: 2.2GB / 8GB (27% 사용)
+============================================================
+```
+
+### 핵심 수정사항 (이번 세션)
+
+**1. Attack Circuit 버그 수정** - `addToPost(g)` 누락
+```python
+# slither_pygenn_biological.py:57-60
+# BEFORE: 시냅스 전류가 전달 안됨 (Attack triggers = 0)
+pre_spike_syn_code="""
+    stdp_trace -= aMinus;  # ← addToPost(g) 없음!
+""",
+
+# AFTER: 전류 전달 추가 (Attack triggers = 0~517)
+pre_spike_syn_code="""
+    addToPost(g);          # ← 핵심 수정!
+    stdp_trace -= aMinus;
+""",
+```
+
+**2. Enemy→Attack 시냅스 강화**
+```python
+# sparsity 4배: 0.5% → 2%
+# weight 2.5배: 1.0 → 2.5
+self.syn_enemy_attack = create_synapse(
+    "enemy_attack", self.enemy_eye, self.attack,
+    sparsity=self.config.sparsity * 4,  # 2% 연결
+    w_init=2.5)  # 공격이 공포보다 강하게
+```
+
+### 진화 경로
+
+| 단계 | 환경 | 뉴런 | 성과 |
+|------|------|------|------|
+| 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
+| 2단계 | Slither.io snnTorch | 15,800 | High: 57 (적 3마리) |
+| **3단계** | **Slither.io PyGeNN** | **158,000** | **High: 16 (적 7마리)** |
+
+### 다음 단계
+
+1. **추가 훈련**: 500+ 에피소드로 R-STDP 학습 안정화
+2. **Attack 회로 튜닝**: Fear↔Attack 균형 조절
+3. **시각화 분석**: `--render pygame`으로 행동 패턴 관찰
+
+---
+
 ## 절대 원칙 (NEVER FORGET)
 
 ```
@@ -29,81 +107,17 @@
 | 메커니즘 | 생물학적 근거 |
 |----------|--------------|
 | STDP (Spike-Timing Dependent Plasticity) | 실제 시냅스 가소성 |
-| DA-STDP (Dopamine-modulated STDP) | 3-factor learning rule |
+| R-STDP (Reward-modulated STDP) | 3-factor learning rule + eligibility trace |
 | 도파민 시스템 (VTA/SNc) | Novelty → 도파민 → 학습/탐색 조절 |
 | 습관화 (Habituation) | 반복 자극에 반응 감소 |
 | LIF 뉴런 (Leaky Integrate-and-Fire) | 실제 뉴런 모델 |
 | 항상성 가소성 (Homeostatic Plasticity) | 뉴런 활성화 안정화 |
 | Dale's Law (흥분/억제 분리) | 실제 뉴런 특성 |
-| 억제 시냅스 (Inhibitory Synapses) | 뉴런 간 억제 연결 |
-
-### 자기 점검 질문
-
-새로운 기능을 추가하기 전에 반드시 확인:
-
-1. "인간 아기도 이렇게 배우는가?"
-2. "이건 학습인가, 아니면 그냥 데이터 저장인가?"
-3. "뇌가 진짜 '이해'하는가, 아니면 패턴만 저장하는가?"
-4. "이 능력이 경험에서 창발하는가, 아니면 내가 주입하는가?"
+| WTA (Winner-Take-All) | 측면 억제를 통한 경쟁 |
 
 ---
 
-## 현재 상태: Slither.io (15,800 neurons)
-
-### 진화 경로
-
-| 단계 | 환경 | 뉴런 | 성과 |
-|------|------|------|------|
-| 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
-| 2단계 | Slither.io Phase 1 | 15,800 | High: 64 (청소부) |
-| **현재** | **Slither.io Phase 2** | **15,800** | **High: 57 (적 3마리)** |
-
-### Phase 2 결과 (적 추가 + 진화된 본능)
-
-```
-Evolved + Curriculum Training:
-  Best: 57
-  Total Kills: 107
-  Innate avoidance reflex enabled
-```
-
-**핵심 구현사항**:
-
-1. **진화된 본능 (Innate Reflex as Synaptic Weights)**
-   - 적 회피 반사를 **시냅스 가중치**로 구현 (if문 아님)
-   - 교차 배선: Enemy LEFT → RIGHT motor (적 반대로 회전)
-   - 초기 가중치 3배 부스트 (innate_boost = 3.0)
-   - DA-STDP로 여전히 학습 가능 (경험으로 조절됨)
-
-   ```python
-   # 진화된 본능 = 강한 초기 시냅스 가중치
-   self.syn_enemy_motor_left.weights *= innate_boost  # 3x stronger
-   self.syn_enemy_motor_right.weights *= innate_boost
-   ```
-
-2. **Slither.io 규칙 구현**
-   - 적 머리가 내 몸에 부딪히면 → 적 사망 + 먹이화
-   - 적 AI: 400px 내 플레이어 추적
-
-3. **GPU 최적화** (RTX 3070 8GB)
-   - 벡터화된 인코딩: Python for-loop → torch.repeat_interleave
-   - Lazy sparse rebuild: 학습 시 매번 재구성 → 필요할 때만
-   - 캐시된 transpose: float32 변환 캐싱
-   - **성능: 36 → 44.6 steps/sec (+24%)**
-
-### 철학적 원칙: 진화된 본능 vs 하드코딩
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  "빈 서판(Blank Slate)은 죽음이다"                              │
-│  - 갓 태어난 동물도 생존 본능이 있음                            │
-│  - 본능 = 진화가 시냅스 가중치에 새겨놓은 것                    │
-│  - if문으로 행동 조작 ≠ 본능 (그건 로봇)                        │
-│  - 시냅스 가중치 초기화 = 본능 (여전히 학습 가능)               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Slither.io 아키텍처 (153K neurons)
+## PyGeNN 아키텍처 (158K neurons)
 
 ```
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
@@ -112,106 +126,61 @@ Evolved + Curriculum Training:
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │
        ▼                 ▼                 ▼
-┌──────────────┐  ┌──────────────┐
-│Hunger Circuit│  │ Fear Circuit │
-│    (10K)     │  │    (10K)     │
-└──────┬───────┘  └──────┬───────┘
-       │                 │
-       └────────┬────────┘
-                ▼
-     ┌────────────────────┐
-     │   Integration 1    │
-     │       (50K)        │
-     └─────────┬──────────┘
-               ▼
-     ┌────────────────────┐
-     │   Integration 2    │
-     │       (50K)        │
-     └─────────┬──────────┘
-               │
-    ┌──────────┼──────────┐
-    ▼          ▼          ▼
-┌───────┐  ┌───────┐  ┌───────┐
-│ Left  │  │ Right │  │ Boost │
-│ (5K)  │  │ (5K)  │  │ (3K)  │
-└───────┘  └───────┘  └───────┘
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│Hunger Circuit│  │ Fear Circuit │  │Attack Circuit│
+│    (10K)     │  │    (10K)     │  │    (5K)      │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │
+       │    Fear --| Hunger (억제)         │
+       │    Fear <-> Attack (상호 억제)    │
+       └────────────┬──────────────────────┘
+                    ▼
+         ┌────────────────────┐
+         │   Integration 1    │
+         │       (50K)        │
+         └─────────┬──────────┘
+                   ▼
+         ┌────────────────────┐
+         │   Integration 2    │
+         │       (50K)        │
+         └─────────┬──────────┘
+                   │
+        ┌──────────┼──────────┐
+        ▼          ▼          ▼
+   ┌───────┐  ┌───────┐  ┌───────┐
+   │ Left  │  │ Right │  │ Boost │
+   │ (5K)  │  │ (5K)  │  │ (3K)  │
+   └───────┘  └───────┘  └───────┘
+        ↑          ↑          ↑
+        └── WTA 측면억제 ──────┘
 ```
 
-**핵심 메커니즘**:
-- **3채널 시각**: Food Eye (attract), Enemy Eye (avoid), Body Eye (self)
-- **공포 회로**: 적 감지 시 Hunger 억제 (Fear --| Hunger)
-- **직접 반사**: Fear → Boost (위기 탈출)
-- **Ray-cast 센서**: 32방향 레이로 주변 감지
-
----
-
-## Chrome Dino 졸업 (3,600 neurons)
-
-### 핵심 아키텍처: snnTorch 기반 Scalable SNN
+### R-STDP (Reward-Modulated STDP)
 
 ```python
-# SparseLIFLayer: Leaky Integrate-and-Fire 뉴런 (snnTorch)
-class SparseLIFLayer:
-    beta: float = 0.9          # 막전위 감쇠율
-    threshold: float = 1.0     # 스파이크 임계값
+# 2-Trace System:
+# 1. stdp_trace (τ=20ms): spike timing 감지 (LTP/LTD 결정)
+# 2. eligibility (τ=3000ms): 3초 전 행동도 기억
 
-# SparseSynapses: 1% 희소 연결
-class SparseSynapses:
-    sparsity: float = 0.01     # 연결 비율
-    weights: Tensor            # 희소 가중치 행렬
-    eligibility: Tensor        # STDP eligibility trace
+# 동작 원리:
+Pre-spike  → stdp_trace -= aMinus (LTD 준비)
+Post-spike → stdp_trace += aPlus  (LTP)
+매 스텝   → eligibility += stdp_trace (누적)
+           → 둘 다 감쇠
+보상 시   → g += η * dopamine * eligibility (가중치 업데이트)
 ```
 
-### Chrome Dino 에이전트 결과
-
-| 에이전트 | High Score | Avg Score | 특징 |
-|---------|------------|-----------|------|
-| 단일 채널 (JS API) | 644 | 423.8 | 기본 점프 타이밍 학습 |
-| **이중 채널 (Dual-Channel)** | **725** | **367.9** | 새(Bird) 회피 성공 |
-
-### Dual-Channel Vision 아키텍처
-
-```
-┌─────────────┐                    ┌─────────────┐
-│  Ground Eye │                    │   Sky Eye   │
-│  (Cacti)    │                    │  (Birds)    │
-│   500 LIF   │                    │   500 LIF   │
-└──────┬──────┘                    └──────┬──────┘
-       │                                  │
-       ▼                                  ▼
-┌──────────────┐                   ┌──────────────┐
-│ Ground Hidden│                   │  Sky Hidden  │
-│   1000 LIF   │                   │   1000 LIF   │
-└──────┬───────┘                   └──────┬───────┘
-       │                                  │
-       ▼                                  ▼
-┌──────────────┐    INHIBIT        ┌──────────────┐
-│  Jump Motor  │◄──────────────────│  Duck Motor  │
-│    300 LIF   │   (strength=0.8)  │    300 LIF   │
-└──────────────┘                   └──────────────┘
-
-Total: 3,600 neurons
-```
-
-**핵심 메커니즘**:
-- **채널 분리**: Ground Eye는 cacti만, Sky Eye는 birds만 처리
-- **억제 시냅스**: Sky Eye가 새 감지 시 Jump Motor 억제 → 점프 방지
-- **격리된 경로**: 채널 간 간섭(cross-talk) 방지로 안정적 학습
-
-### DA-STDP 학습
+### Fight-or-Flight 회로
 
 ```python
-# 3-factor learning rule
-def _learn(self):
-    # 1. Eligibility trace 업데이트 (pre-post spike timing)
-    self.syn.update_eligibility(pre_spikes, post_spikes, tau=500.0)
+# Fear ↔ Attack 상호 억제 (편도체 모델)
+# Fear가 강하면 → Attack 억제 → 도망
+# Attack이 강하면 → Fear 억제 → 공격
 
-    # 2. 도파민 조절 시냅스 가소성
-    self.syn.apply_dopamine(
-        dopamine=self.dopamine,
-        a_plus=0.01,   # LTP 강도
-        a_minus=0.012  # LTD 강도
-    )
+self.syn_fear_attack = create_synapse(
+    w_init=-0.3)   # Fear → Attack 억제
+self.syn_attack_fear = create_synapse(
+    w_init=-0.7)   # Attack → Fear 억제 (공격 편향)
 ```
 
 ---
@@ -221,22 +190,22 @@ def _learn(self):
 ```
 backend/
 ├── genesis/
-│   ├── # Core SNN
-│   ├── snn_scalable.py           # SparseLIFLayer, SparseSynapses (snnTorch)
-│   ├── snn_brain.py              # BiologicalBrain (original)
-│   ├── snn_brain_biological.py   # STDP 기반 생물학적 뇌
+│   ├── # PyGeNN (Current - GPU)
+│   ├── slither_pygenn_biological.py  # 158K neuron PyGeNN 에이전트 ★
+│   ├── gpu_monitor.py                # GPU 온도/메모리 모니터링
 │   │
-│   ├── # Slither.io (Current)
-│   ├── slither_gym.py            # Python 훈련 환경
-│   ├── slither_snn_agent.py      # 153K neuron 에이전트
+│   ├── # snnTorch (Previous - CPU/GPU)
+│   ├── slither_snn_agent.py          # 15.8K neuron snnTorch 에이전트
+│   ├── slither_gym.py                # Python 훈련 환경
+│   ├── snn_scalable.py               # SparseLIFLayer, SparseSynapses
 │   │
 │   ├── # Chrome Dino (Graduated)
-│   ├── dino_dual_channel_agent.py # 이중 채널 + 억제 회로 (725점)
-│   ├── dino_snn_js_agent.py      # JS API + SNN (644점)
+│   ├── dino_dual_channel_agent.py    # 이중 채널 + 억제 회로 (725점)
 │   │
-│   └── checkpoints/              # 저장된 모델들
+│   └── checkpoints/
+│       ├── slither_pygenn_bio/       # PyGeNN 체크포인트
+│       └── slither_snn/              # snnTorch 체크포인트
 │
-├── Dockerfile
 └── requirements.txt
 ```
 
@@ -244,37 +213,58 @@ backend/
 
 ## 실행 방법
 
-### Slither.io (현재 진행중)
+### PyGeNN Slither.io (현재 진행중)
 
-```bash
-cd backend/genesis
+```powershell
+# 훈련 (headless)
+& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
+    'C:\Users\JungHyun\Desktop\brain\BrainSimulation\backend\genesis\slither_pygenn_biological.py' `
+    --episodes 300 --enemies 7 --render none
 
-# Phase 1: 청소부 (먹이만, 적 없음)
-python slither_snn_agent.py --render pygame
+# 시각화 모드
+& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
+    'C:\Users\JungHyun\Desktop\brain\BrainSimulation\backend\genesis\slither_pygenn_biological.py' `
+    --episodes 10 --enemies 7 --render pygame
 
-# Phase 2: 겁쟁이 (적 추가)
-python slither_snn_agent.py --enemies 3 --render pygame
+# 경량 모드 (50K neurons)
+... --mode lite
 
-# 이어서 훈련
-python slither_snn_agent.py --resume
+# 개발 모드 (15K neurons)
+... --mode dev
 ```
 
-### Chrome Dino (졸업)
+### snnTorch Slither.io (이전 버전)
 
 ```bash
 cd backend/genesis
-python dino_dual_channel_agent.py --eval  # 저장된 모델 평가
+python slither_snn_agent.py --enemies 3 --render pygame
 ```
 
 ---
 
-## 핵심 발견
+## 핵심 발견 & 교훈
 
-1. **JS API vs 픽셀**: 게임 상태 직접 접근이 스크린샷보다 ~20x 빠름
-2. **점프 타이밍**: gap=100px에서 점프 시 최적 (장애물 통과 지점에서 최고점)
-3. **이중 채널 효과**: 새(Bird) 회피 문제 해결로 "600점 벽" 돌파
-4. **억제 회로**: 생물학적 억제 시냅스로 행동 충돌 해결
-5. **채널 격리**: 분리된 Hidden layer가 cross-talk 방지의 핵심
+### 이번 세션 교훈
+
+1. **addToPost(g) 필수**: GeNN에서 시냅스 전류 전달은 자동이 아님
+2. **GPU 메모리 vs 연산**: SNN은 compute-bound (메모리 27%인데 GPU 65%)
+3. **환경 정보 기록**: pygenn_env 경로 등 환경 설정 반드시 문서화
+
+### 생물학적 원칙
+
+1. **빈 서판은 죽음**: 선천적 본능 = 시냅스 초기 가중치 (if문 아님)
+2. **Fight-or-Flight**: Fear↔Attack 상호 억제로 행동 선택
+3. **3-Factor Learning**: pre + post + reward (도파민)
+
+### 디버깅 팁
+
+```python
+# Fear/Attack 스파이크 확인
+print(f"Fear: {fear_spikes:.3f}({self.fear.vars['nSpk'].view[0]})")
+print(f"Attack: {attack_spikes:.3f}({self.attack.vars['nSpk'].view[0]})")
+
+# Attack triggers = 0이면 → addToPost(g) 확인!
+```
 
 ---
 

@@ -19,15 +19,41 @@ class GPUStats:
     power_draw: float  # W
     power_cap: float  # W
 
+    @property
+    def memory_percent(self) -> float:
+        return 100 * self.memory_used / self.memory_total if self.memory_total > 0 else 0
+
+    @property
+    def power_percent(self) -> float:
+        return 100 * self.power_draw / self.power_cap if self.power_cap > 0 else 0
+
+
+@dataclass
+class SafetyLimits:
+    """GPU 안전 한계 (크래시 방지)"""
+    temp_warn: float = 80.0      # 경고 온도 (C)
+    temp_critical: float = 87.0  # 위험 온도 (C) - 스로틀링 직전
+    memory_warn: float = 85.0    # 메모리 경고 (%)
+    memory_critical: float = 95.0  # 메모리 위험 (%)
+    power_warn: float = 90.0     # 파워 경고 (% of cap)
+
 
 class GPUMonitor:
-    """실시간 GPU 모니터링"""
+    """실시간 GPU 모니터링 with 안전 한계"""
 
-    def __init__(self, interval: float = 0.5, history_size: int = 100):
+    def __init__(self, interval: float = 0.5, history_size: int = 100,
+                 limits: Optional[SafetyLimits] = None,
+                 on_warning: Optional[callable] = None,
+                 on_critical: Optional[callable] = None):
         self.interval = interval
         self.history: deque = deque(maxlen=history_size)
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self.limits = limits or SafetyLimits()
+        self.on_warning = on_warning  # 경고 콜백
+        self.on_critical = on_critical  # 위험 콜백 (학습 중지용)
+        self._warning_count = 0
+        self._critical_triggered = False
 
     def _parse_nvidia_smi(self) -> Optional[GPUStats]:
         """nvidia-smi 출력 파싱"""
@@ -55,12 +81,49 @@ class GPUMonitor:
             print(f"nvidia-smi error: {e}")
         return None
 
+    def check_safety(self, stats: GPUStats) -> str:
+        """안전 상태 점검 - 'ok', 'warning', 'critical' 반환"""
+        # Critical 체크 (학습 중지 필요)
+        if stats.temperature >= self.limits.temp_critical:
+            return "critical", f"🔥 TEMP CRITICAL: {stats.temperature:.0f}C >= {self.limits.temp_critical}C"
+        if stats.memory_percent >= self.limits.memory_critical:
+            return "critical", f"💾 MEMORY CRITICAL: {stats.memory_percent:.1f}% >= {self.limits.memory_critical}%"
+
+        # Warning 체크
+        warnings = []
+        if stats.temperature >= self.limits.temp_warn:
+            warnings.append(f"Temp: {stats.temperature:.0f}C")
+        if stats.memory_percent >= self.limits.memory_warn:
+            warnings.append(f"Mem: {stats.memory_percent:.1f}%")
+        if stats.power_percent >= self.limits.power_warn:
+            warnings.append(f"Power: {stats.power_percent:.0f}%")
+
+        if warnings:
+            return "warning", f"⚠️ GPU WARNING: {', '.join(warnings)}"
+
+        return "ok", ""
+
     def _monitor_loop(self):
-        """모니터링 루프"""
+        """모니터링 루프 with 안전 점검"""
         while self._running:
             stats = self._parse_nvidia_smi()
             if stats:
                 self.history.append(stats)
+
+                # 안전 점검
+                status, msg = self.check_safety(stats)
+                if status == "critical" and not self._critical_triggered:
+                    print(f"\n{'='*60}\n{msg}\n{'='*60}")
+                    self._critical_triggered = True
+                    if self.on_critical:
+                        self.on_critical(msg)
+                elif status == "warning":
+                    self._warning_count += 1
+                    if self._warning_count % 5 == 1:  # 5회마다 한 번만 출력
+                        print(f"\n{msg}")
+                    if self.on_warning:
+                        self.on_warning(msg)
+
             time.sleep(self.interval)
 
     def start(self):

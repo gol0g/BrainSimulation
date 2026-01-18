@@ -87,10 +87,11 @@ class SlitherConfig:
     food_radius: float = 5.0
     segment_spacing: float = 8.0
 
-    # Rewards
+    # Rewards (Predator Mode!)
     food_reward: float = 1.0
     death_penalty: float = -10.0
     survival_reward: float = 0.01
+    kill_reward: float = 50.0  # MASSIVE reward for killing enemy!
 
 
 class SlitherGym:
@@ -111,6 +112,11 @@ class SlitherGym:
         self.foods: List[Food] = []
         self.steps = 0
         self.score = 0
+
+        # Kill detection tracking (for Predator Mode)
+        self.prev_alive_enemies = 0
+        self.prev_nearby_food = 0
+        self.total_kills = 0  # Lifetime kill count
 
         # Pygame (lazy init)
         self.screen = None
@@ -139,6 +145,10 @@ class SlitherGym:
 
         self.steps = 0
         self.score = 0
+
+        # Initialize kill tracking
+        self.prev_alive_enemies = len([e for e in self.enemies if e.alive])
+        self.prev_nearby_food = self._count_nearby_food()
 
         return self._get_observation()
 
@@ -226,6 +236,25 @@ class SlitherGym:
         self.steps += 1
         self.score = self.agent.length
 
+        # === KILL DETECTION (Predator Mode!) ===
+        # Kill = enemy count decreased AND food exploded nearby
+        current_alive = len([e for e in self.enemies if e.alive])
+        current_nearby_food = self._count_nearby_food()
+        kills_this_step = 0
+
+        if current_alive < self.prev_alive_enemies:
+            food_delta = current_nearby_food - self.prev_nearby_food
+            # Food explosion = kill confirmed (death food spawned)
+            if food_delta > 5:  # Significant food increase
+                kills_this_step = self.prev_alive_enemies - current_alive
+                reward += self.config.kill_reward * kills_this_step
+                self.total_kills += kills_this_step
+                print(f"  ★ KILL! (+{kills_this_step}) Total: {self.total_kills} | Reward: +{self.config.kill_reward * kills_this_step}")
+
+        # Update tracking for next step
+        self.prev_alive_enemies = current_alive
+        self.prev_nearby_food = current_nearby_food
+
         # Check done
         done = not self.agent.alive
 
@@ -238,6 +267,8 @@ class SlitherGym:
             'length': self.agent.length,
             'steps': self.steps,
             'foods_eaten': self.score - 5,  # Started with 5
+            'kills': kills_this_step,
+            'total_kills': self.total_kills,
         }
 
         return obs, reward, done, info
@@ -404,6 +435,18 @@ class SlitherGym:
                 color=(255, 100, 100)
             ))
 
+    def _count_nearby_food(self, radius: float = 200.0) -> int:
+        """Count food items near agent head (for kill detection)"""
+        if not self.agent or not self.agent.alive:
+            return 0
+        head = self.agent.head
+        count = 0
+        for food in self.foods:
+            dist = math.sqrt((head.x - food.x)**2 + (head.y - food.y)**2)
+            if dist < radius:
+                count += 1
+        return count
+
     def _get_observation(self) -> dict:
         """
         Get observation for agent
@@ -474,24 +517,26 @@ class SlitherGym:
 
     def get_sensor_input(self, n_rays: int = 16) -> np.ndarray:
         """
-        Get ray-cast sensor input for SNN
+        Get ray-cast sensor input for SNN (Predator Mode!)
 
         Casts rays in all directions and returns:
-        - Distance to nearest food (per ray)
-        - Distance to nearest enemy (per ray)
-        - Distance to nearest body segment (per ray)
+        - [0] Distance to nearest food (per ray) - ATTRACT
+        - [1] Distance to nearest enemy BODY (per ray) - AVOID (death on contact)
+        - [2] Distance to nearest own body segment (per ray) - AVOID
+        - [3] Distance to nearest enemy HEAD (per ray) - ATTACK TARGET!
 
-        Returns: (3, n_rays) array normalized 0-1
+        Returns: (4, n_rays) array normalized 0-1
         """
         if not self.agent.alive:
-            return np.zeros((3, n_rays))
+            return np.zeros((4, n_rays))
 
         head = self.agent.head
         view_range = 300.0  # Increased for larger map (2000x2000)
 
         food_rays = np.ones(n_rays)  # 1 = nothing, 0 = close
-        enemy_rays = np.ones(n_rays)
+        enemy_body_rays = np.ones(n_rays)  # Enemy bodies = DANGER
         body_rays = np.ones(n_rays)
+        enemy_head_rays = np.ones(n_rays)  # Enemy HEADS = ATTACK TARGETS!
 
         for i in range(n_rays):
             ray_angle = self.agent.angle + (2 * np.pi * i / n_rays) - np.pi
@@ -507,11 +552,23 @@ class SlitherGym:
                     if angle_diff < np.pi / n_rays:  # Within ray cone
                         food_rays[i] = min(food_rays[i], dist / view_range)
 
-            # Check enemies
+            # Check enemies - SEPARATE HEAD from BODY!
             for enemy in self.enemies:
                 if not enemy.alive:
                     continue
-                for seg in enemy.segments:
+                # Enemy HEAD (attack target!)
+                enemy_head = enemy.head
+                dx = enemy_head.x - head.x
+                dy = enemy_head.y - head.y
+                dist = math.sqrt(dx*dx + dy*dy)
+                if dist < view_range:
+                    head_angle = math.atan2(dy, dx)
+                    angle_diff = abs((head_angle - ray_angle + np.pi) % (2*np.pi) - np.pi)
+                    if angle_diff < np.pi / n_rays:
+                        enemy_head_rays[i] = min(enemy_head_rays[i], dist / view_range)
+
+                # Enemy BODY (danger - skip first few segments near head)
+                for seg in enemy.segments[3:]:
                     dx = seg.x - head.x
                     dy = seg.y - head.y
                     dist = math.sqrt(dx*dx + dy*dy)
@@ -519,7 +576,7 @@ class SlitherGym:
                         seg_angle = math.atan2(dy, dx)
                         angle_diff = abs((seg_angle - ray_angle + np.pi) % (2*np.pi) - np.pi)
                         if angle_diff < np.pi / n_rays:
-                            enemy_rays[i] = min(enemy_rays[i], dist / view_range)
+                            enemy_body_rays[i] = min(enemy_body_rays[i], dist / view_range)
 
             # Check own body
             for seg in self.agent.segments[10:]:
@@ -533,7 +590,8 @@ class SlitherGym:
                         body_rays[i] = min(body_rays[i], dist / view_range)
 
         # Invert so closer = higher signal
-        return np.stack([1 - food_rays, 1 - enemy_rays, 1 - body_rays])
+        # Channel order: [food, enemy_body, own_body, enemy_head]
+        return np.stack([1 - food_rays, 1 - enemy_body_rays, 1 - body_rays, 1 - enemy_head_rays])
 
     def render(self):
         """Render the environment"""

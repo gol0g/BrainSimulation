@@ -31,14 +31,15 @@ CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
 @dataclass
 class SlitherBrainConfig:
-    """Configuration for Slither SNN Brain"""
+    """Configuration for Slither SNN Brain (Predator Mode!)"""
     # Sensory neurons (per channel, per ray direction)
     n_rays: int = 32  # Number of sensor rays
 
-    # Sensory layers
-    n_food_eye: int = 8000       # Food detection (8K)
-    n_enemy_eye: int = 8000      # Enemy detection (8K)
-    n_body_eye: int = 4000       # Self-body detection (4K)
+    # Sensory layers (4-channel vision!)
+    n_food_eye: int = 8000       # Food detection (8K) - ATTRACT
+    n_enemy_eye: int = 8000      # Enemy BODY detection (8K) - AVOID (death on contact)
+    n_body_eye: int = 4000       # Self-body detection (4K) - AVOID
+    n_enemy_head_eye: int = 8000 # Enemy HEAD detection (8K) - ATTACK TARGET!
 
     # Processing layers (Mushroom Body analog)
     n_integration_1: int = 50000   # First integration layer (50K)
@@ -50,8 +51,9 @@ class SlitherBrainConfig:
     n_motor_boost: int = 3000    # Emergency boost
 
     # Specialized circuits
-    n_fear_circuit: int = 10000   # Enemy avoidance (10K)
+    n_fear_circuit: int = 10000   # Enemy BODY avoidance (10K) - DEFENSIVE
     n_hunger_circuit: int = 10000 # Food seeking (10K)
+    n_attack_circuit: int = 10000 # Enemy HEAD hunting (10K) - OFFENSIVE!
 
     # SNN parameters
     sparsity: float = 0.005  # 0.5% connectivity (more sparse for larger network)
@@ -63,18 +65,31 @@ class SlitherBrainConfig:
     # 이유: 먹이를 먹기 3초 전의 "우회전"에도 보상 크레딧이 할당됨
     # exp(-3000/3000) ≈ 0.37 → 3초 전 행동도 37% 보상
     stdp_tau: float = 3000.0  # 3초 eligibility trace (핵심!)
-    a_plus: float = 0.005     # LTP 강도
-    a_minus: float = 0.006    # LTD 강도
+    # 수정: Learning rate 절반으로 감소 (대박 보상에 가중치 폭발 방지)
+    a_plus: float = 0.0025    # LTP 강도 (0.005 → 0.0025, 50% 감소)
+    a_minus: float = 0.003    # LTD 강도 (0.006 → 0.003, 50% 감소)
+
+    # Homeostatic Plasticity (Synaptic Scaling)
+    # 시냅스 포화 방지: 특정 뉴런으로 들어오는 가중치 합이 일정 수준 유지
+    # 수정: 즉시 적용 (느린 적응 → 즉각 정규화)
+    synaptic_scaling: bool = True        # 시냅스 스케일링 활성화
+    target_weight_sum: float = 0.5       # 목표 가중치 합 (1.0 → 0.5, 더 엄격)
+    scaling_rate: float = 1.0            # 즉시 적용! (0.01 → 1.0)
+
+    # Reward Baseline Subtraction
+    # 평균보다 잘했을 때만 강화 → 디테일 학습
+    use_reward_baseline: bool = True     # 보상 기준선 사용
+    baseline_decay: float = 0.99         # 기준선 업데이트 속도
 
     # Inhibition
     fear_inhibition: float = 0.9  # Strong inhibition when enemy near
 
     @property
     def total_neurons(self) -> int:
-        return (self.n_food_eye + self.n_enemy_eye + self.n_body_eye +
+        return (self.n_food_eye + self.n_enemy_eye + self.n_body_eye + self.n_enemy_head_eye +
                 self.n_integration_1 + self.n_integration_2 +
                 self.n_motor_left + self.n_motor_right + self.n_motor_boost +
-                self.n_fear_circuit + self.n_hunger_circuit)
+                self.n_fear_circuit + self.n_hunger_circuit + self.n_attack_circuit)
 
 
 class SlitherBrain:
@@ -121,14 +136,16 @@ class SlitherBrain:
 
         print(f"Initializing SlitherBrain with {self.config.total_neurons:,} neurons...")
 
-        # === SENSORY LAYERS ===
+        # === SENSORY LAYERS (4-channel vision!) ===
         self.food_eye = SparseLIFLayer(self.config.n_food_eye, lif)
-        self.enemy_eye = SparseLIFLayer(self.config.n_enemy_eye, lif)
+        self.enemy_eye = SparseLIFLayer(self.config.n_enemy_eye, lif)  # Enemy BODY
         self.body_eye = SparseLIFLayer(self.config.n_body_eye, lif)
+        self.enemy_head_eye = SparseLIFLayer(self.config.n_enemy_head_eye, lif)  # Enemy HEAD - ATTACK!
 
         # === SPECIALIZED CIRCUITS ===
         self.hunger_circuit = SparseLIFLayer(self.config.n_hunger_circuit, lif)
-        self.fear_circuit = SparseLIFLayer(self.config.n_fear_circuit, lif)
+        self.fear_circuit = SparseLIFLayer(self.config.n_fear_circuit, lif)  # DEFENSIVE
+        self.attack_circuit = SparseLIFLayer(self.config.n_attack_circuit, lif)  # OFFENSIVE!
 
         # === INTEGRATION LAYERS (Mushroom Body) ===
         self.integration_1 = SparseLIFLayer(self.config.n_integration_1, lif)
@@ -156,10 +173,19 @@ class SlitherBrain:
         self.syn_food_hunger = SparseSynapses(self.config.n_food_eye, self.config.n_hunger_circuit, sp)
         self.syn_enemy_fear = SparseSynapses(self.config.n_enemy_eye, self.config.n_fear_circuit, sp)
         self.syn_body_fear = SparseSynapses(self.config.n_body_eye, self.config.n_fear_circuit, sp * 0.5)
+        # NEW: Enemy HEAD → Attack Circuit (predator instinct!)
+        self.syn_enemy_head_attack = SparseSynapses(self.config.n_enemy_head_eye, self.config.n_attack_circuit, sp * 2)
+        # === LICENSE TO KILL: 공격 본능 각성 ===
+        # 문제: attack_triggers가 0 = 적 머리를 봐도 공격 회로가 안 뜀
+        # 해결: 시냅스 가중치 대폭 부스트 (진화된 포식 본능!)
+        attack_instinct_boost = 5.0  # 5x stronger (더 강한 공격 본능!)
+        self.syn_enemy_head_attack.weights = self.syn_enemy_head_attack.weights * attack_instinct_boost
+        self.syn_enemy_head_attack._rebuild_sparse()
 
         # Specialized → Integration 1
         self.syn_hunger_int1 = SparseSynapses(self.config.n_hunger_circuit, self.config.n_integration_1, sp)
         self.syn_fear_int1 = SparseSynapses(self.config.n_fear_circuit, self.config.n_integration_1, sp)
+        self.syn_attack_int1 = SparseSynapses(self.config.n_attack_circuit, self.config.n_integration_1, sp)  # Attack → Int
 
         # Integration 1 → Integration 2
         self.syn_int1_int2 = SparseSynapses(self.config.n_integration_1, self.config.n_integration_2, sp)
@@ -174,6 +200,10 @@ class SlitherBrain:
 
         # === DIRECT REFLEX: Fear → Boost (emergency escape) ===
         self.syn_fear_boost = SparseSynapses(self.config.n_fear_circuit, self.config.n_motor_boost, sp * 3)
+
+        # === DIRECT REFLEX: Attack → Boost (intercept chase!) ===
+        # When enemy HEAD detected → BOOST to cut them off!
+        self.syn_attack_boost = SparseSynapses(self.config.n_attack_circuit, self.config.n_motor_boost, sp * 4)
 
         # === DIRECT REFLEX: Food → Motor (food seeking) ===
         # Biologically valid: even simple organisms have direct sensorimotor reflexes
@@ -197,18 +227,38 @@ class SlitherBrain:
         self.syn_enemy_motor_left._rebuild_sparse()
         self.syn_enemy_motor_right._rebuild_sparse()
 
+        # === PREDATOR REFLEX: Enemy HEAD → Motor (chase toward prey!) ===
+        # OPPOSITE of body avoidance - we CHASE enemy heads!
+        # Enemy HEAD on left → turn LEFT (toward prey)
+        # Enemy HEAD on right → turn RIGHT (toward prey)
+        self.syn_enemy_head_motor_left = SparseSynapses(self.config.n_enemy_head_eye, self.config.n_motor_left, sp * 2)
+        self.syn_enemy_head_motor_right = SparseSynapses(self.config.n_enemy_head_eye, self.config.n_motor_right, sp * 2)
+        # Strong initial predator instinct (learnable)
+        predator_boost = 4.0  # Even stronger than avoidance!
+        self.syn_enemy_head_motor_left.weights = self.syn_enemy_head_motor_left.weights * predator_boost
+        self.syn_enemy_head_motor_right.weights = self.syn_enemy_head_motor_right.weights * predator_boost
+        self.syn_enemy_head_motor_left._rebuild_sparse()
+        self.syn_enemy_head_motor_right._rebuild_sparse()
+
         # State
         self.dopamine = 0.5
         self.fear_level = 0.0
         self.hunger_level = 0.5
+        self.attack_level = 0.0  # NEW: Attack intensity
         self.current_heading = 0.0  # Current heading angle
         self.steps = 0
 
-        # Statistics
+        # Reward Baseline (for baseline subtraction)
+        # 평균 보상보다 잘했을 때만 강화 → 세부 조정 학습
+        self.reward_baseline = 0.0
+
+        # Statistics (Predator Mode!)
         self.stats = {
             'food_eaten': 0,
             'boosts': 0,
             'fear_triggers': 0,
+            'attack_triggers': 0,  # NEW: Hunting mode activations
+            'kills': 0,            # NEW: Confirmed kills
             'left_turns': 0,
             'right_turns': 0,
             'fatigue_switches': 0  # 피로로 인한 방향 전환 횟수
@@ -216,44 +266,50 @@ class SlitherBrain:
         self._last_turn_dir = None  # 이전 회전 방향 추적
 
         print(f"  Food Eye: {self.config.n_food_eye:,}")
-        print(f"  Enemy Eye: {self.config.n_enemy_eye:,}")
+        print(f"  Enemy Body Eye: {self.config.n_enemy_eye:,}")
+        print(f"  Enemy HEAD Eye: {self.config.n_enemy_head_eye:,} (PREDATOR!)")
         print(f"  Body Eye: {self.config.n_body_eye:,}")
         print(f"  Hunger Circuit: {self.config.n_hunger_circuit:,}")
         print(f"  Fear Circuit: {self.config.n_fear_circuit:,}")
+        print(f"  Attack Circuit: {self.config.n_attack_circuit:,} (KILLER!)")
         print(f"  Integration: {self.config.n_integration_1 + self.config.n_integration_2:,}")
         print(f"  Motor: {self.config.n_motor_left + self.config.n_motor_right + self.config.n_motor_boost:,} (Adaptive)")
         print(f"  Total: {self.config.total_neurons:,} neurons")
         print(f"  Sparsity: {sp*100:.1f}%")
-        print(f"  Neural Adaptation: tau=200ms, beta=1.0")
+        print(f"  Mode: PREDATOR (Kill Reward: +50)")
 
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
         """
-        Process sensor input and return action
+        Process sensor input and return action (PREDATOR MODE!)
 
         Args:
-            sensor_input: (3, n_rays) array from SlitherGym.get_sensor_input()
-                - [0, :] = food signals (0-1, closer = higher)
-                - [1, :] = enemy signals
-                - [2, :] = body signals (wall proximity)
+            sensor_input: (4, n_rays) array from SlitherGym.get_sensor_input()
+                - [0, :] = food signals (0-1, closer = higher) - ATTRACT
+                - [1, :] = enemy BODY signals - AVOID (death on contact)
+                - [2, :] = own body signals - AVOID
+                - [3, :] = enemy HEAD signals - ATTACK TARGET!
             reward: Learning signal
 
         Returns:
             (target_x, target_y, boost): Action tuple (normalized 0-1)
         """
-        # Unpack sensor input
+        # Unpack 4-channel sensor input
         food_signal = sensor_input[0]  # (n_rays,)
-        enemy_signal = sensor_input[1]
+        enemy_body_signal = sensor_input[1]  # Enemy BODY = danger
         body_signal = sensor_input[2]
+        enemy_head_signal = sensor_input[3] if sensor_input.shape[0] > 3 else np.zeros_like(food_signal)  # Enemy HEAD = target!
 
         # === ENCODE TO POPULATION ===
         food_input = self._encode_rays(food_signal, self.config.n_food_eye)
-        enemy_input = self._encode_rays(enemy_signal, self.config.n_enemy_eye)
+        enemy_input = self._encode_rays(enemy_body_signal, self.config.n_enemy_eye)
         body_input = self._encode_rays(body_signal, self.config.n_body_eye)
+        enemy_head_input = self._encode_rays(enemy_head_signal, self.config.n_enemy_head_eye)
 
         # === SENSORY PROCESSING ===
         food_spikes = self.food_eye.forward(food_input * 15.0)
         enemy_spikes = self.enemy_eye.forward(enemy_input * 20.0)  # Higher gain for danger
         body_spikes = self.body_eye.forward(body_input * 10.0)
+        enemy_head_spikes = self.enemy_head_eye.forward(enemy_head_input * 25.0)  # Highest gain for prey!
 
         # === SPECIALIZED CIRCUITS ===
         # Hunger (food seeking)
@@ -261,7 +317,7 @@ class SlitherBrain:
         hunger_spikes = self.hunger_circuit.forward(hunger_in * 30.0)
         self.hunger_level = hunger_spikes.sum().item() / self.config.n_hunger_circuit
 
-        # Fear (danger avoidance)
+        # Fear (danger avoidance) - from enemy BODY
         fear_enemy = self.syn_enemy_fear.forward(enemy_spikes)
         fear_body = self.syn_body_fear.forward(body_spikes)
         fear_in = fear_enemy + fear_body
@@ -271,6 +327,29 @@ class SlitherBrain:
         if self.fear_level > 0.1:
             self.stats['fear_triggers'] += 1
 
+        # Attack (hunting behavior) - from enemy HEAD
+        # === GLOBAL ENEMY HEAD POOLING ===
+        # Problem: Enemy heads are single points - only 1-2 rays detect them
+        # Even with 5x weight boost, sparse connectivity dilutes the signal
+        # Solution: Pool across all rays - if ANY ray sees a head, ATTACK MODE!
+        global_head_detection = enemy_head_signal.max()  # Max across all rays (0-1)
+
+        attack_in = self.syn_enemy_head_attack.forward(enemy_head_spikes)
+
+        # Global boost when ANY enemy head is detected within 240px (300 * 0.8)
+        if global_head_detection > 0.2:
+            # Broadcast boost to ALL attack circuit neurons
+            # This is biologically plausible: "any presence" detector neurons
+            global_boost = torch.ones(self.config.n_attack_circuit, device=DEVICE)
+            global_boost = global_boost * global_head_detection * 30.0  # Strong global signal
+            attack_in = attack_in + global_boost
+
+        attack_spikes = self.attack_circuit.forward(attack_in * 50.0)
+        self.attack_level = attack_spikes.sum().item() / self.config.n_attack_circuit
+
+        if self.attack_level > 0.05:
+            self.stats['attack_triggers'] += 1
+
         # === CROSS-INHIBITION: Fear suppresses Hunger ===
         fear_inhibition = self.syn_fear_hunger_inhib.forward(fear_spikes)
         # Suppress hunger when scared
@@ -278,7 +357,8 @@ class SlitherBrain:
 
         # === INTEGRATION ===
         int1_in = (self.syn_hunger_int1.forward(hunger_spikes) +
-                   self.syn_fear_int1.forward(fear_spikes))
+                   self.syn_fear_int1.forward(fear_spikes) +
+                   self.syn_attack_int1.forward(attack_spikes))  # Add attack signal!
         int1_spikes = self.integration_1.forward(int1_in * 20.0)
 
         int2_in = self.syn_int1_int2.forward(int1_spikes)
@@ -289,9 +369,13 @@ class SlitherBrain:
         right_in = self.syn_int2_right.forward(int2_spikes)
         boost_in = self.syn_int2_boost.forward(int2_spikes)
 
-        # Direct fear → boost reflex
+        # Direct fear → boost reflex (escape)
         fear_boost = self.syn_fear_boost.forward(fear_spikes)
         boost_in = boost_in + fear_boost * 2.0
+
+        # Direct attack → boost reflex (intercept chase!)
+        attack_boost = self.syn_attack_boost.forward(attack_spikes)
+        boost_in = boost_in + attack_boost * 3.0  # Strong chase boost!
 
         # === DIRECT FOOD REFLEX ===
         # Encode food with directional bias (left half → left motor, right half → right motor)
@@ -307,7 +391,7 @@ class SlitherBrain:
         # Enemy on LEFT → activate RIGHT motor (turn AWAY)
         # Enemy on RIGHT → activate LEFT motor (turn AWAY)
         # Note: OPPOSITE of food reflex - we turn AWAY from danger
-        enemy_left_input, enemy_right_input = self._encode_enemy_directional(enemy_signal)
+        enemy_left_input, enemy_right_input = self._encode_enemy_directional(enemy_body_signal)
         # Cross-wiring: left enemy → right motor, right enemy → left motor
         enemy_reflex_to_right = self.syn_enemy_motor_right.forward(enemy_left_input)
         enemy_reflex_to_left = self.syn_enemy_motor_left.forward(enemy_right_input)
@@ -315,6 +399,17 @@ class SlitherBrain:
         # Add innate avoidance (weights already boosted in __init__)
         left_in = left_in + enemy_reflex_to_left * 2.0
         right_in = right_in + enemy_reflex_to_right * 2.0
+
+        # === PREDATOR REFLEX: Enemy HEAD → Motor (chase toward prey!) ===
+        # OPPOSITE of body avoidance - turn TOWARD enemy heads!
+        enemy_head_left_input, enemy_head_right_input = self._encode_enemy_head_directional(enemy_head_signal)
+        # Same-side wiring: head on LEFT → turn LEFT (toward prey)
+        predator_reflex_left = self.syn_enemy_head_motor_left.forward(enemy_head_left_input)
+        predator_reflex_right = self.syn_enemy_head_motor_right.forward(enemy_head_right_input)
+
+        # Add predator chase reflex (strong initial weights from __init__)
+        left_in = left_in + predator_reflex_left * 2.5
+        right_in = right_in + predator_reflex_right * 2.5
 
         left_spikes = self.motor_left.forward(left_in * 30.0)
         right_spikes = self.motor_right.forward(right_in * 30.0)
@@ -328,7 +423,7 @@ class SlitherBrain:
         # Direction: Difference between left and right
         # Also bias toward food direction
         food_direction = self._compute_direction_bias(food_signal)
-        enemy_direction = self._compute_direction_bias(enemy_signal)
+        enemy_direction = self._compute_direction_bias(enemy_body_signal)
 
         # Compute target direction (relative angle)
         # Motor rate difference now has higher weight so fatigue affects steering
@@ -362,10 +457,13 @@ class SlitherBrain:
         target_x = np.clip(target_x, 0.05, 0.95)
         target_y = np.clip(target_y, 0.05, 0.95)
 
-        # Boost decision: Only when ACTUAL enemy detected in sensor
-        # Check raw sensor input, not just Fear circuit (which can have noise)
-        enemy_detected = enemy_signal.max() > 0.1  # Actually see enemy in view
-        boost = boost_rate > 0.15 and enemy_detected
+        # Boost decision: PREDATOR MODE - boost for ATTACK or ESCAPE
+        # Check raw sensor input for both enemy body (escape) and head (attack)
+        enemy_body_detected = enemy_body_signal.max() > 0.1  # Danger nearby
+        enemy_head_detected = enemy_head_signal.max() > 0.2  # Prey nearby!
+
+        # Boost if: escaping from danger OR chasing prey
+        boost = boost_rate > 0.12 and (enemy_body_detected or enemy_head_detected)
 
         # Track turns and fatigue-induced switches
         current_turn = 'left' if left_rate > right_rate else 'right'
@@ -387,7 +485,7 @@ class SlitherBrain:
             if reward > 0:
                 self.stats['food_eaten'] += 1
             self.dopamine = np.clip(self.dopamine + reward * 0.1, 0.0, 1.0)
-            self._learn()
+            self._learn(reward)  # Pass reward for baseline subtraction
         else:
             # Baseline dopamine based on state
             self.dopamine = 0.5 + 0.1 * self.hunger_level - 0.1 * self.fear_level
@@ -496,60 +594,186 @@ class SlitherBrain:
 
         return left_input, right_input
 
-    def _learn(self):
-        """DA-STDP learning for all synapses"""
+    def _encode_enemy_head_directional(self, ray_signal: np.ndarray) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Encode enemy HEAD signals with left/right directional bias for ATTACK - VECTORIZED"""
+        n_rays = len(ray_signal)
+        half = n_rays // 2
+        neurons_per_half = self.config.n_enemy_head_eye // 2
+        n_per_ray = neurons_per_half // half
+        actual_size = n_per_ray * half
+
+        # Convert to tensors
+        left_signal = torch.from_numpy(ray_signal[:half]).float().to(DEVICE)
+        right_signal = torch.from_numpy(ray_signal[half:]).float().to(DEVICE)
+
+        # Expand signals to neuron populations
+        left_expanded = left_signal.repeat_interleave(n_per_ray)
+        right_expanded = right_signal.repeat_interleave(n_per_ray)
+
+        # Create output tensors
+        left_input = torch.zeros(self.config.n_enemy_head_eye, device=DEVICE)
+        right_input = torch.zeros(self.config.n_enemy_head_eye, device=DEVICE)
+
+        # Stochastic activation (match expanded size)
+        noise_left = torch.rand(actual_size, device=DEVICE)
+        noise_right = torch.rand(actual_size, device=DEVICE)
+
+        # Enemy HEAD left → LEFT motor (chase toward prey!)
+        mask_left = (left_expanded > 0.05) & (noise_left < left_expanded * 0.8)
+        left_input[:actual_size][mask_left] = left_expanded[mask_left] * 4.0  # Strong predator signal!
+
+        # Enemy HEAD right → RIGHT motor (chase toward prey!)
+        mask_right = (right_expanded > 0.05) & (noise_right < right_expanded * 0.8)
+        right_input[neurons_per_half:neurons_per_half + actual_size][mask_right] = right_expanded[mask_right] * 4.0
+
+        return left_input, right_input
+
+    def _learn(self, reward: float = 0.0):
+        """
+        DA-STDP learning with Homeostatic Plasticity
+
+        새로운 메커니즘:
+        1. Reward Baseline Subtraction: 평균보다 잘했을 때만 강화
+        2. Synaptic Scaling: 가중치 합이 폭주하지 않도록 정규화
+        """
         tau = self.config.stdp_tau
         a_plus = self.config.a_plus
         a_minus = self.config.a_minus
         dt = 1.0
 
+        # === REWARD BASELINE SUBTRACTION ===
+        # 평균 보상보다 잘했을 때만 강화 (디테일 학습)
+        if self.config.use_reward_baseline and reward != 0:
+            # 유효 보상 = 현재 보상 - 기준선
+            effective_reward = reward - self.reward_baseline
+            # 기준선 업데이트 (지수 이동 평균)
+            self.reward_baseline = (self.config.baseline_decay * self.reward_baseline +
+                                    (1 - self.config.baseline_decay) * reward)
+            # 도파민은 유효 보상에 비례
+            effective_dopamine = 0.5 + effective_reward * 0.2
+        else:
+            effective_dopamine = self.dopamine
+
         # Sensory → Specialized
         self.syn_food_hunger.update_eligibility(self.food_eye.spikes, self.hunger_circuit.spikes, tau, dt)
-        self.syn_food_hunger.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_food_hunger.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         self.syn_enemy_fear.update_eligibility(self.enemy_eye.spikes, self.fear_circuit.spikes, tau, dt)
-        self.syn_enemy_fear.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_enemy_fear.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         # Specialized → Integration
         self.syn_hunger_int1.update_eligibility(self.hunger_circuit.spikes, self.integration_1.spikes, tau, dt)
-        self.syn_hunger_int1.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_hunger_int1.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         self.syn_fear_int1.update_eligibility(self.fear_circuit.spikes, self.integration_1.spikes, tau, dt)
-        self.syn_fear_int1.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_fear_int1.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         # Integration → Motor
         self.syn_int2_left.update_eligibility(self.integration_2.spikes, self.motor_left.spikes, tau, dt)
-        self.syn_int2_left.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_int2_left.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         self.syn_int2_right.update_eligibility(self.integration_2.spikes, self.motor_right.spikes, tau, dt)
-        self.syn_int2_right.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_int2_right.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         self.syn_int2_boost.update_eligibility(self.integration_2.spikes, self.motor_boost.spikes, tau, dt)
-        self.syn_int2_boost.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_int2_boost.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         # Direct food reflex (modifiable even though it's a reflex)
         self.syn_food_motor_left.update_eligibility(self.food_eye.spikes, self.motor_left.spikes, tau, dt)
-        self.syn_food_motor_left.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_food_motor_left.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         self.syn_food_motor_right.update_eligibility(self.food_eye.spikes, self.motor_right.spikes, tau, dt)
-        self.syn_food_motor_right.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_food_motor_right.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         # Innate enemy avoidance reflex (STILL LEARNABLE - can be modified by experience!)
         # If avoiding enemies leads to survival → reinforce
         # If avoiding prevents eating → might weaken (learning "courage")
         self.syn_enemy_motor_left.update_eligibility(self.enemy_eye.spikes, self.motor_left.spikes, tau, dt)
-        self.syn_enemy_motor_left.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_enemy_motor_left.apply_dopamine(effective_dopamine, a_plus, a_minus)
 
         self.syn_enemy_motor_right.update_eligibility(self.enemy_eye.spikes, self.motor_right.spikes, tau, dt)
-        self.syn_enemy_motor_right.apply_dopamine(self.dopamine, a_plus, a_minus)
+        self.syn_enemy_motor_right.apply_dopamine(effective_dopamine, a_plus, a_minus)
+
+        # === PREDATOR SYNAPSES (Kill for massive reward!) ===
+        # Enemy HEAD → Attack Circuit
+        self.syn_enemy_head_attack.update_eligibility(self.enemy_head_eye.spikes, self.attack_circuit.spikes, tau, dt)
+        self.syn_enemy_head_attack.apply_dopamine(effective_dopamine, a_plus, a_minus)
+
+        # Attack → Integration
+        self.syn_attack_int1.update_eligibility(self.attack_circuit.spikes, self.integration_1.spikes, tau, dt)
+        self.syn_attack_int1.apply_dopamine(effective_dopamine, a_plus, a_minus)
+
+        # Attack → Boost (chase reflex)
+        self.syn_attack_boost.update_eligibility(self.attack_circuit.spikes, self.motor_boost.spikes, tau, dt)
+        self.syn_attack_boost.apply_dopamine(effective_dopamine, a_plus, a_minus)
+
+        # Predator reflex: Enemy HEAD → Motor (chase toward prey)
+        self.syn_enemy_head_motor_left.update_eligibility(self.enemy_head_eye.spikes, self.motor_left.spikes, tau, dt)
+        self.syn_enemy_head_motor_left.apply_dopamine(effective_dopamine, a_plus, a_minus)
+
+        self.syn_enemy_head_motor_right.update_eligibility(self.enemy_head_eye.spikes, self.motor_right.spikes, tau, dt)
+        self.syn_enemy_head_motor_right.apply_dopamine(effective_dopamine, a_plus, a_minus)
+
+        # === SYNAPTIC SCALING (Homeostatic Plasticity) ===
+        # 시냅스 포화 방지: 가중치 합을 목표 수준으로 유지
+        # 이것이 Ep 17 정체 문제 해결의 핵심!
+        if self.config.synaptic_scaling:
+            self._apply_synaptic_scaling()
+
+    def _apply_synaptic_scaling(self):
+        """
+        Synaptic Scaling (항상성 가소성) - 즉시 적용 버전
+
+        메커니즘:
+        - 특정 뉴런으로 들어오는 가중치의 합이 target_weight_sum을 넘지 않도록 정규화
+        - 중요한 시냅스는 상대적으로 강해지고, 덜 중요한 시냅스는 약해짐 (Competition)
+        - 뇌가 포화되지 않고 끝까지 학습 가능
+
+        수정: 즉시 정규화 (gradual → immediate)
+        """
+        target = self.config.target_weight_sum
+
+        # 모든 학습 가능한 시냅스에 적용
+        synapses = [
+            self.syn_food_hunger, self.syn_enemy_fear,
+            self.syn_hunger_int1, self.syn_fear_int1,
+            self.syn_int2_left, self.syn_int2_right, self.syn_int2_boost,
+            self.syn_food_motor_left, self.syn_food_motor_right,
+            self.syn_enemy_motor_left, self.syn_enemy_motor_right,
+            # PREDATOR synapses
+            self.syn_enemy_head_attack, self.syn_attack_int1, self.syn_attack_boost,
+            self.syn_enemy_head_motor_left, self.syn_enemy_head_motor_right
+        ]
+
+        for syn in synapses:
+            # 각 post-synaptic 뉴런으로 들어오는 가중치 합 계산
+            if hasattr(syn, 'weights') and syn.weights is not None:
+                w = syn.weights
+                # 열(column) 방향 합 = 각 post-neuron으로 들어오는 총 입력
+                col_sum = w.sum(dim=0, keepdim=True)  # (1, n_post)
+
+                # 0으로 나누기 방지
+                col_sum = torch.clamp(col_sum, min=1e-8)
+
+                # 스케일링 팩터: target / current_sum
+                scale_factor = target / col_sum
+
+                # 넘치는 놈만 깎기 (작은 건 키우지 않음)
+                scale_factor = torch.clamp(scale_factor, max=1.0)
+
+                # 즉시 적용! (rate=1.0)
+                syn.weights = w * scale_factor
+                syn._needs_rebuild = True
 
     def reset(self):
         """Reset state for new episode"""
         self.food_eye.reset()
         self.enemy_eye.reset()
         self.body_eye.reset()
+        self.enemy_head_eye.reset()  # PREDATOR eye
         self.hunger_circuit.reset()
         self.fear_circuit.reset()
+        self.attack_circuit.reset()  # PREDATOR circuit
         self.integration_1.reset()
         self.integration_2.reset()
         self.motor_left.reset()
@@ -558,16 +782,19 @@ class SlitherBrain:
         self.dopamine = 0.5
         self.fear_level = 0.0
         self.hunger_level = 0.5
+        self.attack_level = 0.0  # PREDATOR state
         self.current_heading = 0.0
         self._last_turn_dir = None  # Reset turn tracking
-        # Reset stats (ensures all keys exist)
+        # reward_baseline은 리셋하지 않음 (에피소드 간 유지 = 경험 축적)
+        # Reset stats (ensures all keys exist) - PREDATOR MODE!
         self.stats = {
             'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0,
+            'attack_triggers': 0, 'kills': 0,  # PREDATOR stats
             'left_turns': 0, 'right_turns': 0, 'fatigue_switches': 0
         }
 
     def save(self, path: Path):
-        """Save all synapse weights"""
+        """Save all synapse weights (PREDATOR MODE!)"""
         state = {
             'syn_food_hunger': self.syn_food_hunger.weights.cpu(),
             'syn_enemy_fear': self.syn_enemy_fear.weights.cpu(),
@@ -585,13 +812,19 @@ class SlitherBrain:
             # Innate enemy avoidance (진화된 본능 - learnable)
             'syn_enemy_motor_left': self.syn_enemy_motor_left.weights.cpu(),
             'syn_enemy_motor_right': self.syn_enemy_motor_right.weights.cpu(),
+            # === PREDATOR SYNAPSES ===
+            'syn_enemy_head_attack': self.syn_enemy_head_attack.weights.cpu(),
+            'syn_attack_int1': self.syn_attack_int1.weights.cpu(),
+            'syn_attack_boost': self.syn_attack_boost.weights.cpu(),
+            'syn_enemy_head_motor_left': self.syn_enemy_head_motor_left.weights.cpu(),
+            'syn_enemy_head_motor_right': self.syn_enemy_head_motor_right.weights.cpu(),
             'stats': self.stats.copy(),
         }
         torch.save(state, path)
         print(f"  Model saved: {path}")
 
     def load(self, path: Path) -> bool:
-        """Load synapse weights"""
+        """Load synapse weights (PREDATOR MODE!)"""
         if not path.exists():
             print(f"  No checkpoint: {path}")
             return False
@@ -619,6 +852,22 @@ class SlitherBrain:
         if 'syn_enemy_motor_right' in state:
             self.syn_enemy_motor_right.weights = state['syn_enemy_motor_right'].to(DEVICE)
             self.syn_enemy_motor_right._rebuild_sparse()
+        # === LOAD PREDATOR SYNAPSES (optional for backward compatibility) ===
+        if 'syn_enemy_head_attack' in state:
+            self.syn_enemy_head_attack.weights = state['syn_enemy_head_attack'].to(DEVICE)
+            self.syn_enemy_head_attack._rebuild_sparse()
+        if 'syn_attack_int1' in state:
+            self.syn_attack_int1.weights = state['syn_attack_int1'].to(DEVICE)
+            self.syn_attack_int1._rebuild_sparse()
+        if 'syn_attack_boost' in state:
+            self.syn_attack_boost.weights = state['syn_attack_boost'].to(DEVICE)
+            self.syn_attack_boost._rebuild_sparse()
+        if 'syn_enemy_head_motor_left' in state:
+            self.syn_enemy_head_motor_left.weights = state['syn_enemy_head_motor_left'].to(DEVICE)
+            self.syn_enemy_head_motor_left._rebuild_sparse()
+        if 'syn_enemy_head_motor_right' in state:
+            self.syn_enemy_head_motor_right.weights = state['syn_enemy_head_motor_right'].to(DEVICE)
+            self.syn_enemy_head_motor_right._rebuild_sparse()
         if 'stats' in state:
             self.stats = state['stats']
         print(f"  Model loaded: {path}")
@@ -637,8 +886,15 @@ class SlitherAgent:
         self.scores = []
         self.best_score = 0
 
-    def run_episode(self, max_steps: int = 1000) -> dict:
-        """Run one episode"""
+    def run_episode(self, max_steps: int = 5000, metabolic_cost: float = 0.005) -> dict:
+        """
+        Run one episode
+
+        Args:
+            max_steps: Maximum steps per episode (5000 = 5x longer than before!)
+            metabolic_cost: Negative reward per step (hunger pressure)
+                          "가만히 있으면 굶어 죽는다" → 적극적 사냥 유도
+        """
         obs = self.env.reset()
         self.brain.reset()
 
@@ -657,9 +913,16 @@ class SlitherAgent:
 
             # Step environment
             obs, reward, done, info = self.env.step((target_x, target_y, boost))
+
+            # === METABOLIC COST (기초대사량) ===
+            # 숨만 쉬어도 에너지 소모 → 사냥해야 생존
+            # 이것이 "공무원 뱀"을 "사냥꾼"으로 바꾸는 핵심!
+            if reward == 0:
+                reward = -metabolic_cost  # 매 스텝 -0.005 고통
+
             total_reward += reward
 
-            # Learn from reward
+            # Learn from reward (including metabolic cost)
             if reward != 0:
                 self.brain.process(sensor, reward)
 
@@ -678,17 +941,27 @@ class SlitherAgent:
             'food_eaten': info.get('foods_eaten', 0)
         }
 
-    def train(self, n_episodes: int = 100, resume: bool = False):
+    def train(self, n_episodes: int = 100, resume: bool = False, max_steps: int = 5000):
         """Train the agent"""
         print("\n" + "="*60)
         print(f"Slither.io SNN Training ({self.brain.config.total_neurons:,} neurons)")
+        print(f"  Max Steps: {max_steps} (Step Limit {'UNLOCKED' if max_steps > 1000 else 'default'})")
+        print(f"  Metabolic Cost: -0.005/step (Hunger Pressure ON)")
         print("="*60)
 
         if resume:
-            self.load_model("best")
+            if self.load_model("best"):
+                print("  ★ Resumed from best checkpoint")
+                # 이전 최고점수 추정 (파일명에서)
+                import glob
+                checkpoints = glob.glob(str(CHECKPOINT_DIR / "best_*.pt"))
+                if checkpoints:
+                    scores = [int(p.split('_')[-1].replace('.pt', '')) for p in checkpoints]
+                    self.best_score = max(scores)
+                    print(f"  ★ Previous Best: {self.best_score}")
 
         for ep in range(n_episodes):
-            result = self.run_episode()
+            result = self.run_episode(max_steps=max_steps)
             self.scores.append(result['length'])
 
             # Save best
@@ -737,12 +1010,19 @@ if __name__ == "__main__":
     parser.add_argument('--resume', action='store_true', help='Resume from best')
     parser.add_argument('--enemies', type=int, default=0, help='Number of enemy bots')
     parser.add_argument('--small', action='store_true', help='Use smaller brain (15K neurons) for testing')
+    parser.add_argument('--hell', action='store_true', help='Hell Mode: 15 enemies, large map, PREDATOR training!')
     args = parser.parse_args()
 
-    print("Slither.io SNN Agent")
+    # Hell Mode overrides
+    if args.hell:
+        args.enemies = 15
+        args.small = True  # Use small mode for faster iteration, scale up later
+
+    print("Slither.io SNN Agent - PREDATOR MODE!")
     print(f"Render mode: {args.render}")
     print(f"Enemies: {args.enemies}")
     print(f"Small mode: {args.small}")
+    print(f"Hell Mode: {args.hell}")
     print()
 
     # Configure environment
@@ -754,6 +1034,7 @@ if __name__ == "__main__":
             n_food_eye=1000,
             n_enemy_eye=1000,
             n_body_eye=500,
+            n_enemy_head_eye=1000,    # PREDATOR: Enemy HEAD detection
             n_integration_1=5000,
             n_integration_2=5000,
             n_motor_left=500,
@@ -761,10 +1042,11 @@ if __name__ == "__main__":
             n_motor_boost=300,
             n_fear_circuit=1000,
             n_hunger_circuit=1000,
+            n_attack_circuit=1000,    # PREDATOR: Hunting circuit
             sparsity=0.02  # Higher sparsity for smaller network
         )
     else:
-        brain_config = None  # Use defaults (153K)
+        brain_config = None  # Use defaults (full scale)
 
     # Create agent
     agent = SlitherAgent(

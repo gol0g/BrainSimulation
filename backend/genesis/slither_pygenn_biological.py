@@ -37,7 +37,53 @@ CHECKPOINT_DIR = Path(__file__).parent / "checkpoints" / "slither_pygenn_bio"
 CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# DA-STDP Weight Update Model (GPU에서 실행)
+# === R-STDP (Reward-Modulated STDP) with Long Eligibility Trace ===
+# 핵심: 3초 전 행동도 기억하는 "화학적 흔적"
+#
+# 2-Trace System:
+#   1. stdp_trace (τ=20ms): spike timing 감지 (LTP/LTD 부호 결정)
+#   2. eligibility (τ=3000ms): 보상까지 기억 유지 (3초간 생존)
+#
+# 동작:
+#   Pre-spike → stdp_trace 감소 (LTD 준비)
+#   Post-spike → stdp_trace 증가 (LTP)
+#   매 스텝 → stdp_trace를 eligibility로 누적, 둘 다 감쇠
+#   보상 → eligibility 기반으로 가중치 업데이트 (Dopamine Shower)
+#
+r_stdp_model = create_weight_update_model(
+    "R_STDP_LONG_TRACE",
+    params=["tauStdp", "tauElig", "aPlus", "aMinus", "wMin", "wMax", "dopamine", "eta"],
+    vars=[("g", "scalar"), ("stdp_trace", "scalar"), ("eligibility", "scalar")],
+    pre_spike_syn_code="""
+        // Pre-spike: 전류 전달 + LTD 준비
+        addToPost(g);
+        stdp_trace -= aMinus;
+    """,
+    post_spike_syn_code="""
+        // Post-spike: LTP (양의 흔적)
+        stdp_trace += aPlus;
+    """,
+    # 매 시뮬레이션 스텝마다 실행 (synapse dynamics)
+    synapse_dynamics_code="""
+        // 1. STDP trace 감쇠 (빠름: 20ms)
+        stdp_trace *= exp(-dt / tauStdp);
+
+        // 2. STDP → Eligibility 누적 (흔적 전달)
+        eligibility += stdp_trace * dt * 0.01;
+
+        // 3. Eligibility trace 감쇠 (느림: 3000ms)
+        eligibility *= exp(-dt / tauElig);
+
+        // 4. 도파민 조절 학습 (보상 시에만 유의미)
+        scalar da_signal = dopamine - 0.5;
+        if (fabs(da_signal) > 0.1) {
+            // 보상/벌칙이 있을 때만 가중치 업데이트
+            g = fmin(wMax, fmax(wMin, g + eta * da_signal * eligibility));
+        }
+    """,
+)
+
+# Legacy: 이전 DA-STDP 모델 (비교용으로 유지)
 da_stdp_model = create_weight_update_model(
     "DA_STDP_BIO",
     params=["tauPlus", "tauMinus", "aPlus", "aMinus", "wMin", "wMax", "dopamine"],
@@ -93,6 +139,7 @@ class BiologicalConfig:
     # === SPECIALIZED CIRCUITS ===
     n_hunger_circuit: int = 10000   # Food seeking drive
     n_fear_circuit: int = 10000     # Danger avoidance drive
+    n_attack_circuit: int = 5000    # Predator attack drive (적 추적)
 
     # === INTEGRATION (Mushroom Body) ===
     n_integration_1: int = 50000    # First integration
@@ -102,6 +149,42 @@ class BiologicalConfig:
     n_motor_left: int = 5000     # Turn left
     n_motor_right: int = 5000    # Turn right
     n_motor_boost: int = 3000    # Emergency boost
+
+    @classmethod
+    def lite(cls) -> "BiologicalConfig":
+        """경량 설정 - GPU 메모리 절약용 (50K neurons)"""
+        return cls(
+            n_food_eye=2000,
+            n_enemy_eye=2000,
+            n_body_eye=1000,
+            n_hunger_circuit=3000,
+            n_fear_circuit=3000,
+            n_attack_circuit=1500,
+            n_integration_1=15000,
+            n_integration_2=15000,
+            n_motor_left=1500,
+            n_motor_right=1500,
+            n_motor_boost=1000,
+            sparsity=0.01,  # 약간 더 조밀한 연결
+        )
+
+    @classmethod
+    def dev(cls) -> "BiologicalConfig":
+        """개발/디버깅용 초경량 설정 (15K neurons)"""
+        return cls(
+            n_food_eye=800,
+            n_enemy_eye=800,
+            n_body_eye=400,
+            n_hunger_circuit=1000,
+            n_fear_circuit=1000,
+            n_attack_circuit=500,
+            n_integration_1=4000,
+            n_integration_2=4000,
+            n_motor_left=500,
+            n_motor_right=500,
+            n_motor_boost=300,
+            sparsity=0.02,  # 더 조밀한 연결로 보상
+        )
 
     # Network parameters
     sparsity: float = 0.005      # 0.5% connectivity
@@ -113,14 +196,19 @@ class BiologicalConfig:
     v_thresh: float = -50.0
     tau_refrac: float = 2.0
 
-    # STDP parameters (최적값 - 실험으로 검증됨)
-    # Slow Learning (τ=10, η=0.001) 실험: Best 20 → 역효과 확인
-    tau_plus: float = 20.0    # 20ms 윈도우가 최적
-    tau_minus: float = 20.0   # 대칭
-    a_plus: float = 0.005     # 이 학습률이 WTA와 최적 조합
-    a_minus: float = 0.006    # LTD 약간 강하게 (안정성)
+    # === R-STDP parameters (Long Eligibility Trace) ===
+    # 핵심: 3초 전 행동도 기억하는 "화학적 흔적"
+    tau_stdp: float = 20.0       # STDP 타이밍 윈도우 (빠름)
+    tau_eligibility: float = 3000.0  # 자격 흔적 시간 (3초 = 3000ms)
+    a_plus: float = 0.005        # LTP 강도
+    a_minus: float = 0.006       # LTD 강도
+    eta: float = 0.01            # 도파민 조절 학습률
     w_max: float = 1.0
     w_min: float = 0.0
+
+    # Legacy STDP (비교용)
+    tau_plus: float = 20.0
+    tau_minus: float = 20.0
 
     # Biological parameters
     innate_boost: float = 3.0       # 선천적 회피 본능 강도
@@ -142,7 +230,7 @@ class BiologicalConfig:
     @property
     def total_neurons(self) -> int:
         return (self.n_food_eye + self.n_enemy_eye + self.n_body_eye +
-                self.n_hunger_circuit + self.n_fear_circuit +
+                self.n_hunger_circuit + self.n_fear_circuit + self.n_attack_circuit +
                 self.n_integration_1 + self.n_integration_2 +
                 self.n_motor_left + self.n_motor_right + self.n_motor_boost)
 
@@ -225,8 +313,10 @@ class BiologicalBrain:
             "hunger", self.config.n_hunger_circuit, "LIF", lif_params, lif_init)
         self.fear = self.model.add_neuron_population(
             "fear", self.config.n_fear_circuit, "LIF", lif_params, lif_init)
+        self.attack = self.model.add_neuron_population(
+            "attack", self.config.n_attack_circuit, "LIF", lif_params, lif_init)
 
-        print(f"  Circuits: Hunger({self.config.n_hunger_circuit:,}) + Fear({self.config.n_fear_circuit:,})")
+        print(f"  Circuits: Hunger({self.config.n_hunger_circuit:,}) + Fear({self.config.n_fear_circuit:,}) + Attack({self.config.n_attack_circuit:,})")
 
         # === 3. INTEGRATION LAYERS ===
         self.integration_1 = self.model.add_neuron_population(
@@ -247,7 +337,19 @@ class BiologicalBrain:
 
         print(f"  Motor: Left({self.config.n_motor_left:,}) + Right({self.config.n_motor_right:,}) + Boost({self.config.n_motor_boost:,})")
 
-        # === STDP 파라미터 ===
+        # === R-STDP 파라미터 (3초 Eligibility Trace) ===
+        r_stdp_params = {
+            "tauStdp": self.config.tau_stdp,       # 20ms (spike timing)
+            "tauElig": self.config.tau_eligibility, # 3000ms (3초 기억)
+            "aPlus": self.config.a_plus,
+            "aMinus": self.config.a_minus,
+            "wMin": self.config.w_min,
+            "wMax": self.config.w_max,
+            "dopamine": 0.5,
+            "eta": self.config.eta,  # 도파민 학습률
+        }
+
+        # Legacy STDP 파라미터 (비교용)
         stdp_params = {
             "tauPlus": self.config.tau_plus,
             "tauMinus": self.config.tau_minus,
@@ -258,14 +360,15 @@ class BiologicalBrain:
             "dopamine": 0.5,
         }
 
-        # 시냅스 생성 헬퍼
+        # 시냅스 생성 헬퍼 (R-STDP 사용)
         def create_synapse(name, pre, post, n_pre, n_post, sparsity=None, w_init=None):
             sp = sparsity or self.config.sparsity
             fan_in = n_pre * sp
             std = w_init if w_init else (1.0 / np.sqrt(fan_in) if fan_in > 0 else 0.1)
             syn = self.model.add_synapse_population(
                 name, "SPARSE", pre, post,
-                init_weight_update(da_stdp_model, stdp_params, {"g": std, "eligibility": 0.0}),
+                init_weight_update(r_stdp_model, r_stdp_params,
+                                   {"g": std, "stdp_trace": 0.0, "eligibility": 0.0}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
                 init_sparse_connectivity("FixedProbability", {"prob": sp})
             )
@@ -279,15 +382,23 @@ class BiologicalBrain:
         self.syn_food_hunger = create_synapse(
             "food_hunger", self.food_eye, self.hunger,
             self.config.n_food_eye, self.config.n_hunger_circuit)
+        # Enemy → Fear/Attack: 가중치 대폭 강화 (신호 전달 보장)
         self.syn_enemy_fear = create_synapse(
             "enemy_fear", self.enemy_eye, self.fear,
-            self.config.n_enemy_eye, self.config.n_fear_circuit)
+            self.config.n_enemy_eye, self.config.n_fear_circuit,
+            sparsity=self.config.sparsity * 4,  # 2% 연결
+            w_init=2.0)  # 강한 가중치
+        self.syn_enemy_attack = create_synapse(
+            "enemy_attack", self.enemy_eye, self.attack,
+            self.config.n_enemy_eye, self.config.n_attack_circuit,
+            sparsity=self.config.sparsity * 4,  # 2% 연결
+            w_init=2.5)  # 공격이 공포보다 강하게!
         self.syn_body_fear = create_synapse(
             "body_fear", self.body_eye, self.fear,
             self.config.n_body_eye, self.config.n_fear_circuit,
             sparsity=self.config.sparsity * 0.5)
 
-        self.all_synapses.extend([self.syn_food_hunger, self.syn_enemy_fear, self.syn_body_fear])
+        self.all_synapses.extend([self.syn_food_hunger, self.syn_enemy_fear, self.syn_enemy_attack, self.syn_body_fear])
 
         # Circuits → Integration 1
         self.syn_hunger_int1 = create_synapse(
@@ -296,8 +407,11 @@ class BiologicalBrain:
         self.syn_fear_int1 = create_synapse(
             "fear_int1", self.fear, self.integration_1,
             self.config.n_fear_circuit, self.config.n_integration_1)
+        self.syn_attack_int1 = create_synapse(
+            "attack_int1", self.attack, self.integration_1,
+            self.config.n_attack_circuit, self.config.n_integration_1)
 
-        self.all_synapses.extend([self.syn_hunger_int1, self.syn_fear_int1])
+        self.all_synapses.extend([self.syn_hunger_int1, self.syn_fear_int1, self.syn_attack_int1])
 
         # Integration 1 → Integration 2
         self.syn_int1_int2 = create_synapse(
@@ -326,9 +440,26 @@ class BiologicalBrain:
             "fear_hunger_inhib", self.fear, self.hunger,
             self.config.n_fear_circuit, self.config.n_hunger_circuit,
             sparsity=self.config.sparsity * 2,
-            w_init=abs(self.config.inhibitory_weight))  # Will be negated in processing
+            w_init=abs(self.config.inhibitory_weight))
 
         self.all_synapses.append(self.syn_fear_hunger_inhib)
+
+        # === FEAR ↔ ATTACK 상호 억제 (Fight-or-Flight Competition) ===
+        # 튜닝: 공포가 공격을 너무 억제하면 attack_triggers=0 문제 발생
+        # → Fear→Attack 억제를 약하게, Attack→Fear 억제를 강하게 (공격 우선)
+        print(f"  Fear ↔ Attack Mutual Inhibition (Attack-biased)")
+        self.syn_fear_attack_inhib = create_synapse(
+            "fear_attack_inhib", self.fear, self.attack,
+            self.config.n_fear_circuit, self.config.n_attack_circuit,
+            sparsity=self.config.sparsity * 2,
+            w_init=abs(self.config.inhibitory_weight) * 0.3)  # 공포→공격 억제 (약하게!)
+        self.syn_attack_fear_inhib = create_synapse(
+            "attack_fear_inhib", self.attack, self.fear,
+            self.config.n_attack_circuit, self.config.n_fear_circuit,
+            sparsity=self.config.sparsity * 2,
+            w_init=abs(self.config.inhibitory_weight) * 0.7)  # 공격→공포 억제 (강하게!)
+
+        self.all_synapses.extend([self.syn_fear_attack_inhib, self.syn_attack_fear_inhib])
 
         # === DIRECT REFLEX: Fear → Boost ===
         self.syn_fear_boost = create_synapse(
@@ -370,6 +501,28 @@ class BiologicalBrain:
             sparsity=self.config.sparsity * 2)
 
         self.all_synapses.extend([self.syn_food_motor_left, self.syn_food_motor_right])
+
+        # === ATTACK CIRCUIT → Motor (적 방향으로 돌진) ===
+        # 튜닝: 공격 충동이 모터까지 전달되어야 함 - 가중치 상향
+        print(f"  Attack Reflex: Attack→Motor (boosted)")
+        self.syn_attack_motor_left = create_synapse(
+            "attack_motor_left", self.attack, self.motor_left,
+            self.config.n_attack_circuit, self.config.n_motor_left,
+            sparsity=self.config.sparsity * 2,
+            w_init=0.5)  # 0.2 → 0.5 (2.5x 강화)
+        self.syn_attack_motor_right = create_synapse(
+            "attack_motor_right", self.attack, self.motor_right,
+            self.config.n_attack_circuit, self.config.n_motor_right,
+            sparsity=self.config.sparsity * 2,
+            w_init=0.5)  # 0.2 → 0.5
+        # Attack → Boost (공격 시 가속 - 돌진!)
+        self.syn_attack_boost = create_synapse(
+            "attack_boost", self.attack, self.motor_boost,
+            self.config.n_attack_circuit, self.config.n_motor_boost,
+            sparsity=self.config.sparsity * 3,
+            w_init=0.4)  # 0.15 → 0.4 (공격 시 부스트 확률 증가)
+
+        self.all_synapses.extend([self.syn_attack_motor_left, self.syn_attack_motor_right, self.syn_attack_boost])
 
         # === WTA (Winner-Take-All) 측면 억제 회로 ===
         # 가장 강하게 발화한 모터 뉴런이 나머지를 억제 → 깨끗한 STDP 학습
@@ -454,10 +607,11 @@ class BiologicalBrain:
         # State
         self.dopamine = 0.5
         self.fear_level = 0.0
+        self.attack_level = 0.0
         self.hunger_level = 0.5
         self.steps = 0
         self.generation = 0  # 윤회 세대
-        self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0}
+        self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
 
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
         """센서 입력 처리 및 행동 출력"""
@@ -500,14 +654,19 @@ class BiologicalBrain:
         right_rate = self._decode_activity(right_v)
         boost_rate = self._decode_activity(boost_v)
 
-        # Read fear level (for stats)
+        # Read fear & attack levels (for stats and behavior modulation)
         self.fear.vars["V"].pull_from_device()
+        self.attack.vars["V"].pull_from_device()
         fear_v = self.fear.vars["V"].view
+        attack_v = self.attack.vars["V"].view
         self.fear_level = self._decode_activity(fear_v)
+        self.attack_level = self._decode_activity(attack_v)
 
-        # 공포 활성화 감지 (낮은 임계값)
+        # 공포/공격 활성화 감지 (Fight-or-Flight)
         if self.fear_level > 0.02 or enemy_signal.max() > 0.2:
             self.stats['fear_triggers'] += 1
+        if self.attack_level > 0.001:  # 임계값 낮춤 (0.02 → 0.001)
+            self.stats['attack_triggers'] += 1
 
         # === COMPUTE ACTION ===
         # Direction from motor difference
@@ -595,7 +754,7 @@ class BiologicalBrain:
                          False면 완전 초기화
         """
         all_pops = [self.food_eye, self.enemy_eye, self.body_eye,
-                    self.hunger, self.fear,
+                    self.hunger, self.fear, self.attack,
                     self.integration_1, self.integration_2,
                     self.motor_left, self.motor_right, self.motor_boost]
 
@@ -606,8 +765,9 @@ class BiologicalBrain:
 
         self.dopamine = 0.5
         self.fear_level = 0.0
+        self.attack_level = 0.0
         self.hunger_level = 0.5
-        self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0}
+        self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
 
 
 class BiologicalAgent:
@@ -654,6 +814,7 @@ class BiologicalAgent:
             'reward': total_reward,
             'food_eaten': info.get('foods_eaten', 0),
             'fear_triggers': self.brain.stats['fear_triggers'],
+            'attack_triggers': self.brain.stats['attack_triggers'],
             'boosts': self.brain.stats['boosts'],
             'generation': self.brain.generation
         }
@@ -688,7 +849,7 @@ class BiologicalAgent:
             gen = result.get('generation', 0)
             print(f"[Ep {ep+1:3d}] Gen:{gen:3d} | Length: {result['length']:3d} | "
                   f"High: {high} | Avg(10): {avg:.0f} | "
-                  f"Food: {result['food_eaten']} | Fear: {result['fear_triggers']}")
+                  f"Food: {result['food_eaten']} | Fear: {result['fear_triggers']} | Attack: {result['attack_triggers']}")
 
         elapsed = time.time() - start_time
 
@@ -713,15 +874,28 @@ if __name__ == "__main__":
     parser.add_argument('--episodes', type=int, default=100, help='Number of episodes')
     parser.add_argument('--render', choices=['none', 'pygame', 'ascii'], default='none')
     parser.add_argument('--enemies', type=int, default=3, help='Number of enemy bots')
+    parser.add_argument('--lite', action='store_true', help='Use lite config (50K neurons) - GPU safe')
+    parser.add_argument('--dev', action='store_true', help='Use dev config (15K neurons) - debugging')
     args = parser.parse_args()
 
     print("Biological PyGeNN Slither.io Agent")
     print(f"Render mode: {args.render}")
     print(f"Enemies: {args.enemies}")
+
+    # GPU 안전 모드 선택
+    if args.dev:
+        brain_config = BiologicalConfig.dev()
+        print("Mode: DEV (15K neurons - GPU safe for debugging)")
+    elif args.lite:
+        brain_config = BiologicalConfig.lite()
+        print("Mode: LITE (50K neurons - GPU safe)")
+    else:
+        brain_config = BiologicalConfig()
+        print("Mode: FULL (153K neurons - GPU intensive!)")
+    print(f"Total neurons: {brain_config.total_neurons:,}")
     print()
 
     env_config = SlitherConfig(n_enemies=args.enemies)
-    brain_config = BiologicalConfig()
 
     agent = BiologicalAgent(
         brain_config=brain_config,
