@@ -196,15 +196,15 @@ class BiologicalConfig:
     v_thresh: float = -50.0
     tau_refrac: float = 2.0
 
-    # === R-STDP parameters (Long Eligibility Trace) ===
-    # 핵심: 3초 전 행동도 기억하는 "화학적 흔적"
+    # === R-STDP parameters (v20: 짧고 강한 학습) ===
+    # v20: 1초로 단축 - Slither.io는 빠르게 변함, 3초는 너무 긴 기억
     tau_stdp: float = 20.0       # STDP 타이밍 윈도우 (빠름)
-    tau_eligibility: float = 3000.0  # 자격 흔적 시간 (3초 = 3000ms)
+    tau_eligibility: float = 1000.0  # v20: 1초로 단축 (인과관계 명확화)
     a_plus: float = 0.005        # LTP 강도
     a_minus: float = 0.006       # LTD 강도
-    eta: float = 0.01            # 도파민 조절 학습률
-    w_max: float = 1.0
-    w_min: float = 0.0
+    eta: float = 0.05            # v20: 학습률 5배 증가 (wMin/wMax 클리핑 있음)
+    w_max: float = 10.0          # v20: 가중치 범위 확대
+    w_min: float = -5.0          # v20: 억제 허용
 
     # Legacy STDP (비교용)
     tau_plus: float = 20.0
@@ -729,8 +729,9 @@ class BiologicalBrain:
         return float(np.clip(v_norm, 0, 1).mean())
 
     def _update_dopamine(self, reward: float):
-        """도파민 업데이트 및 GPU 전송"""
-        self.dopamine = np.clip(self.dopamine + reward * 0.15, 0.0, 1.0)
+        """도파민 업데이트 및 GPU 전송 (v20: 보상 신호 강화)"""
+        # v20: 0.15 → 0.30 (2배 강화) - 음식/죽음의 영향력 증가
+        self.dopamine = np.clip(self.dopamine + reward * 0.30, 0.0, 1.0)
         for syn in self.all_synapses:
             syn.set_dynamic_param_value("dopamine", self.dopamine)
 
@@ -770,32 +771,63 @@ class BiologicalBrain:
         self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
 
     def save_weights(self, path: Path):
-        """시냅스 가중치 저장"""
-        weights = {}
+        """시냅스 가중치 + 연결 인덱스 저장 (SPARSE connectivity 포함)"""
+        checkpoint = {}
         for syn in self.all_synapses:
-            syn.vars["g"].pull_from_device()
-            # Sparse connectivity uses .values, not .view
-            weights[syn.name] = np.array(syn.vars["g"].values)
+            # Pull connectivity to get indices + weights
+            syn.pull_connectivity_from_device()
+            checkpoint[f"{syn.name}_g"] = np.array(syn.vars["g"].values)
+            checkpoint[f"{syn.name}_ind"] = np.array(syn.get_sparse_post_inds())
+            checkpoint[f"{syn.name}_row_length"] = np.array(syn._row_lengths.view)
 
-        np.savez(path, **weights)
-        print(f"  Saved weights: {path}")
+        np.savez(path, **checkpoint)
+        print(f"  Saved weights: {path} ({len(self.all_synapses)} synapses)")
 
     def load_weights(self, path: Path) -> bool:
-        """시냅스 가중치 로드"""
+        """시냅스 가중치 + 연결 인덱스 로드 (SPARSE connectivity 복원)"""
         if not path.exists():
             print(f"  No checkpoint: {path}")
             return False
 
         try:
             data = np.load(path)
+            loaded_count = 0
+
             for syn in self.all_synapses:
-                if syn.name in data:
-                    syn.vars["g"].values[:] = data[syn.name]
+                g_key = f"{syn.name}_g"
+                ind_key = f"{syn.name}_ind"
+                row_key = f"{syn.name}_row_length"
+
+                if g_key in data and ind_key in data and row_key in data:
+                    # New format: restore connectivity + weights
+                    saved_g = data[g_key]
+                    saved_ind = data[ind_key]
+                    saved_row = data[row_key]
+
+                    # Restore connectivity structure
+                    syn._row_lengths.view[:] = saved_row
+                    syn._ind.view[:len(saved_ind)] = saved_ind
+                    syn.push_connectivity_to_device()
+
+                    # Restore weights
+                    syn.vars["g"].values[:len(saved_g)] = saved_g
                     syn.vars["g"].push_to_device()
-            print(f"  Loaded weights: {path}")
-            return True
+                    loaded_count += 1
+                elif syn.name in data:
+                    # Old format (weights only) - connectivity may not match
+                    syn.pull_connectivity_from_device()
+                    saved_weights = data[syn.name]
+                    min_size = min(len(saved_weights), len(syn.vars["g"].values))
+                    syn.vars["g"].values[:min_size] = saved_weights[:min_size]
+                    syn.vars["g"].push_to_device()
+                    loaded_count += 1
+
+            print(f"  Loaded weights: {path} ({loaded_count} synapses)")
+            return loaded_count > 0
         except Exception as e:
             print(f"  Load failed: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
 

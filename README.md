@@ -12,7 +12,7 @@
 - **FEP 공식이 아니다**: G(a) = Risk + Ambiguity (X)
 - **생물학적 메커니즘**: LIF 뉴런 + R-STDP + 도파민 (O)
 
-## 현재 상태: Slither.io PyGeNN Agent (158K neurons)
+## 현재 상태: Slither.io PyGeNN v21
 
 ### 진화 경로
 
@@ -20,20 +20,21 @@
 |------|------|------|------|
 | 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
 | 2단계 | Slither.io snnTorch | 15,800 | High: 57 (적 3마리) |
-| **3단계** | **Slither.io PyGeNN** | **158,000** | **High: 16 (적 7마리)** |
+| 3단계 | Slither.io PyGeNN | 158,000 | High: 16 (적 7마리) |
+| v19 | PyGeNN + 음식추적 | 13,800 (dev) | High: 10 |
+| **v21** | **PyGeNN + 체크포인트 수정** | **46,500 (lite)** | **High: 17** |
 
-### PyGeNN 아키텍처
+### v19 아키텍처
 
 ```
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Food Eye   │  │  Enemy Eye   │  │   Body Eye   │
-│    (8K)      │  │    (8K)      │  │    (4K)      │
+│  Food Eye    │  │  Enemy Eye   │  │   Body Eye   │
+│  L/R 분리    │  │  L/R 분리    │  │              │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │
        ▼                 ▼                 ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │Hunger Circuit│  │ Fear Circuit │  │Attack Circuit│
-│    (10K)     │  │    (10K)     │  │    (5K)      │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │
        │    Fear --| Hunger (억제)         │
@@ -42,56 +43,95 @@
                     ▼
          ┌────────────────────┐
          │   Integration      │
-         │      (100K)        │
          └─────────┬──────────┘
                    │
-        ┌──────────┼──────────┐
-        ▼          ▼          ▼
-   ┌───────┐  ┌───────┐  ┌───────┐
-   │ Left  │  │ Right │  │ Boost │
-   │ (5K)  │  │ (5K)  │  │ (3K)  │
-   └───────┘  └───────┘  └───────┘
-        ↑          ↑          ↑
-        └── WTA 측면억제 ──────┘
+    ┌──────────────┼──────────────┐
+    ▼              ▼              ▼
+┌───────┐     ┌───────┐     ┌───────┐
+│ Left  │◄────│  WTA  │────►│ Right │
+└───────┘     └───────┘     └───────┘
+    ▲                             ▲
+    │                             │
+┌───┴─────────────────────────────┴───┐
+│         INNATE REFLEX (v19)         │
+├─────────────────────────────────────┤
+│ Enemy_L → Motor_R (교차, w=80)      │
+│ Enemy_R → Motor_L (교차, w=80)      │
+│ Food_L  → Motor_L (동측, w=30)      │
+│ Food_R  → Motor_R (동측, w=30)      │
+└─────────────────────────────────────┘
 ```
 
 ## 빠른 시작
 
 ### 요구사항
 
+- **WSL2** (Ubuntu 24.04)
+- **CUDA 12.x** (WSL 내 설치)
+- **Python 3.12+**
+
+### WSL 환경 설정
+
 ```bash
-# PyGeNN (GPU 가속)
-pip install pygenn
+# 1. WSL 진입
+wsl -d Ubuntu-24.04
 
-# snnTorch (CPU/GPU)
-pip install torch snntorch numpy
+# 2. Python venv 생성 (최초 1회)
+python3 -m venv ~/pygenn_wsl
+source ~/pygenn_wsl/bin/activate
 
-# 시각화
-pip install pygame
+# 3. 패키지 설치
+pip install pygenn numpy pygame
+
+# 4. 작업 디렉토리 생성
+mkdir -p ~/pygenn_test
 ```
 
 ### Slither.io 실행
 
 ```bash
-cd backend/genesis
+# WSL 진입
+wsl -d Ubuntu-24.04
+
+# 환경 설정
+export CUDA_PATH=/usr/local/cuda-12.6
+source ~/pygenn_wsl/bin/activate
+cd ~/pygenn_test
 
 # 훈련 (headless)
-python slither_pygenn_biological.py --episodes 300 --enemies 7 --render none
+python /mnt/c/<YOUR_PATH>/BrainSimulation/backend/genesis/slither_pygenn_biological.py \
+    --dev --episodes 100 --enemies 5 --render none
 
 # 시각화 모드
-python slither_pygenn_biological.py --episodes 10 --enemies 7 --render pygame
+python /mnt/c/<YOUR_PATH>/BrainSimulation/backend/genesis/slither_pygenn_biological.py \
+    --dev --episodes 10 --enemies 3 --render pygame
 ```
 
-### Chrome Dino (졸업)
+### 모드 옵션
 
-```bash
-cd backend/genesis
-python dino_dual_channel_agent.py --eval
-```
+| 옵션 | 뉴런 수 | 용도 |
+|------|---------|------|
+| `--dev` | 13,800 | 디버깅, 빠른 테스트 |
+| `--lite` | 50,000 | 중간 규모 |
+| (없음) | 158,000 | 전체 모델 |
 
 ## 핵심 메커니즘
 
-### 1. R-STDP (Reward-Modulated STDP)
+### 1. 선천적 반사 회로 (v19)
+
+```python
+# 적 회피: 교차 배선 (contralateral)
+# 왼쪽 적 감지 → 오른쪽으로 회전 (도망)
+Enemy_L → Motor_R (weight=80)
+Enemy_R → Motor_L (weight=80)
+
+# 음식 추적: 동측 배선 (ipsilateral)
+# 왼쪽 음식 감지 → 왼쪽으로 회전 (추적)
+Food_L → Motor_L (weight=30)
+Food_R → Motor_R (weight=30)
+```
+
+### 2. R-STDP (Reward-Modulated STDP)
 
 ```python
 # 2-Trace System:
@@ -104,7 +144,7 @@ Post-spike → stdp_trace += aPlus
 보상 시   → g += η * dopamine * eligibility
 ```
 
-### 2. Fight-or-Flight 회로
+### 3. Fight-or-Flight 회로
 
 ```python
 # Fear ↔ Attack 상호 억제 (편도체 모델)
@@ -112,43 +152,24 @@ Fear 강함 → Attack 억제 → 도망
 Attack 강함 → Fear 억제 → 공격
 ```
 
-### 3. 선천적 본능 (Innate Reflex)
-
-```python
-# 시냅스 초기 가중치로 구현 (if문 아님)
-Enemy LEFT → RIGHT motor (교차 배선)
-초기 가중치 3x 부스트 (innate_boost = 3.0)
-```
-
 ## 프로젝트 구조
 
 ```
 backend/genesis/
-├── # PyGeNN (Current - GPU)
-├── slither_pygenn_biological.py  # 158K neuron 에이전트 ★
+├── slither_pygenn_biological.py  # v19 PyGeNN 에이전트 ★
 ├── gpu_monitor.py                # GPU 모니터링
-│
-├── # snnTorch (Previous)
-├── slither_snn_agent.py          # 15.8K neuron 에이전트
+├── slither_snn_agent.py          # snnTorch 에이전트 (이전)
 ├── slither_gym.py                # 훈련 환경
-├── snn_scalable.py               # SparseLIFLayer
-│
-├── # Chrome Dino (Graduated)
-├── dino_dual_channel_agent.py    # 이중 채널 (725점)
-│
+├── dino_dual_channel_agent.py    # Chrome Dino (졸업)
 └── checkpoints/                  # 저장된 모델
 ```
 
 ## 핵심 발견
 
-1. **addToPost(g) 필수**: GeNN에서 시냅스 전류 전달은 자동이 아님
-2. **GPU 메모리 vs 연산**: SNN은 compute-bound (메모리 27%인데 GPU 65%)
+1. **교차 배선 (Contralateral)**: 적 회피 - 반대편으로 회전
+2. **동측 배선 (Ipsilateral)**: 음식 추적 - 같은 편으로 회전
 3. **빈 서판은 죽음**: 선천적 본능 = 시냅스 초기 가중치
-4. **채널 분리**: 감각 채널 분리로 안정적 학습
-
-## 레거시 코드
-
-FEP, Predictive Coding, E6-E8 실험: `archive/legacy` 브랜치
+4. **WTA wMax 주의**: `wMax=0`이면 모든 가중치가 0으로 클리핑됨
 
 ## 참고
 

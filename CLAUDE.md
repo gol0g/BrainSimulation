@@ -4,64 +4,129 @@
 
 ## 환경 설정 (CRITICAL - 반드시 읽을 것)
 
-```bash
-# PyGeNN 환경 (GPU SNN 실행용) - 시스템 Python이 아님!
-C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe
-
-# 실행 예시 (PowerShell)
-& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
-    'C:\Users\JungHyun\Desktop\brain\BrainSimulation\backend\genesis\slither_pygenn_biological.py' `
-    --episodes 300 --enemies 7 --render none
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  ⚠️  절대 Windows Python으로 PyGeNN 실행하지 마라!            ║
+║      반드시 WSL Ubuntu-24.04 사용!                            ║
+║      Windows pygenn_env는 죽은 환경임!                        ║
+╚═══════════════════════════════════════════════════════════════╝
 ```
 
-**주의**: `conda activate` 아님! 독립 venv 환경.
+```bash
+# PyGeNN 환경 - WSL Ubuntu-24.04 사용!
+
+# WSL 실행 명령어
+wsl -d Ubuntu-24.04 -e bash -c "
+export CUDA_PATH=/usr/local/cuda-12.6
+export PATH=\$CUDA_PATH/bin:\$PATH
+export LD_LIBRARY_PATH=\$CUDA_PATH/lib64:\$LD_LIBRARY_PATH
+source ~/pygenn_wsl/bin/activate
+cd ~/pygenn_test
+python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episodes 10 --enemies 3 --render pygame
+"
+```
+
+**WSL 환경 정보:**
+- Python venv: `~/pygenn_wsl/`
+- CUDA: `/usr/local/cuda-12.6`
+- 작업 디렉토리: `~/pygenn_test/`
+- `<PROJECT_PATH>`: 이 프로젝트의 WSL 경로 (예: `/mnt/c/.../BrainSimulation`)
 
 ---
 
-## 현재 상태: PyGeNN Slither.io (158K neurons)
+## 현재 상태: PyGeNN Slither.io v21
 
-### 최신 결과 (2025-01-19)
+### 최신 결과 (2025-01-22)
 
 ```
 ============================================================
-Training Results (300 Episodes, 7 Enemies)
+Training Results (v21 - 300 Episodes)
 ============================================================
-  Best Length: 16
-  Final Avg:   7.1
-  Time:        1406.6s (4.69s/ep)
+  Best Length: 17
+  Final Avg:   7.8
+  Mode:        LITE (46,500 neurons)
+  Time:        866.8s (2.89s/ep)
 
   GPU Status:
-    Util: 65.6% avg (compute-bound, not memory-bound)
-    Temp: 55.2°C avg, 58°C max (안정)
-    Memory: 2.2GB / 8GB (27% 사용)
+    Util: 36.9% avg
+    Temp: 42.0°C avg
+    Memory: 1757MB / 8GB
 ============================================================
 ```
 
-### 핵심 수정사항 (이번 세션)
+### v21 핵심 수정사항 (2025-01-22)
 
-**1. Attack Circuit 버그 수정** - `addToPost(g)` 누락
+**1. 체크포인트 저장/로드 수정 - SPARSE Connectivity 포함**
 ```python
-# slither_pygenn_biological.py:57-60
-# BEFORE: 시냅스 전류가 전달 안됨 (Attack triggers = 0)
-pre_spike_syn_code="""
-    stdp_trace -= aMinus;  # ← addToPost(g) 없음!
-""",
+# BEFORE: 가중치만 저장 → 로드해도 랜덤 connectivity라 의미 없음
+weights[syn.name] = syn.vars["g"].values
 
-# AFTER: 전류 전달 추가 (Attack triggers = 0~517)
-pre_spike_syn_code="""
-    addToPost(g);          # ← 핵심 수정!
-    stdp_trace -= aMinus;
-""",
+# AFTER: connectivity indices까지 저장 → 완벽한 모델 복원
+checkpoint[f"{syn.name}_g"] = syn.vars["g"].values
+checkpoint[f"{syn.name}_ind"] = syn.get_sparse_post_inds()
+checkpoint[f"{syn.name}_row_length"] = syn._row_lengths.view
 ```
 
-**2. Enemy→Attack 시냅스 강화**
+**2. v20 R-STDP 파라미터 최적화**
 ```python
-# sparsity 4배: 0.5% → 2%
-# weight 2.5배: 1.0 → 2.5
-self.syn_enemy_attack = create_synapse(
-    "enemy_attack", self.enemy_eye, self.attack,
-    sparsity=self.config.sparsity * 4,  # 2% 연결
-    w_init=2.5)  # 공격이 공포보다 강하게
+# 빠르고 강한 학습
+tau_eligibility: 3000.0 → 1000.0  # 1초로 단축 (인과관계 명확화)
+eta: 0.01 → 0.05                   # 학습률 5배 증가
+w_max: 1.0 → 10.0                  # 가중치 범위 확대
+w_min: 0.0 → -5.0                  # 억제 허용
+```
+
+**3. 보상 신호 강화**
+```python
+# 음식/죽음의 영향력 2배 증가
+reward_scale: 0.15 → 0.30
+```
+
+---
+
+### v19 핵심 수정사항 (이전)
+
+**1. WTA 가중치 버그 수정**
+```python
+# BEFORE: wMax=0.0이 모든 가중치를 0으로 클리핑
+inhib_params["wMax"] = 0.0  # 버그!
+
+# AFTER: 실제 억제 가중치로 설정
+inhib_params["wMax"] = wta_weight_boost  # -5.0
+```
+
+**2. 방향 계산 버그 수정**
+```python
+# BEFORE: cos(-x) = cos(x) 라서 좌우 구분 불가
+target_x = 0.5 + 0.2 * np.cos(angle_delta)
+
+# AFTER: 직접 매핑
+turn_delta = right_rate - left_rate
+target_x = 0.5 + turn_delta * 0.3
+```
+
+**3. 스파이크 카운팅 버그 수정**
+```python
+# BEFORE: RefracTime > 0 은 refractory 전체 기간 카운트 (20 스텝)
+left_spikes = np.sum(self.motor_left.vars["RefracTime"].view > 0)
+
+# AFTER: 새 스파이크만 카운트 (최근 0.5ms)
+spike_threshold = self.config.tau_refrac - 0.5  # 1.5
+left_spikes = np.sum(self.motor_left.vars["RefracTime"].view > spike_threshold)
+```
+
+**4. 동측 음식 추적 경로 추가 (v19 신규)**
+```python
+# food_eye를 좌/우 분리
+food_eye_left, food_eye_right
+
+# 동측 배선 (ipsilateral) - 음식 방향으로 회전
+Food_L → Motor_L (가중치=30)
+Food_R → Motor_R (가중치=30)
+
+# 교차 배선 (contralateral) - 적 회피 (기존, 강화)
+Enemy_L → Motor_R (가중치=80)
+Enemy_R → Motor_L (가중치=80)
 ```
 
 ### 진화 경로
@@ -70,13 +135,8 @@ self.syn_enemy_attack = create_synapse(
 |------|------|------|------|
 | 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
 | 2단계 | Slither.io snnTorch | 15,800 | High: 57 (적 3마리) |
-| **3단계** | **Slither.io PyGeNN** | **158,000** | **High: 16 (적 7마리)** |
-
-### 다음 단계
-
-1. **추가 훈련**: 500+ 에피소드로 R-STDP 학습 안정화
-2. **Attack 회로 튜닝**: Fear↔Attack 균형 조절
-3. **시각화 분석**: `--render pygame`으로 행동 패턴 관찰
+| 3단계 | Slither.io PyGeNN | 158,000 | High: 16 (적 7마리) |
+| **v19** | **PyGeNN + 음식추적** | **13,800 (dev)** | **High: 10** |
 
 ---
 
@@ -117,18 +177,17 @@ self.syn_enemy_attack = create_synapse(
 
 ---
 
-## PyGeNN 아키텍처 (158K neurons)
+## PyGeNN 아키텍처 v19
 
 ```
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Food Eye   │  │  Enemy Eye   │  │   Body Eye   │
-│    (8K)      │  │    (8K)      │  │    (4K)      │
+│  Food Eye    │  │  Enemy Eye   │  │   Body Eye   │
+│  L/R 분리    │  │  L/R 분리    │  │              │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │
        ▼                 ▼                 ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │Hunger Circuit│  │ Fear Circuit │  │Attack Circuit│
-│    (10K)     │  │    (10K)     │  │    (5K)      │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │
        │    Fear --| Hunger (억제)         │
@@ -137,50 +196,48 @@ self.syn_enemy_attack = create_synapse(
                     ▼
          ┌────────────────────┐
          │   Integration 1    │
-         │       (50K)        │
          └─────────┬──────────┘
                    ▼
          ┌────────────────────┐
          │   Integration 2    │
-         │       (50K)        │
          └─────────┬──────────┘
                    │
-        ┌──────────┼──────────┐
-        ▼          ▼          ▼
-   ┌───────┐  ┌───────┐  ┌───────┐
-   │ Left  │  │ Right │  │ Boost │
-   │ (5K)  │  │ (5K)  │  │ (3K)  │
-   └───────┘  └───────┘  └───────┘
-        ↑          ↑          ↑
-        └── WTA 측면억제 ──────┘
+    ┌──────────────┼──────────────┐
+    │              │              │
+    ▼              ▼              ▼
+┌───────┐     ┌───────┐     ┌───────┐
+│ Left  │◄────│  WTA  │────►│ Right │
+└───────┘     └───────┘     └───────┘
+    ▲              │              ▲
+    │              ▼              │
+    │         ┌───────┐           │
+    │         │ Boost │           │
+    │         └───────┘           │
+    │                             │
+┌───┴─────────────────────────────┴───┐
+│         INNATE REFLEX (v19)         │
+├─────────────────────────────────────┤
+│ Enemy_L → Motor_R (교차, w=80)      │
+│ Enemy_R → Motor_L (교차, w=80)      │
+│ Food_L  → Motor_L (동측, w=30)      │
+│ Food_R  → Motor_R (동측, w=30)      │
+└─────────────────────────────────────┘
 ```
 
-### R-STDP (Reward-Modulated STDP)
+### 선천적 반사 회로 (Innate Reflex)
 
 ```python
-# 2-Trace System:
-# 1. stdp_trace (τ=20ms): spike timing 감지 (LTP/LTD 결정)
-# 2. eligibility (τ=3000ms): 3초 전 행동도 기억
+# 적 회피: 교차 배선 (contralateral) - 도망 반사
+# 왼쪽 적 → 오른쪽 회전 (적에서 멀어짐)
+Enemy_L → Motor_R (weight=80)
+Enemy_R → Motor_L (weight=80)
 
-# 동작 원리:
-Pre-spike  → stdp_trace -= aMinus (LTD 준비)
-Post-spike → stdp_trace += aPlus  (LTP)
-매 스텝   → eligibility += stdp_trace (누적)
-           → 둘 다 감쇠
-보상 시   → g += η * dopamine * eligibility (가중치 업데이트)
-```
+# 음식 추적: 동측 배선 (ipsilateral) - 추적 반사
+# 왼쪽 음식 → 왼쪽 회전 (음식 방향으로)
+Food_L → Motor_L (weight=30)
+Food_R → Motor_R (weight=30)
 
-### Fight-or-Flight 회로
-
-```python
-# Fear ↔ Attack 상호 억제 (편도체 모델)
-# Fear가 강하면 → Attack 억제 → 도망
-# Attack이 강하면 → Fear 억제 → 공격
-
-self.syn_fear_attack = create_synapse(
-    w_init=-0.3)   # Fear → Attack 억제
-self.syn_attack_fear = create_synapse(
-    w_init=-0.7)   # Attack → Fear 억제 (공격 편향)
+# 적 회피가 음식보다 우선 (80 > 30)
 ```
 
 ---
@@ -191,7 +248,7 @@ self.syn_attack_fear = create_synapse(
 backend/
 ├── genesis/
 │   ├── # PyGeNN (Current - GPU)
-│   ├── slither_pygenn_biological.py  # 158K neuron PyGeNN 에이전트 ★
+│   ├── slither_pygenn_biological.py  # v19 PyGeNN 에이전트 ★
 │   ├── gpu_monitor.py                # GPU 온도/메모리 모니터링
 │   │
 │   ├── # snnTorch (Previous - CPU/GPU)
@@ -213,57 +270,70 @@ backend/
 
 ## 실행 방법
 
-### PyGeNN Slither.io (현재 진행중)
-
-```powershell
-# 훈련 (headless)
-& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
-    'C:\Users\JungHyun\Desktop\brain\BrainSimulation\backend\genesis\slither_pygenn_biological.py' `
-    --episodes 300 --enemies 7 --render none
-
-# 시각화 모드
-& 'C:\Users\JungHyun\Desktop\brain\pygenn_env\Scripts\python.exe' `
-    'C:\Users\JungHyun\Desktop\brain\BrainSimulation\backend\genesis\slither_pygenn_biological.py' `
-    --episodes 10 --enemies 7 --render pygame
-
-# 경량 모드 (50K neurons)
-... --mode lite
-
-# 개발 모드 (15K neurons)
-... --mode dev
-```
-
-### snnTorch Slither.io (이전 버전)
+### PyGeNN Slither.io (WSL 필수!)
 
 ```bash
-cd backend/genesis
-python slither_snn_agent.py --enemies 3 --render pygame
+# WSL에서 실행 (필수!)
+wsl -d Ubuntu-24.04
+
+# 환경 설정
+export CUDA_PATH=/usr/local/cuda-12.6
+export PATH=$CUDA_PATH/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
+source ~/pygenn_wsl/bin/activate
+cd ~/pygenn_test
+
+# 훈련 (headless)
+python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py \
+    --dev --episodes 100 --enemies 5 --render none
+
+# 시각화 모드
+python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py \
+    --dev --episodes 10 --enemies 3 --render pygame
+
+# 모드 옵션
+# --dev   : 13,800 뉴런 (디버깅용)
+# --lite  : 50,000 뉴런 (중간)
+# (없음)  : 158,000 뉴런 (전체)
+```
+
+### 한 줄 실행 (PowerShell에서)
+
+```powershell
+wsl -d Ubuntu-24.04 -e bash -c "export CUDA_PATH=/usr/local/cuda-12.6 && source ~/pygenn_wsl/bin/activate && cd ~/pygenn_test && python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episodes 5 --enemies 3 --render pygame"
 ```
 
 ---
 
 ## 핵심 발견 & 교훈
 
-### 이번 세션 교훈
+### v19 세션 교훈
 
-1. **addToPost(g) 필수**: GeNN에서 시냅스 전류 전달은 자동이 아님
-2. **GPU 메모리 vs 연산**: SNN은 compute-bound (메모리 27%인데 GPU 65%)
-3. **환경 정보 기록**: pygenn_env 경로 등 환경 설정 반드시 문서화
+1. **WTA wMax 클리핑**: `wMax=0.0`이면 모든 가중치가 0으로 클리핑됨
+2. **cos는 짝수함수**: `cos(-x)=cos(x)` 라서 좌우 구분 불가
+3. **RefracTime 카운팅**: `>0` 대신 `>threshold`로 새 스파이크만 카운트
+4. **대칭 경로 상쇄**: 대칭 경로가 교차배선 효과를 상쇄함 → 비활성화
+5. **WSL 환경 사용**: Windows PyGeNN 대신 WSL PyGeNN 사용
 
 ### 생물학적 원칙
 
 1. **빈 서판은 죽음**: 선천적 본능 = 시냅스 초기 가중치 (if문 아님)
-2. **Fight-or-Flight**: Fear↔Attack 상호 억제로 행동 선택
-3. **3-Factor Learning**: pre + post + reward (도파민)
+2. **교차 배선 (Contralateral)**: 적 회피 - 반대편으로 회전
+3. **동측 배선 (Ipsilateral)**: 음식 추적 - 같은 편으로 회전
+4. **Fight-or-Flight**: Fear↔Attack 상호 억제로 행동 선택
 
 ### 디버깅 팁
 
 ```python
-# Fear/Attack 스파이크 확인
-print(f"Fear: {fear_spikes:.3f}({self.fear.vars['nSpk'].view[0]})")
-print(f"Attack: {attack_spikes:.3f}({self.attack.vars['nSpk'].view[0]})")
+# 스파이크 카운팅 확인
+spike_threshold = tau_refrac - 0.5  # 1.5
+new_spikes = np.sum(refrac_time > spike_threshold)
 
-# Attack triggers = 0이면 → addToPost(g) 확인!
+# 모터 출력 확인
+print(f"Motor: L={left_rate:.2f} R={right_rate:.2f} | Turn: {turn_delta:+.3f}")
+
+# 입력 신호 확인
+print(f"Enemy: L={enemy_l:.2f} R={enemy_r:.2f} | Food: L={food_l:.2f} R={food_r:.2f}")
 ```
 
 ---
