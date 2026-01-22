@@ -34,27 +34,61 @@ python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episo
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v21
+## 현재 상태: PyGeNN Slither.io v26
 
-### 최신 결과 (2025-01-22)
+### 최신 결과 (2025-01-23)
 
 ```
 ============================================================
-Training Results (v21 - 300 Episodes)
+Training Results (v26 - 100 Episodes)
 ============================================================
-  Best Length: 17
-  Final Avg:   7.8
-  Mode:        LITE (46,500 neurons)
-  Time:        866.8s (2.89s/ep)
+  Best Length: 14
+  Final Avg:   5.5
+  Mode:        DEV (13,800 neurons)
+  Time:        301.8s (3.02s/ep)
 
   GPU Status:
-    Util: 36.9% avg
-    Temp: 42.0°C avg
-    Memory: 1757MB / 8GB
+    Util: 59.7% avg
+    Temp: 44.8°C avg
+    Memory: 1375MB / 8GB
 ============================================================
 ```
 
-### v21 핵심 수정사항 (2025-01-22)
+### v26 핵심 수정사항 (2025-01-23)
+
+**1. 모터 출력 디코딩 버그 수정 - 스파이크 누적 카운팅**
+```python
+# BEFORE: 전압으로 활성도 측정 → 스파이크 후 Vreset으로 리셋되어 0이 됨
+left_v = self.motor_left.vars["V"].view
+left_rate = self._decode_activity(left_v)  # 항상 0!
+
+# AFTER: 매 스텝마다 스파이크 누적 → 정확한 활성도 측정
+for _ in range(10):
+    self.model.step_time()
+    left_spike_count += np.sum(refrac_time > spike_threshold)
+left_rate = left_spike_count / max_spikes  # 실제 활성도!
+```
+
+**2. v25 Push-Pull 회피 반사 (유지)**
+```python
+# 적에서 멀어지기 위한 이중 제어
+push_weight = 40.0   # Enemy_L → Motor_R (+40)
+pull_weight = -50.0  # Enemy_L → Motor_L (-50)
+# Push-Pull = 적 반대 방향으로 강하게 밀고, 적 방향으로 억제
+```
+
+**3. v24 Soft-Bound R-STDP (유지)**
+```python
+# 가중치 포화 방지: 곱셈 방식
+if update > 0:
+    g += update * (wMax - g)  # 남은 공간에 비례
+else:
+    g += update * (g - wMin)  # 현재 값에 비례
+```
+
+---
+
+### v21 핵심 수정사항 (이전)
 
 **1. 체크포인트 저장/로드 수정 - SPARSE Connectivity 포함**
 ```python
@@ -307,7 +341,13 @@ wsl -d Ubuntu-24.04 -e bash -c "export CUDA_PATH=/usr/local/cuda-12.6 && source 
 
 ## 핵심 발견 & 교훈
 
-### v19 세션 교훈
+### v26 세션 교훈
+
+1. **전압이 아닌 스파이크 누적**: 전압(V)은 스파이크 후 Vreset으로 리셋됨 → 매 스텝 RefracTime으로 스파이크 누적 필수
+2. **신호 체인 전체 확인**: Enemy→Motor 경로가 작동해도, 마지막 디코딩이 잘못되면 출력 0
+3. **Push-Pull 효과 확인됨**: Enemy 스파이크 시 Motor_R 100% 활성, Motor_L 강하게 억제 (-11000mV)
+
+### v19 세션 교훈 (이전)
 
 1. **WTA wMax 클리핑**: `wMax=0.0`이면 모든 가중치가 0으로 클리핑됨
 2. **cos는 짝수함수**: `cos(-x)=cos(x)` 라서 좌우 구분 불가
@@ -325,9 +365,15 @@ wsl -d Ubuntu-24.04 -e bash -c "export CUDA_PATH=/usr/local/cuda-12.6 && source 
 ### 디버깅 팁
 
 ```python
-# 스파이크 카운팅 확인
-spike_threshold = tau_refrac - 0.5  # 1.5
-new_spikes = np.sum(refrac_time > spike_threshold)
+# v26: 스파이크 누적 카운팅 (CRITICAL!)
+# 전압(V)으로 활성도 측정하면 안 됨 - 스파이크 후 Vreset으로 리셋!
+# 반드시 시뮬레이션 루프 내에서 매 스텝마다 스파이크 누적해야 함
+spike_threshold = tau_refrac - 0.5  # 1.5 (새 스파이크 감지)
+for _ in range(10):
+    model.step_time()
+    motor_left.vars["RefracTime"].pull_from_device()
+    left_spike_count += np.sum(motor_left.vars["RefracTime"].view > spike_threshold)
+left_rate = left_spike_count / (n_neurons * 5)  # max 5 spikes per neuron (10ms/2ms)
 
 # 모터 출력 확인
 print(f"Motor: L={left_rate:.2f} R={right_rate:.2f} | Turn: {turn_delta:+.3f}")

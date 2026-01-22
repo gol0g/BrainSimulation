@@ -89,7 +89,7 @@ class SlitherConfig:
 
     # Rewards (Predator Mode!)
     food_reward: float = 1.0
-    death_penalty: float = -10.0
+    death_penalty: float = -50.0  # v2: 킬 보상과 균형 (카미카제 방지)
     survival_reward: float = 0.01
     kill_reward: float = 50.0  # MASSIVE reward for killing enemy!
 

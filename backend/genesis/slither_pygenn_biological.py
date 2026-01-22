@@ -29,7 +29,8 @@ if os.name == 'nt':
     os.environ['CUDA_PATH'] = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8".strip()
 
 from pygenn import (GeNNModel, init_sparse_connectivity, init_weight_update,
-                    init_postsynaptic, create_weight_update_model, create_neuron_model)
+                    init_postsynaptic, create_weight_update_model, create_neuron_model,
+                    init_var)
 from slither_gym import SlitherGym, SlitherConfig
 
 # Checkpoint directory
@@ -50,8 +51,12 @@ CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 #   매 스텝 → stdp_trace를 eligibility로 누적, 둘 다 감쇠
 #   보상 → eligibility 기반으로 가중치 업데이트 (Dopamine Shower)
 #
+# === v24: Soft-Bound R-STDP (Multiplicative) ===
+# 기존 Additive STDP의 문제: 가중치가 wMax/wMin으로 빠르게 포화
+# 해결: Multiplicative STDP - 가중치가 극단값에 가까울수록 변화량 감소
+# 효과: 가중치가 정규분포에 가깝게 퍼지며, 포화 현상 방지
 r_stdp_model = create_weight_update_model(
-    "R_STDP_LONG_TRACE",
+    "R_STDP_SOFT_BOUND",
     params=["tauStdp", "tauElig", "aPlus", "aMinus", "wMin", "wMax", "dopamine", "eta"],
     vars=[("g", "scalar"), ("stdp_trace", "scalar"), ("eligibility", "scalar")],
     pre_spike_syn_code="""
@@ -74,11 +79,20 @@ r_stdp_model = create_weight_update_model(
         // 3. Eligibility trace 감쇠 (느림: 3000ms)
         eligibility *= exp(-dt / tauElig);
 
-        // 4. 도파민 조절 학습 (보상 시에만 유의미)
+        // 4. 도파민 조절 학습 - SOFT-BOUND (v24)
         scalar da_signal = dopamine - 0.5;
         if (fabs(da_signal) > 0.1) {
-            // 보상/벌칙이 있을 때만 가중치 업데이트
-            g = fmin(wMax, fmax(wMin, g + eta * da_signal * eligibility));
+            scalar update = eta * da_signal * eligibility;
+
+            if (update > 0) {
+                // 강화(LTP): 남은 공간(wMax - g)에 비례해서 증가
+                // 가중치가 wMax에 가까울수록 변화량 감소
+                g += update * (wMax - g);
+            } else {
+                // 약화(LTD): 현재 값(g - wMin)에 비례해서 감소
+                // 가중치가 wMin에 가까울수록 변화량 감소
+                g += update * (g - wMin);
+            }
         }
     """,
 )
@@ -121,6 +135,33 @@ adaptive_lif_model = create_neuron_model(
     reset_code="""
         V = Vreset;
         Vthresh += Beta;  // Threshold increases on spike (fatigue)
+        RefracTime = TauRefrac;
+    """
+)
+
+# === SensoryLIF Model (v23: 동적 전류 입력) ===
+# 핵심: I_input 변수를 통해 외부에서 전류 주입 가능
+# 전압 직접 설정 대신 전류 주입 → 정상적인 스파이크 이벤트 발생
+sensory_lif_model = create_neuron_model(
+    "SensoryLIF",
+    params=["C", "TauM", "Vrest", "Vreset", "Vthresh", "TauRefrac"],
+    vars=[("V", "scalar"), ("RefracTime", "scalar"), ("I_input", "scalar")],
+    sim_code="""
+        // Refractory period check
+        if (RefracTime > 0.0) {
+            RefracTime -= dt;
+        } else {
+            // LIF dynamics with external current input
+            // I_total = I_input (external) + Isyn (synaptic)
+            scalar I_total = I_input + Isyn;
+            V += (-(V - Vrest) / TauM + I_total / C) * dt;
+        }
+    """,
+    threshold_condition_code="""
+        RefracTime <= 0.0 && V >= Vthresh
+    """,
+    reset_code="""
+        V = Vreset;
         RefracTime = TauRefrac;
     """
 )
@@ -196,15 +237,14 @@ class BiologicalConfig:
     v_thresh: float = -50.0
     tau_refrac: float = 2.0
 
-    # === R-STDP parameters (v20: 짧고 강한 학습) ===
-    # v20: 1초로 단축 - Slither.io는 빠르게 변함, 3초는 너무 긴 기억
+    # === R-STDP parameters (v24: Soft-Bound + 안정적 학습) ===
     tau_stdp: float = 20.0       # STDP 타이밍 윈도우 (빠름)
-    tau_eligibility: float = 1000.0  # v20: 1초로 단축 (인과관계 명확화)
+    tau_eligibility: float = 1000.0  # 1초 eligibility trace
     a_plus: float = 0.005        # LTP 강도
     a_minus: float = 0.006       # LTD 강도
-    eta: float = 0.05            # v20: 학습률 5배 증가 (wMin/wMax 클리핑 있음)
-    w_max: float = 10.0          # v20: 가중치 범위 확대
-    w_min: float = -5.0          # v20: 억제 허용
+    eta: float = 0.01            # v24: 학습률 낮춤 (Soft-Bound로 안정적)
+    w_max: float = 10.0          # 가중치 상한
+    w_min: float = -5.0          # 가중치 하한 (억제 허용)
 
     # Legacy STDP (비교용)
     tau_plus: float = 20.0
@@ -286,7 +326,7 @@ class BiologicalBrain:
         self.model = GeNNModel("float", "slither_bio")
         self.model.dt = self.config.dt
 
-        # LIF 파라미터
+        # LIF 파라미터 (일반 뉴런용)
         lif_params = {
             "C": 1.0,
             "TauM": self.config.tau_m,
@@ -298,15 +338,33 @@ class BiologicalBrain:
         }
         lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
 
-        # === 1. SENSORY POPULATIONS (분리!) ===
-        self.food_eye = self.model.add_neuron_population(
-            "food_eye", self.config.n_food_eye, "LIF", lif_params, lif_init)
-        self.enemy_eye = self.model.add_neuron_population(
-            "enemy_eye", self.config.n_enemy_eye, "LIF", lif_params, lif_init)
-        self.body_eye = self.model.add_neuron_population(
-            "body_eye", self.config.n_body_eye, "LIF", lif_params, lif_init)
+        # v23: SensoryLIF 파라미터 (동적 전류 입력)
+        sensory_params = {
+            "C": 1.0,
+            "TauM": self.config.tau_m,
+            "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset,
+            "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        sensory_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
 
-        print(f"  Sensory: Food({self.config.n_food_eye:,}) + Enemy({self.config.n_enemy_eye:,}) + Body({self.config.n_body_eye:,})")
+        # === 1. SENSORY POPULATIONS (v23: SensoryLIF 사용!) ===
+        n_food_half = self.config.n_food_eye // 2
+        n_enemy_half = self.config.n_enemy_eye // 2
+
+        self.food_eye_left = self.model.add_neuron_population(
+            "food_eye_left", n_food_half, sensory_lif_model, sensory_params, sensory_init)
+        self.food_eye_right = self.model.add_neuron_population(
+            "food_eye_right", n_food_half, sensory_lif_model, sensory_params, sensory_init)
+        self.enemy_eye_left = self.model.add_neuron_population(
+            "enemy_eye_left", n_enemy_half, sensory_lif_model, sensory_params, sensory_init)
+        self.enemy_eye_right = self.model.add_neuron_population(
+            "enemy_eye_right", n_enemy_half, sensory_lif_model, sensory_params, sensory_init)
+        self.body_eye = self.model.add_neuron_population(
+            "body_eye", self.config.n_body_eye, sensory_lif_model, sensory_params, sensory_init)
+
+        print(f"  Sensory: Food_L/R({n_food_half:,}x2) + Enemy_L/R({n_enemy_half:,}x2) + Body({self.config.n_body_eye:,})")
 
         # === 2. SPECIALIZED CIRCUITS ===
         self.hunger = self.model.add_neuron_population(
@@ -360,7 +418,7 @@ class BiologicalBrain:
             "dopamine": 0.5,
         }
 
-        # 시냅스 생성 헬퍼 (R-STDP 사용)
+        # 시냅스 생성 헬퍼 (R-STDP 사용 - 학습 가능)
         def create_synapse(name, pre, post, n_pre, n_post, sparsity=None, w_init=None):
             sp = sparsity or self.config.sparsity
             fan_in = n_pre * sp
@@ -375,43 +433,78 @@ class BiologicalBrain:
             syn.set_wu_param_dynamic("dopamine")
             return syn
 
+        # === v24: 고정 시냅스 헬퍼 (StaticPulse - 학습 안 함) ===
+        # 생존 본능(공포 회로)은 학습하면 안 됨 - 선천적 본능으로 고정
+        def create_static_synapse(name, pre, post, n_pre, n_post, sparsity=None, w_init=1.0):
+            sp = sparsity or self.config.sparsity
+            syn = self.model.add_synapse_population(
+                name, "SPARSE", pre, post,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": w_init})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": sp})
+            )
+            return syn
+
         # === SYNAPTIC CONNECTIONS ===
         self.all_synapses = []
 
-        # Sensory → Circuits
-        self.syn_food_hunger = create_synapse(
-            "food_hunger", self.food_eye, self.hunger,
-            self.config.n_food_eye, self.config.n_hunger_circuit)
-        # Enemy → Fear/Attack: 가중치 대폭 강화 (신호 전달 보장)
-        self.syn_enemy_fear = create_synapse(
-            "enemy_fear", self.enemy_eye, self.fear,
-            self.config.n_enemy_eye, self.config.n_fear_circuit,
-            sparsity=self.config.sparsity * 4,  # 2% 연결
-            w_init=2.0)  # 강한 가중치
-        self.syn_enemy_attack = create_synapse(
-            "enemy_attack", self.enemy_eye, self.attack,
-            self.config.n_enemy_eye, self.config.n_attack_circuit,
-            sparsity=self.config.sparsity * 4,  # 2% 연결
-            w_init=2.5)  # 공격이 공포보다 강하게!
-        self.syn_body_fear = create_synapse(
+        # Sensory → Circuits (v19: L/R 분리)
+        self.syn_food_left_hunger = create_synapse(
+            "food_left_hunger", self.food_eye_left, self.hunger,
+            n_food_half, self.config.n_hunger_circuit)
+        self.syn_food_right_hunger = create_synapse(
+            "food_right_hunger", self.food_eye_right, self.hunger,
+            n_food_half, self.config.n_hunger_circuit)
+
+        # === v24: Enemy → Fear (고정 - 공포는 선천적 본능) ===
+        # "토끼가 늑대에게 물렸다고 다음엔 덜 무서워하지 않는다"
+        self.syn_enemy_left_fear = create_static_synapse(
+            "enemy_left_fear", self.enemy_eye_left, self.fear,
+            n_enemy_half, self.config.n_fear_circuit,
+            sparsity=self.config.sparsity * 4, w_init=5.0)  # 고정: 강한 공포 반응
+        self.syn_enemy_right_fear = create_static_synapse(
+            "enemy_right_fear", self.enemy_eye_right, self.fear,
+            n_enemy_half, self.config.n_fear_circuit,
+            sparsity=self.config.sparsity * 4, w_init=5.0)
+
+        # Enemy → Attack (학습 가능 - 사냥 기술은 배움)
+        self.syn_enemy_left_attack = create_synapse(
+            "enemy_left_attack", self.enemy_eye_left, self.attack,
+            n_enemy_half, self.config.n_attack_circuit,
+            sparsity=self.config.sparsity * 4, w_init=2.5)
+        self.syn_enemy_right_attack = create_synapse(
+            "enemy_right_attack", self.enemy_eye_right, self.attack,
+            n_enemy_half, self.config.n_attack_circuit,
+            sparsity=self.config.sparsity * 4, w_init=2.5)
+
+        # Body → Fear (고정 - 자기 몸 인식도 본능)
+        self.syn_body_fear = create_static_synapse(
             "body_fear", self.body_eye, self.fear,
             self.config.n_body_eye, self.config.n_fear_circuit,
-            sparsity=self.config.sparsity * 0.5)
+            sparsity=self.config.sparsity * 0.5, w_init=1.0)
 
-        self.all_synapses.extend([self.syn_food_hunger, self.syn_enemy_fear, self.syn_enemy_attack, self.syn_body_fear])
+        # R-STDP 시냅스만 all_synapses에 추가 (학습 대상)
+        self.all_synapses.extend([
+            self.syn_food_left_hunger, self.syn_food_right_hunger,
+            self.syn_enemy_left_attack, self.syn_enemy_right_attack,
+            # enemy_left/right_fear, body_fear는 StaticPulse → 학습 안 함
+        ])
 
         # Circuits → Integration 1
         self.syn_hunger_int1 = create_synapse(
             "hunger_int1", self.hunger, self.integration_1,
             self.config.n_hunger_circuit, self.config.n_integration_1)
-        self.syn_fear_int1 = create_synapse(
+        # Fear → Int1 (고정 - 공포 전달 경로도 본능)
+        self.syn_fear_int1 = create_static_synapse(
             "fear_int1", self.fear, self.integration_1,
-            self.config.n_fear_circuit, self.config.n_integration_1)
+            self.config.n_fear_circuit, self.config.n_integration_1,
+            w_init=2.0)  # 고정: 공포가 행동에 영향
         self.syn_attack_int1 = create_synapse(
             "attack_int1", self.attack, self.integration_1,
             self.config.n_attack_circuit, self.config.n_integration_1)
 
-        self.all_synapses.extend([self.syn_hunger_int1, self.syn_fear_int1, self.syn_attack_int1])
+        # fear_int1은 StaticPulse → 학습 대상에서 제외
+        self.all_synapses.extend([self.syn_hunger_int1, self.syn_attack_int1])
 
         # Integration 1 → Integration 2
         self.syn_int1_int2 = create_synapse(
@@ -420,87 +513,100 @@ class BiologicalBrain:
 
         self.all_synapses.append(self.syn_int1_int2)
 
-        # Integration 2 → Motor
+        # === v25: Integration 2 → Motor (약화 - 기억이 감각을 덮으면 안 됨) ===
+        # 기억(Int2)은 감각(Sensory)을 보조해야지, 덮어쓰면 안 됨
+        int2_motor_weight = 3.0  # v25: 약한 가중치 (기존 ~9.4 → 3.0)
         self.syn_int2_left = create_synapse(
             "int2_left", self.integration_2, self.motor_left,
-            self.config.n_integration_2, self.config.n_motor_left)
+            self.config.n_integration_2, self.config.n_motor_left,
+            w_init=int2_motor_weight)
         self.syn_int2_right = create_synapse(
             "int2_right", self.integration_2, self.motor_right,
-            self.config.n_integration_2, self.config.n_motor_right)
+            self.config.n_integration_2, self.config.n_motor_right,
+            w_init=int2_motor_weight)
         self.syn_int2_boost = create_synapse(
             "int2_boost", self.integration_2, self.motor_boost,
-            self.config.n_integration_2, self.config.n_motor_boost)
+            self.config.n_integration_2, self.config.n_motor_boost,
+            w_init=int2_motor_weight)
 
         self.all_synapses.extend([self.syn_int2_left, self.syn_int2_right, self.syn_int2_boost])
 
-        # === CROSS-INHIBITION: Fear --| Hunger ===
-        # 공포가 배고픔을 억제 (적이 보이면 먹이 추적 중단)
-        print(f"  Cross-Inhibition: Fear --| Hunger (weight={self.config.inhibitory_weight})")
-        self.syn_fear_hunger_inhib = create_synapse(
+        # === v24: CROSS-INHIBITION (고정 - 본능적 억제) ===
+        # Fear --| Hunger: 공포가 배고픔을 억제 (적이 보이면 먹이 추적 중단)
+        print(f"  Cross-Inhibition: Fear --| Hunger (STATIC, weight={self.config.inhibitory_weight})")
+        self.syn_fear_hunger_inhib = create_static_synapse(
             "fear_hunger_inhib", self.fear, self.hunger,
             self.config.n_fear_circuit, self.config.n_hunger_circuit,
             sparsity=self.config.sparsity * 2,
             w_init=abs(self.config.inhibitory_weight))
+        # 학습 대상 아님 (본능)
 
-        self.all_synapses.append(self.syn_fear_hunger_inhib)
-
-        # === FEAR ↔ ATTACK 상호 억제 (Fight-or-Flight Competition) ===
-        # 튜닝: 공포가 공격을 너무 억제하면 attack_triggers=0 문제 발생
-        # → Fear→Attack 억제를 약하게, Attack→Fear 억제를 강하게 (공격 우선)
-        print(f"  Fear ↔ Attack Mutual Inhibition (Attack-biased)")
-        self.syn_fear_attack_inhib = create_synapse(
+        # === v24: FEAR ↔ ATTACK 상호 억제 (고정) ===
+        # Fight-or-Flight는 본능적 선택이므로 학습하지 않음
+        print(f"  Fear ↔ Attack Mutual Inhibition (STATIC, Attack-biased)")
+        self.syn_fear_attack_inhib = create_static_synapse(
             "fear_attack_inhib", self.fear, self.attack,
             self.config.n_fear_circuit, self.config.n_attack_circuit,
             sparsity=self.config.sparsity * 2,
-            w_init=abs(self.config.inhibitory_weight) * 0.3)  # 공포→공격 억제 (약하게!)
-        self.syn_attack_fear_inhib = create_synapse(
+            w_init=abs(self.config.inhibitory_weight) * 0.3)  # 공포→공격 억제 (약하게)
+        self.syn_attack_fear_inhib = create_static_synapse(
             "attack_fear_inhib", self.attack, self.fear,
             self.config.n_attack_circuit, self.config.n_fear_circuit,
             sparsity=self.config.sparsity * 2,
-            w_init=abs(self.config.inhibitory_weight) * 0.7)  # 공격→공포 억제 (강하게!)
+            w_init=abs(self.config.inhibitory_weight) * 0.7)  # 공격→공포 억제 (강하게)
+        # 학습 대상 아님 (본능)
 
-        self.all_synapses.extend([self.syn_fear_attack_inhib, self.syn_attack_fear_inhib])
-
-        # === DIRECT REFLEX: Fear → Boost ===
-        self.syn_fear_boost = create_synapse(
+        # === v24: DIRECT REFLEX: Fear → Boost (고정) ===
+        # 공포 시 도망 가속은 본능
+        self.syn_fear_boost = create_static_synapse(
             "fear_boost", self.fear, self.motor_boost,
             self.config.n_fear_circuit, self.config.n_motor_boost,
-            sparsity=self.config.sparsity * 3)
+            sparsity=self.config.sparsity * 3, w_init=3.0)  # 강한 부스트
+        # 학습 대상 아님 (본능)
 
-        self.all_synapses.append(self.syn_fear_boost)
+        # === v25b: PUSH-PULL AVOIDANCE REFLEX (강화된 버전) ===
+        # Push: 적 반대 방향으로 가라 (+W) - 더 강하게!
+        # Pull: 적 방향으로 가지 마라 (-W)
+        push_weight = 40.0   # v25b: 15→40 (더 강한 도망 신호)
+        pull_weight = -50.0  # v25b: -30→-50 (더 강한 억제)
+        push_sparsity = 0.2  # v25b: 0.1→0.2 (더 밀집한 연결)
+        print(f"  Push-Pull Reflex: Enemy→Motor (PUSH={push_weight}, PULL={pull_weight}, sp={push_sparsity})")
 
-        # === INNATE AVOIDANCE REFLEX (진화된 본능!) ===
-        # Cross-wired: Enemy LEFT → Motor RIGHT, Enemy RIGHT → Motor LEFT
-        # 3x boosted initial weights
-        print(f"  Innate Reflex: Enemy→Motor (cross-wired, {self.config.innate_boost}x boost)")
+        # PUSH: Enemy_L → Motor_R (오른쪽으로 도망) - 강하고 밀집!
+        self.syn_enemy_left_motor_right = create_static_synapse(
+            "enemy_left_motor_right", self.enemy_eye_left, self.motor_right,
+            n_enemy_half, self.config.n_motor_right,
+            sparsity=push_sparsity, w_init=push_weight)
+        self.syn_enemy_right_motor_left = create_static_synapse(
+            "enemy_right_motor_left", self.enemy_eye_right, self.motor_left,
+            n_enemy_half, self.config.n_motor_left,
+            sparsity=push_sparsity, w_init=push_weight)
 
-        # Enemy의 왼쪽 절반 → 오른쪽 모터 (회피를 위해 반대로)
-        # Enemy의 오른쪽 절반 → 왼쪽 모터
-        # 이건 process()에서 입력을 나눠서 처리
-        self.syn_enemy_motor_left = create_synapse(
-            "enemy_motor_left", self.enemy_eye, self.motor_left,
-            self.config.n_enemy_eye, self.config.n_motor_left,
-            sparsity=self.config.sparsity * 2,
-            w_init=0.3 * self.config.innate_boost)  # 3x boost!
-        self.syn_enemy_motor_right = create_synapse(
-            "enemy_motor_right", self.enemy_eye, self.motor_right,
-            self.config.n_enemy_eye, self.config.n_motor_right,
-            sparsity=self.config.sparsity * 2,
-            w_init=0.3 * self.config.innate_boost)  # 3x boost!
+        # PULL (억제): Enemy_L → Motor_L (왼쪽으로 가지 마!)
+        self.syn_enemy_left_motor_left_inhib = create_static_synapse(
+            "enemy_left_motor_left_inhib", self.enemy_eye_left, self.motor_left,
+            n_enemy_half, self.config.n_motor_left,
+            sparsity=push_sparsity, w_init=pull_weight)
+        self.syn_enemy_right_motor_right_inhib = create_static_synapse(
+            "enemy_right_motor_right_inhib", self.enemy_eye_right, self.motor_right,
+            n_enemy_half, self.config.n_motor_right,
+            sparsity=push_sparsity, w_init=pull_weight)
+        # 학습 대상 아님 (본능) - 공포의 거부권
 
-        self.all_synapses.extend([self.syn_enemy_motor_left, self.syn_enemy_motor_right])
+        # === v25: FOOD TRACKING REFLEX (고정 - 본능) ===
+        # "밥이 보이면 고개를 돌린다"는 학습 대상이 아님
+        food_weight = 10.0  # v25: 고정, 적당한 강도
+        print(f"  Food Reflex: Food_L→Motor_L, Food_R→Motor_R (STATIC, w={food_weight})")
 
-        # === Direct food reflex ===
-        self.syn_food_motor_left = create_synapse(
-            "food_motor_left", self.food_eye, self.motor_left,
-            self.config.n_food_eye, self.config.n_motor_left,
-            sparsity=self.config.sparsity * 2)
-        self.syn_food_motor_right = create_synapse(
-            "food_motor_right", self.food_eye, self.motor_right,
-            self.config.n_food_eye, self.config.n_motor_right,
-            sparsity=self.config.sparsity * 2)
-
-        self.all_synapses.extend([self.syn_food_motor_left, self.syn_food_motor_right])
+        self.syn_food_left_motor_left = create_static_synapse(
+            "food_left_motor_left", self.food_eye_left, self.motor_left,
+            n_food_half, self.config.n_motor_left,
+            sparsity=0.1, w_init=food_weight)
+        self.syn_food_right_motor_right = create_static_synapse(
+            "food_right_motor_right", self.food_eye_right, self.motor_right,
+            n_food_half, self.config.n_motor_right,
+            sparsity=0.1, w_init=food_weight)
+        # 학습 대상 아님 (본능)
 
         # === ATTACK CIRCUIT → Motor (적 방향으로 돌진) ===
         # 튜닝: 공격 충동이 모터까지 전달되어야 함 - 가중치 상향
@@ -602,6 +708,10 @@ class BiologicalBrain:
         print("  Compiling CUDA code...")
         self.model.build()
         self.model.load()
+
+        # v23: DENSE 연결 (전체 연결)
+        n_conn = 1000 * 1500  # n_food_half * n_motor_left
+        print(f"  Food_L→Motor_L connections: {n_conn} (DENSE)")
         print(f"  Model ready! {self.config.total_neurons:,} neurons")
 
         # State
@@ -614,45 +724,81 @@ class BiologicalBrain:
         self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
 
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
-        """센서 입력 처리 및 행동 출력"""
+        """센서 입력 처리 및 행동 출력 (v19: L/R 분리)"""
         # Unpack sensor input (3, n_rays)
         food_signal = sensor_input[0]
         enemy_signal = sensor_input[1]
         body_signal = sensor_input[2]
 
         n_rays = len(food_signal)
+        mid = n_rays // 2
 
-        # === ENCODE SENSORY INPUT (분리된 채널) ===
-        food_encoded = self._encode_to_population(food_signal, self.config.n_food_eye)
-        enemy_encoded = self._encode_to_population(enemy_signal, self.config.n_enemy_eye)
+        # === ENCODE SENSORY INPUT (v19: L/R 분리) ===
+        # 왼쪽 절반 = 왼쪽 시야, 오른쪽 절반 = 오른쪽 시야
+        n_food_half = self.config.n_food_eye // 2
+        n_enemy_half = self.config.n_enemy_eye // 2
+
+        food_left_encoded = self._encode_to_population(food_signal[:mid], n_food_half)
+        food_right_encoded = self._encode_to_population(food_signal[mid:], n_food_half)
+        enemy_left_encoded = self._encode_to_population(enemy_signal[:mid], n_enemy_half)
+        enemy_right_encoded = self._encode_to_population(enemy_signal[mid:], n_enemy_half)
         body_encoded = self._encode_to_population(body_signal, self.config.n_body_eye)
 
-        # Set sensory input (voltage injection)
-        self.food_eye.vars["V"].view[:] = self.config.v_rest + food_encoded * 40.0
-        self.enemy_eye.vars["V"].view[:] = self.config.v_rest + enemy_encoded * 50.0
-        self.body_eye.vars["V"].view[:] = self.config.v_rest + body_encoded * 25.0
+        # === SIMULATE (v23: I_input 전류 주입) ===
+        # 전압 직접 설정 대신 전류 주입 → 정상적인 스파이크 이벤트 발생
+        current_scale = 3.0  # 전류 강도 (threshold를 넘을 수 있도록 충분히 강하게)
 
-        self.food_eye.vars["V"].push_to_device()
-        self.enemy_eye.vars["V"].push_to_device()
-        self.body_eye.vars["V"].push_to_device()
+        # 전류 값 설정 (한 번만 설정, 10 스텝 동안 유지)
+        self.food_eye_left.vars["I_input"].view[:] = food_left_encoded * current_scale
+        self.food_eye_right.vars["I_input"].view[:] = food_right_encoded * current_scale
+        self.enemy_eye_left.vars["I_input"].view[:] = enemy_left_encoded * current_scale * 1.2  # 적 신호 강화
+        self.enemy_eye_right.vars["I_input"].view[:] = enemy_right_encoded * current_scale * 1.2
+        self.body_eye.vars["I_input"].view[:] = body_encoded * current_scale * 0.5
 
-        # === SIMULATE ===
-        self.model.step_time()
-        self.steps += 1
+        # GPU로 전송
+        self.food_eye_left.push_var_to_device("I_input")
+        self.food_eye_right.push_var_to_device("I_input")
+        self.enemy_eye_left.push_var_to_device("I_input")
+        self.enemy_eye_right.push_var_to_device("I_input")
+        self.body_eye.push_var_to_device("I_input")
 
-        # === READ MOTOR OUTPUT ===
-        self.motor_left.vars["V"].pull_from_device()
-        self.motor_right.vars["V"].pull_from_device()
-        self.motor_boost.vars["V"].pull_from_device()
+        # === v26: 시뮬레이션 + 스파이크 누적 ===
+        # RefracTime은 2ms 후 decay하므로, 매 스텝마다 새 스파이크 감지 필요
+        n_motor_left = self.config.n_motor_left
+        n_motor_right = self.config.n_motor_right
+        n_motor_boost = self.config.n_motor_boost
 
-        left_v = self.motor_left.vars["V"].view.copy()
-        right_v = self.motor_right.vars["V"].view.copy()
-        boost_v = self.motor_boost.vars["V"].view.copy()
+        # 스파이크 누적 카운터
+        left_spike_count = 0
+        right_spike_count = 0
+        boost_spike_count = 0
 
-        # Decode motor activity
-        left_rate = self._decode_activity(left_v)
-        right_rate = self._decode_activity(right_v)
-        boost_rate = self._decode_activity(boost_v)
+        # 새 스파이크 감지 임계값 (RefracTime이 TauRefrac 근처면 "방금 스파이크")
+        spike_threshold = self.config.tau_refrac - 0.5  # 1.5ms
+
+        for _ in range(10):
+            self.model.step_time()
+
+            # 매 스텝마다 새 스파이크 카운트 (RefracTime > threshold)
+            self.motor_left.vars["RefracTime"].pull_from_device()
+            self.motor_right.vars["RefracTime"].pull_from_device()
+            self.motor_boost.vars["RefracTime"].pull_from_device()
+
+            left_spike_count += np.sum(self.motor_left.vars["RefracTime"].view > spike_threshold)
+            right_spike_count += np.sum(self.motor_right.vars["RefracTime"].view > spike_threshold)
+            boost_spike_count += np.sum(self.motor_boost.vars["RefracTime"].view > spike_threshold)
+
+        self.steps += 10
+
+        # === READ MOTOR OUTPUT (v26: 누적 스파이크로 활성도 계산) ===
+        # 최대 가능 스파이크: n_neurons * 10_steps / 2 (refractory 고려)
+        max_spikes_left = n_motor_left * 5  # 2ms refractory → 최대 5번 스파이크 가능
+        max_spikes_right = n_motor_right * 5
+        max_spikes_boost = n_motor_boost * 5
+
+        left_rate = float(min(left_spike_count / max_spikes_left, 1.0))
+        right_rate = float(min(right_spike_count / max_spikes_right, 1.0))
+        boost_rate = float(min(boost_spike_count / max_spikes_boost, 1.0))
 
         # Read fear & attack levels (for stats and behavior modulation)
         self.fear.vars["V"].pull_from_device()
@@ -672,9 +818,16 @@ class BiologicalBrain:
         # Direction from motor difference
         angle_delta = (right_rate - left_rate) * 0.8
 
-        # Compute target position
-        target_x = 0.5 + 0.2 * np.cos(angle_delta)
-        target_y = 0.5 + 0.2 * np.sin(angle_delta)
+        # v25: 디버그 (필요시 주석 해제)
+        # if enemy_signal.max() > 0.3:
+        #     enemy_l = enemy_signal[:len(enemy_signal)//2].max()
+        #     enemy_r = enemy_signal[len(enemy_signal)//2:].max()
+        #     print(f"[ENEMY] L={enemy_l:.2f} R={enemy_r:.2f} | Motor: L={left_rate:.3f} R={right_rate:.3f} | delta={angle_delta:+.3f}")
+
+        # Compute target position - v23: cos 버그 수정!
+        # cos(x)=cos(-x) 문제 → 직접 매핑으로 변경
+        target_x = 0.5 + angle_delta * 0.3  # 양수면 오른쪽, 음수면 왼쪽
+        target_y = 0.5
 
         # Food seeking bias (heuristic to help initial learning)
         if food_signal.max() > 0.1:
@@ -728,6 +881,17 @@ class BiologicalBrain:
         v_norm = (v - self.config.v_rest) / (self.config.v_thresh - self.config.v_rest)
         return float(np.clip(v_norm, 0, 1).mean())
 
+    def _decode_spike_rate(self, refrac_time: np.ndarray) -> float:
+        """RefracTime으로 스파이크 비율 계산 (v26)
+
+        뉴런이 스파이크하면 RefracTime = tau_refrac (2.0ms)
+        RefracTime > 0이면 최근 refractory period 내에 스파이크함
+        """
+        # 최근 스파이크 (RefracTime > 0)의 비율
+        spike_count = np.sum(refrac_time > 0)
+        spike_rate = spike_count / len(refrac_time)
+        return float(spike_rate)
+
     def _update_dopamine(self, reward: float):
         """도파민 업데이트 및 GPU 전송 (v20: 보상 신호 강화)"""
         # v20: 0.15 → 0.30 (2배 강화) - 음식/죽음의 영향력 증가
@@ -754,7 +918,8 @@ class BiologicalBrain:
             keep_weights: True면 시냅스 가중치 유지 (윤회)
                          False면 완전 초기화
         """
-        all_pops = [self.food_eye, self.enemy_eye, self.body_eye,
+        all_pops = [self.food_eye_left, self.food_eye_right,
+                    self.enemy_eye_left, self.enemy_eye_right, self.body_eye,
                     self.hunger, self.fear, self.attack,
                     self.integration_1, self.integration_2,
                     self.motor_left, self.motor_right, self.motor_boost]
@@ -774,8 +939,10 @@ class BiologicalBrain:
         """시냅스 가중치 + 연결 인덱스 저장 (SPARSE connectivity 포함)"""
         checkpoint = {}
         for syn in self.all_synapses:
-            # Pull connectivity to get indices + weights
+            # Pull connectivity to get indices
             syn.pull_connectivity_from_device()
+            # Pull weights separately (CRITICAL!)
+            syn.vars["g"].pull_from_device()
             checkpoint[f"{syn.name}_g"] = np.array(syn.vars["g"].values)
             checkpoint[f"{syn.name}_ind"] = np.array(syn.get_sparse_post_inds())
             checkpoint[f"{syn.name}_row_length"] = np.array(syn._row_lengths.view)
