@@ -564,12 +564,11 @@ class BiologicalBrain:
             sparsity=self.config.sparsity * 3, w_init=3.0)  # 강한 부스트
         # 학습 대상 아님 (본능)
 
-        # === v25b: PUSH-PULL AVOIDANCE REFLEX (강화된 버전) ===
-        # Push: 적 반대 방향으로 가라 (+W) - 더 강하게!
-        # Pull: 적 방향으로 가지 마라 (-W)
-        push_weight = 40.0   # v25b: 15→40 (더 강한 도망 신호)
-        pull_weight = -50.0  # v25b: -30→-50 (더 강한 억제)
-        push_sparsity = 0.2  # v25b: 0.1→0.2 (더 밀집한 연결)
+        # === v27d: PUSH-PULL AVOIDANCE REFLEX (압도적 회피) ===
+        # "적 보면 다른 모든 신호 무시하고 도망"
+        push_weight = 100.0  # v27d: 70→100 (압도적)
+        pull_weight = -80.0  # v27d: -50→-80 (완전 차단)
+        push_sparsity = 0.3  # v27d: 0.25→0.3 (더 밀집)
         print(f"  Push-Pull Reflex: Enemy→Motor (PUSH={push_weight}, PULL={pull_weight}, sp={push_sparsity})")
 
         # PUSH: Enemy_L → Motor_R (오른쪽으로 도망) - 강하고 밀집!
@@ -593,19 +592,20 @@ class BiologicalBrain:
             sparsity=push_sparsity, w_init=pull_weight)
         # 학습 대상 아님 (본능) - 공포의 거부권
 
-        # === v25: FOOD TRACKING REFLEX (고정 - 본능) ===
-        # "밥이 보이면 고개를 돌린다"는 학습 대상이 아님
-        food_weight = 10.0  # v25: 고정, 적당한 강도
-        print(f"  Food Reflex: Food_L→Motor_L, Food_R→Motor_R (STATIC, w={food_weight})")
+        # === v27e: FOOD TRACKING REFLEX (약화 - 생존 우선) ===
+        # 적 회피가 우선, 음식은 나중에
+        food_weight = 15.0  # v27e: 30→15 (적 회피 우선)
+        food_sparsity = 0.1  # v27e: 0.2→0.1 (sparse)
+        print(f"  Food Reflex: Food_L→Motor_L, Food_R→Motor_R (STATIC, w={food_weight}, sp={food_sparsity})")
 
         self.syn_food_left_motor_left = create_static_synapse(
             "food_left_motor_left", self.food_eye_left, self.motor_left,
             n_food_half, self.config.n_motor_left,
-            sparsity=0.1, w_init=food_weight)
+            sparsity=food_sparsity, w_init=food_weight)
         self.syn_food_right_motor_right = create_static_synapse(
             "food_right_motor_right", self.food_eye_right, self.motor_right,
             n_food_half, self.config.n_motor_right,
-            sparsity=0.1, w_init=food_weight)
+            sparsity=food_sparsity, w_init=food_weight)
         # 학습 대상 아님 (본능)
 
         # === ATTACK CIRCUIT → Motor (적 방향으로 돌진) ===
@@ -723,6 +723,11 @@ class BiologicalBrain:
         self.generation = 0  # 윤회 세대
         self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
 
+        # v27g: 모터 출력 스무딩 (EMA) - 빠른 반응
+        self.prev_left_rate = 0.5
+        self.prev_right_rate = 0.5
+        self.motor_smoothing = 0.6  # v27g: 0.3→0.6 (더 빠른 반응)
+
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
         """센서 입력 처리 및 행동 출력 (v19: L/R 분리)"""
         # Unpack sensor input (3, n_rays)
@@ -796,9 +801,16 @@ class BiologicalBrain:
         max_spikes_right = n_motor_right * 5
         max_spikes_boost = n_motor_boost * 5
 
-        left_rate = float(min(left_spike_count / max_spikes_left, 1.0))
-        right_rate = float(min(right_spike_count / max_spikes_right, 1.0))
+        raw_left_rate = float(min(left_spike_count / max_spikes_left, 1.0))
+        raw_right_rate = float(min(right_spike_count / max_spikes_right, 1.0))
         boost_rate = float(min(boost_spike_count / max_spikes_boost, 1.0))
+
+        # v27e: EMA 스무딩 (진동 감소)
+        alpha = self.motor_smoothing
+        left_rate = alpha * raw_left_rate + (1 - alpha) * self.prev_left_rate
+        right_rate = alpha * raw_right_rate + (1 - alpha) * self.prev_right_rate
+        self.prev_left_rate = left_rate
+        self.prev_right_rate = right_rate
 
         # Read fear & attack levels (for stats and behavior modulation)
         self.fear.vars["V"].pull_from_device()
@@ -814,40 +826,18 @@ class BiologicalBrain:
         if self.attack_level > 0.001:  # 임계값 낮춤 (0.02 → 0.001)
             self.stats['attack_triggers'] += 1
 
-        # === COMPUTE ACTION ===
+        # === COMPUTE ACTION (v27i: RELATIVE angle_delta 출력) ===
         # Direction from motor difference
-        angle_delta = (right_rate - left_rate) * 0.8
+        # Positive = turn RIGHT (clockwise in screen coords)
+        # Negative = turn LEFT (counterclockwise in screen coords)
+        angle_delta = (right_rate - left_rate) * 0.3  # Scale to gym's [-0.3, 0.3] range
 
-        # v25: 디버그 (필요시 주석 해제)
-        # if enemy_signal.max() > 0.3:
-        #     enemy_l = enemy_signal[:len(enemy_signal)//2].max()
-        #     enemy_r = enemy_signal[len(enemy_signal)//2:].max()
-        #     print(f"[ENEMY] L={enemy_l:.2f} R={enemy_r:.2f} | Motor: L={left_rate:.3f} R={right_rate:.3f} | delta={angle_delta:+.3f}")
-
-        # Compute target position - v23: cos 버그 수정!
-        # cos(x)=cos(-x) 문제 → 직접 매핑으로 변경
-        target_x = 0.5 + angle_delta * 0.3  # 양수면 오른쪽, 음수면 왼쪽
-        target_y = 0.5
-
-        # Food seeking bias (heuristic to help initial learning)
-        if food_signal.max() > 0.1:
-            best_ray = np.argmax(food_signal)
-            food_angle = (2 * np.pi * best_ray / n_rays) - np.pi
-            blend = min(0.4, food_signal.max())
-            target_x = target_x * (1 - blend) + (0.5 + 0.15 * np.cos(food_angle)) * blend
-            target_y = target_y * (1 - blend) + (0.5 + 0.15 * np.sin(food_angle)) * blend
-
-        # Enemy avoidance bias (적절한 회피)
-        if enemy_signal.max() > 0.25:  # 더 가까울 때만
-            enemy_ray = np.argmax(enemy_signal)
-            enemy_angle = (2 * np.pi * enemy_ray / n_rays) - np.pi
-            avoid_angle = enemy_angle + np.pi  # 반대 방향
-            blend = min(0.4, enemy_signal.max() * 0.8)  # 적절한 회피
-            target_x = target_x * (1 - blend) + (0.5 + 0.2 * np.cos(avoid_angle)) * blend
-            target_y = target_y * (1 - blend) + (0.5 + 0.2 * np.sin(avoid_angle)) * blend
-
-        target_x = np.clip(target_x, 0.05, 0.95)
-        target_y = np.clip(target_y, 0.05, 0.95)
+        # v27i: 디버그 (적 감지 시)
+        if enemy_signal.max() > 0.3:
+            enemy_l = enemy_signal[:len(enemy_signal)//2].max()
+            enemy_r = enemy_signal[len(enemy_signal)//2:].max()
+            turn_dir = "RIGHT" if angle_delta > 0 else "LEFT"
+            print(f"[ENEMY] L={enemy_l:.2f} R={enemy_r:.2f} | Motor: L={left_rate:.3f} R={right_rate:.3f} | delta={angle_delta:+.3f} → {turn_dir}")
 
         # Boost decision - 보수적으로 (부스트는 길이를 소모함)
         enemy_very_close = enemy_signal.max() > 0.6  # 매우 가까운 적만
@@ -862,7 +852,9 @@ class BiologicalBrain:
             if reward > 0:
                 self.stats['food_eaten'] += 1
 
-        return target_x, target_y, boost
+        # v27i: Return RELATIVE angle_delta instead of absolute coordinates
+        # The gym supports (angle_delta, boost) format for direct control
+        return angle_delta, boost
 
     def _encode_to_population(self, signal: np.ndarray, n_neurons: int) -> np.ndarray:
         """신호를 뉴런 population 크기로 확장"""
@@ -934,6 +926,10 @@ class BiologicalBrain:
         self.attack_level = 0.0
         self.hunger_level = 0.5
         self.stats = {'food_eaten': 0, 'boosts': 0, 'fear_triggers': 0, 'attack_triggers': 0}
+
+        # v27e: EMA 스무딩 상태 초기화
+        self.prev_left_rate = 0.5
+        self.prev_right_rate = 0.5
 
     def save_weights(self, path: Path):
         """시냅스 가중치 + 연결 인덱스 저장 (SPARSE connectivity 포함)"""
@@ -1030,9 +1026,9 @@ class BiologicalAgent:
 
         while step < max_steps:
             sensor = self.env.get_sensor_input(self.brain.config.n_rays)
-            target_x, target_y, boost = self.brain.process(sensor)
+            angle_delta, boost = self.brain.process(sensor)  # v27i: relative angle control
 
-            obs, reward, done, info = self.env.step((target_x, target_y, boost))
+            obs, reward, done, info = self.env.step((angle_delta, boost))  # v27i: 2-value format
             total_reward += reward
 
             if reward != 0:

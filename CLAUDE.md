@@ -34,56 +34,66 @@ python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episo
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v26
+## 현재 상태: PyGeNN Slither.io v27i
 
-### 최신 결과 (2025-01-23)
+### 최신 결과 (2025-01-24)
 
 ```
 ============================================================
-Training Results (v26 - 100 Episodes)
+Training Results (v27i - 50 Episodes, 5 Enemies)
 ============================================================
-  Best Length: 14
-  Final Avg:   5.5
+  Best Length: 27
+  Final Avg:   12.5
   Mode:        DEV (13,800 neurons)
-  Time:        301.8s (3.02s/ep)
-
-  GPU Status:
-    Util: 59.7% avg
-    Temp: 44.8°C avg
-    Memory: 1375MB / 8GB
+  Time:        560.9s (11.22s/ep)
 ============================================================
 ```
 
-### v26 핵심 수정사항 (2025-01-23)
+### v27i 핵심 수정사항 (2025-01-24)
 
-**1. 모터 출력 디코딩 버그 수정 - 스파이크 누적 카운팅**
+**1. CRITICAL BUG FIX: 출력 포맷 변경 (절대좌표 → 상대각도)**
 ```python
-# BEFORE: 전압으로 활성도 측정 → 스파이크 후 Vreset으로 리셋되어 0이 됨
-left_v = self.motor_left.vars["V"].view
-left_rate = self._decode_activity(left_v)  # 항상 0!
+# BEFORE: 절대 화면 좌표 출력 - 뱀의 현재 위치/방향 무시!
+target_x = 0.5 + angle_delta * 0.7  # 화면의 어느 지점을 향해
+return target_x, target_y, boost    # 좌표계 불일치!
 
-# AFTER: 매 스텝마다 스파이크 누적 → 정확한 활성도 측정
+# AFTER: 상대 각도 출력 - 현재 방향 기준으로 회전
+angle_delta = (right_rate - left_rate) * 0.3  # [-0.3, 0.3] 라디안
+return angle_delta, boost  # 직접 회전 제어!
+```
+
+**문제점**: 절대좌표 (target_x=0.9) 사용 시, 화면 오른쪽 끝으로 이동하라는 의미.
+뱀이 이미 오른쪽에 있고 왼쪽을 향하고 있으면, 목표가 뒤에 있어서 180도 회전 시도!
+적 방향과 무관하게 화면 위치에 따라 행동이 달라지는 치명적 버그.
+
+**해결**: gym이 지원하는 `(angle_delta, boost)` 포맷 사용.
+- 양수 = 시계방향(오른쪽) 회전
+- 음수 = 반시계방향(왼쪽) 회전
+
+**2. Push-Pull 회피 반사 (강화)**
+```python
+# 적에서 멀어지기 위한 이중 제어
+push_weight = 100.0  # Enemy_L → Motor_R (+100)
+pull_weight = -80.0  # Enemy_L → Motor_L (-80)
+# Push-Pull = 적 반대 방향으로 강하게 밀고, 적 방향으로 완전 차단
+```
+
+**3. v26 스파이크 누적 카운팅 (유지)**
+```python
+# 매 스텝마다 스파이크 누적 → 정확한 활성도 측정
 for _ in range(10):
     self.model.step_time()
     left_spike_count += np.sum(refrac_time > spike_threshold)
-left_rate = left_spike_count / max_spikes  # 실제 활성도!
+left_rate = left_spike_count / max_spikes
 ```
 
-**2. v25 Push-Pull 회피 반사 (유지)**
-```python
-# 적에서 멀어지기 위한 이중 제어
-push_weight = 40.0   # Enemy_L → Motor_R (+40)
-pull_weight = -50.0  # Enemy_L → Motor_L (-50)
-# Push-Pull = 적 반대 방향으로 강하게 밀고, 적 방향으로 억제
-```
-
-**3. v24 Soft-Bound R-STDP (유지)**
+**4. v24 Soft-Bound R-STDP (유지)**
 ```python
 # 가중치 포화 방지: 곱셈 방식
 if update > 0:
-    g += update * (wMax - g)  # 남은 공간에 비례
+    g += update * (wMax - g)
 else:
-    g += update * (g - wMin)  # 현재 값에 비례
+    g += update * (g - wMin)
 ```
 
 ---
@@ -249,29 +259,33 @@ Enemy_R → Motor_L (가중치=80)
     │         └───────┘           │
     │                             │
 ┌───┴─────────────────────────────┴───┐
-│         INNATE REFLEX (v19)         │
+│       INNATE REFLEX (v27i)          │
 ├─────────────────────────────────────┤
-│ Enemy_L → Motor_R (교차, w=80)      │
-│ Enemy_R → Motor_L (교차, w=80)      │
-│ Food_L  → Motor_L (동측, w=30)      │
-│ Food_R  → Motor_R (동측, w=30)      │
+│ Enemy_L → Motor_R (PUSH +100)       │
+│ Enemy_L → Motor_L (PULL -80)        │
+│ Enemy_R → Motor_L (PUSH +100)       │
+│ Enemy_R → Motor_R (PULL -80)        │
+│ Food_L  → Motor_L (동측, w=15)      │
+│ Food_R  → Motor_R (동측, w=15)      │
 └─────────────────────────────────────┘
 ```
 
-### 선천적 반사 회로 (Innate Reflex)
+### 선천적 반사 회로 (Innate Reflex v27i)
 
 ```python
-# 적 회피: 교차 배선 (contralateral) - 도망 반사
-# 왼쪽 적 → 오른쪽 회전 (적에서 멀어짐)
-Enemy_L → Motor_R (weight=80)
-Enemy_R → Motor_L (weight=80)
+# 적 회피: Push-Pull 이중 제어 - 완벽한 회피
+# 왼쪽 적 → 오른쪽 활성화 + 왼쪽 억제 = 오른쪽 회전
+Enemy_L → Motor_R (PUSH +100)  # 반대편 활성화
+Enemy_L → Motor_L (PULL -80)   # 같은편 억제
+Enemy_R → Motor_L (PUSH +100)
+Enemy_R → Motor_R (PULL -80)
 
-# 음식 추적: 동측 배선 (ipsilateral) - 추적 반사
+# 음식 추적: 동측 배선 (ipsilateral)
 # 왼쪽 음식 → 왼쪽 회전 (음식 방향으로)
-Food_L → Motor_L (weight=30)
-Food_R → Motor_R (weight=30)
+Food_L → Motor_L (weight=15)
+Food_R → Motor_R (weight=15)
 
-# 적 회피가 음식보다 우선 (80 > 30)
+# 적 회피가 음식보다 우선 (100 vs 15)
 ```
 
 ---
@@ -282,7 +296,7 @@ Food_R → Motor_R (weight=30)
 backend/
 ├── genesis/
 │   ├── # PyGeNN (Current - GPU)
-│   ├── slither_pygenn_biological.py  # v19 PyGeNN 에이전트 ★
+│   ├── slither_pygenn_biological.py  # v27i PyGeNN 에이전트 ★
 │   ├── gpu_monitor.py                # GPU 온도/메모리 모니터링
 │   │
 │   ├── # snnTorch (Previous - CPU/GPU)
@@ -340,6 +354,18 @@ wsl -d Ubuntu-24.04 -e bash -c "export CUDA_PATH=/usr/local/cuda-12.6 && source 
 ---
 
 ## 핵심 발견 & 교훈
+
+### v27i 세션 교훈 (CRITICAL!)
+
+1. **절대좌표 vs 상대각도**: `(target_x, target_y)` 절대좌표는 뱀의 현재 위치/방향과 무관하게 화면상의 점을 향함!
+   - 뱀이 오른쪽에 있고 왼쪽을 향할 때 `target_x=0.9`면 뒤로 돌아서 적에게 돌진!
+   - **해결**: `(angle_delta, boost)` 상대 회전 출력 사용
+
+2. **Gym 출력 포맷**: 두 가지 지원
+   - `(target_x, target_y, boost)` - 절대 화면 좌표 (문제!)
+   - `(angle_delta, boost)` - 상대 회전 각도 (정답!)
+
+3. **결과**: Best 14→27, Avg 6→12.5 (2배 향상!)
 
 ### v26 세션 교훈
 
