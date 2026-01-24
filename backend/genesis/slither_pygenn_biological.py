@@ -630,10 +630,11 @@ class BiologicalBrain:
             sparsity=wall_sparsity, w_init=wall_pull_weight)
         # 학습 대상 아님 (본능)
 
-        # === v27e: FOOD TRACKING REFLEX (약화 - 생존 우선) ===
-        # 적 회피가 우선, 음식은 나중에
-        food_weight = 15.0  # v27e: 30→15 (적 회피 우선)
-        food_sparsity = 0.1  # v27e: 0.2→0.1 (sparse)
+        # === v28c: 적 회피 우선, 식욕은 보조 ===
+        # 음식 신호가 양쪽 모터를 동시 활성화 → 적 회피 신호 상쇄!
+        # 음식은 "방향 유도" 정도만, 생존이 우선
+        food_weight = 20.0   # v28c: 30→20 (적 회피 우선)
+        food_sparsity = 0.15 # v28c: 0.2→0.15 (더 sparse)
         print(f"  Food Reflex: Food_L→Motor_L, Food_R→Motor_R (STATIC, w={food_weight}, sp={food_sparsity})")
 
         self.syn_food_left_motor_left = create_static_synapse(
@@ -795,8 +796,10 @@ class BiologicalBrain:
         current_scale = 3.0  # 전류 강도 (threshold를 넘을 수 있도록 충분히 강하게)
 
         # 전류 값 설정 (한 번만 설정, 10 스텝 동안 유지)
-        self.food_eye_left.vars["I_input"].view[:] = food_left_encoded * current_scale
-        self.food_eye_right.vars["I_input"].view[:] = food_right_encoded * current_scale
+        # v28b: 음식 감각 민감도 - 균형
+        food_sensitivity = 1.5  # v28b: 1.8→1.5 (균형)
+        self.food_eye_left.vars["I_input"].view[:] = food_left_encoded * current_scale * food_sensitivity
+        self.food_eye_right.vars["I_input"].view[:] = food_right_encoded * current_scale * food_sensitivity
         self.enemy_eye_left.vars["I_input"].view[:] = enemy_left_encoded * current_scale * 1.2  # 적 신호 강화
         self.enemy_eye_right.vars["I_input"].view[:] = enemy_right_encoded * current_scale * 1.2
         # v27j: body/wall signal split into L/R
