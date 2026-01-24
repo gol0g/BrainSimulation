@@ -361,10 +361,14 @@ class BiologicalBrain:
             "enemy_eye_left", n_enemy_half, sensory_lif_model, sensory_params, sensory_init)
         self.enemy_eye_right = self.model.add_neuron_population(
             "enemy_eye_right", n_enemy_half, sensory_lif_model, sensory_params, sensory_init)
-        self.body_eye = self.model.add_neuron_population(
-            "body_eye", self.config.n_body_eye, sensory_lif_model, sensory_params, sensory_init)
+        # v27j: body_eye split into L/R for wall avoidance
+        n_body_half = self.config.n_body_eye // 2
+        self.body_eye_left = self.model.add_neuron_population(
+            "body_eye_left", n_body_half, sensory_lif_model, sensory_params, sensory_init)
+        self.body_eye_right = self.model.add_neuron_population(
+            "body_eye_right", n_body_half, sensory_lif_model, sensory_params, sensory_init)
 
-        print(f"  Sensory: Food_L/R({n_food_half:,}x2) + Enemy_L/R({n_enemy_half:,}x2) + Body({self.config.n_body_eye:,})")
+        print(f"  Sensory: Food_L/R({n_food_half:,}x2) + Enemy_L/R({n_enemy_half:,}x2) + Body_L/R({n_body_half:,}x2)")
 
         # === 2. SPECIALIZED CIRCUITS ===
         self.hunger = self.model.add_neuron_population(
@@ -477,10 +481,15 @@ class BiologicalBrain:
             n_enemy_half, self.config.n_attack_circuit,
             sparsity=self.config.sparsity * 4, w_init=2.5)
 
-        # Body → Fear (고정 - 자기 몸 인식도 본능)
-        self.syn_body_fear = create_static_synapse(
-            "body_fear", self.body_eye, self.fear,
-            self.config.n_body_eye, self.config.n_fear_circuit,
+        # Body → Fear (고정 - 자기 몸/벽 인식도 본능)
+        n_body_half = self.config.n_body_eye // 2
+        self.syn_body_left_fear = create_static_synapse(
+            "body_left_fear", self.body_eye_left, self.fear,
+            n_body_half, self.config.n_fear_circuit,
+            sparsity=self.config.sparsity * 0.5, w_init=1.0)
+        self.syn_body_right_fear = create_static_synapse(
+            "body_right_fear", self.body_eye_right, self.fear,
+            n_body_half, self.config.n_fear_circuit,
             sparsity=self.config.sparsity * 0.5, w_init=1.0)
 
         # R-STDP 시냅스만 all_synapses에 추가 (학습 대상)
@@ -591,6 +600,35 @@ class BiologicalBrain:
             n_enemy_half, self.config.n_motor_right,
             sparsity=push_sparsity, w_init=pull_weight)
         # 학습 대상 아님 (본능) - 공포의 거부권
+
+        # === v27j: WALL/BODY AVOIDANCE REFLEX (벽 회피) ===
+        # 벽도 적처럼 회피해야 함
+        wall_push_weight = 80.0   # 적보다 약간 약하게 (100 vs 80)
+        wall_pull_weight = -60.0  # 억제도 약간 약하게
+        wall_sparsity = 0.2
+        n_body_half = self.config.n_body_eye // 2
+        print(f"  Wall Reflex: Body→Motor (PUSH={wall_push_weight}, PULL={wall_pull_weight}, sp={wall_sparsity})")
+
+        # PUSH: Body_L → Motor_R (벽이 왼쪽에 있으면 오른쪽으로)
+        self.syn_body_left_motor_right = create_static_synapse(
+            "body_left_motor_right", self.body_eye_left, self.motor_right,
+            n_body_half, self.config.n_motor_right,
+            sparsity=wall_sparsity, w_init=wall_push_weight)
+        self.syn_body_right_motor_left = create_static_synapse(
+            "body_right_motor_left", self.body_eye_right, self.motor_left,
+            n_body_half, self.config.n_motor_left,
+            sparsity=wall_sparsity, w_init=wall_push_weight)
+
+        # PULL: Body_L → Motor_L (벽 쪽으로 가지 마!)
+        self.syn_body_left_motor_left_inhib = create_static_synapse(
+            "body_left_motor_left_inhib", self.body_eye_left, self.motor_left,
+            n_body_half, self.config.n_motor_left,
+            sparsity=wall_sparsity, w_init=wall_pull_weight)
+        self.syn_body_right_motor_right_inhib = create_static_synapse(
+            "body_right_motor_right_inhib", self.body_eye_right, self.motor_right,
+            n_body_half, self.config.n_motor_right,
+            sparsity=wall_sparsity, w_init=wall_pull_weight)
+        # 학습 대상 아님 (본능)
 
         # === v27e: FOOD TRACKING REFLEX (약화 - 생존 우선) ===
         # 적 회피가 우선, 음식은 나중에
@@ -747,7 +785,10 @@ class BiologicalBrain:
         food_right_encoded = self._encode_to_population(food_signal[mid:], n_food_half)
         enemy_left_encoded = self._encode_to_population(enemy_signal[:mid], n_enemy_half)
         enemy_right_encoded = self._encode_to_population(enemy_signal[mid:], n_enemy_half)
-        body_encoded = self._encode_to_population(body_signal, self.config.n_body_eye)
+        # v27j: body_eye split into L/R for wall avoidance
+        n_body_half = self.config.n_body_eye // 2
+        body_left_encoded = self._encode_to_population(body_signal[:mid], n_body_half)
+        body_right_encoded = self._encode_to_population(body_signal[mid:], n_body_half)
 
         # === SIMULATE (v23: I_input 전류 주입) ===
         # 전압 직접 설정 대신 전류 주입 → 정상적인 스파이크 이벤트 발생
@@ -758,14 +799,17 @@ class BiologicalBrain:
         self.food_eye_right.vars["I_input"].view[:] = food_right_encoded * current_scale
         self.enemy_eye_left.vars["I_input"].view[:] = enemy_left_encoded * current_scale * 1.2  # 적 신호 강화
         self.enemy_eye_right.vars["I_input"].view[:] = enemy_right_encoded * current_scale * 1.2
-        self.body_eye.vars["I_input"].view[:] = body_encoded * current_scale * 0.5
+        # v27j: body/wall signal split into L/R
+        self.body_eye_left.vars["I_input"].view[:] = body_left_encoded * current_scale * 1.0  # 벽 신호도 강하게
+        self.body_eye_right.vars["I_input"].view[:] = body_right_encoded * current_scale * 1.0
 
         # GPU로 전송
         self.food_eye_left.push_var_to_device("I_input")
         self.food_eye_right.push_var_to_device("I_input")
         self.enemy_eye_left.push_var_to_device("I_input")
         self.enemy_eye_right.push_var_to_device("I_input")
-        self.body_eye.push_var_to_device("I_input")
+        self.body_eye_left.push_var_to_device("I_input")
+        self.body_eye_right.push_var_to_device("I_input")
 
         # === v26: 시뮬레이션 + 스파이크 누적 ===
         # RefracTime은 2ms 후 decay하므로, 매 스텝마다 새 스파이크 감지 필요
@@ -911,7 +955,8 @@ class BiologicalBrain:
                          False면 완전 초기화
         """
         all_pops = [self.food_eye_left, self.food_eye_right,
-                    self.enemy_eye_left, self.enemy_eye_right, self.body_eye,
+                    self.enemy_eye_left, self.enemy_eye_right,
+                    self.body_eye_left, self.body_eye_right,  # v27j: L/R split
                     self.hunger, self.fear, self.attack,
                     self.integration_1, self.integration_2,
                     self.motor_left, self.motor_right, self.motor_boost]

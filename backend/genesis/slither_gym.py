@@ -541,6 +541,34 @@ class SlitherGym:
         for i in range(n_rays):
             ray_angle = self.agent.angle + (2 * np.pi * i / n_rays) - np.pi
 
+            # v27i: Check walls (add to body_rays since walls are obstacles)
+            cos_a = math.cos(ray_angle)
+            sin_a = math.sin(ray_angle)
+            wall_dist = view_range  # default: no wall in range
+
+            # Distance to each wall along the ray direction
+            if cos_a < -0.01:  # Ray pointing left
+                dist_to_left = -head.x / cos_a
+                if 0 < dist_to_left < wall_dist:
+                    wall_dist = dist_to_left
+            elif cos_a > 0.01:  # Ray pointing right
+                dist_to_right = (self.config.width - head.x) / cos_a
+                if 0 < dist_to_right < wall_dist:
+                    wall_dist = dist_to_right
+
+            if sin_a < -0.01:  # Ray pointing up
+                dist_to_top = -head.y / sin_a
+                if 0 < dist_to_top < wall_dist:
+                    wall_dist = dist_to_top
+            elif sin_a > 0.01:  # Ray pointing down
+                dist_to_bottom = (self.config.height - head.y) / sin_a
+                if 0 < dist_to_bottom < wall_dist:
+                    wall_dist = dist_to_bottom
+
+            # Add wall to body_rays (closer wall = stronger signal)
+            if wall_dist < view_range:
+                body_rays[i] = min(body_rays[i], wall_dist / view_range)
+
             # Check food
             for food in self.foods:
                 dx = food.x - head.x
