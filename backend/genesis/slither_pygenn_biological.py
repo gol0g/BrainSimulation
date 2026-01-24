@@ -656,19 +656,19 @@ class BiologicalBrain:
             sparsity=food_sparsity, w_init=food_weight)
         # 학습 대상 아님 (본능)
 
-        # === v30: ENEMY HEAD → MOTOR (동측 배선 = 사냥 본능!) ===
-        # 적 머리 방향으로 회전 (Push-Pull 회피와 반대!)
-        # - 적 body가 왼쪽 → 오른쪽으로 회피 (Push-Pull)
-        # - 적 head가 왼쪽 → 왼쪽으로 돌진 (동측 = 공격!)
-        # v30b: 가중치를 낮춰서 Push-Pull 회피 우선 유지
-        # 회피(100+80=180) >> 사냥(15) → 회피가 항상 우세
-        # 사냥은 적 body가 없고 head만 있을 때 효과적
-        attack_hunt_weight = 15.0  # v30b: 35→15 (회피 우선!)
-        attack_sparsity = 0.2
-        n_enemy_head_half = self.config.n_enemy_eye // 4  # enemy_head 뉴런 수
-        print(f"  Hunt Reflex: EnemyHead→Motor IPSILATERAL (w={attack_hunt_weight}, sp={attack_sparsity})")
+        # === v31: THE BERSERKER (광전사) - 탈억제 사냥 회로 ===
+        # 핵심 통찰: "적 머리가 보이면 두려움을 잊게 하라"
+        # - 평소: Fear(Push 100) >> Hunt(15) → 무조건 회피
+        # - 적 머리 감지: Fear 억제(-50) + Hunt(35) → 돌진 가능!
+        #
+        # 생물학적 근거: 포식자는 사냥 시 공포 반응이 억제됨 (Disinhibition)
 
-        # 동측 배선: 적 머리 방향으로 회전!
+        n_enemy_head_half = self.config.n_enemy_eye // 4
+        attack_hunt_weight = 35.0  # v31: 15→35 (Fear 억제와 함께라면 작동 가능!)
+        attack_sparsity = 0.2
+
+        # === Part 1: 동측 배선 (적 머리 방향으로 회전) ===
+        print(f"  Hunt Reflex: EnemyHead→Motor IPSILATERAL (w={attack_hunt_weight})")
         self.syn_enemy_head_left_motor_left = create_static_synapse(
             "enemy_head_left_motor_left", self.enemy_head_left, self.motor_left,
             n_enemy_head_half, self.config.n_motor_left,
@@ -677,6 +677,23 @@ class BiologicalBrain:
             "enemy_head_right_motor_right", self.enemy_head_right, self.motor_right,
             n_enemy_head_half, self.config.n_motor_right,
             sparsity=attack_sparsity, w_init=attack_hunt_weight)
+
+        # === Part 2: 탈억제 (Fear의 Push 신호 차단!) ===
+        # Enemy_Head_L이 활성화되면 → Motor_R로 가는 Push(+100)를 상쇄
+        # 결과: Fear의 "오른쪽으로 도망" 명령이 약해짐 → 왼쪽(적 방향)으로 갈 수 있음
+        disinhibit_weight = -70.0  # v31b: Push(100)의 70%를 상쇄 → Hunt(35)가 우위!
+        print(f"  Disinhibition: EnemyHead→Motor CONTRALATERAL (w={disinhibit_weight}) - Fear suppression!")
+
+        # 적 머리 왼쪽 → 오른쪽 모터 억제 (Push 상쇄)
+        self.syn_enemy_head_left_motor_right_inhib = create_static_synapse(
+            "enemy_head_left_motor_right_inhib", self.enemy_head_left, self.motor_right,
+            n_enemy_head_half, self.config.n_motor_right,
+            sparsity=attack_sparsity, w_init=disinhibit_weight)
+        # 적 머리 오른쪽 → 왼쪽 모터 억제 (Push 상쇄)
+        self.syn_enemy_head_right_motor_left_inhib = create_static_synapse(
+            "enemy_head_right_motor_left_inhib", self.enemy_head_right, self.motor_left,
+            n_enemy_head_half, self.config.n_motor_left,
+            sparsity=attack_sparsity, w_init=disinhibit_weight)
 
         # === WTA (Winner-Take-All) 측면 억제 회로 ===
         # 가장 강하게 발화한 모터 뉴런이 나머지를 억제 → 깨끗한 STDP 학습
