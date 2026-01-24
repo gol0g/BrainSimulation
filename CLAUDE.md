@@ -34,66 +34,55 @@ python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episo
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v27i
+## 현재 상태: PyGeNN Slither.io v28c (Stable Baseline)
 
 ### 최신 결과 (2025-01-24)
 
 ```
 ============================================================
-Training Results (v27i - 50 Episodes, 5 Enemies)
+Training Results (v28c - 50 Episodes)
 ============================================================
-  Best Length: 27
-  Final Avg:   12.5
-  Mode:        DEV (13,800 neurons)
-  Time:        560.9s (11.22s/ep)
+  5 Enemies:  Best=37, Avg=18.9 (baseline)
+  7 Enemies:  Best=26, Avg=18.5 (안정)
+  10 Enemies: Best=26, Avg=16.9 (생존만 가능)
+  Mode:       DEV (13,800 neurons)
+============================================================
+BREAKTHROUGH: Avg 5.5 → 18.9 (3.4배 향상!)
 ============================================================
 ```
 
-### v27i 핵심 수정사항 (2025-01-24)
+### v28c 핵심 변경사항 (2025-01-24)
 
-**1. CRITICAL BUG FIX: 출력 포맷 변경 (절대좌표 → 상대각도)**
+**1. 균형 잡힌 본능 시스템 (Static Synapses)**
 ```python
-# BEFORE: 절대 화면 좌표 출력 - 뱀의 현재 위치/방향 무시!
-target_x = 0.5 + angle_delta * 0.7  # 화면의 어느 지점을 향해
-return target_x, target_y, boost    # 좌표계 불일치!
+# 적 회피: Push-Pull (최우선)
+push_weight = 100.0  # Enemy_L → Motor_R
+pull_weight = -80.0  # Enemy_L → Motor_L (억제)
 
-# AFTER: 상대 각도 출력 - 현재 방향 기준으로 회전
-angle_delta = (right_rate - left_rate) * 0.3  # [-0.3, 0.3] 라디안
-return angle_delta, boost  # 직접 회전 제어!
+# 벽 회피: Push-Pull (차선)
+wall_push = 80.0     # Body_L → Motor_R
+wall_pull = -60.0    # Body_L → Motor_L (억제)
+
+# 음식 추적: 동측 배선 (보조)
+food_weight = 20.0   # Food_L → Motor_L
+food_sensitivity = 1.5  # 입력 전류 증폭
 ```
 
-**문제점**: 절대좌표 (target_x=0.9) 사용 시, 화면 오른쪽 끝으로 이동하라는 의미.
-뱀이 이미 오른쪽에 있고 왼쪽을 향하고 있으면, 목표가 뒤에 있어서 180도 회전 시도!
-적 방향과 무관하게 화면 위치에 따라 행동이 달라지는 치명적 버그.
-
-**해결**: gym이 지원하는 `(angle_delta, boost)` 포맷 사용.
-- 양수 = 시계방향(오른쪽) 회전
-- 음수 = 반시계방향(왼쪽) 회전
-
-**2. Push-Pull 회피 반사 (강화)**
-```python
-# 적에서 멀어지기 위한 이중 제어
-push_weight = 100.0  # Enemy_L → Motor_R (+100)
-pull_weight = -80.0  # Enemy_L → Motor_L (-80)
-# Push-Pull = 적 반대 방향으로 강하게 밀고, 적 방향으로 완전 차단
+**2. 핵심 발견: 음식 가중치 균형**
+```
+food_weight=40 → 양쪽 모터 동시 활성화 → 적 회피 신호 상쇄! (실패)
+food_weight=20 → 적 회피 우선 + 음식 방향 유도 (성공)
 ```
 
-**3. v26 스파이크 누적 카운팅 (유지)**
-```python
-# 매 스텝마다 스파이크 누적 → 정확한 활성도 측정
-for _ in range(10):
-    self.model.step_time()
-    left_spike_count += np.sum(refrac_time > spike_threshold)
-left_rate = left_spike_count / max_spikes
-```
+**3. v27j 벽 회피 추가**
+- Gym: 벽까지 거리를 body_rays에 추가 (ray-cast)
+- Brain: body_eye를 L/R로 분리 → Push-Pull 반사
 
-**4. v24 Soft-Bound R-STDP (유지)**
+**4. v27i 출력 포맷 수정**
 ```python
-# 가중치 포화 방지: 곱셈 방식
-if update > 0:
-    g += update * (wMax - g)
-else:
-    g += update * (g - wMin)
+# 절대좌표 (target_x, target_y) → 상대각도 (angle_delta)
+angle_delta = (right_rate - left_rate) * 0.3
+return angle_delta, boost
 ```
 
 ---
