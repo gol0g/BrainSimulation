@@ -368,13 +368,22 @@ class BiologicalBrain:
         self.body_eye_right = self.model.add_neuron_population(
             "body_eye_right", n_body_half, sensory_lif_model, sensory_params, sensory_init)
 
-        print(f"  Sensory: Food_L/R({n_food_half:,}x2) + Enemy_L/R({n_enemy_half:,}x2) + Body_L/R({n_body_half:,}x2)")
+        # === v30: ENEMY HEAD SENSOR (적 머리 = 공격 대상!) ===
+        # 적 머리 방향으로 회전해서 내 몸으로 막기 (킬!)
+        n_enemy_head_half = n_enemy_half // 2  # 적 머리 뉴런은 더 작게
+        self.enemy_head_left = self.model.add_neuron_population(
+            "enemy_head_left", n_enemy_head_half, sensory_lif_model, sensory_params, sensory_init)
+        self.enemy_head_right = self.model.add_neuron_population(
+            "enemy_head_right", n_enemy_head_half, sensory_lif_model, sensory_params, sensory_init)
+
+        print(f"  Sensory: Food_L/R({n_food_half:,}x2) + Enemy_L/R({n_enemy_half:,}x2) + Body_L/R({n_body_half:,}x2) + EnemyHead_L/R({n_enemy_head_half:,}x2)")
 
         # === 2. SPECIALIZED CIRCUITS ===
         self.hunger = self.model.add_neuron_population(
             "hunger", self.config.n_hunger_circuit, "LIF", lif_params, lif_init)
         self.fear = self.model.add_neuron_population(
             "fear", self.config.n_fear_circuit, "LIF", lif_params, lif_init)
+        # v28c: Attack uses standard LIF (v29 SensoryLIF 롤백)
         self.attack = self.model.add_neuron_population(
             "attack", self.config.n_attack_circuit, "LIF", lif_params, lif_init)
 
@@ -550,20 +559,20 @@ class BiologicalBrain:
             w_init=abs(self.config.inhibitory_weight))
         # 학습 대상 아님 (본능)
 
-        # === v24: FEAR ↔ ATTACK 상호 억제 (고정) ===
-        # Fight-or-Flight는 본능적 선택이므로 학습하지 않음
-        print(f"  Fear ↔ Attack Mutual Inhibition (STATIC, Attack-biased)")
+        # === v29: FEAR ↔ ATTACK 상호 억제 (공격 우세) ===
+        # 공격 모드가 활성화되면 공포를 압도해야 함 (Disinhibition)
+        print(f"  Fear ↔ Attack Mutual Inhibition (STATIC, Attack DOMINANT)")
         self.syn_fear_attack_inhib = create_static_synapse(
             "fear_attack_inhib", self.fear, self.attack,
             self.config.n_fear_circuit, self.config.n_attack_circuit,
             sparsity=self.config.sparsity * 2,
-            w_init=abs(self.config.inhibitory_weight) * 0.3)  # 공포→공격 억제 (약하게)
+            w_init=-2.0)  # v29: 공포→공격 억제 (약함)
         self.syn_attack_fear_inhib = create_static_synapse(
             "attack_fear_inhib", self.attack, self.fear,
             self.config.n_attack_circuit, self.config.n_fear_circuit,
-            sparsity=self.config.sparsity * 2,
-            w_init=abs(self.config.inhibitory_weight) * 0.7)  # 공격→공포 억제 (강하게)
-        # 학습 대상 아님 (본능)
+            sparsity=0.4,  # v29: 더 밀집한 연결
+            w_init=-8.0)  # v29: 공격→공포 강력 억제! (Disinhibition)
+        # 학습 대상 아님 (본능) - 공격이 공포를 이기는 구조
 
         # === v24: DIRECT REFLEX: Fear → Boost (고정) ===
         # 공포 시 도망 가속은 본능
@@ -647,27 +656,27 @@ class BiologicalBrain:
             sparsity=food_sparsity, w_init=food_weight)
         # 학습 대상 아님 (본능)
 
-        # === ATTACK CIRCUIT → Motor (적 방향으로 돌진) ===
-        # 튜닝: 공격 충동이 모터까지 전달되어야 함 - 가중치 상향
-        print(f"  Attack Reflex: Attack→Motor (boosted)")
-        self.syn_attack_motor_left = create_synapse(
-            "attack_motor_left", self.attack, self.motor_left,
-            self.config.n_attack_circuit, self.config.n_motor_left,
-            sparsity=self.config.sparsity * 2,
-            w_init=0.5)  # 0.2 → 0.5 (2.5x 강화)
-        self.syn_attack_motor_right = create_synapse(
-            "attack_motor_right", self.attack, self.motor_right,
-            self.config.n_attack_circuit, self.config.n_motor_right,
-            sparsity=self.config.sparsity * 2,
-            w_init=0.5)  # 0.2 → 0.5
-        # Attack → Boost (공격 시 가속 - 돌진!)
-        self.syn_attack_boost = create_synapse(
-            "attack_boost", self.attack, self.motor_boost,
-            self.config.n_attack_circuit, self.config.n_motor_boost,
-            sparsity=self.config.sparsity * 3,
-            w_init=0.4)  # 0.15 → 0.4 (공격 시 부스트 확률 증가)
+        # === v30: ENEMY HEAD → MOTOR (동측 배선 = 사냥 본능!) ===
+        # 적 머리 방향으로 회전 (Push-Pull 회피와 반대!)
+        # - 적 body가 왼쪽 → 오른쪽으로 회피 (Push-Pull)
+        # - 적 head가 왼쪽 → 왼쪽으로 돌진 (동측 = 공격!)
+        # v30b: 가중치를 낮춰서 Push-Pull 회피 우선 유지
+        # 회피(100+80=180) >> 사냥(15) → 회피가 항상 우세
+        # 사냥은 적 body가 없고 head만 있을 때 효과적
+        attack_hunt_weight = 15.0  # v30b: 35→15 (회피 우선!)
+        attack_sparsity = 0.2
+        n_enemy_head_half = self.config.n_enemy_eye // 4  # enemy_head 뉴런 수
+        print(f"  Hunt Reflex: EnemyHead→Motor IPSILATERAL (w={attack_hunt_weight}, sp={attack_sparsity})")
 
-        self.all_synapses.extend([self.syn_attack_motor_left, self.syn_attack_motor_right, self.syn_attack_boost])
+        # 동측 배선: 적 머리 방향으로 회전!
+        self.syn_enemy_head_left_motor_left = create_static_synapse(
+            "enemy_head_left_motor_left", self.enemy_head_left, self.motor_left,
+            n_enemy_head_half, self.config.n_motor_left,
+            sparsity=attack_sparsity, w_init=attack_hunt_weight)
+        self.syn_enemy_head_right_motor_right = create_static_synapse(
+            "enemy_head_right_motor_right", self.enemy_head_right, self.motor_right,
+            n_enemy_head_half, self.config.n_motor_right,
+            sparsity=attack_sparsity, w_init=attack_hunt_weight)
 
         # === WTA (Winner-Take-All) 측면 억제 회로 ===
         # 가장 강하게 발화한 모터 뉴런이 나머지를 억제 → 깨끗한 STDP 학습
@@ -768,11 +777,12 @@ class BiologicalBrain:
         self.motor_smoothing = 0.6  # v27g: 0.3→0.6 (더 빠른 반응)
 
     def process(self, sensor_input: np.ndarray, reward: float = 0.0) -> Tuple[float, float, bool]:
-        """센서 입력 처리 및 행동 출력 (v19: L/R 분리)"""
-        # Unpack sensor input (3, n_rays)
+        """센서 입력 처리 및 행동 출력 (v30: Hunt Mode)"""
+        # Unpack sensor input (4 channels: food, enemy_body, body, enemy_head)
         food_signal = sensor_input[0]
-        enemy_signal = sensor_input[1]
+        enemy_signal = sensor_input[1]  # enemy body (danger - 회피 대상)
         body_signal = sensor_input[2]
+        enemy_head_signal = sensor_input[3] if len(sensor_input) > 3 else np.zeros_like(food_signal)  # v30: 공격 대상!
 
         n_rays = len(food_signal)
         mid = n_rays // 2
@@ -790,6 +800,10 @@ class BiologicalBrain:
         n_body_half = self.config.n_body_eye // 2
         body_left_encoded = self._encode_to_population(body_signal[:mid], n_body_half)
         body_right_encoded = self._encode_to_population(body_signal[mid:], n_body_half)
+        # v30: enemy_head split into L/R for hunting
+        n_enemy_head_half = n_enemy_half // 2
+        enemy_head_left_encoded = self._encode_to_population(enemy_head_signal[:mid], n_enemy_head_half)
+        enemy_head_right_encoded = self._encode_to_population(enemy_head_signal[mid:], n_enemy_head_half)
 
         # === SIMULATE (v23: I_input 전류 주입) ===
         # 전압 직접 설정 대신 전류 주입 → 정상적인 스파이크 이벤트 발생
@@ -803,8 +817,15 @@ class BiologicalBrain:
         self.enemy_eye_left.vars["I_input"].view[:] = enemy_left_encoded * current_scale * 1.2  # 적 신호 강화
         self.enemy_eye_right.vars["I_input"].view[:] = enemy_right_encoded * current_scale * 1.2
         # v27j: body/wall signal split into L/R
-        self.body_eye_left.vars["I_input"].view[:] = body_left_encoded * current_scale * 1.0  # 벽 신호도 강하게
+        self.body_eye_left.vars["I_input"].view[:] = body_left_encoded * current_scale * 1.0
         self.body_eye_right.vars["I_input"].view[:] = body_right_encoded * current_scale * 1.0
+
+        # === v30: ENEMY HEAD HUNTING (적 머리 방향으로 돌진!) ===
+        # 적 머리가 가까울수록 강하게 자극 → 동측 배선으로 그 방향으로 회전
+        # 가중치 균형: 회피(100) > 사냥(35) > 음식(20) → 위험하면 회피, 안전하면 사냥
+        enemy_head_sensitivity = 1.5  # v30: 적 머리 감지 민감도
+        self.enemy_head_left.vars["I_input"].view[:] = enemy_head_left_encoded * current_scale * enemy_head_sensitivity
+        self.enemy_head_right.vars["I_input"].view[:] = enemy_head_right_encoded * current_scale * enemy_head_sensitivity
 
         # GPU로 전송
         self.food_eye_left.push_var_to_device("I_input")
@@ -813,6 +834,8 @@ class BiologicalBrain:
         self.enemy_eye_right.push_var_to_device("I_input")
         self.body_eye_left.push_var_to_device("I_input")
         self.body_eye_right.push_var_to_device("I_input")
+        self.enemy_head_left.push_var_to_device("I_input")
+        self.enemy_head_right.push_var_to_device("I_input")
 
         # === v26: 시뮬레이션 + 스파이크 누적 ===
         # RefracTime은 2ms 후 decay하므로, 매 스텝마다 새 스파이크 감지 필요
@@ -879,12 +902,14 @@ class BiologicalBrain:
         # Negative = turn LEFT (counterclockwise in screen coords)
         angle_delta = (right_rate - left_rate) * 0.3  # Scale to gym's [-0.3, 0.3] range
 
-        # v27i: 디버그 (적 감지 시)
+        # v28c 디버그: 적 + 음식 신호 확인
         if enemy_signal.max() > 0.3:
             enemy_l = enemy_signal[:len(enemy_signal)//2].max()
             enemy_r = enemy_signal[len(enemy_signal)//2:].max()
+            food_l = food_signal[:len(food_signal)//2].max()
+            food_r = food_signal[len(food_signal)//2:].max()
             turn_dir = "RIGHT" if angle_delta > 0 else "LEFT"
-            print(f"[ENEMY] L={enemy_l:.2f} R={enemy_r:.2f} | Motor: L={left_rate:.3f} R={right_rate:.3f} | delta={angle_delta:+.3f} → {turn_dir}")
+            print(f"[DBG] E_L={enemy_l:.2f} E_R={enemy_r:.2f} | F_L={food_l:.2f} F_R={food_r:.2f} | M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
 
         # Boost decision - 보수적으로 (부스트는 길이를 소모함)
         enemy_very_close = enemy_signal.max() > 0.6  # 매우 가까운 적만
