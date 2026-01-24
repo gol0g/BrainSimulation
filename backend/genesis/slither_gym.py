@@ -532,6 +532,7 @@ class SlitherGym:
 
         head = self.agent.head
         view_range = 300.0  # Increased for larger map (2000x2000)
+        head_boost = 2.0  # v32b: Amplify head signal (detect from same range, but stronger!)
 
         food_rays = np.ones(n_rays)  # 1 = nothing, 0 = close
         enemy_body_rays = np.ones(n_rays)  # Enemy bodies = DANGER
@@ -584,19 +585,24 @@ class SlitherGym:
             for enemy in self.enemies:
                 if not enemy.alive:
                     continue
-                # Enemy HEAD (attack target!)
-                enemy_head = enemy.head
-                dx = enemy_head.x - head.x
-                dy = enemy_head.y - head.y
-                dist = math.sqrt(dx*dx + dy*dy)
-                if dist < view_range:
-                    head_angle = math.atan2(dy, dx)
-                    angle_diff = abs((head_angle - ray_angle + np.pi) % (2*np.pi) - np.pi)
-                    if angle_diff < np.pi / n_rays:
-                        enemy_head_rays[i] = min(enemy_head_rays[i], dist / view_range)
+                # Enemy HEAD ZONE (attack target!) - v32c: Head + first 5 segments = "front"
+                # This makes the "head" target bigger (like aiming at enemy's face, not just tip)
+                for seg_idx, seg in enumerate(enemy.segments[:5]):  # Head + 4 more = enemy "front"
+                    dx = seg.x - head.x
+                    dy = seg.y - head.y
+                    dist = math.sqrt(dx*dx + dy*dy)
+                    if dist < view_range:
+                        seg_angle = math.atan2(dy, dx)
+                        angle_diff = abs((seg_angle - ray_angle + np.pi) % (2*np.pi) - np.pi)
+                        if angle_diff < np.pi / n_rays:
+                            # v32c: Head segment = full boost, further segments = decaying boost
+                            segment_boost = head_boost * (1.0 - seg_idx * 0.15)  # 2.0, 1.7, 1.4, 1.1, 0.8
+                            raw_signal = dist / view_range
+                            boosted_signal = raw_signal / max(0.5, segment_boost)
+                            enemy_head_rays[i] = min(enemy_head_rays[i], max(0, boosted_signal))
 
-                # Enemy BODY (danger - skip first few segments near head)
-                for seg in enemy.segments[3:]:
+                # Enemy BODY (danger - skip head zone, segments 5+)
+                for seg in enemy.segments[5:]:
                     dx = seg.x - head.x
                     dy = seg.y - head.y
                     dist = math.sqrt(dx*dx + dy*dy)

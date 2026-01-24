@@ -678,22 +678,47 @@ class BiologicalBrain:
             n_enemy_head_half, self.config.n_motor_right,
             sparsity=attack_sparsity, w_init=attack_hunt_weight)
 
-        # === Part 2: 탈억제 (Fear의 Push 신호 차단!) ===
-        # Enemy_Head_L이 활성화되면 → Motor_R로 가는 Push(+100)를 상쇄
-        # 결과: Fear의 "오른쪽으로 도망" 명령이 약해짐 → 왼쪽(적 방향)으로 갈 수 있음
-        disinhibit_weight = -70.0  # v31b: Push(100)의 70%를 상쇄 → Hunt(35)가 우위!
-        print(f"  Disinhibition: EnemyHead→Motor CONTRALATERAL (w={disinhibit_weight}) - Fear suppression!")
+        # === Part 2: 탈억제 (Fear의 Push AND Pull 신호 차단!) ===
+        # v32b: Push도 Pull도 모두 상쇄해야 함!
+        #
+        # Fear 신호 (Body_L 감지시):
+        #   Motor_R: +100 (Push - 오른쪽으로 회전, 왼쪽 적에서 멀어짐)
+        #   Motor_L: -80  (Pull - 왼쪽 회전 억제, 적 방향으로 못 감)
+        #
+        # Hunt 신호 (Head_L 감지시):
+        #   Motor_L: +35  (Hunt - 왼쪽으로 회전, 적 머리 방향)
+        #   Motor_R: -70  (Disinhibit Push)
+        #   Motor_L: +60  (Disinhibit Pull - NEW!)  ← Pull 상쇄!
+        #
+        # 결과:
+        #   Motor_R: +100 - 70 = +30 (약한 회피)
+        #   Motor_L: -80 + 35 + 60 = +15 (사냥 활성!) ← 드디어 양수!
+
+        disinhibit_push = -70.0   # Push 상쇄 (Motor 반대편)
+        disinhibit_pull = 60.0    # v32b: Pull 상쇄 (Motor 같은편) - 억제된 모터를 다시 활성화!
+        print(f"  Disinhibition: Push({disinhibit_push}) + Pull(+{disinhibit_pull}) - Full Fear suppression!")
 
         # 적 머리 왼쪽 → 오른쪽 모터 억제 (Push 상쇄)
         self.syn_enemy_head_left_motor_right_inhib = create_static_synapse(
             "enemy_head_left_motor_right_inhib", self.enemy_head_left, self.motor_right,
             n_enemy_head_half, self.config.n_motor_right,
-            sparsity=attack_sparsity, w_init=disinhibit_weight)
+            sparsity=attack_sparsity, w_init=disinhibit_push)
         # 적 머리 오른쪽 → 왼쪽 모터 억제 (Push 상쇄)
         self.syn_enemy_head_right_motor_left_inhib = create_static_synapse(
             "enemy_head_right_motor_left_inhib", self.enemy_head_right, self.motor_left,
             n_enemy_head_half, self.config.n_motor_left,
-            sparsity=attack_sparsity, w_init=disinhibit_weight)
+            sparsity=attack_sparsity, w_init=disinhibit_push)
+
+        # v32b: 적 머리 왼쪽 → 왼쪽 모터 활성화 (Pull 상쇄!)
+        # Hunt(35) + DisinhibitPull(60) = +95 vs FearPull(-80) → 넷 +15 (사냥 승리!)
+        self.syn_enemy_head_left_motor_left_boost = create_static_synapse(
+            "enemy_head_left_motor_left_boost", self.enemy_head_left, self.motor_left,
+            n_enemy_head_half, self.config.n_motor_left,
+            sparsity=attack_sparsity, w_init=disinhibit_pull)
+        self.syn_enemy_head_right_motor_right_boost = create_static_synapse(
+            "enemy_head_right_motor_right_boost", self.enemy_head_right, self.motor_right,
+            n_enemy_head_half, self.config.n_motor_right,
+            sparsity=attack_sparsity, w_init=disinhibit_pull)
 
         # === WTA (Winner-Take-All) 측면 억제 회로 ===
         # 가장 강하게 발화한 모터 뉴런이 나머지를 억제 → 깨끗한 STDP 학습
@@ -919,14 +944,15 @@ class BiologicalBrain:
         # Negative = turn LEFT (counterclockwise in screen coords)
         angle_delta = (right_rate - left_rate) * 0.3  # Scale to gym's [-0.3, 0.3] range
 
-        # v28c 디버그: 적 + 음식 신호 확인
-        if enemy_signal.max() > 0.3:
+        # v31b 디버그: 적 body + head 신호 확인
+        if enemy_signal.max() > 0.3 or enemy_head_signal.max() > 0.2:
             enemy_l = enemy_signal[:len(enemy_signal)//2].max()
             enemy_r = enemy_signal[len(enemy_signal)//2:].max()
-            food_l = food_signal[:len(food_signal)//2].max()
-            food_r = food_signal[len(food_signal)//2:].max()
+            head_l = enemy_head_signal[:len(enemy_head_signal)//2].max()
+            head_r = enemy_head_signal[len(enemy_head_signal)//2:].max()
             turn_dir = "RIGHT" if angle_delta > 0 else "LEFT"
-            print(f"[DBG] E_L={enemy_l:.2f} E_R={enemy_r:.2f} | F_L={food_l:.2f} F_R={food_r:.2f} | M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
+            hunt_active = "🎯" if (head_l > 0.3 or head_r > 0.3) else ""
+            print(f"[DBG] Body L={enemy_l:.2f} R={enemy_r:.2f} | Head L={head_l:.2f} R={head_r:.2f} {hunt_active}| M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
 
         # Boost decision - 보수적으로 (부스트는 길이를 소모함)
         enemy_very_close = enemy_signal.max() > 0.6  # 매우 가까운 적만
