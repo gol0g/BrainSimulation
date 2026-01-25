@@ -250,6 +250,10 @@ class BiologicalConfig:
     tau_plus: float = 20.0
     tau_minus: float = 20.0
 
+    # === v36: Long Tau R-STDP for Hunt synapses (Sandbag Training) ===
+    # 킬까지 5-10초 걸리므로, 사냥 시냅스는 더 긴 기억이 필요
+    tau_eligibility_hunt: float = 10000.0  # 10초 (일반 1초 vs 사냥 10초)
+
     # Biological parameters
     innate_boost: float = 3.0       # 선천적 회피 본능 강도
     fear_inhibition: float = 0.8    # 공포가 배고픔 억제하는 강도
@@ -431,6 +435,19 @@ class BiologicalBrain:
             "dopamine": 0.5,
         }
 
+        # === v36: Long Tau R-STDP for Hunt synapses ===
+        # 사냥 시냅스는 10초 기억 필요 (킬까지의 기동 시간)
+        r_stdp_hunt_params = {
+            "tauStdp": self.config.tau_stdp,           # 20ms (spike timing)
+            "tauElig": self.config.tau_eligibility_hunt,  # 10000ms (10초 기억!)
+            "aPlus": self.config.a_plus,
+            "aMinus": self.config.a_minus,
+            "wMin": self.config.w_min,
+            "wMax": 40.0,  # Hunt 가중치 상한 확대 (학습 여유)
+            "dopamine": 0.5,
+            "eta": 0.05,   # 학습률 증가 (보상 빈도가 낮으므로)
+        }
+
         # 시냅스 생성 헬퍼 (R-STDP 사용 - 학습 가능)
         def create_synapse(name, pre, post, n_pre, n_post, sparsity=None, w_init=None):
             sp = sparsity or self.config.sparsity
@@ -456,6 +473,20 @@ class BiologicalBrain:
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
                 init_sparse_connectivity("FixedProbability", {"prob": sp})
             )
+            return syn
+
+        # === v36: Hunt 시냅스 헬퍼 (Long Tau R-STDP - 10초 기억) ===
+        # 사냥 기술은 학습해야 함 - 긴 eligibility trace로 킬과 행동 연결
+        def create_hunt_synapse(name, pre, post, n_pre, n_post, sparsity=None, w_init=1.0):
+            sp = sparsity or self.config.sparsity
+            syn = self.model.add_synapse_population(
+                name, "SPARSE", pre, post,
+                init_weight_update(r_stdp_model, r_stdp_hunt_params,
+                                   {"g": w_init, "stdp_trace": 0.0, "eligibility": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": sp})
+            )
+            syn.set_wu_param_dynamic("dopamine")
             return syn
 
         # === SYNAPTIC CONNECTIONS ===
@@ -582,10 +613,11 @@ class BiologicalBrain:
             sparsity=self.config.sparsity * 3, w_init=3.0)  # 강한 부스트
         # 학습 대상 아님 (본능)
 
-        # === v27d: PUSH-PULL AVOIDANCE REFLEX (압도적 회피) ===
-        # "적 보면 다른 모든 신호 무시하고 도망"
-        push_weight = 100.0  # v27d: 70→100 (압도적)
-        pull_weight = -80.0  # v27d: -50→-80 (완전 차단)
+        # === v37f: PUSH-PULL AVOIDANCE REFLEX (약화!) ===
+        # v37b 문제: 5 enemies에서 Fear가 너무 강해서 Hunt 불가
+        # v37f: Fear 약화 → Hunt가 이길 수 있음
+        push_weight = 80.0   # v37f: 100→80 (약화)
+        pull_weight = -60.0  # v37f: -80→-60 (약화)
         push_sparsity = 0.3  # v27d: 0.25→0.3 (더 밀집)
         print(f"  Push-Pull Reflex: Enemy→Motor (PUSH={push_weight}, PULL={pull_weight}, sp={push_sparsity})")
 
@@ -656,19 +688,24 @@ class BiologicalBrain:
             sparsity=food_sparsity, w_init=food_weight)
         # 학습 대상 아님 (본능)
 
-        # === v31: THE BERSERKER (광전사) - 탈억제 사냥 회로 ===
-        # 핵심 통찰: "적 머리가 보이면 두려움을 잊게 하라"
-        # - 평소: Fear(Push 100) >> Hunt(15) → 무조건 회피
-        # - 적 머리 감지: Fear 억제(-50) + Hunt(35) → 돌진 가능!
+        # === v37f: SCALED ATTACK - Fear 약화에 맞춘 조정 ===
+        # v37f 전략: Fear를 약화시켰으니 Hunt도 비례 조정
         #
-        # 생물학적 근거: 포식자는 사냥 시 공포 반응이 억제됨 (Disinhibition)
+        # v37f 설정:
+        #   Fear: body × 80 → contralateral (약화됨)
+        #   Hunt: head × 180 → ipsilateral (강화!)
+        #   Disinhibition: head × (-100) → contralateral
+        #
+        # 결과 계산 (적 머리 보일 때):
+        #   Motor_R: +80 - 100 = -20 (도망 신호 역전!)
+        #   Motor_L: -60 + 180 + 80 = +200 (더 강력한 사냥!)
 
         n_enemy_head_half = self.config.n_enemy_eye // 4
-        attack_hunt_weight = 35.0  # v31: 15→35 (Fear 억제와 함께라면 작동 가능!)
-        attack_sparsity = 0.2
+        attack_hunt_weight = 180.0  # ★ v37f: 강화!
+        attack_sparsity = 0.5      # ★ v37b: 높은 연결 밀도!
 
-        # === Part 1: 동측 배선 (적 머리 방향으로 회전) ===
-        print(f"  Hunt Reflex: EnemyHead→Motor IPSILATERAL (w={attack_hunt_weight})")
+        # === Part 1: 동측 배선 (적 머리 방향으로 회전) - STATIC! ===
+        print(f"  Hunt Reflex: EnemyHead→Motor IPSILATERAL (w={attack_hunt_weight}, STATIC - no learning)")
         self.syn_enemy_head_left_motor_left = create_static_synapse(
             "enemy_head_left_motor_left", self.enemy_head_left, self.motor_left,
             n_enemy_head_half, self.config.n_motor_left,
@@ -678,25 +715,30 @@ class BiologicalBrain:
             n_enemy_head_half, self.config.n_motor_right,
             sparsity=attack_sparsity, w_init=attack_hunt_weight)
 
-        # === Part 2: 탈억제 (Fear의 Push AND Pull 신호 차단!) ===
-        # v32b: Push도 Pull도 모두 상쇄해야 함!
+        # v37: Hunt는 이제 정적 시냅스 (학습 안함)
+        self.hunt_synapses = []  # R-STDP 제거됨
+
+        # === Part 2: v37 강화된 탈억제 (Fear 완전 무력화!) ===
+        #
+        # v36 문제: Fear(100) > Hunt(40) + Disinhibit(70) → 여전히 도망
+        # v37 해결: Disinhibition을 Fear보다 강하게!
         #
         # Fear 신호 (Body_L 감지시):
-        #   Motor_R: +100 (Push - 오른쪽으로 회전, 왼쪽 적에서 멀어짐)
-        #   Motor_L: -80  (Pull - 왼쪽 회전 억제, 적 방향으로 못 감)
+        #   Motor_R: +100 (Push)
+        #   Motor_L: -80  (Pull)
         #
         # Hunt 신호 (Head_L 감지시):
-        #   Motor_L: +35  (Hunt - 왼쪽으로 회전, 적 머리 방향)
-        #   Motor_R: -70  (Disinhibit Push)
-        #   Motor_L: +60  (Disinhibit Pull - NEW!)  ← Pull 상쇄!
+        #   Motor_L: +150 (Hunt - v37 강화!)
+        #   Motor_R: -120 (Disinhibit Push - Fear 상쇄!)
+        #   Motor_L: +100 (Disinhibit Pull - v37 강화!)
         #
-        # 결과:
-        #   Motor_R: +100 - 70 = +30 (약한 회피)
-        #   Motor_L: -80 + 35 + 60 = +15 (사냥 활성!) ← 드디어 양수!
+        # 결과 (적 머리가 보일 때):
+        #   Motor_R: +100 - 120 = -20 (도망 신호 역전!)
+        #   Motor_L: -80 + 150 + 100 = +170 (강력한 사냥!)
 
-        disinhibit_push = -70.0   # Push 상쇄 (Motor 반대편)
-        disinhibit_pull = 60.0    # v32b: Pull 상쇄 (Motor 같은편) - 억제된 모터를 다시 활성화!
-        print(f"  Disinhibition: Push({disinhibit_push}) + Pull(+{disinhibit_pull}) - Full Fear suppression!")
+        disinhibit_push = -100.0  # ★ v37f: Fear Push(80)보다 강한 억제!
+        disinhibit_pull = 80.0    # ★ v37f: Fear Pull(-60)을 상쇄!
+        print(f"  Disinhibition: Push({disinhibit_push}) + Pull(+{disinhibit_pull}) - v37f scaled!")
 
         # 적 머리 왼쪽 → 오른쪽 모터 억제 (Push 상쇄)
         self.syn_enemy_head_left_motor_right_inhib = create_static_synapse(
@@ -719,6 +761,24 @@ class BiologicalBrain:
             "enemy_head_right_motor_right_boost", self.enemy_head_right, self.motor_right,
             n_enemy_head_half, self.config.n_motor_right,
             sparsity=attack_sparsity, w_init=disinhibit_pull)
+
+        # === v37f: PROXIMITY FEAR - 최소화 ===
+        # v37e 결과: -40에서도 킬 0 → 효과 미미
+        # v37f: -20으로 더 약화 (거의 무시 수준)
+        #
+        # 주 방어는 약화된 Fear(80)에 맡기고
+        # Hunt(180)가 압도하도록 설계
+        proximity_inhibit = -20.0  # v37f: 최소 억제
+        print(f"  Proximity Fear: Body→Head INHIBITION (w={proximity_inhibit}) - v37f MINIMAL")
+
+        self.syn_body_inhibits_head_left = create_static_synapse(
+            "body_inhibits_head_left", self.enemy_eye_left, self.enemy_head_left,
+            n_enemy_half, n_enemy_head_half,
+            sparsity=0.3, w_init=proximity_inhibit)
+        self.syn_body_inhibits_head_right = create_static_synapse(
+            "body_inhibits_head_right", self.enemy_eye_right, self.enemy_head_right,
+            n_enemy_half, n_enemy_head_half,
+            sparsity=0.3, w_init=proximity_inhibit)
 
         # === v33: ATTACK WTA (승자 독식) - 사냥 방향 결정! ===
         # 문제: L=0.68, R=0.62 → 양쪽 모터 비슷하게 활성화 → 진동 (부리단의 당나귀)
@@ -1058,6 +1118,16 @@ class BiologicalBrain:
         self.generation += 1
         pass
 
+    def get_hunt_synapse_stats(self) -> dict:
+        """v37f: Hunt는 정적 시냅스 - 고정 가중치 반환"""
+        # v37f: R-STDP 제거됨, 정적 가중치 180.0 사용
+        return {
+            'hunt_L_mean': 180.0,  # 정적 가중치 v37f
+            'hunt_R_mean': 180.0,
+            'hunt_L_std': 0.0,
+            'hunt_R_std': 0.0,
+        }
+
     def reset(self, keep_weights: bool = True):
         """상태 초기화 (윤회 시스템)
 
@@ -1198,6 +1268,9 @@ class BiologicalAgent:
                 self.brain.apply_death_penalty()
                 break
 
+        # v36: Hunt synapse stats for learning tracking
+        hunt_stats = self.brain.get_hunt_synapse_stats()
+
         return {
             'length': info['length'],
             'steps': info['steps'],
@@ -1206,7 +1279,10 @@ class BiologicalAgent:
             'fear_triggers': self.brain.stats['fear_triggers'],
             'attack_triggers': self.brain.stats['attack_triggers'],
             'boosts': self.brain.stats['boosts'],
-            'generation': self.brain.generation
+            'generation': self.brain.generation,
+            'kills': info.get('total_kills', 0),
+            'hunt_L_mean': hunt_stats['hunt_L_mean'],
+            'hunt_R_mean': hunt_stats['hunt_R_mean'],
         }
 
     def train(self, n_episodes: int = 100, resume: bool = False):
@@ -1228,6 +1304,7 @@ class BiologicalAgent:
         print("\n" + "=" * 60)
         print(f"Biological PyGeNN Training ({self.brain.config.total_neurons:,} neurons)")
         print(f"  STDP: τ={self.brain.config.tau_plus}ms, η={self.brain.config.a_plus}")
+        print(f"  Hunt R-STDP: τ={self.brain.config.tau_eligibility_hunt}ms (Long Memory!)")
         print(f"  WTA: inhibition={self.brain.config.wta_inhibition}, sparsity={self.brain.config.wta_sparsity}")
         print("=" * 60)
 
@@ -1252,9 +1329,15 @@ class BiologicalAgent:
                 monitor.print_status()
 
             gen = result.get('generation', 0)
-            print(f"[Ep {ep+1:3d}] Gen:{gen:3d} | Length: {result['length']:3d} | "
-                  f"High: {high} | Avg(10): {avg:.0f} | "
-                  f"Food: {result['food_eaten']} | Fear: {result['fear_triggers']} | Attack: {result['attack_triggers']}")
+            kills = result.get('kills', 0)
+            hunt_L = result.get('hunt_L_mean', 0)
+            hunt_R = result.get('hunt_R_mean', 0)
+
+            # v36: Kill 표시 (있으면 강조!)
+            kill_str = f"★KILL:{kills}★ " if kills > 0 else ""
+            print(f"[Ep {ep+1:3d}] {kill_str}Gen:{gen:3d} | Len:{result['length']:3d} | "
+                  f"H:{high} A10:{avg:.0f} | "
+                  f"Hunt(L={hunt_L:.1f},R={hunt_R:.1f}) | Atk:{result['attack_triggers']}")
 
         elapsed = time.time() - start_time
 
@@ -1286,11 +1369,11 @@ if __name__ == "__main__":
     parser.add_argument('--resume', action='store_true', help='Resume from best checkpoint')
     parser.add_argument('--lite', action='store_true', help='Use lite config (50K neurons) - GPU safe')
     parser.add_argument('--dev', action='store_true', help='Use dev config (15K neurons) - debugging')
+    parser.add_argument('--sandbag', action='store_true', help='Sandbag training mode (small map, 1 slow enemy)')
     args = parser.parse_args()
 
     print("Biological PyGeNN Slither.io Agent")
     print(f"Render mode: {args.render}")
-    print(f"Enemies: {args.enemies}")
 
     # GPU 안전 모드 선택
     if args.dev:
@@ -1305,7 +1388,25 @@ if __name__ == "__main__":
     print(f"Total neurons: {brain_config.total_neurons:,}")
     print()
 
-    env_config = SlitherConfig(n_enemies=args.enemies)
+    # === v36: SANDBAG MODE (1v1 작은 맵, 느린 적) ===
+    if args.sandbag:
+        print("=" * 60)
+        print("🥊 SANDBAG MODE ACTIVATED: 1v1 Cage Match")
+        print("=" * 60)
+        print("  Map: 500x500 (16x smaller)")
+        print("  Enemy: 1 (slow, speed=0.5)")
+        print("  Goal: Learn to hunt with R-STDP (τ=10s)")
+        print("=" * 60)
+        env_config = SlitherConfig(
+            width=500,
+            height=500,
+            n_food=50,         # 음식 밀도 유지
+            n_enemies=1,       # 1:1 결투
+            enemy_speed=0.5,   # 매우 느린 적 (에이전트 속도 3.0의 1/6)
+        )
+    else:
+        print(f"Enemies: {args.enemies}")
+        env_config = SlitherConfig(n_enemies=args.enemies)
 
     agent = BiologicalAgent(
         brain_config=brain_config,

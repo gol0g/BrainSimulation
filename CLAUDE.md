@@ -34,21 +34,182 @@ python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episo
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v32c (First Kill!)
+## 외부 AI 제안 처리 (MANDATORY)
 
-### 최신 결과 (2025-01-25)
+외부 AI(Gemini, GPT 등)의 제안을 받을 경우 **비판적으로 수용**한다.
+
+### 검증 항목
+
+| 항목 | 확인 내용 |
+|------|----------|
+| 파라미터 존재 여부 | 제안된 설정/함수가 실제 코드에 존재하는가? |
+| 가정 검증 | 제안의 전제 조건이 현재 시스템에 유효한가? |
+| 근본 원인 해결 | 제안이 증상만 완화하는가, 근본 원인을 해결하는가? |
+| 부작용 | 제안 적용 시 발생 가능한 부정적 영향은? |
+| 전이 가능성 | 단순화된 환경에서의 학습이 실제 환경에 적용 가능한가? |
+
+### 처리 절차
+
+1. **제안 수신** → 그대로 실행하지 않음
+2. **비판적 분석** → 위 검증 항목 확인
+3. **수정/보완** → 문제점 해결 후 실행 계획 수립
+4. **Phase 1 프로세스 적용** → 사전 분석 후 실험
+
+---
+
+## 실험 프로세스 (MANDATORY)
+
+장기 실험(100+ 에피소드) 실행 전 반드시 아래 프로세스를 따른다.
+
+### Phase 1: 사전 분석 (코드 작성 전)
+
+**1.1 학습 메커니즘 검증**
+
+| 항목 | 기준 | 미충족 시 |
+|------|------|----------|
+| 보상 빈도 | > 1% | shaping reward 추가 |
+| 시간 지연 | < eligibility τ (3초) | τ 연장 또는 설계 변경 |
+| 인과관계 | 명확 | credit assignment 해결책 필요 |
+
+**1.2 측정 지표 검증**
+
+| 항목 | 확인 방법 |
+|------|----------|
+| 측정 경로 | 코드에서 지표 계산 위치 추적 |
+| 회로 연결 | 새 시냅스가 측정 경로에 포함되는지 확인 |
+| 성공 기준 | 수치로 정의 (예: "지표 > N") |
+
+**1.3 신호 강도 검증**
+
+| 항목 | 확인 방법 |
+|------|----------|
+| 경쟁 신호 | 기존 신호 vs 새 신호 가중치 비교 |
+| 우회 여부 | 새 경로가 기존 회로를 bypass하는지 확인 |
+
+### Phase 2: 짧은 검증 (20-50 에피소드)
+
+```bash
+python ... --episodes 20 --enemies 5
+```
+
+**확인 항목:**
+- 학습 신호 발생 여부 (reward ≠ 0)
+- 목표 지표 변화 여부
+- baseline 대비 성능 유지 여부
+
+**판단 기준:**
+
+| 결과 | 조치 |
+|------|------|
+| 지표 = 0 고정 | 중단, 설계 재검토 |
+| 지표 변화 있음 | Phase 3 진행 |
+| 지표 있으나 변화 없음 | 100 에피소드로 확장 |
+
+### Phase 3: 중기 검증 (100-200 에피소드)
+
+**체크포인트:** 50 에피소드마다 점검
+
+**조기 중단 기준:**
+- 100 에피소드 후 지표 변화 없음
+- baseline 대비 성능 20% 이상 하락
+
+### Phase 4: 장기 실험 (500+ 에피소드)
+
+**진입 조건:** Phase 2, 3에서 학습 신호 확인됨
+
+**운영:**
+- 백그라운드 실행
+- 주기적 로그 확인
+- 100 에피소드마다 checkpoint 저장
+
+---
+
+### R-STDP 학습 조건
+
+R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
+
+| 조건 | 요구사항 | v35 (실패) | v36 Sandbag |
+|------|----------|-----------|-------------|
+| 보상 빈도 | > 1% | ~0.7% ✗ | ~9.6% (예상) ✓ |
+| 시간 지연 | < τ | > 3초 ✗ | < 10초 ✓ (τ=10s) |
+| 인과관계 | 명확 | 불명확 ✗ | 개선 예상 |
+
+**v36 대응:**
+- 환경 단순화 (Sandbag): 보상 빈도 증가
+- Long Tau R-STDP: τ=10초로 연장 (Hunt 시냅스만)
+- 생존 회로는 Static 유지 (학습 대상 아님)
+
+---
+
+## 현재 상태: PyGeNN Slither.io v37f (Active Kill 달성!)
+
+### v37f THE HUNTER - Phase 3 검증 완료 (2025-01-26)
 
 ```
 ============================================================
-★★★ FIRST KILL ACHIEVED! v32c (100 Episodes, 3 Enemies) ★★★
+v37f Phase 3 - ACTIVE KILL 검증 결과 ★ SUCCESS!
 ============================================================
-  KILLS: 4 (에피소드 4, 17, 39, 67)
-  Best: 28
-  Avg(10): 18
-  Attack triggers: ~0 (대부분 passive kill)
-  Mode: DEV (13,800 neurons)
+  Episodes: 200
+  Best Length: 30
+  Final Avg: 15.5
+  Total Kills: 6 (Active!)
+  Kill Rate: 3%
+  Environment: 5 enemies (normal)
 ============================================================
 ```
+
+**핵심 구성:**
+```python
+# Fear (약화) - 사냥 시 두려움 감소
+push_weight = 80.0   # v28c: 100 → v37f: 80
+pull_weight = -60.0  # v28c: -80 → v37f: -60
+
+# Hunt (정적, 강화) - 적 머리로 돌진
+attack_hunt_weight = 180.0  # 강력한 사냥 본능
+attack_sparsity = 0.5
+
+# Disinhibition - Fear 상쇄
+disinhibit_push = -100.0  # Fear Push 상쇄
+disinhibit_pull = 80.0    # Fear Pull 상쇄
+
+# Proximity Fear (최소) - 근거리 억제 최소화
+proximity_inhibit = -20.0
+```
+
+**신호 흐름:**
+```
+적 body만 보임: Fear(80) → 회피
+적 head 보임:   Fear(80) - Disinhibit(100) + Hunt(180) = +160 → 돌진!
+```
+
+**실험 프로세스 준수:**
+- Phase 2 (50ep): Best=31, Avg=17.8, Kills=1+ ✓
+- Phase 3 (200ep): Best=30, Avg=15.5, Kills=6 ✓
+- 조기 중단 기준 미해당 (성능 유지)
+
+---
+
+### v35 Project SNIPER (2025-01-25) - 실패
+
+**목표:** R-STDP를 통한 Active Kill 학습
+
+**결과:**
+
+| 지표 | v35 (1000 ep) | v33 baseline |
+|------|---------------|--------------|
+| Best | 31 | 27~31 |
+| Kills | 6 (passive) | 4~6 (passive) |
+| Attack 카운터 | 0 | 0 |
+| R-STDP 학습 | 미발생 | N/A |
+
+**실패 원인 분석:**
+
+| 문제 | 상세 |
+|------|------|
+| 측정 오류 | Hunt 시냅스가 Attack Circuit 우회 → Attack 카운터 측정 불가 |
+| R-STDP 조건 미충족 | 보상 빈도 0.7% (< 1%), 시간 지연 수십초 (> τ=3초) |
+
+**결론:** v33으로 롤백. R-STDP는 현재 Kill 보상 구조에 부적합.
 
 ### v28c Baseline (2025-01-24)
 
@@ -123,10 +284,34 @@ v32c: Expanded Head Zone (Gym)
   - 결과: 4 KILLS in 100 episodes!
 ```
 
-**다음 목표: Active Hunt**
-- 현재: Passive kill (적이 우리 몸에 부딪힘)
-- 필요: Active hunt (우리가 적 머리에 돌진)
-- 방법: Attack trigger 증가, 더 강한 disinhibition
+**v33 WTA 실험 (부분 성공):**
+```
+v33: Signal-level WTA 전처리
+============================================================
+문제: Head L=0.68, R=0.62 → 양쪽 모터 비슷하게 활성화 → 진동
+해결: WTA로 약한 쪽 100% 억제 → 한 방향으로 확실한 회전
+결과: Best=27, Avg=13.9, Gen=32/100 (안정적 생존)
+============================================================
+```
+
+**v34 Aggressive Hunter 실험 (실패 - 교훈 기록):**
+```
+v34 실험 목표: 모터 포화 돌파로 Active Kill 달성
+============================================================
+v34:  hunt=100, sp=0.35, push=-120, pull=100 → Death 100%!
+      (Fear 완전 상쇄 → 생존 본능 제거 → 자살 공격)
+
+v34b: push=-60, pull=50 → Attack=0 (너무 소심)
+v34c: push=-90, pull=80 → Death 100% (여전히 공격적)
+v34d: hunt_threshold=0.6 → Death 99% (Fear가 여전히 압도)
+============================================================
+결론: Disinhibition 접근법의 한계 확인
+- Fear 완전 상쇄 → 자살 공격
+- Fear 부분 상쇄 → 공격 불가
+- 근본 원인: 적 head가 보이면 body도 보임 (위험 상황)
+```
+
+**v35: PROJECT SNIPER (실패) - 상세 내용은 "현재 상태" 섹션 참조**
 
 ### v28c 핵심 변경사항 (2025-01-24)
 
@@ -246,7 +431,10 @@ Enemy_R → Motor_L (가중치=80)
 | 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
 | 2단계 | Slither.io snnTorch | 15,800 | High: 57 (적 3마리) |
 | 3단계 | Slither.io PyGeNN | 158,000 | High: 16 (적 7마리) |
-| **v19** | **PyGeNN + 음식추적** | **13,800 (dev)** | **High: 10** |
+| v19 | PyGeNN + 음식추적 | 13,800 (dev) | High: 10 |
+| v28c | Push-Pull 회피 | 13,800 (dev) | Best: 27~37, Avg: 15~19 |
+| v32c | First Kill | 13,800 (dev) | 4 Kills (100 ep) |
+| **v37f** | **Active Kill** | **13,800 (dev)** | **Best: 30, Kills: 6 (200 ep)** |
 
 ---
 
@@ -287,71 +475,75 @@ Enemy_R → Motor_L (가중치=80)
 
 ---
 
-## PyGeNN 아키텍처 v19
+## PyGeNN 아키텍처 v37f
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  Food Eye    │  │  Enemy Eye   │  │   Body Eye   │
-│  L/R 분리    │  │  L/R 분리    │  │              │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       ▼                 ▼                 ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│Hunger Circuit│  │ Fear Circuit │  │Attack Circuit│
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       │    Fear --| Hunger (억제)         │
-       │    Fear <-> Attack (상호 억제)    │
-       └────────────┬──────────────────────┘
-                    ▼
-         ┌────────────────────┐
-         │   Integration 1    │
-         └─────────┬──────────┘
-                   ▼
-         ┌────────────────────┐
-         │   Integration 2    │
-         └─────────┬──────────┘
-                   │
-    ┌──────────────┼──────────────┐
-    │              │              │
-    ▼              ▼              ▼
-┌───────┐     ┌───────┐     ┌───────┐
-│ Left  │◄────│  WTA  │────►│ Right │
-└───────┘     └───────┘     └───────┘
-    ▲              │              ▲
-    │              ▼              │
-    │         ┌───────┐           │
-    │         │ Boost │           │
-    │         └───────┘           │
-    │                             │
-┌───┴─────────────────────────────┴───┐
-│       INNATE REFLEX (v27i)          │
-├─────────────────────────────────────┤
-│ Enemy_L → Motor_R (PUSH +100)       │
-│ Enemy_L → Motor_L (PULL -80)        │
-│ Enemy_R → Motor_L (PUSH +100)       │
-│ Enemy_R → Motor_R (PULL -80)        │
-│ Food_L  → Motor_L (동측, w=15)      │
-│ Food_R  → Motor_R (동측, w=15)      │
-└─────────────────────────────────────┘
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  Food Eye    │  │  Enemy Eye   │  │  Enemy Head  │  │   Body Eye   │
+│  L/R 분리    │  │  L/R 분리    │  │  L/R 분리    │  │   L/R 분리   │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │                 │
+       ▼                 ▼                 ▼                 ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│Hunger Circuit│  │ Fear Circuit │  │ Hunt Circuit │  │ Wall Avoid   │
+│   (Food)     │  │ (Push-Pull)  │  │ (Disinhibit) │  │ (Push-Pull)  │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │                 │
+       └────────────────┬┴─────────────────┴─────────────────┘
+                        ▼
+                   ┌─────────┐
+                   │  Motor  │
+                   │  L / R  │
+                   └────┬────┘
+                        │
+    ┌───────────────────┼───────────────────┐
+    │                   │                   │
+    ▼                   ▼                   ▼
+┌───────┐          ┌───────┐          ┌───────┐
+│ Left  │◄─────────│  WTA  │─────────►│ Right │
+└───────┘          └───────┘          └───────┘
+
+┌─────────────────────────────────────────────────┐
+│           INNATE REFLEX v37f (Static)           │
+├─────────────────────────────────────────────────┤
+│ [Fear - 약화된 회피]                            │
+│ Enemy_L → Motor_R (PUSH +80)                    │
+│ Enemy_L → Motor_L (PULL -60)                    │
+│                                                 │
+│ [Hunt - 강화된 사냥]                            │
+│ EnemyHead_L → Motor_L (HUNT +180)               │
+│                                                 │
+│ [Disinhibition - Fear 상쇄]                     │
+│ EnemyHead_L → Motor_R (DISINHIBIT -100)         │
+│ EnemyHead_L → Motor_L (RELEASE +80)             │
+│                                                 │
+│ [Wall/Food - 기존 유지]                         │
+│ Body_L → Motor_R (PUSH +80)                     │
+│ Food_L → Motor_L (IPSI +20)                     │
+└─────────────────────────────────────────────────┘
 ```
 
-### 선천적 반사 회로 (Innate Reflex v27i)
+### 선천적 반사 회로 (Innate Reflex v37f)
 
 ```python
-# 적 회피: Push-Pull 이중 제어 - 완벽한 회피
-# 왼쪽 적 → 오른쪽 활성화 + 왼쪽 억제 = 오른쪽 회전
-Enemy_L → Motor_R (PUSH +100)  # 반대편 활성화
-Enemy_L → Motor_L (PULL -80)   # 같은편 억제
-Enemy_R → Motor_L (PUSH +100)
-Enemy_R → Motor_R (PULL -80)
+# 1. Fear (약화) - 적 body 회피
+Enemy_L → Motor_R (PUSH +80)   # 반대편 활성화
+Enemy_L → Motor_L (PULL -60)   # 같은편 억제
 
-# 음식 추적: 동측 배선 (ipsilateral)
-# 왼쪽 음식 → 왼쪽 회전 (음식 방향으로)
-Food_L → Motor_L (weight=15)
-Food_R → Motor_R (weight=15)
+# 2. Hunt - 적 head 추적 (동측)
+EnemyHead_L → Motor_L (HUNT +180)  # 사냥 본능
 
-# 적 회피가 음식보다 우선 (100 vs 15)
+# 3. Disinhibition - 사냥 시 Fear 상쇄
+EnemyHead_L → Motor_R (DISINHIBIT -100)  # Fear Push 상쇄
+EnemyHead_L → Motor_L (RELEASE +80)      # Fear Pull 상쇄
+
+# 4. 결합 효과
+# 적 body만: Fear(80) → 회피
+# 적 head도: Fear(80) - Disinhibit(100) + Hunt(180) = +160 → 돌진!
+
+# 5. 음식/벽 회피 (기존 유지)
+Food_L → Motor_L (IPSI +20)
+Body_L → Motor_R (PUSH +80)
 ```
 
 ---
@@ -362,7 +554,7 @@ Food_R → Motor_R (weight=15)
 backend/
 ├── genesis/
 │   ├── # PyGeNN (Current - GPU)
-│   ├── slither_pygenn_biological.py  # v27i PyGeNN 에이전트 ★
+│   ├── slither_pygenn_biological.py  # v37f PyGeNN 에이전트 (Active Kill) ★
 │   ├── gpu_monitor.py                # GPU 온도/메모리 모니터링
 │   │
 │   ├── # snnTorch (Previous - CPU/GPU)
