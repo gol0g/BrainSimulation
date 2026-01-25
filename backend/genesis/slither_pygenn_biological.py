@@ -720,6 +720,24 @@ class BiologicalBrain:
             n_enemy_head_half, self.config.n_motor_right,
             sparsity=attack_sparsity, w_init=disinhibit_pull)
 
+        # === v33: ATTACK WTA (승자 독식) - 사냥 방향 결정! ===
+        # 문제: L=0.68, R=0.62 → 양쪽 모터 비슷하게 활성화 → 진동 (부리단의 당나귀)
+        # 해결: EnemyHead_L ↔ EnemyHead_R 측면 억제 → 강한 쪽이 약한 쪽을 제압!
+        #
+        # 결과: L=0.68, R=0.62 → L이 R을 억제 → R≈0 → 왼쪽으로 풀 스로틀!
+        attack_wta_weight = -25.0  # 강한 억제로 확실한 결정
+        attack_wta_sparsity = 0.3
+        print(f"  Attack WTA: EnemyHead L↔R (w={attack_wta_weight}) - 'Choose ONE target!'")
+
+        self.syn_head_left_inhibits_right = create_static_synapse(
+            "head_left_inhibits_right", self.enemy_head_left, self.enemy_head_right,
+            n_enemy_head_half, n_enemy_head_half,
+            sparsity=attack_wta_sparsity, w_init=attack_wta_weight)
+        self.syn_head_right_inhibits_left = create_static_synapse(
+            "head_right_inhibits_left", self.enemy_head_right, self.enemy_head_left,
+            n_enemy_head_half, n_enemy_head_half,
+            sparsity=attack_wta_sparsity, w_init=attack_wta_weight)
+
         # === WTA (Winner-Take-All) 측면 억제 회로 ===
         # 가장 강하게 발화한 모터 뉴런이 나머지를 억제 → 깨끗한 STDP 학습
         print(f"  WTA Lateral Inhibition: Motor neurons (weight={self.config.wta_inhibition})")
@@ -843,9 +861,29 @@ class BiologicalBrain:
         body_left_encoded = self._encode_to_population(body_signal[:mid], n_body_half)
         body_right_encoded = self._encode_to_population(body_signal[mid:], n_body_half)
         # v30: enemy_head split into L/R for hunting
+        # v33: Apply WTA to head signals BEFORE encoding!
+        # Problem: L=0.68, R=0.62 → both sides activate → oscillation
+        # Solution: Winner takes all - only stronger side gets signal
+        head_left_raw = enemy_head_signal[:mid].max()
+        head_right_raw = enemy_head_signal[mid:].max()
+
+        # WTA: If one side is significantly stronger, suppress the other
+        wta_threshold = 0.02  # v33: Lowered from 0.05 - be more decisive!
+        if head_left_raw > head_right_raw + wta_threshold:
+            # Left wins - FULL suppress right (승자 독식!)
+            enemy_head_signal_processed = enemy_head_signal.copy()
+            enemy_head_signal_processed[mid:] = 0  # 100% suppression - 오직 왼쪽만!
+        elif head_right_raw > head_left_raw + wta_threshold:
+            # Right wins - FULL suppress left (승자 독식!)
+            enemy_head_signal_processed = enemy_head_signal.copy()
+            enemy_head_signal_processed[:mid] = 0  # 100% suppression - 오직 오른쪽만!
+        else:
+            # Too close to call - keep both (defensive posture)
+            enemy_head_signal_processed = enemy_head_signal
+
         n_enemy_head_half = n_enemy_half // 2
-        enemy_head_left_encoded = self._encode_to_population(enemy_head_signal[:mid], n_enemy_head_half)
-        enemy_head_right_encoded = self._encode_to_population(enemy_head_signal[mid:], n_enemy_head_half)
+        enemy_head_left_encoded = self._encode_to_population(enemy_head_signal_processed[:mid], n_enemy_head_half)
+        enemy_head_right_encoded = self._encode_to_population(enemy_head_signal_processed[mid:], n_enemy_head_half)
 
         # === SIMULATE (v23: I_input 전류 주입) ===
         # 전압 직접 설정 대신 전류 주입 → 정상적인 스파이크 이벤트 발생
@@ -944,15 +982,17 @@ class BiologicalBrain:
         # Negative = turn LEFT (counterclockwise in screen coords)
         angle_delta = (right_rate - left_rate) * 0.3  # Scale to gym's [-0.3, 0.3] range
 
-        # v31b 디버그: 적 body + head 신호 확인
+        # v33 디버그: WTA 효과 확인
         if enemy_signal.max() > 0.3 or enemy_head_signal.max() > 0.2:
             enemy_l = enemy_signal[:len(enemy_signal)//2].max()
             enemy_r = enemy_signal[len(enemy_signal)//2:].max()
             head_l = enemy_head_signal[:len(enemy_head_signal)//2].max()
             head_r = enemy_head_signal[len(enemy_head_signal)//2:].max()
+            # v33: WTA 결과 표시
+            wta_winner = "=" if abs(head_l - head_r) < 0.02 else ("L⚔" if head_l > head_r else "⚔R")
             turn_dir = "RIGHT" if angle_delta > 0 else "LEFT"
             hunt_active = "🎯" if (head_l > 0.3 or head_r > 0.3) else ""
-            print(f"[DBG] Body L={enemy_l:.2f} R={enemy_r:.2f} | Head L={head_l:.2f} R={head_r:.2f} {hunt_active}| M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
+            print(f"[DBG] Body L={enemy_l:.2f} R={enemy_r:.2f} | Head L={head_l:.2f} R={head_r:.2f} {wta_winner} {hunt_active}| M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
 
         # Boost decision - 보수적으로 (부스트는 길이를 소모함)
         enemy_very_close = enemy_signal.max() > 0.6  # 매우 가까운 적만
