@@ -34,9 +34,23 @@ python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episo
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v28c (Stable Baseline)
+## 현재 상태: PyGeNN Slither.io v32c (First Kill!)
 
-### 최신 결과 (2025-01-24)
+### 최신 결과 (2025-01-25)
+
+```
+============================================================
+★★★ FIRST KILL ACHIEVED! v32c (100 Episodes, 3 Enemies) ★★★
+============================================================
+  KILLS: 4 (에피소드 4, 17, 39, 67)
+  Best: 28
+  Avg(10): 18
+  Attack triggers: ~0 (대부분 passive kill)
+  Mode: DEV (13,800 neurons)
+============================================================
+```
+
+### v28c Baseline (2025-01-24)
 
 ```
 ============================================================
@@ -95,10 +109,24 @@ v31b: Disinhibition -70 → Best=27, Avg=18.2, Attack=739 ✓
 생물학적 근거: 포식자는 사냥 시 공포 반응이 억제됨
 ```
 
-**다음 목표: First Kill 달성**
-- 현재: 공격 회로 활성화됨 (Attack=739)
-- 필요: 킬 판정 확인 (★ KILL! 로그)
-- 방법: 시각화로 실제 행동 확인, 더 긴 훈련
+**v32c - First Kill 달성! (2025-01-25)**
+```
+v32b: Full Push+Pull Disinhibition (Brain)
+  - disinhibit_push = -70 (Fear Push 상쇄)
+  - disinhibit_pull = +60 (Fear Pull 상쇄) ← NEW!
+  - 결과: Motor_L = -80 + 35 + 60 = +15 (사냥 가능!)
+
+v32c: Expanded Head Zone (Gym)
+  - Head zone: segments 0-4 (5개 세그먼트)
+  - Body zone: segments 5+ (충돌 없음)
+  - head_boost = 2.0 (신호 증폭)
+  - 결과: 4 KILLS in 100 episodes!
+```
+
+**다음 목표: Active Hunt**
+- 현재: Passive kill (적이 우리 몸에 부딪힘)
+- 필요: Active hunt (우리가 적 머리에 돌진)
+- 방법: Attack trigger 증가, 더 강한 disinhibition
 
 ### v28c 핵심 변경사항 (2025-01-24)
 
