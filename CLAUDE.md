@@ -141,18 +141,18 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v37f (Active Kill 달성!)
+## 현재 상태: PyGeNN Slither.io v37f (Defensive Kill - 분석 완료)
 
 ### v37f THE HUNTER - Phase 3 검증 완료 (2025-01-26)
 
 ```
 ============================================================
-v37f Phase 3 - ACTIVE KILL 검증 결과 ★ SUCCESS!
+v37f Phase 3 - 검증 결과
 ============================================================
   Episodes: 200
   Best Length: 30
   Final Avg: 15.5
-  Total Kills: 6 (Active!)
+  Total Kills: 6 (Defensive - v38 분석으로 확인)
   Kill Rate: 3%
   Environment: 5 enemies (normal)
 ============================================================
@@ -186,6 +186,52 @@ proximity_inhibit = -20.0
 - Phase 2 (50ep): Best=31, Avg=17.8, Kills=1+ ✓
 - Phase 3 (200ep): Best=30, Avg=15.5, Kills=6 ✓
 - 조기 중단 기준 미해당 (성능 유지)
+
+---
+
+### v38 Sandbag 분석 (2025-01-27) - 핵심 통찰!
+
+**Sandbag 테스트 (1v1, 느린 적):**
+```
+============================================================
+v37f SANDBAG TEST - 0 KILLS!
+============================================================
+  Episodes: 20
+  Best Length: 40
+  Final Avg: 17.6
+  Kills: 0  ← 충격!
+  Environment: 1 enemy (slow, 500x500 map)
+============================================================
+```
+
+**핵심 발견: 킬 메커니즘의 본질**
+
+| 구분 | 조건 | 설명 |
+|------|------|------|
+| **킬 발생** | 적 HEAD가 **우리 BODY**에 충돌 | 우리가 적을 "쫓는" 게 아님! |
+| **Sandbag 0킬** | 1v1에서 적이 도망감 | 추격해도 충돌 기회 없음 |
+| **5 enemies 킬** | 혼란 속 적이 우리 body에 충돌 | "방어적 킬" |
+
+**Motor 포화 문제 분석:**
+```python
+# 문제: 적 head가 보여도 양쪽 모터가 비슷하게 포화
+Head L=0.80 → M_L=0.66, M_R=0.66 → δ≈0 (진동!)
+
+# 원인: Food 신호가 양쪽 모터 균등 활성화
+Food_L → Motor_L (w=20)
+Food_R → Motor_R (w=20)
+# 결과: Hunt 차등 신호가 Food 균등 신호에 묻힘
+```
+
+**v37f 킬의 실체:**
+- ~~"Active Kill"~~ → **"Defensive Kill"** (방어적 킬)
+- 적 회피 중 적이 우리 body에 충돌하는 "행운의 킬"
+- Hunt 회로는 간접 효과 (적 방향 유지 → 충돌 기회 증가)
+
+**진정한 Active Kill을 위한 과제:**
+1. 적 HEAD 앞에 BODY 배치 전략 필요
+2. 또는 환경 수정 (적이 플레이어 추적)
+3. 현재 구조로는 "추격 킬" 불가능
 
 ---
 
@@ -434,7 +480,7 @@ Enemy_R → Motor_L (가중치=80)
 | v19 | PyGeNN + 음식추적 | 13,800 (dev) | High: 10 |
 | v28c | Push-Pull 회피 | 13,800 (dev) | Best: 27~37, Avg: 15~19 |
 | v32c | First Kill | 13,800 (dev) | 4 Kills (100 ep) |
-| **v37f** | **Active Kill** | **13,800 (dev)** | **Best: 30, Kills: 6 (200 ep)** |
+| **v37f** | **Defensive Kill** | **13,800 (dev)** | **Best: 30, Kills: 6 (200 ep)** |
 
 ---
 

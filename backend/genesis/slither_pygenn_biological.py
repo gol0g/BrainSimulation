@@ -260,8 +260,8 @@ class BiologicalConfig:
     inhibitory_weight: float = -2.0 # 억제 시냅스 가중치
 
     # === WTA (Winner-Take-All) 측면 억제 ===
-    wta_inhibition: float = -3.0    # WTA 억제 강도 (강할수록 승자 독식)
-    wta_sparsity: float = 0.02      # WTA 연결 희소성
+    wta_inhibition: float = -3.0    # v37f 복원
+    wta_sparsity: float = 0.02      # v37f 복원
 
     # === Adaptive Threshold (Motor neurons only) ===
     # "고인 물은 썩는다" - 승자도 지쳐야 교대가 일어남
@@ -616,8 +616,8 @@ class BiologicalBrain:
         # === v37f: PUSH-PULL AVOIDANCE REFLEX (약화!) ===
         # v37b 문제: 5 enemies에서 Fear가 너무 강해서 Hunt 불가
         # v37f: Fear 약화 → Hunt가 이길 수 있음
-        push_weight = 80.0   # v37f: 100→80 (약화)
-        pull_weight = -60.0  # v37f: -80→-60 (약화)
+        push_weight = 80.0   # v37f 복원
+        pull_weight = -60.0  # v37f 복원
         push_sparsity = 0.3  # v27d: 0.25→0.3 (더 밀집)
         print(f"  Push-Pull Reflex: Enemy→Motor (PUSH={push_weight}, PULL={pull_weight}, sp={push_sparsity})")
 
@@ -674,7 +674,7 @@ class BiologicalBrain:
         # === v28c: 적 회피 우선, 식욕은 보조 ===
         # 음식 신호가 양쪽 모터를 동시 활성화 → 적 회피 신호 상쇄!
         # 음식은 "방향 유도" 정도만, 생존이 우선
-        food_weight = 20.0   # v28c: 30→20 (적 회피 우선)
+        food_weight = 20.0   # v37f 복원
         food_sparsity = 0.15 # v28c: 0.2→0.15 (더 sparse)
         print(f"  Food Reflex: Food_L→Motor_L, Food_R→Motor_R (STATIC, w={food_weight}, sp={food_sparsity})")
 
