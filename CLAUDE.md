@@ -124,6 +124,29 @@ python ... --episodes 20 --enemies 5
 
 ---
 
+### 디버깅 및 시각화 (MANDATORY)
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  ⚠️  "측정하지 않으면 개선할 수 없다"                          ║
+║      모든 실험에서 철저한 로깅과 시각화 필수!                  ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+**필수 로그 항목:**
+1. **매 스텝:** 내부 상태, 뉴런 활성화율, 모터 출력
+2. **매 에피소드:** 생존 시간, 보상 빈도, 사망 원인, 주요 지표
+3. **이상 감지:** 자동 경고 (뉴런 비활성화, 신호 불균형 등)
+
+**필수 시각화:**
+1. **Pygame 렌더링:** 환경, 에이전트, 상태 바, 뉴런 패널
+2. **그래프 저장:** Energy/Drives 시계열, 궤적, 모터 출력
+3. **체크포인트 메타데이터:** 학습 이력 포함
+
+> **상세 스펙:** [docs/PHASE2A_DESIGN.md - 섹션 4.3](docs/PHASE2A_DESIGN.md)
+
+---
+
 ### R-STDP 학습 조건
 
 R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
@@ -141,334 +164,175 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ---
 
-## 현재 상태: PyGeNN Slither.io v37f (Defensive Kill - 분석 완료)
+## 현재 상태: Phase 1 완료 (Slither.io 졸업)
 
-### v37f THE HUNTER - Phase 3 검증 완료 (2025-01-26)
+> **상세 보고서:** [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
+
+### Phase 1: 반사하는 뇌 - 완료 (2025-01-28)
 
 ```
-============================================================
-v37f Phase 3 - 검증 결과
-============================================================
-  Episodes: 200
-  Best Length: 30
-  Final Avg: 15.5
-  Total Kills: 6 (Defensive - v38 분석으로 확인)
-  Kill Rate: 3%
-  Environment: 5 enemies (normal)
-============================================================
+╔═══════════════════════════════════════════════════════════════╗
+║  SLITHER.IO PROJECT - GRADUATED (v40b)                        ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Best Length: 64    │  Avg: 37.6    │  Kills: 0.44/ep         ║
+║  검증 완료: Push-Pull, Disinhibition, WTA, 선천적 본능        ║
+╚═══════════════════════════════════════════════════════════════╝
 ```
 
-**핵심 구성:**
-```python
-# Fear (약화) - 사냥 시 두려움 감소
-push_weight = 80.0   # v28c: 100 → v37f: 80
-pull_weight = -60.0  # v28c: -80 → v37f: -60
-
-# Hunt (정적, 강화) - 적 머리로 돌진
-attack_hunt_weight = 180.0  # 강력한 사냥 본능
-attack_sparsity = 0.5
-
-# Disinhibition - Fear 상쇄
-disinhibit_push = -100.0  # Fear Push 상쇄
-disinhibit_pull = 80.0    # Fear Pull 상쇄
-
-# Proximity Fear (최소) - 근거리 억제 최소화
-proximity_inhibit = -20.0
-```
-
-**신호 흐름:**
-```
-적 body만 보임: Fear(80) → 회피
-적 head 보임:   Fear(80) - Disinhibit(100) + Hunt(180) = +160 → 돌진!
-```
-
-**실험 프로세스 준수:**
-- Phase 2 (50ep): Best=31, Avg=17.8, Kills=1+ ✓
-- Phase 3 (200ep): Best=30, Avg=15.5, Kills=6 ✓
-- 조기 중단 기준 미해당 (성능 유지)
+**달성한 것:**
+- 뇌간/척수 수준의 반사 회로 검증
+- 생물학적 배선 원칙 (Push-Pull, 탈억제) 확인
+- 선천적 본능의 시냅스 가중치 표현 검증
+- PyGeNN SNN 프레임워크 확립
 
 ---
 
-### v38 Sandbag 분석 (2025-01-27) - 핵심 통찰!
+## Phase 2-3: 느끼는 뇌 (Affective Brain) - Phase 3a 완료
 
-**Sandbag 테스트 (1v1, 느린 적):**
-```
-============================================================
-v37f SANDBAG TEST - 0 KILLS!
-============================================================
-  Episodes: 20
-  Best Length: 40
-  Final Avg: 17.6
-  Kills: 0  ← 충격!
-  Environment: 1 enemy (slow, 500x500 map)
-============================================================
-```
+> **Phase 2a:** [docs/PHASE2A_DESIGN.md](docs/PHASE2A_DESIGN.md), [docs/PHASE2A_RESULTS.md](docs/PHASE2A_RESULTS.md)
+> **Phase 2b:** [docs/PHASE2B_DESIGN.md](docs/PHASE2B_DESIGN.md), [docs/PHASE2B_RESULTS.md](docs/PHASE2B_RESULTS.md)
+> **Phase 3:** [docs/PHASE3_DESIGN.md](docs/PHASE3_DESIGN.md), [docs/PHASE3_RESULTS.md](docs/PHASE3_RESULTS.md)
 
-**핵심 발견: 킬 메커니즘의 본질**
-
-| 구분 | 조건 | 설명 |
-|------|------|------|
-| **킬 발생** | 적 HEAD가 **우리 BODY**에 충돌 | 우리가 적을 "쫓는" 게 아님! |
-| **Sandbag 0킬** | 1v1에서 적이 도망감 | 추격해도 충돌 기회 없음 |
-| **5 enemies 킬** | 혼란 속 적이 우리 body에 충돌 | "방어적 킬" |
-
-**Motor 포화 문제 분석:**
-```python
-# 문제: 적 head가 보여도 양쪽 모터가 비슷하게 포화
-Head L=0.80 → M_L=0.66, M_R=0.66 → δ≈0 (진동!)
-
-# 원인: Food 신호가 양쪽 모터 균등 활성화
-Food_L → Motor_L (w=20)
-Food_R → Motor_R (w=20)
-# 결과: Hunt 차등 신호가 Food 균등 신호에 묻힘
-```
-
-**v37f 킬의 실체:**
-- ~~"Active Kill"~~ → **"Defensive Kill"** (방어적 킬)
-- 적 회피 중 적이 우리 body에 충돌하는 "행운의 킬"
-- Hunt 회로는 간접 효과 (적 방향 유지 → 충돌 기회 증가)
-
-**진정한 Active Kill을 위한 과제:**
-1. 적 HEAD 앞에 BODY 배치 전략 필요
-2. 또는 환경 수정 (적이 플레이어 추적)
-3. 현재 구조로는 "추격 킬" 불가능
-
----
-
-### v35 Project SNIPER (2025-01-25) - 실패
-
-**목표:** R-STDP를 통한 Active Kill 학습
-
-**결과:**
-
-| 지표 | v35 (1000 ep) | v33 baseline |
-|------|---------------|--------------|
-| Best | 31 | 27~31 |
-| Kills | 6 (passive) | 4~6 (passive) |
-| Attack 카운터 | 0 | 0 |
-| R-STDP 학습 | 미발생 | N/A |
-
-**실패 원인 분석:**
-
-| 문제 | 상세 |
-|------|------|
-| 측정 오류 | Hunt 시냅스가 Attack Circuit 우회 → Attack 카운터 측정 불가 |
-| R-STDP 조건 미충족 | 보상 빈도 0.7% (< 1%), 시간 지연 수십초 (> τ=3초) |
-
-**결론:** v33으로 롤백. R-STDP는 현재 Kill 보상 구조에 부적합.
-
-### v28c Baseline (2025-01-24)
+### Phase 로드맵
 
 ```
-============================================================
-Training Results (v28c - 50 Episodes)
-============================================================
-  5 Enemies:  Best=27~37, Avg=15~19 (baseline)
-  7 Enemies:  Best=26, Avg=18.5 (안정)
-  10 Enemies: Best=26, Avg=16.9 (생존만 가능)
-  Mode:       DEV (13,800 neurons)
-============================================================
+╔═══════════════════════════════════════════════════════════════╗
+║  Forager Brain Project - 변연계 구현                          ║
+╠═══════════════════════════════════════════════════════════════╣
+║  2a: 시상하부 - 항상성 ✓ 완료 (2025-01-28)                   ║
+║      └── Hunger/Satiety 드라이브, Energy 기반 행동 조절      ║
+║                                                               ║
+║  2b: 편도체 - 공포 회피 ✓ 완료 (2025-01-28)                  ║
+║      └── Pain Zone 회피, Hunger-Fear 경쟁, 생존율 50%        ║
+║                                                               ║
+║  3a: 해마 - Place Cells ✓ 완료 (2025-01-28)                  ║
+║      └── 20x20 Place Cells, Food Memory 기본 구조            ║
+║                                                               ║
+║  3b: 해마 - Hebbian 학습 ← 다음                              ║
+║      └── 음식 위치 기억 학습 (STDP)                          ║
+╚═══════════════════════════════════════════════════════════════╝
 ```
 
-### v29 Attack Mode 실험 결과 (실패 - 교훈 기록)
+### 현재 상태: Phase 3a (5,800 뉴런)
 
 ```
-v29 실험 목표: 적 머리 공격으로 킬 달성
-============================================================
-v29:  Attack→Motor 양쪽 활성화 → delta=0 → 회피 불가 (Avg 10.2)
-v29b: Attack→Boost only → 부스트 과다 → 길이 소모 (Avg 16.4)
-v29c: 임계값 0.5 → 여전히 Attack 트리거 과다 (Avg 17.0)
-v29 disabled: v28c 복원 (Avg 15~17)
-============================================================
-결론: 현재 Attack 설계는 성능 저하. 공격 기능 재설계 필요.
+╔═══════════════════════════════════════════════════════════════╗
+║  Phase 3a 결과 (Forager Brain)                                ║
+╠═══════════════════════════════════════════════════════════════╣
+║  생존율:        50% ✓ (목표: >40%)                            ║
+║  Pain Avoidance:95% ✓ (목표: <15% pain time)                  ║
+║  뉴런 수:       5,800 (Hypo+Amyg+Hippo)                        ║
+║  학습:          미구현 (Phase 3b에서)                         ║
+╚═══════════════════════════════════════════════════════════════╝
 ```
 
-**v29 실패 원인 분석:**
-1. **Attack→Motor 양쪽 동시 활성화**: 좌우 모터가 균등하게 활성화되어 delta=0
-   - Push-Pull 회피 신호가 상쇄됨
-2. **Attack→Boost only**: 부스트만 켜면 도망가는 효과 (공격이 아님)
-   - 부스트는 길이를 소모해서 성장 방해
-3. **Attack 감지 임계값 문제**: 0.2, 0.5 모두 너무 낮음
-   - 거의 항상 적 머리가 감지되어 Attack=2000
+### Forager Brain 아키텍처 (5,800 뉴런)
 
-**v30 Hunt Mode 실험 (부분 성공):**
 ```
-v30: enemy_head 동측 배선 (w=35) → Push-Pull 상쇄 (Avg 16.4, 실패)
-v30b: 가중치 낮춤 (w=15) → 회피 복구 (Avg 16.9, 효과 미미)
-결론: 적 body와 head가 함께 보여서 사냥 신호가 회피에 묻힘
-```
-
-**v31 The Berserker - 탈억제 사냥 회로 (성공!):**
-```
-핵심 통찰: "적 머리가 보이면 두려움을 잊게 하라"
-============================================================
-v31: Disinhibition -50 → Attack 활성화되지만 성능 유지 안됨
-v31b: Disinhibition -70 → Best=27, Avg=18.2, Attack=739 ✓
-============================================================
-구현:
-- Hunt (동측): EnemyHead_L → Motor_L (+35)
-- Disinhibition (교차): EnemyHead_L → Motor_R (-70)
-
-신호 흐름:
-- 적 body만: Push(100) → 완전 회피
-- 적 head도: Push(100-70=30) < Hunt(35) → 돌진!
-
-생물학적 근거: 포식자는 사냥 시 공포 반응이 억제됨
+┌─────────────────────────────────────────────────────────────┐
+│                    Forager Brain v3a                        │
+├─────────────────────────────────────────────────────────────┤
+│  Sensory (1,800)                                            │
+│    Food Eye L/R (800) + Wall Eye L/R (400)                  │
+│    Pain Eye L/R (400) + Danger (200)                        │
+│                                                             │
+│  Hypothalamus (1,400) - Phase 2a                            │
+│    LowEnergy (200) + HighEnergy (200)                       │
+│    Hunger (500) ↔ Satiety (500) [WTA]                       │
+│                                                             │
+│  Amygdala (1,000) - Phase 2b                                │
+│    LA (500) → CEA (300) → Fear (200)                        │
+│    Pain → LA (US), Danger → LA (CS)                         │
+│    Hunger ↔ Fear 경쟁                                       │
+│                                                             │
+│  Hippocampus (600) - Phase 3a                               │
+│    Place Cells (400, 20x20) → Food Memory (200)             │
+│    [학습 미구현 - Phase 3b에서]                             │
+│                                                             │
+│  Motor (1,000)                                              │
+│    Motor L (500) ↔ Motor R (500) [WTA]                      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**v32c - First Kill 달성! (2025-01-25)**
-```
-v32b: Full Push+Pull Disinhibition (Brain)
-  - disinhibit_push = -70 (Fear Push 상쇄)
-  - disinhibit_pull = +60 (Fear Pull 상쇄) ← NEW!
-  - 결과: Motor_L = -80 + 35 + 60 = +15 (사냥 가능!)
+### 핵심 발견 (교훈)
 
-v32c: Expanded Head Zone (Gym)
-  - Head zone: segments 0-4 (5개 세그먼트)
-  - Body zone: segments 5+ (충돌 없음)
-  - head_boost = 2.0 (신호 증폭)
-  - 결과: 4 KILLS in 100 episodes!
-```
+1. **방향성 Push-Pull이 핵심**: 무방향 Fear → 방향성 Pain Push-Pull로 변경 시 Pain Death 0%
+2. **MOTOR DEAD 해결**: Satiety 억제 완화 (-8 → -4)
+3. **학습 없는 Hippocampus는 노이즈**: Food Memory 가중치 최소화 필요
 
-**v33 WTA 실험 (부분 성공):**
-```
-v33: Signal-level WTA 전처리
-============================================================
-문제: Head L=0.68, R=0.62 → 양쪽 모터 비슷하게 활성화 → 진동
-해결: WTA로 약한 쪽 100% 억제 → 한 방향으로 확실한 회전
-결과: Best=27, Avg=13.9, Gen=32/100 (안정적 생존)
-============================================================
-```
+### 실행 명령어
 
-**v34 Aggressive Hunter 실험 (실패 - 교훈 기록):**
-```
-v34 실험 목표: 모터 포화 돌파로 Active Kill 달성
-============================================================
-v34:  hunt=100, sp=0.35, push=-120, pull=100 → Death 100%!
-      (Fear 완전 상쇄 → 생존 본능 제거 → 자살 공격)
+```bash
+# Forager Brain 테스트 (WSL)
+wsl -d Ubuntu-24.04 -- bash -c "
+export CUDA_PATH=/usr/local/cuda-12.6;
+export PATH=\$CUDA_PATH/bin:/usr/local/bin:/usr/bin:/bin;
+export LD_LIBRARY_PATH=\$CUDA_PATH/lib64;
+source ~/pygenn_wsl/bin/activate;
+cd ~/pygenn_test;
+python /mnt/c/.../backend/genesis/forager_brain.py \
+    --episodes 20 --log-level normal --render none
+"
 
-v34b: push=-60, pull=50 → Attack=0 (너무 소심)
-v34c: push=-90, pull=80 → Death 100% (여전히 공격적)
-v34d: hunt_threshold=0.6 → Death 99% (Fear가 여전히 압도)
-============================================================
-결론: Disinhibition 접근법의 한계 확인
-- Fear 완전 상쇄 → 자살 공격
-- Fear 부분 상쇄 → 공격 불가
-- 근본 원인: 적 head가 보이면 body도 보임 (위험 상황)
+# 시각화 모드
+python forager_brain.py --episodes 3 --render pygame
 ```
 
-**v35: PROJECT SNIPER (실패) - 상세 내용은 "현재 상태" 섹션 참조**
+### 구현 파일
 
-### v28c 핵심 변경사항 (2025-01-24)
-
-**1. 균형 잡힌 본능 시스템 (Static Synapses)**
-```python
-# 적 회피: Push-Pull (최우선)
-push_weight = 100.0  # Enemy_L → Motor_R
-pull_weight = -80.0  # Enemy_L → Motor_L (억제)
-
-# 벽 회피: Push-Pull (차선)
-wall_push = 80.0     # Body_L → Motor_R
-wall_pull = -60.0    # Body_L → Motor_L (억제)
-
-# 음식 추적: 동측 배선 (보조)
-food_weight = 20.0   # Food_L → Motor_L
-food_sensitivity = 1.5  # 입력 전류 증폭
+```
+backend/genesis/
+├── forager_gym.py     # ForagerGym 환경 (Pain Zone 포함)
+├── forager_brain.py   # Forager Brain (Hypo+Amyg+Hippo)
+└── checkpoints/
+    └── forager_hypothalamus/  # NEW: Phase 2a 체크포인트
 ```
 
-**2. 핵심 발견: 음식 가중치 균형**
-```
-food_weight=40 → 양쪽 모터 동시 활성화 → 적 회피 신호 상쇄! (실패)
-food_weight=20 → 적 회피 우선 + 음식 방향 유도 (성공)
-```
+### WSL 실행 명령어 (Phase 2a)
 
-**3. v27j 벽 회피 추가**
-- Gym: 벽까지 거리를 body_rays에 추가 (ray-cast)
-- Brain: body_eye를 L/R로 분리 → Push-Pull 반사
-
-**4. v27i 출력 포맷 수정**
-```python
-# 절대좌표 (target_x, target_y) → 상대각도 (angle_delta)
-angle_delta = (right_rate - left_rate) * 0.3
-return angle_delta, boost
+```bash
+# Phase 2a 훈련
+wsl -d Ubuntu-24.04 -e bash -c "
+export CUDA_PATH=/usr/local/cuda-12.6
+source ~/pygenn_wsl/bin/activate
+cd ~/pygenn_test
+python <PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --render pygame
+"
 ```
 
 ---
 
-### v21 핵심 수정사항 (이전)
+## Phase 1 완료: Slither.io 졸업
 
-**1. 체크포인트 저장/로드 수정 - SPARSE Connectivity 포함**
-```python
-# BEFORE: 가중치만 저장 → 로드해도 랜덤 connectivity라 의미 없음
-weights[syn.name] = syn.vars["g"].values
+> **상세 보고서:** [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
 
-# AFTER: connectivity indices까지 저장 → 완벽한 모델 복원
-checkpoint[f"{syn.name}_g"] = syn.vars["g"].values
-checkpoint[f"{syn.name}_ind"] = syn.get_sparse_post_inds()
-checkpoint[f"{syn.name}_row_length"] = syn._row_lengths.view
+### Phase 1 최종 결과
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  SLITHER.IO PROJECT - GRADUATED (v40b)                        ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Best Length: 64    │  Avg: 37.6    │  Kills: 0.44/ep         ║
+║  검증 완료: Push-Pull, Disinhibition, WTA, 선천적 본능        ║
+╚═══════════════════════════════════════════════════════════════╝
 ```
 
-**2. v20 R-STDP 파라미터 최적화**
-```python
-# 빠르고 강한 학습
-tau_eligibility: 3000.0 → 1000.0  # 1초로 단축 (인과관계 명확화)
-eta: 0.01 → 0.05                   # 학습률 5배 증가
-w_max: 1.0 → 10.0                  # 가중치 범위 확대
-w_min: 0.0 → -5.0                  # 억제 허용
-```
+### Slither.io 버전 히스토리 (요약)
 
-**3. 보상 신호 강화**
-```python
-# 음식/죽음의 영향력 2배 증가
-reward_scale: 0.15 → 0.30
-```
+> **상세 내용:** [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
 
----
+**핵심 마일스톤:**
+- v28c: Push-Pull 반사 회로 완성 (Baseline)
+- v31: Disinhibition 발견 (돌파구)
+- v32c: First Kill 달성
+- v37f: Defensive Kill 메커니즘 규명
+- v40b: 시간 제한 해제 → 진정한 성능 발현 (졸업)
 
-### v19 핵심 수정사항 (이전)
-
-**1. WTA 가중치 버그 수정**
-```python
-# BEFORE: wMax=0.0이 모든 가중치를 0으로 클리핑
-inhib_params["wMax"] = 0.0  # 버그!
-
-# AFTER: 실제 억제 가중치로 설정
-inhib_params["wMax"] = wta_weight_boost  # -5.0
-```
-
-**2. 방향 계산 버그 수정**
-```python
-# BEFORE: cos(-x) = cos(x) 라서 좌우 구분 불가
-target_x = 0.5 + 0.2 * np.cos(angle_delta)
-
-# AFTER: 직접 매핑
-turn_delta = right_rate - left_rate
-target_x = 0.5 + turn_delta * 0.3
-```
-
-**3. 스파이크 카운팅 버그 수정**
-```python
-# BEFORE: RefracTime > 0 은 refractory 전체 기간 카운트 (20 스텝)
-left_spikes = np.sum(self.motor_left.vars["RefracTime"].view > 0)
-
-# AFTER: 새 스파이크만 카운트 (최근 0.5ms)
-spike_threshold = self.config.tau_refrac - 0.5  # 1.5
-left_spikes = np.sum(self.motor_left.vars["RefracTime"].view > spike_threshold)
-```
-
-**4. 동측 음식 추적 경로 추가 (v19 신규)**
-```python
-# food_eye를 좌/우 분리
-food_eye_left, food_eye_right
-
-# 동측 배선 (ipsilateral) - 음식 방향으로 회전
-Food_L → Motor_L (가중치=30)
-Food_R → Motor_R (가중치=30)
-
-# 교차 배선 (contralateral) - 적 회피 (기존, 강화)
-Enemy_L → Motor_R (가중치=80)
-Enemy_R → Motor_L (가중치=80)
-```
+**핵심 교훈:**
+1. 양쪽 모터 동시 활성화 → 신호 상쇄 (실패)
+2. Fear 완전 상쇄 → 자살 공격 (실패)
+3. R-STDP는 빈번하고 즉각적인 보상 필요
+4. 환경의 시간 제한이 성능 병목일 수 있음
 
 ### 진화 경로
 
@@ -480,7 +344,8 @@ Enemy_R → Motor_L (가중치=80)
 | v19 | PyGeNN + 음식추적 | 13,800 (dev) | High: 10 |
 | v28c | Push-Pull 회피 | 13,800 (dev) | Best: 27~37, Avg: 15~19 |
 | v32c | First Kill | 13,800 (dev) | 4 Kills (100 ep) |
-| **v37f** | **Defensive Kill** | **13,800 (dev)** | **Best: 30, Kills: 6 (200 ep)** |
+| v37f | Defensive Kill | 13,800 (dev) | Best: 30, Kills: 6 (200 ep) |
+| **v40b** | **Uncapped (3000)** | **13,800 (dev)** | **Best: 64, Avg: 37.6, 0.44 kills/ep!** |
 
 ---
 
@@ -521,7 +386,7 @@ Enemy_R → Motor_L (가중치=80)
 
 ---
 
-## PyGeNN 아키텍처 v37f
+## PyGeNN 아키텍처 (Phase 1 - Slither.io v40b)
 
 ```
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
@@ -599,21 +464,27 @@ Body_L → Motor_R (PUSH +80)
 ```
 backend/
 ├── genesis/
-│   ├── # PyGeNN (Current - GPU)
-│   ├── slither_pygenn_biological.py  # v37f PyGeNN 에이전트 (Active Kill) ★
+│   ├── # Phase 2a: Forager (현재 개발 중)
+│   ├── forager_gym.py                # Phase 2a 환경 (NEW)
+│   ├── forager_brain.py              # Phase 2a 뇌 - 시상하부 (NEW)
+│   │
+│   ├── # Phase 1: Slither.io (졸업)
+│   ├── slither_pygenn_biological.py  # v40b PyGeNN 에이전트 (졸업)
+│   ├── slither_gym.py                # Slither.io 환경
 │   ├── gpu_monitor.py                # GPU 온도/메모리 모니터링
 │   │
-│   ├── # snnTorch (Previous - CPU/GPU)
-│   ├── slither_snn_agent.py          # 15.8K neuron snnTorch 에이전트
-│   ├── slither_gym.py                # Python 훈련 환경
-│   ├── snn_scalable.py               # SparseLIFLayer, SparseSynapses
-│   │
-│   ├── # Chrome Dino (Graduated)
-│   ├── dino_dual_channel_agent.py    # 이중 채널 + 억제 회로 (725점)
+│   ├── # Legacy (참조용)
+│   ├── slither_snn_agent.py          # snnTorch 에이전트
+│   ├── dino_dual_channel_agent.py    # Chrome Dino (725점, 졸업)
 │   │
 │   └── checkpoints/
-│       ├── slither_pygenn_bio/       # PyGeNN 체크포인트
+│       ├── forager_hypothalamus/     # Phase 2a 체크포인트 (NEW)
+│       ├── slither_pygenn_bio/       # Phase 1 체크포인트
 │       └── slither_snn/              # snnTorch 체크포인트
+│
+├── docs/
+│   ├── PHASE2A_DESIGN.md             # Phase 2a 설계 문서 (NEW)
+│   └── SLITHER_GRADUATION.md         # Phase 1 졸업 보고서
 │
 └── requirements.txt
 ```

@@ -150,6 +150,9 @@ class SlitherGym:
         self.prev_alive_enemies = len([e for e in self.enemies if e.alive])
         self.prev_nearby_food = self._count_nearby_food()
 
+        # v40: 사망 원인 추적
+        self.death_cause = None
+
         return self._get_observation()
 
     def _spawn_food(self):
@@ -335,12 +338,11 @@ class SlitherGym:
         dy = player_head.y - enemy.head.y
         dist_to_player = math.sqrt(dx*dx + dy*dy)
 
-        # Hunting behavior: Chase player if within 400px
-        if dist_to_player < 400 and np.random.random() < 0.15:
-            # Turn toward player
+        # Original passive enemy AI - occasionally chase player
+        if dist_to_player < 300 and np.random.random() < 0.15:  # 15% chase, 300px range
             target_angle = math.atan2(dy, dx)
             angle_diff = (target_angle - enemy.angle + math.pi) % (2 * math.pi) - math.pi
-            enemy.angle += 0.15 * angle_diff
+            enemy.angle += 0.15 * angle_diff  # Gentle turn toward player
         elif np.random.random() < 0.02:
             # Random wander when far from player
             enemy.angle += np.random.uniform(-0.5, 0.5)
@@ -393,6 +395,7 @@ class SlitherGym:
         if (head.x < margin or head.x > self.config.width - margin or
             head.y < margin or head.y > self.config.height - margin):
             self.agent.alive = False
+            self.death_cause = "wall"  # v40: 사망 원인 추적
             return self.config.death_penalty
 
         # Collision with enemy bodies (my head hits enemy body = I die)
@@ -403,6 +406,7 @@ class SlitherGym:
                 dist = math.sqrt((head.x - seg.x)**2 + (head.y - seg.y)**2)
                 if dist < self.config.head_radius + 5:
                     self.agent.alive = False
+                    self.death_cause = "enemy"  # v40: 사망 원인 추적
                     # In real slither.io, dead snake becomes food
                     self._spawn_death_food(self.agent)
                     return self.config.death_penalty

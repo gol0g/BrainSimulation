@@ -1042,17 +1042,17 @@ class BiologicalBrain:
         # Negative = turn LEFT (counterclockwise in screen coords)
         angle_delta = (right_rate - left_rate) * 0.3  # Scale to gym's [-0.3, 0.3] range
 
-        # v33 디버그: WTA 효과 확인
-        if enemy_signal.max() > 0.3 or enemy_head_signal.max() > 0.2:
-            enemy_l = enemy_signal[:len(enemy_signal)//2].max()
-            enemy_r = enemy_signal[len(enemy_signal)//2:].max()
-            head_l = enemy_head_signal[:len(enemy_head_signal)//2].max()
-            head_r = enemy_head_signal[len(enemy_head_signal)//2:].max()
-            # v33: WTA 결과 표시
-            wta_winner = "=" if abs(head_l - head_r) < 0.02 else ("L⚔" if head_l > head_r else "⚔R")
-            turn_dir = "RIGHT" if angle_delta > 0 else "LEFT"
-            hunt_active = "🎯" if (head_l > 0.3 or head_r > 0.3) else ""
-            print(f"[DBG] Body L={enemy_l:.2f} R={enemy_r:.2f} | Head L={head_l:.2f} R={head_r:.2f} {wta_winner} {hunt_active}| M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
+        # v33 디버그: WTA 효과 확인 (v40 분석용 비활성화)
+        # if enemy_signal.max() > 0.3 or enemy_head_signal.max() > 0.2:
+        #     enemy_l = enemy_signal[:len(enemy_signal)//2].max()
+        #     enemy_r = enemy_signal[len(enemy_signal)//2:].max()
+        #     head_l = enemy_head_signal[:len(enemy_head_signal)//2].max()
+        #     head_r = enemy_head_signal[len(enemy_head_signal)//2:].max()
+        #     # v33: WTA 결과 표시
+        #     wta_winner = "=" if abs(head_l - head_r) < 0.02 else ("L⚔" if head_l > head_r else "⚔R")
+        #     turn_dir = "RIGHT" if angle_delta > 0 else "LEFT"
+        #     hunt_active = "🎯" if (head_l > 0.3 or head_r > 0.3) else ""
+        #     print(f"[DBG] Body L={enemy_l:.2f} R={enemy_r:.2f} | Head L={head_l:.2f} R={head_r:.2f} {wta_winner} {hunt_active}| M_L={left_rate:.3f} M_R={right_rate:.3f} | δ={angle_delta:+.3f} → {turn_dir}")
 
         # Boost decision - 보수적으로 (부스트는 길이를 소모함)
         enemy_very_close = enemy_signal.max() > 0.6  # 매우 가까운 적만
@@ -1268,6 +1268,10 @@ class BiologicalAgent:
                 self.brain.apply_death_penalty()
                 break
 
+        # v40b: max_steps 도달 시 timeout으로 처리
+        if not done:
+            self.env.death_cause = "timeout"
+
         # v36: Hunt synapse stats for learning tracking
         hunt_stats = self.brain.get_hunt_synapse_stats()
 
@@ -1283,9 +1287,10 @@ class BiologicalAgent:
             'kills': info.get('total_kills', 0),
             'hunt_L_mean': hunt_stats['hunt_L_mean'],
             'hunt_R_mean': hunt_stats['hunt_R_mean'],
+            'death_cause': getattr(self.env, 'death_cause', 'unknown'),  # v40: 사망 원인
         }
 
-    def train(self, n_episodes: int = 100, resume: bool = False):
+    def train(self, n_episodes: int = 100, resume: bool = False, max_steps: int = 1000):
         """학습"""
         from gpu_monitor import start_monitoring, stop_monitoring
 
@@ -1311,9 +1316,16 @@ class BiologicalAgent:
         monitor = start_monitoring(interval=1.0)
         start_time = time.time()
 
+        # v40 분석: 죽을 때 길이 + 사망 원인 추적
+        death_lengths = []
+        death_causes = []  # v40: 사망 원인 (wall/enemy)
+        max_lengths_per_ep = []  # 에피소드 중 최대 길이
+
         for ep in range(n_episodes):
-            result = self.run_episode()
+            result = self.run_episode(max_steps=max_steps)
             self.scores.append(result['length'])
+            death_lengths.append(result['length'])  # v40: 죽을 때 길이 추적
+            death_causes.append(result.get('death_cause', 'unknown'))  # v40: 사망 원인
 
             if result['length'] > self.best_score:
                 self.best_score = result['length']
@@ -1353,6 +1365,49 @@ class BiologicalAgent:
         print(f"  Saved to: {CHECKPOINT_DIR}")
         print("=" * 60)
 
+        # v40 분석: 죽을 때 길이 분포
+        print("\n" + "=" * 60)
+        print("Death Length Analysis (v40)")
+        print("=" * 60)
+        if death_lengths:
+            import numpy as np
+            dl = np.array(death_lengths)
+            dc = np.array(death_causes)
+            print(f"  Deaths at length 1-10:  {np.sum((dl >= 1) & (dl <= 10)):3d} ({100*np.sum((dl >= 1) & (dl <= 10))/len(dl):.1f}%)")
+            print(f"  Deaths at length 11-20: {np.sum((dl >= 11) & (dl <= 20)):3d} ({100*np.sum((dl >= 11) & (dl <= 20))/len(dl):.1f}%)")
+            print(f"  Deaths at length 21-30: {np.sum((dl >= 21) & (dl <= 30)):3d} ({100*np.sum((dl >= 21) & (dl <= 30))/len(dl):.1f}%)")
+            print(f"  Deaths at length 31-50: {np.sum((dl >= 31) & (dl <= 50)):3d} ({100*np.sum((dl >= 31) & (dl <= 50))/len(dl):.1f}%)")
+            print(f"  Deaths at length 51+:   {np.sum(dl >= 51):3d} ({100*np.sum(dl >= 51)/len(dl):.1f}%)")
+            print(f"  ---")
+            print(f"  Mean death length: {np.mean(dl):.1f}")
+            print(f"  Median death length: {np.median(dl):.1f}")
+            print(f"  Max death length: {np.max(dl)}")
+
+            # v40b: 사망 원인 분석 (timeout 추가)
+            print("\n" + "-" * 40)
+            print("Death CAUSE Analysis (v40b)")
+            print("-" * 40)
+            wall_deaths = np.sum(dc == 'wall')
+            enemy_deaths = np.sum(dc == 'enemy')
+            timeout_deaths = np.sum(dc == 'timeout')  # v40b: timeout 추가
+            total = len(dc)
+            print(f"  Overall:")
+            print(f"    Wall deaths:    {wall_deaths:3d} ({100*wall_deaths/total:.1f}%)")
+            print(f"    Enemy deaths:   {enemy_deaths:3d} ({100*enemy_deaths/total:.1f}%)")
+            print(f"    Timeout (1000): {timeout_deaths:3d} ({100*timeout_deaths/total:.1f}%)")
+
+            # 길이별 사망 원인
+            print(f"  \n  By length range:")
+            for (lo, hi) in [(1,10), (11,20), (21,30), (31,50)]:
+                mask = (dl >= lo) & (dl <= hi)
+                if np.sum(mask) > 0:
+                    wall_in_range = np.sum((dc == 'wall') & mask)
+                    enemy_in_range = np.sum((dc == 'enemy') & mask)
+                    timeout_in_range = np.sum((dc == 'timeout') & mask)
+                    range_total = np.sum(mask)
+                    print(f"    Length {lo:2d}-{hi:2d}: Wall={wall_in_range:2d}({100*wall_in_range/range_total:4.1f}%) Enemy={enemy_in_range:2d}({100*enemy_in_range/range_total:4.1f}%) Timeout={timeout_in_range:2d}({100*timeout_in_range/range_total:4.1f}%)")
+        print("=" * 60)
+
         stop_monitoring()
 
     def close(self):
@@ -1370,6 +1425,7 @@ if __name__ == "__main__":
     parser.add_argument('--lite', action='store_true', help='Use lite config (50K neurons) - GPU safe')
     parser.add_argument('--dev', action='store_true', help='Use dev config (15K neurons) - debugging')
     parser.add_argument('--sandbag', action='store_true', help='Sandbag training mode (small map, 1 slow enemy)')
+    parser.add_argument('--max-steps', type=int, default=1000, help='Max steps per episode (default: 1000)')
     args = parser.parse_args()
 
     print("Biological PyGeNN Slither.io Agent")
@@ -1415,7 +1471,7 @@ if __name__ == "__main__":
     )
 
     try:
-        agent.train(n_episodes=args.episodes, resume=args.resume)
+        agent.train(n_episodes=args.episodes, resume=args.resume, max_steps=args.max_steps)
     except KeyboardInterrupt:
         print("\n\nTraining interrupted.")
         agent.save_model("interrupted")
