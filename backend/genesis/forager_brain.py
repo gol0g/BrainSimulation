@@ -97,9 +97,10 @@ class ForagerBrainConfig:
     # === HIPPOCAMPUS (Phase 3 신규) ===
     hippocampus_enabled: bool = True        # Hippocampus 활성화 여부
     n_place_cells: int = 400                # Place Cells (20x20 격자)
-    n_food_memory: int = 200                # 음식 위치 기억
+    n_food_memory: int = 200                # 음식 위치 기억 (Phase 3c: 좌/우 각 100)
     place_cell_sigma: float = 0.08          # 수용장 크기 (정규화, 맵의 8%)
     place_cell_grid_size: int = 20          # 격자 크기 (20x20)
+    directional_food_memory: bool = True    # Phase 3c: 방향성 Food Memory
 
     # === MOTOR ===
     n_motor_left: int = 500
@@ -155,12 +156,12 @@ class ForagerBrainConfig:
 
     # === Phase 3 시냅스 가중치 (신규) ===
     # Place Cells → Food Memory (Hebbian 학습)
-    place_to_food_memory_weight: float = 5.0   # 초기 가중치 (학습으로 강화)
-    place_to_food_memory_eta: float = 0.1      # Hebbian 학습률
+    place_to_food_memory_weight: float = 2.0   # 초기 가중치 (Phase 3c: 5→2, 학습 효과 강화)
+    place_to_food_memory_eta: float = 0.15     # Hebbian 학습률 (Phase 3c: 0.1→0.15)
     place_to_food_memory_w_max: float = 30.0   # 최대 가중치
 
     # Food Memory → Motor (약한 편향)
-    food_memory_to_motor_weight: float = 5.0   # 음식 방향 편향 (15→5, 간섭 최소화)
+    food_memory_to_motor_weight: float = 8.0   # 음식 방향 편향 (Phase 3c: 5→8, 방향 신호 강화)
 
     # Hunger → Food Memory (배고플 때 기억 활성화)
     hunger_to_food_memory_weight: float = 10.0 # 기억 탐색 활성화 (20→10, 간섭 최소화)
@@ -302,18 +303,37 @@ class ForagerBrain:
             self.place_cells = self.model.add_neuron_population(
                 "place_cells", self.config.n_place_cells, sensory_lif_model, sensory_params, sensory_init)
 
-            # Food Memory: 음식 위치 기억
-            self.food_memory = self.model.add_neuron_population(
-                "food_memory", self.config.n_food_memory, "LIF", lif_params, lif_init)
+            # Phase 3c: 방향성 Food Memory (좌/우 분리)
+            if self.config.directional_food_memory:
+                n_half = self.config.n_food_memory // 2
+                self.food_memory_left = self.model.add_neuron_population(
+                    "food_memory_left", n_half, "LIF", lif_params, lif_init)
+                self.food_memory_right = self.model.add_neuron_population(
+                    "food_memory_right", n_half, "LIF", lif_params, lif_init)
+                # 호환성을 위한 참조 (단일 food_memory는 None)
+                self.food_memory = None
+            else:
+                # Phase 3b: 단일 Food Memory
+                self.food_memory = self.model.add_neuron_population(
+                    "food_memory", self.config.n_food_memory, "LIF", lif_params, lif_init)
+                self.food_memory_left = None
+                self.food_memory_right = None
 
             # Place Cell 중심점 계산 (20x20 격자)
             self.place_cell_centers = []
+            self.place_cell_left_indices = []   # Phase 3c: 좌측 Place Cells
+            self.place_cell_right_indices = []  # Phase 3c: 우측 Place Cells
             grid = self.config.place_cell_grid_size
             for i in range(grid):
                 for j in range(grid):
                     cx = (i + 0.5) / grid  # 0~1 정규화
                     cy = (j + 0.5) / grid
                     self.place_cell_centers.append((cx, cy))
+                    idx = i * grid + j
+                    if cx < 0.5:
+                        self.place_cell_left_indices.append(idx)
+                    else:
+                        self.place_cell_right_indices.append(idx)
 
             print(f"  Hippocampus: PlaceCells({self.config.n_place_cells}) + "
                   f"FoodMemory({self.config.n_food_memory})")
@@ -545,110 +565,208 @@ class ForagerBrain:
     # === Phase 3: Hippocampus Circuits ===
 
     def _build_hippocampus_circuit(self):
-        """해마 회로: Place Cells → Food Memory → Motor (Phase 3b: 학습 포함)"""
-        print("  Building Hippocampus circuit (Phase 3b - Hebbian)...")
-
-        # 1. Place Cells → Food Memory (학습 가능!)
-        # Dense 연결로 변경하여 학습 시 가중치 접근 용이
-        self.place_to_food_memory = self.model.add_synapse_population(
-            "place_to_food_memory", "DENSE",
-            self.place_cells, self.food_memory,
-            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.place_to_food_memory_weight})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0})
-        )
+        """해마 회로: Place Cells → Food Memory → Motor (Phase 3c: 방향성 학습)"""
 
         # 학습 추적을 위한 초기화
         self.food_learning_enabled = True
         self.last_active_place_cells = np.zeros(self.config.n_place_cells)
 
-        print(f"    PlaceCells→FoodMemory: {self.config.place_to_food_memory_weight} (LEARNABLE, eta={self.config.place_to_food_memory_eta})")
+        if self.config.directional_food_memory:
+            # === Phase 3c: 방향성 Food Memory ===
+            print("  Building Hippocampus circuit (Phase 3c - Directional)...")
 
-        # 2. Food Memory → Motor (약한 편향, 동측 배선)
-        # Food Memory가 활성화되면 해당 방향으로 약하게 회전
-        # 좌/우 분리를 위해 Food Memory를 반으로 나눔
-        n_half = self.config.n_food_memory // 2
+            # 1. Place Cells Left → Food Memory Left (학습 가능)
+            self.place_to_food_memory_left = self.model.add_synapse_population(
+                "place_to_food_memory_left", "DENSE",
+                self.place_cells, self.food_memory_left,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.place_to_food_memory_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0})
+            )
 
-        # Food Memory 왼쪽 절반 → Motor Left
-        self.food_memory_left_to_motor = self.model.add_synapse_population(
-            "food_memory_left_to_motor", "SPARSE",
-            self.food_memory, self.motor_left,
-            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.food_memory_to_motor_weight})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbabilityNoAutapse", {"prob": 0.1})
-        )
+            # 2. Place Cells Right → Food Memory Right (학습 가능)
+            self.place_to_food_memory_right = self.model.add_synapse_population(
+                "place_to_food_memory_right", "DENSE",
+                self.place_cells, self.food_memory_right,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.place_to_food_memory_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0})
+            )
 
-        # Food Memory 오른쪽 절반 → Motor Right
-        self.food_memory_right_to_motor = self.model.add_synapse_population(
-            "food_memory_right_to_motor", "SPARSE",
-            self.food_memory, self.motor_right,
-            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.food_memory_to_motor_weight})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbabilityNoAutapse", {"prob": 0.1})
-        )
+            # 호환성 참조
+            self.place_to_food_memory = None
 
-        print(f"    FoodMemory→Motor: {self.config.food_memory_to_motor_weight}")
+            print(f"    PlaceCells→FoodMemory L/R: {self.config.place_to_food_memory_weight} (DIRECTIONAL, eta={self.config.place_to_food_memory_eta})")
 
-        # 3. Hunger → Food Memory (배고플 때 기억 활성화 증폭)
-        self._create_static_synapse(
-            "hunger_to_food_memory", self.hunger_drive, self.food_memory,
-            self.config.hunger_to_food_memory_weight, sparsity=0.1)
+            # 3. Food Memory Left → Motor Left (동측 배선)
+            self.food_memory_left_to_motor = self.model.add_synapse_population(
+                "food_memory_left_to_motor", "SPARSE",
+                self.food_memory_left, self.motor_left,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.food_memory_to_motor_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbabilityNoAutapse", {"prob": 0.15})
+            )
+
+            # 4. Food Memory Right → Motor Right (동측 배선)
+            self.food_memory_right_to_motor = self.model.add_synapse_population(
+                "food_memory_right_to_motor", "SPARSE",
+                self.food_memory_right, self.motor_right,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.food_memory_to_motor_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbabilityNoAutapse", {"prob": 0.15})
+            )
+
+            print(f"    FoodMemory L→Motor L, R→Motor R: {self.config.food_memory_to_motor_weight}")
+
+            # 5. Hunger → Food Memory (양쪽 모두)
+            self._create_static_synapse(
+                "hunger_to_food_memory_left", self.hunger_drive, self.food_memory_left,
+                self.config.hunger_to_food_memory_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "hunger_to_food_memory_right", self.hunger_drive, self.food_memory_right,
+                self.config.hunger_to_food_memory_weight, sparsity=0.1)
+
+        else:
+            # === Phase 3b: 단일 Food Memory (기존) ===
+            print("  Building Hippocampus circuit (Phase 3b - Hebbian)...")
+
+            self.place_to_food_memory = self.model.add_synapse_population(
+                "place_to_food_memory", "DENSE",
+                self.place_cells, self.food_memory,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.place_to_food_memory_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0})
+            )
+
+            self.place_to_food_memory_left = None
+            self.place_to_food_memory_right = None
+
+            print(f"    PlaceCells→FoodMemory: {self.config.place_to_food_memory_weight} (LEARNABLE, eta={self.config.place_to_food_memory_eta})")
+
+            # Food Memory → Motor (양쪽 동시)
+            self.food_memory_left_to_motor = self.model.add_synapse_population(
+                "food_memory_left_to_motor", "SPARSE",
+                self.food_memory, self.motor_left,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.food_memory_to_motor_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbabilityNoAutapse", {"prob": 0.1})
+            )
+
+            self.food_memory_right_to_motor = self.model.add_synapse_population(
+                "food_memory_right_to_motor", "SPARSE",
+                self.food_memory, self.motor_right,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.food_memory_to_motor_weight})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbabilityNoAutapse", {"prob": 0.1})
+            )
+
+            print(f"    FoodMemory→Motor: {self.config.food_memory_to_motor_weight}")
+
+            # Hunger → Food Memory
+            self._create_static_synapse(
+                "hunger_to_food_memory", self.hunger_drive, self.food_memory,
+                self.config.hunger_to_food_memory_weight, sparsity=0.1)
 
         print(f"    Hunger→FoodMemory: {self.config.hunger_to_food_memory_weight} (amplify when hungry)")
 
-    def learn_food_location(self):
+    def learn_food_location(self, food_position: tuple = None):
         """
-        Phase 3b: 음식 발견 시 Hebbian 학습
+        Phase 3b/3c: 음식 발견 시 Hebbian 학습
 
         음식을 먹었을 때 호출되어 현재 활성화된 Place Cells와
         Food Memory 사이의 연결을 강화합니다.
 
-        Δw = η * pre_activity * post_activity
+        Phase 3c (directional): 음식 위치에 따라 좌/우 Food Memory 선택적 학습
+
+        Args:
+            food_position: (x, y) 정규화된 음식 위치 (Phase 3c용)
+
+        Δw = η * pre_activity
         """
         if not self.config.hippocampus_enabled or not self.food_learning_enabled:
             return
 
-        # 1. 현재 가중치 가져오기
-        self.place_to_food_memory.vars["g"].pull_from_device()
-        weights = self.place_to_food_memory.vars["g"].view.copy()
-
-        # Dense 연결: (n_place_cells, n_food_memory) 형태로 reshape
-        n_pre = self.config.n_place_cells
-        n_post = self.config.n_food_memory
-        weights = weights.reshape(n_pre, n_post)
-
-        # 2. 활성화된 Place Cells 기반 학습
-        # last_active_place_cells는 _compute_place_cell_input에서 설정됨
         active_cells = self.last_active_place_cells
-
-        # 3. Hebbian 학습: Δw = η * pre_activity
-        # 활성화된 Place Cell → 모든 Food Memory 연결 강화
         eta = self.config.place_to_food_memory_eta
         w_max = self.config.place_to_food_memory_w_max
+        n_pre = self.config.n_place_cells
 
-        for i in range(n_pre):
-            if active_cells[i] > 0.1:  # 활성화 임계값
-                delta_w = eta * active_cells[i]
-                weights[i, :] += delta_w
-                weights[i, :] = np.clip(weights[i, :], 0.0, w_max)
+        if self.config.directional_food_memory:
+            # === Phase 3c: 방향성 학습 ===
+            # 음식 위치에 따라 좌/우 Food Memory 선택적 강화
+            n_post = self.config.n_food_memory // 2
 
-        # 4. 가중치 다시 저장
-        self.place_to_food_memory.vars["g"].view[:] = weights.flatten()
-        self.place_to_food_memory.vars["g"].push_to_device()
+            # 음식이 왼쪽에 있으면 Food Memory Left 강화
+            # 음식이 오른쪽에 있으면 Food Memory Right 강화
+            food_x = food_position[0] if food_position else 0.5
 
-        # 학습 통계
-        n_strengthened = np.sum(active_cells > 0.1)
-        avg_weight = np.mean(weights)
-        max_weight = np.max(weights)
+            if food_x < 0.5:
+                # 좌측 학습: 좌측 Place Cells → Food Memory Left
+                self.place_to_food_memory_left.vars["g"].pull_from_device()
+                weights = self.place_to_food_memory_left.vars["g"].view.copy()
+                weights = weights.reshape(n_pre, n_post)
 
-        return {
-            "n_strengthened": int(n_strengthened),
-            "avg_weight": float(avg_weight),
-            "max_weight": float(max_weight)
-        }
+                n_strengthened = 0
+                for i in self.place_cell_left_indices:
+                    if active_cells[i] > 0.1:
+                        delta_w = eta * active_cells[i]
+                        weights[i, :] += delta_w
+                        weights[i, :] = np.clip(weights[i, :], 0.0, w_max)
+                        n_strengthened += 1
+
+                self.place_to_food_memory_left.vars["g"].view[:] = weights.flatten()
+                self.place_to_food_memory_left.vars["g"].push_to_device()
+                side = "LEFT"
+            else:
+                # 우측 학습: 우측 Place Cells → Food Memory Right
+                self.place_to_food_memory_right.vars["g"].pull_from_device()
+                weights = self.place_to_food_memory_right.vars["g"].view.copy()
+                weights = weights.reshape(n_pre, n_post)
+
+                n_strengthened = 0
+                for i in self.place_cell_right_indices:
+                    if active_cells[i] > 0.1:
+                        delta_w = eta * active_cells[i]
+                        weights[i, :] += delta_w
+                        weights[i, :] = np.clip(weights[i, :], 0.0, w_max)
+                        n_strengthened += 1
+
+                self.place_to_food_memory_right.vars["g"].view[:] = weights.flatten()
+                self.place_to_food_memory_right.vars["g"].push_to_device()
+                side = "RIGHT"
+
+            return {
+                "n_strengthened": n_strengthened,
+                "avg_weight": float(np.mean(weights)),
+                "max_weight": float(np.max(weights)),
+                "side": side
+            }
+
+        else:
+            # === Phase 3b: 단일 Food Memory (기존) ===
+            n_post = self.config.n_food_memory
+
+            self.place_to_food_memory.vars["g"].pull_from_device()
+            weights = self.place_to_food_memory.vars["g"].view.copy()
+            weights = weights.reshape(n_pre, n_post)
+
+            for i in range(n_pre):
+                if active_cells[i] > 0.1:
+                    delta_w = eta * active_cells[i]
+                    weights[i, :] += delta_w
+                    weights[i, :] = np.clip(weights[i, :], 0.0, w_max)
+
+            self.place_to_food_memory.vars["g"].view[:] = weights.flatten()
+            self.place_to_food_memory.vars["g"].push_to_device()
+
+            n_strengthened = np.sum(active_cells > 0.1)
+
+            return {
+                "n_strengthened": int(n_strengthened),
+                "avg_weight": float(np.mean(weights)),
+                "max_weight": float(np.max(weights))
+            }
 
     def save_hippocampus_weights(self, filepath: str = None) -> str:
         """
-        Phase 3b: Hippocampus 가중치 저장
+        Phase 3b/3c: Hippocampus 가중치 저장
 
         학습된 Place Cells → Food Memory 가중치를 파일에 저장합니다.
         에피소드 간 학습 지속을 위해 사용됩니다.
@@ -665,17 +783,25 @@ class ForagerBrain:
         if filepath is None:
             filepath = str(CHECKPOINT_DIR / "hippocampus_weights.npy")
 
-        # GPU에서 가중치 가져오기
-        self.place_to_food_memory.vars["g"].pull_from_device()
-        weights = self.place_to_food_memory.vars["g"].view.copy()
-
-        # 저장
-        np.save(filepath, weights)
-        return filepath
+        if self.config.directional_food_memory:
+            # Phase 3c: 좌/우 가중치 모두 저장
+            self.place_to_food_memory_left.vars["g"].pull_from_device()
+            self.place_to_food_memory_right.vars["g"].pull_from_device()
+            weights_left = self.place_to_food_memory_left.vars["g"].view.copy()
+            weights_right = self.place_to_food_memory_right.vars["g"].view.copy()
+            np.savez(filepath.replace('.npy', '.npz'),
+                     left=weights_left, right=weights_right)
+            return filepath.replace('.npy', '.npz')
+        else:
+            # Phase 3b: 단일 가중치 저장
+            self.place_to_food_memory.vars["g"].pull_from_device()
+            weights = self.place_to_food_memory.vars["g"].view.copy()
+            np.save(filepath, weights)
+            return filepath
 
     def load_hippocampus_weights(self, filepath: str = None) -> bool:
         """
-        Phase 3b: Hippocampus 가중치 복원
+        Phase 3b/3c: Hippocampus 가중치 복원
 
         저장된 Place Cells → Food Memory 가중치를 파일에서 복원합니다.
 
@@ -691,21 +817,29 @@ class ForagerBrain:
         if filepath is None:
             filepath = str(CHECKPOINT_DIR / "hippocampus_weights.npy")
 
-        if not os.path.exists(filepath):
-            return False
-
-        # 가중치 로드
-        weights = np.load(filepath)
-
-        # GPU로 전송
-        self.place_to_food_memory.vars["g"].view[:] = weights
-        self.place_to_food_memory.vars["g"].push_to_device()
-
-        return True
+        if self.config.directional_food_memory:
+            # Phase 3c: 좌/우 가중치 로드
+            npz_path = filepath.replace('.npy', '.npz')
+            if not os.path.exists(npz_path):
+                return False
+            data = np.load(npz_path)
+            self.place_to_food_memory_left.vars["g"].view[:] = data['left']
+            self.place_to_food_memory_left.vars["g"].push_to_device()
+            self.place_to_food_memory_right.vars["g"].view[:] = data['right']
+            self.place_to_food_memory_right.vars["g"].push_to_device()
+            return True
+        else:
+            # Phase 3b: 단일 가중치 로드
+            if not os.path.exists(filepath):
+                return False
+            weights = np.load(filepath)
+            self.place_to_food_memory.vars["g"].view[:] = weights
+            self.place_to_food_memory.vars["g"].push_to_device()
+            return True
 
     def get_hippocampus_stats(self) -> dict:
         """
-        Phase 3b: Hippocampus 학습 상태 통계
+        Phase 3b/3c: Hippocampus 학습 상태 통계
 
         Returns:
             가중치 통계 (avg, max, min, n_strong)
@@ -713,18 +847,38 @@ class ForagerBrain:
         if not self.config.hippocampus_enabled or not self.food_learning_enabled:
             return None
 
-        self.place_to_food_memory.vars["g"].pull_from_device()
-        weights = self.place_to_food_memory.vars["g"].view.copy()
+        if self.config.directional_food_memory:
+            # Phase 3c: 좌/우 통계
+            self.place_to_food_memory_left.vars["g"].pull_from_device()
+            self.place_to_food_memory_right.vars["g"].pull_from_device()
+            weights_left = self.place_to_food_memory_left.vars["g"].view.copy()
+            weights_right = self.place_to_food_memory_right.vars["g"].view.copy()
+            weights = np.concatenate([weights_left, weights_right])
 
-        # 초기값(5.0)보다 크게 강화된 연결 수
-        n_strong = np.sum(weights > self.config.place_to_food_memory_weight + 0.5)
+            n_strong_left = np.sum(weights_left > self.config.place_to_food_memory_weight + 0.5)
+            n_strong_right = np.sum(weights_right > self.config.place_to_food_memory_weight + 0.5)
 
-        return {
-            "avg_weight": float(np.mean(weights)),
-            "max_weight": float(np.max(weights)),
-            "min_weight": float(np.min(weights)),
-            "n_strong_connections": int(n_strong)
-        }
+            return {
+                "avg_weight": float(np.mean(weights)),
+                "max_weight": float(np.max(weights)),
+                "min_weight": float(np.min(weights)),
+                "n_strong_connections": int(n_strong_left + n_strong_right),
+                "n_strong_left": int(n_strong_left),
+                "n_strong_right": int(n_strong_right)
+            }
+        else:
+            # Phase 3b: 단일 통계
+            self.place_to_food_memory.vars["g"].pull_from_device()
+            weights = self.place_to_food_memory.vars["g"].view.copy()
+
+            n_strong = np.sum(weights > self.config.place_to_food_memory_weight + 0.5)
+
+            return {
+                "avg_weight": float(np.mean(weights)),
+                "max_weight": float(np.max(weights)),
+                "min_weight": float(np.min(weights)),
+                "n_strong_connections": int(n_strong)
+            }
 
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
@@ -891,10 +1045,16 @@ class ForagerBrain:
             # Phase 3 스파이크 카운팅
             if self.config.hippocampus_enabled:
                 self.place_cells.vars["RefracTime"].pull_from_device()
-                self.food_memory.vars["RefracTime"].pull_from_device()
-
                 place_cell_spikes += np.sum(self.place_cells.vars["RefracTime"].view > self.spike_threshold)
-                food_memory_spikes += np.sum(self.food_memory.vars["RefracTime"].view > self.spike_threshold)
+
+                if self.config.directional_food_memory:
+                    self.food_memory_left.vars["RefracTime"].pull_from_device()
+                    self.food_memory_right.vars["RefracTime"].pull_from_device()
+                    food_memory_spikes += np.sum(self.food_memory_left.vars["RefracTime"].view > self.spike_threshold)
+                    food_memory_spikes += np.sum(self.food_memory_right.vars["RefracTime"].view > self.spike_threshold)
+                elif self.food_memory is not None:
+                    self.food_memory.vars["RefracTime"].pull_from_device()
+                    food_memory_spikes += np.sum(self.food_memory.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -1036,6 +1196,10 @@ class ForagerBrain:
             sensory_pops.extend([self.pain_eye_left, self.pain_eye_right,
                                  self.danger_sensor])
 
+        # Phase 3: Place Cells 추가 (I_input 있음)
+        if self.config.hippocampus_enabled:
+            sensory_pops.append(self.place_cells)
+
         for pop in sensory_pops:
             pop.vars["V"].view[:] = self.config.v_rest
             pop.vars["RefracTime"].view[:] = 0.0
@@ -1053,6 +1217,13 @@ class ForagerBrain:
             lif_pops.extend([self.lateral_amygdala, self.central_amygdala,
                              self.fear_response])
 
+        # Phase 3: Food Memory 추가
+        if self.config.hippocampus_enabled:
+            if self.config.directional_food_memory:
+                lif_pops.extend([self.food_memory_left, self.food_memory_right])
+            elif self.food_memory is not None:
+                lif_pops.append(self.food_memory)
+
         for pop in lif_pops:
             pop.vars["V"].view[:] = self.config.v_rest
             pop.vars["RefracTime"].view[:] = 0.0
@@ -1067,7 +1238,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     """Phase 2a+2b 훈련 실행"""
 
     print("=" * 70)
-    print("Phase 3b: Forager Training with Hippocampus Hebbian Learning")
+    print("Phase 3c: Forager Training with Directional Food Memory")
     print("=" * 70)
     if persist_learning:
         print("  [!] PERSIST LEARNING ENABLED - weights saved/loaded between episodes")
@@ -1143,17 +1314,20 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                       f"M_L={info['motor_left_rate']:.2f} M_R={info['motor_right_rate']:.2f} | "
                       f"{pain_str}")
 
-            # 음식 섭취 이벤트 (normal 이상) + Phase 3b 학습
+            # 음식 섭취 이벤트 (normal 이상) + Phase 3b/3c 학습
             if env_info["food_eaten"]:
-                # Phase 3b: Hebbian 학습 실행
-                learn_info = brain.learn_food_location()
+                # Phase 3b/3c: Hebbian 학습 실행
+                # food_position을 전달하여 방향성 학습 지원
+                food_pos = (obs["position_x"], obs["position_y"])
+                learn_info = brain.learn_food_location(food_position=food_pos)
                 if learn_info:
                     ep_learn_events += 1
 
                 if log_level in ["normal", "debug", "verbose"]:
                     if learn_info:
+                        side_str = f", side={learn_info.get('side', 'N/A')}" if 'side' in learn_info else ""
                         print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f} "
-                              f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}]")
+                              f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}{side_str}]")
                     else:
                         print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}")
 
