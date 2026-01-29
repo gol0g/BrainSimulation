@@ -102,6 +102,13 @@ class ForagerBrainConfig:
     place_cell_grid_size: int = 20          # 격자 크기 (20x20)
     directional_food_memory: bool = True    # Phase 3c: 방향성 Food Memory
 
+    # === BASAL GANGLIA (Phase 4 신규) ===
+    basal_ganglia_enabled: bool = True      # 기저핵 활성화 여부
+    n_striatum: int = 400                   # Striatum (선조체): 행동 선택
+    n_direct_pathway: int = 200             # Direct pathway (D1): Go 신호
+    n_indirect_pathway: int = 200           # Indirect pathway (D2): NoGo 신호
+    n_dopamine: int = 100                   # Dopamine neurons (VTA/SNc)
+
     # === MOTOR ===
     n_motor_left: int = 500
     n_motor_right: int = 500
@@ -166,6 +173,28 @@ class ForagerBrainConfig:
     # Hunger → Food Memory (배고플 때 기억 활성화)
     hunger_to_food_memory_weight: float = 10.0 # 기억 탐색 활성화 (20→10, 간섭 최소화)
 
+    # === Phase 4 시냅스 가중치 (신규) ===
+    # Sensory → Striatum (행동 컨텍스트)
+    sensory_to_striatum_weight: float = 15.0   # 감각 입력 통합
+    hunger_to_striatum_weight: float = 20.0    # 배고픔 상태 → 행동 촉진
+
+    # Striatum → Direct/Indirect pathways
+    striatum_to_direct_weight: float = 20.0    # Go 신호 (25→20)
+    striatum_to_indirect_weight: float = 15.0  # NoGo 신호 (20→15)
+    direct_indirect_competition: float = -10.0 # D1-D2 상호 억제 (15→10, 완화)
+
+    # Direct/Indirect → Motor
+    direct_to_motor_weight: float = 15.0       # Go → Motor 촉진 (20→15, 균형)
+    indirect_to_motor_weight: float = -8.0     # NoGo → Motor 억제 (15→8, 과억제 완화)
+
+    # Dopamine modulation (보상 학습)
+    dopamine_to_direct_weight: float = 25.0    # DA → D1 강화 (Go 촉진)
+    dopamine_to_indirect_weight: float = -20.0 # DA → D2 억제 (NoGo 감소)
+
+    # Dopamine 학습 파라미터
+    dopamine_eta: float = 0.1                  # Dopamine 학습률
+    dopamine_decay: float = 0.95               # Dopamine 감쇠율
+
     dt: float = 1.0
 
     @property
@@ -180,6 +209,9 @@ class ForagerBrainConfig:
                      self.n_fear_response)
         if self.hippocampus_enabled:
             base += (self.n_place_cells + self.n_food_memory)
+        if self.basal_ganglia_enabled:
+            base += (self.n_striatum + self.n_direct_pathway +
+                     self.n_indirect_pathway + self.n_dopamine)
         return base
 
 
@@ -338,6 +370,32 @@ class ForagerBrain:
             print(f"  Hippocampus: PlaceCells({self.config.n_place_cells}) + "
                   f"FoodMemory({self.config.n_food_memory})")
 
+        # === Phase 4: BASAL GANGLIA POPULATIONS ===
+        if self.config.basal_ganglia_enabled:
+            # Striatum: 감각 입력 통합, 행동 선택
+            self.striatum = self.model.add_neuron_population(
+                "striatum", self.config.n_striatum, "LIF", lif_params, lif_init)
+
+            # Direct pathway (D1): Go 신호 - 행동 촉진
+            self.direct_pathway = self.model.add_neuron_population(
+                "direct_pathway", self.config.n_direct_pathway, "LIF", lif_params, lif_init)
+
+            # Indirect pathway (D2): NoGo 신호 - 행동 억제
+            self.indirect_pathway = self.model.add_neuron_population(
+                "indirect_pathway", self.config.n_indirect_pathway, "LIF", lif_params, lif_init)
+
+            # Dopamine neurons (VTA/SNc): 보상 신호
+            self.dopamine_neurons = self.model.add_neuron_population(
+                "dopamine_neurons", self.config.n_dopamine, sensory_lif_model, sensory_params, sensory_init)
+
+            # Dopamine 레벨 추적
+            self.dopamine_level = 0.0
+
+            print(f"  BasalGanglia: Striatum({self.config.n_striatum}) + "
+                  f"Direct({self.config.n_direct_pathway}) + "
+                  f"Indirect({self.config.n_indirect_pathway}) + "
+                  f"Dopamine({self.config.n_dopamine})")
+
         # === SYNAPTIC CONNECTIONS ===
         self._build_hypothalamus_circuit()
         self._build_modulation_circuit()
@@ -353,6 +411,10 @@ class ForagerBrain:
         # Phase 3: Hippocampus circuits
         if self.config.hippocampus_enabled:
             self._build_hippocampus_circuit()
+
+        # Phase 4: Basal Ganglia circuits
+        if self.config.basal_ganglia_enabled:
+            self._build_basal_ganglia_circuit()
 
         # Build and load
         print("Building model...")
@@ -665,6 +727,144 @@ class ForagerBrain:
                 self.config.hunger_to_food_memory_weight, sparsity=0.1)
 
         print(f"    Hunger→FoodMemory: {self.config.hunger_to_food_memory_weight} (amplify when hungry)")
+
+    # === Phase 4: Basal Ganglia Circuits ===
+
+    def _build_basal_ganglia_circuit(self):
+        """
+        기저핵 회로: 행동 선택 및 습관 학습
+
+        구조:
+        - Sensory → Striatum: 감각 입력 통합
+        - Hunger → Striatum: 동기 상태 전달
+        - Striatum → Direct (D1): Go 신호
+        - Striatum → Indirect (D2): NoGo 신호
+        - D1 ↔ D2: 상호 억제 (경쟁)
+        - Direct → Motor: 행동 촉진
+        - Indirect → Motor: 행동 억제
+        - Dopamine → D1/D2: 보상 시 학습 조절
+        """
+        print("  Building Basal Ganglia circuit (Phase 4)...")
+
+        # 1. Sensory → Striatum (감각 입력 통합)
+        # Food Eye → Striatum (음식 정보)
+        self._create_static_synapse(
+            "food_eye_left_to_striatum", self.food_eye_left, self.striatum,
+            self.config.sensory_to_striatum_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "food_eye_right_to_striatum", self.food_eye_right, self.striatum,
+            self.config.sensory_to_striatum_weight, sparsity=0.08)
+
+        print(f"    FoodEye→Striatum: {self.config.sensory_to_striatum_weight}")
+
+        # 2. Hunger → Striatum (동기 상태)
+        self._create_static_synapse(
+            "hunger_to_striatum", self.hunger_drive, self.striatum,
+            self.config.hunger_to_striatum_weight, sparsity=0.1)
+
+        print(f"    Hunger→Striatum: {self.config.hunger_to_striatum_weight}")
+
+        # 3. Striatum → Direct/Indirect pathways
+        # Striatum → Direct (Go)
+        self.striatum_to_direct = self.model.add_synapse_population(
+            "striatum_to_direct", "DENSE",
+            self.striatum, self.direct_pathway,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.striatum_to_direct_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0})
+        )
+
+        # Striatum → Indirect (NoGo)
+        self.striatum_to_indirect = self.model.add_synapse_population(
+            "striatum_to_indirect", "DENSE",
+            self.striatum, self.indirect_pathway,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.striatum_to_indirect_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0})
+        )
+
+        print(f"    Striatum→Direct: {self.config.striatum_to_direct_weight} (Go)")
+        print(f"    Striatum→Indirect: {self.config.striatum_to_indirect_weight} (NoGo)")
+
+        # 4. Direct ↔ Indirect 상호 억제 (경쟁)
+        self._create_static_synapse(
+            "direct_to_indirect", self.direct_pathway, self.indirect_pathway,
+            self.config.direct_indirect_competition, sparsity=0.1)
+        self._create_static_synapse(
+            "indirect_to_direct", self.indirect_pathway, self.direct_pathway,
+            self.config.direct_indirect_competition, sparsity=0.1)
+
+        print(f"    Direct↔Indirect: {self.config.direct_indirect_competition} (competition)")
+
+        # 5. Direct/Indirect → Motor
+        # Direct → Motor (양쪽 모두 촉진)
+        self._create_static_synapse(
+            "direct_to_motor_left", self.direct_pathway, self.motor_left,
+            self.config.direct_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "direct_to_motor_right", self.direct_pathway, self.motor_right,
+            self.config.direct_to_motor_weight, sparsity=0.1)
+
+        # Indirect → Motor (양쪽 모두 억제)
+        self._create_static_synapse(
+            "indirect_to_motor_left", self.indirect_pathway, self.motor_left,
+            self.config.indirect_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "indirect_to_motor_right", self.indirect_pathway, self.motor_right,
+            self.config.indirect_to_motor_weight, sparsity=0.1)
+
+        print(f"    Direct→Motor: {self.config.direct_to_motor_weight} (Go)")
+        print(f"    Indirect→Motor: {self.config.indirect_to_motor_weight} (NoGo)")
+
+        # 6. Dopamine → Direct/Indirect (보상 조절)
+        # Dopamine → Direct (강화): 보상 시 Go 신호 증가
+        self._create_static_synapse(
+            "dopamine_to_direct", self.dopamine_neurons, self.direct_pathway,
+            self.config.dopamine_to_direct_weight, sparsity=0.15)
+
+        # Dopamine → Indirect (억제): 보상 시 NoGo 신호 감소
+        self._create_static_synapse(
+            "dopamine_to_indirect", self.dopamine_neurons, self.indirect_pathway,
+            self.config.dopamine_to_indirect_weight, sparsity=0.15)
+
+        print(f"    Dopamine→Direct: {self.config.dopamine_to_direct_weight} (reward)")
+        print(f"    Dopamine→Indirect: {self.config.dopamine_to_indirect_weight} (reward)")
+
+    def release_dopamine(self, reward_magnitude: float = 1.0):
+        """
+        Phase 4: 보상 시 Dopamine 방출
+
+        음식 섭취 등 보상 이벤트 발생 시 호출하여
+        Dopamine 뉴런을 활성화하고 학습을 촉진합니다.
+
+        Args:
+            reward_magnitude: 보상 크기 (0~1)
+        """
+        if not self.config.basal_ganglia_enabled:
+            return
+
+        # Dopamine 레벨 업데이트
+        self.dopamine_level = min(1.0, self.dopamine_level + reward_magnitude)
+
+        # Dopamine 뉴런에 입력 전류 주입
+        dopamine_current = self.dopamine_level * 80.0  # 강한 활성화
+        self.dopamine_neurons.vars["I_input"].view[:] = dopamine_current
+        self.dopamine_neurons.vars["I_input"].push_to_device()
+
+        return {"dopamine_level": self.dopamine_level}
+
+    def decay_dopamine(self):
+        """Dopamine 레벨 감쇠"""
+        if not self.config.basal_ganglia_enabled:
+            return
+
+        self.dopamine_level *= self.config.dopamine_decay
+
+        # 감쇠된 레벨 반영
+        if self.dopamine_level < 0.01:
+            self.dopamine_level = 0.0
+            self.dopamine_neurons.vars["I_input"].view[:] = 0.0
+        else:
+            self.dopamine_neurons.vars["I_input"].view[:] = self.dopamine_level * 80.0
+        self.dopamine_neurons.vars["I_input"].push_to_device()
 
     def learn_food_location(self, food_position: tuple = None):
         """
@@ -1224,11 +1424,25 @@ class ForagerBrain:
             elif self.food_memory is not None:
                 lif_pops.append(self.food_memory)
 
+        # Phase 4: Basal Ganglia 추가
+        if self.config.basal_ganglia_enabled:
+            lif_pops.extend([self.striatum, self.direct_pathway, self.indirect_pathway])
+
         for pop in lif_pops:
             pop.vars["V"].view[:] = self.config.v_rest
             pop.vars["RefracTime"].view[:] = 0.0
             pop.vars["V"].push_to_device()
             pop.vars["RefracTime"].push_to_device()
+
+        # Phase 4: Dopamine 초기화 (I_input 있는 Sensory 타입)
+        if self.config.basal_ganglia_enabled:
+            self.dopamine_neurons.vars["V"].view[:] = self.config.v_rest
+            self.dopamine_neurons.vars["RefracTime"].view[:] = 0.0
+            self.dopamine_neurons.vars["I_input"].view[:] = 0.0
+            self.dopamine_neurons.vars["V"].push_to_device()
+            self.dopamine_neurons.vars["RefracTime"].push_to_device()
+            self.dopamine_neurons.vars["I_input"].push_to_device()
+            self.dopamine_level = 0.0
 
 
 def run_training(episodes: int = 20, render_mode: str = "none",
@@ -1238,7 +1452,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     """Phase 2a+2b 훈련 실행"""
 
     print("=" * 70)
-    print("Phase 3c: Forager Training with Directional Food Memory")
+    print("Phase 4: Forager Training with Basal Ganglia (Dopamine)")
     print("=" * 70)
     if persist_learning:
         print("  [!] PERSIST LEARNING ENABLED - weights saved/loaded between episodes")
@@ -1294,6 +1508,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             action_delta, info = brain.process(obs, debug=debug)
             action = (action_delta,)
 
+            # Phase 4: Dopamine 감쇠 (매 스텝)
+            brain.decay_dopamine()
+
             # 환경 스텝
             obs, reward, done, env_info = env.step(action)
             total_reward += reward
@@ -1314,7 +1531,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                       f"M_L={info['motor_left_rate']:.2f} M_R={info['motor_right_rate']:.2f} | "
                       f"{pain_str}")
 
-            # 음식 섭취 이벤트 (normal 이상) + Phase 3b/3c 학습
+            # 음식 섭취 이벤트 (normal 이상) + Phase 3b/3c 학습 + Phase 4 Dopamine
             if env_info["food_eaten"]:
                 # Phase 3b/3c: Hebbian 학습 실행
                 # food_position을 전달하여 방향성 학습 지원
@@ -1323,13 +1540,17 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 if learn_info:
                     ep_learn_events += 1
 
+                # Phase 4: Dopamine 방출 (보상)
+                dopamine_info = brain.release_dopamine(reward_magnitude=0.5)
+
                 if log_level in ["normal", "debug", "verbose"]:
+                    da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
                         side_str = f", side={learn_info.get('side', 'N/A')}" if 'side' in learn_info else ""
                         print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f} "
-                              f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}{side_str}]")
+                              f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}{side_str}{da_str}]")
                     else:
-                        print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}")
+                        print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}{da_str}")
 
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
