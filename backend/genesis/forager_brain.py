@@ -646,6 +646,86 @@ class ForagerBrain:
             "max_weight": float(max_weight)
         }
 
+    def save_hippocampus_weights(self, filepath: str = None) -> str:
+        """
+        Phase 3b: Hippocampus 가중치 저장
+
+        학습된 Place Cells → Food Memory 가중치를 파일에 저장합니다.
+        에피소드 간 학습 지속을 위해 사용됩니다.
+
+        Args:
+            filepath: 저장 경로 (None이면 기본 체크포인트 경로 사용)
+
+        Returns:
+            저장된 파일 경로
+        """
+        if not self.config.hippocampus_enabled or not self.food_learning_enabled:
+            return None
+
+        if filepath is None:
+            filepath = str(CHECKPOINT_DIR / "hippocampus_weights.npy")
+
+        # GPU에서 가중치 가져오기
+        self.place_to_food_memory.vars["g"].pull_from_device()
+        weights = self.place_to_food_memory.vars["g"].view.copy()
+
+        # 저장
+        np.save(filepath, weights)
+        return filepath
+
+    def load_hippocampus_weights(self, filepath: str = None) -> bool:
+        """
+        Phase 3b: Hippocampus 가중치 복원
+
+        저장된 Place Cells → Food Memory 가중치를 파일에서 복원합니다.
+
+        Args:
+            filepath: 로드 경로 (None이면 기본 체크포인트 경로 사용)
+
+        Returns:
+            성공 여부
+        """
+        if not self.config.hippocampus_enabled or not self.food_learning_enabled:
+            return False
+
+        if filepath is None:
+            filepath = str(CHECKPOINT_DIR / "hippocampus_weights.npy")
+
+        if not os.path.exists(filepath):
+            return False
+
+        # 가중치 로드
+        weights = np.load(filepath)
+
+        # GPU로 전송
+        self.place_to_food_memory.vars["g"].view[:] = weights
+        self.place_to_food_memory.vars["g"].push_to_device()
+
+        return True
+
+    def get_hippocampus_stats(self) -> dict:
+        """
+        Phase 3b: Hippocampus 학습 상태 통계
+
+        Returns:
+            가중치 통계 (avg, max, min, n_strong)
+        """
+        if not self.config.hippocampus_enabled or not self.food_learning_enabled:
+            return None
+
+        self.place_to_food_memory.vars["g"].pull_from_device()
+        weights = self.place_to_food_memory.vars["g"].view.copy()
+
+        # 초기값(5.0)보다 크게 강화된 연결 수
+        n_strong = np.sum(weights > self.config.place_to_food_memory_weight + 0.5)
+
+        return {
+            "avg_weight": float(np.mean(weights)),
+            "max_weight": float(np.max(weights)),
+            "min_weight": float(np.min(weights)),
+            "n_strong_connections": int(n_strong)
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -982,12 +1062,15 @@ class ForagerBrain:
 
 def run_training(episodes: int = 20, render_mode: str = "none",
                 log_level: str = "normal", debug: bool = False,
-                no_amygdala: bool = False, no_pain: bool = False):
+                no_amygdala: bool = False, no_pain: bool = False,
+                persist_learning: bool = False):
     """Phase 2a+2b 훈련 실행"""
 
     print("=" * 70)
-    print("Phase 2b: Forager Training with Hypothalamus + Amygdala")
+    print("Phase 3b: Forager Training with Hippocampus Hebbian Learning")
     print("=" * 70)
+    if persist_learning:
+        print("  [!] PERSIST LEARNING ENABLED - weights saved/loaded between episodes")
 
     # 환경 및 뇌 생성
     env_config = ForagerConfig()
@@ -1020,6 +1103,14 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         brain.reset()
         done = False
         total_reward = 0
+
+        # Phase 3b: 에피소드 간 학습 지속 - 가중치 로드
+        if persist_learning and ep > 0:
+            loaded = brain.load_hippocampus_weights()
+            if loaded and log_level in ["normal", "debug", "verbose"]:
+                stats = brain.get_hippocampus_stats()
+                print(f"  [LOAD] Restored weights: avg={stats['avg_weight']:.2f}, "
+                      f"max={stats['max_weight']:.2f}, strong={stats['n_strong_connections']}")
 
         # 에피소드 로그
         ep_hunger_rates = []
@@ -1082,6 +1173,14 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         if env_info["death_cause"]:
             death_causes[env_info["death_cause"]] = death_causes.get(env_info["death_cause"], 0) + 1
 
+        # Phase 3b: 에피소드 간 학습 지속 - 가중치 저장
+        if persist_learning:
+            brain.save_hippocampus_weights()
+            if log_level in ["debug", "verbose"]:
+                stats = brain.get_hippocampus_stats()
+                print(f"  [SAVE] Weights saved: avg={stats['avg_weight']:.2f}, "
+                      f"max={stats['max_weight']:.2f}, strong={stats['n_strong_connections']}")
+
         # 에피소드 요약
         avg_hunger = np.mean(ep_hunger_rates) if ep_hunger_rates else 0
         avg_satiety = np.mean(ep_satiety_rates) if ep_satiety_rates else 0
@@ -1129,6 +1228,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         print(f"\n  === Phase 3b: Hippocampus Learning ===")
         print(f"  Total Learn Events: {sum(all_learn_events)}")
         print(f"  Avg Learn/Episode:  {np.mean(all_learn_events):.1f}")
+        if persist_learning:
+            stats = brain.get_hippocampus_stats()
+            if stats:
+                print(f"  --- Cumulative Learning ---")
+                print(f"  Final Avg Weight:   {stats['avg_weight']:.2f} (initial: 5.0)")
+                print(f"  Final Max Weight:   {stats['max_weight']:.2f}")
+                print(f"  Strong Connections: {stats['n_strong_connections']}")
 
     print(f"\n  Death Causes:")
     for cause, count in death_causes.items():
@@ -1165,6 +1271,8 @@ if __name__ == "__main__":
                        help="Disable Amygdala (Phase 2a mode)")
     parser.add_argument("--no-pain", action="store_true",
                        help="Disable Pain Zone (Phase 2a mode)")
+    parser.add_argument("--persist-learning", action="store_true",
+                       help="Save/load Hippocampus weights between episodes (cumulative learning)")
     args = parser.parse_args()
 
     run_training(
@@ -1173,5 +1281,6 @@ if __name__ == "__main__":
         log_level=args.log_level,
         debug=args.debug,
         no_amygdala=args.no_amygdala,
-        no_pain=args.no_pain
+        no_pain=args.no_pain,
+        persist_learning=args.persist_learning
     )

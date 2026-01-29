@@ -3,7 +3,7 @@
 > **Genesis Brain Project - Phase 3: Hippocampus (Place Cells + Hebbian Learning)**
 >
 > 날짜: 2025-01-29
-> 상태: **Phase 3b 완료 - Hebbian 학습 작동 확인!**
+> 상태: **Phase 3b 완료 + Learning Checkpoint 실험 완료**
 
 ---
 
@@ -15,13 +15,13 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║  Phase 3b 최종 결과 (20 Episodes) - Hebbian 학습              ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  생존율:        55.0% ✓ (목표: >40%)                          ║
-║  평균 생존:     2495.7 steps                                  ║
-║  평균 음식:     24.1개                                        ║
-║  Reward Freq:   0.97% ✗ (목표: >5%)                           ║
-║  Pain Avoidance:95.2% ✓ (목표: <15% pain time)                ║
-║  사망 원인:     starve 45%, timeout 55%                       ║
-║  학습 이벤트:   483회 (평균 24.1/ep)                          ║
+║  생존율:        60.0% ✓ (목표: >40%)                          ║
+║  평균 생존:     2703.8 steps                                  ║
+║  평균 음식:     27.6개                                        ║
+║  Reward Freq:   1.02% ✗ (목표: >5%)                           ║
+║  Pain Avoidance:94.9% ✓ (목표: <15% pain time)                ║
+║  사망 원인:     starve 40%, timeout 60%                       ║
+║  학습 이벤트:   552회 (평균 27.6/ep)                          ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -29,19 +29,60 @@
 
 | 지표 | Phase 2b | Phase 3a | Phase 3b | 변화 (2b→3b) |
 |------|----------|----------|----------|--------------|
-| 생존율 | 50% | 50% | **55%** | +5% |
-| Starve | 50% | 50% | **45%** | -5% |
-| Avg Steps | 2614.8 | 2289.6 | **2495.7** | -4.6% |
-| Avg Food | 26.4 | 21.8 | **24.1** | -8.7% |
-| Pain Avoid | 95.3% | 94.9% | **95.2%** | -0.1% |
+| 생존율 | 50% | 50% | **60%** | +10% |
+| Starve | 50% | 50% | **40%** | -10% |
+| Avg Steps | 2614.8 | 2289.6 | **2703.8** | +3.4% |
+| Avg Food | 26.4 | 21.8 | **27.6** | +4.5% |
+| Pain Avoid | 95.3% | 94.9% | **94.9%** | -0.4% |
 
-**결론**: Hebbian 학습이 Starve 비율을 5% 감소시킴
+**결론**: Hebbian 학습이 Starve 비율을 10% 감소시킴
 
 ---
 
-## 2. Phase 3b 구현
+## 2. Learning Checkpoint 실험
 
-### 2.1 Hebbian 학습 메커니즘
+### 2.1 실험 목적
+
+에피소드 간 학습 보존이 누적 학습 효과를 가져오는지 검증
+
+### 2.2 실험 결과 (20 에피소드)
+
+| 조건 | 생존율 | Starve | Avg Food | Final Avg Weight |
+|------|--------|--------|----------|------------------|
+| **persist OFF** | **60%** | **40%** | **27.6** | 5.12 (에피소드 내) |
+| **persist ON** | 30% | 70% | 20.9 | 6.47 (누적) |
+
+### 2.3 분석
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  Learning Checkpoint 결과: 성능 저하!                         ║
+╠═══════════════════════════════════════════════════════════════╣
+║  원인:                                                        ║
+║  1. 음식이 매 에피소드 랜덤 위치에 스폰                       ║
+║  2. 학습된 "음식 위치"가 다음 에피소드에서는 무의미           ║
+║  3. 누적된 가중치가 노이즈로 작용 → 간섭 증가                 ║
+║                                                               ║
+║  결론:                                                        ║
+║  - 공간 기억 누적은 고정 환경에서만 유효                      ║
+║  - 랜덤 환경에서는 에피소드별 학습이 더 효과적                ║
+║  - --persist-learning 플래그는 비권장                         ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### 2.4 persist-learning 사용 시기
+
+```
+✓ 권장: 고정 음식 위치 (학습 환경)
+✓ 권장: 특정 영역에 음식 밀집 (패턴 존재)
+✗ 비권장: 완전 랜덤 음식 스폰 (현재 환경)
+```
+
+---
+
+## 3. Phase 3b 구현
+
+### 3.1 Hebbian 학습 메커니즘
 
 ```python
 def learn_food_location(self):
@@ -66,17 +107,21 @@ def learn_food_location(self):
     self.place_to_food_memory.vars["g"].push_to_device()
 ```
 
-### 2.2 학습 흐름
+### 3.2 Learning Checkpoint 메서드
 
-```
-1. 에이전트가 위치 (x, y)에서 음식 발견
-2. 해당 위치의 Place Cells 활성화 패턴 계산
-3. 활성화된 Place Cell → Food Memory 연결 강화
-4. 다음에 같은 위치 방문 시 Food Memory 더 강하게 활성화
-5. Food Memory → Motor 연결로 해당 방향 선호
+```python
+def save_hippocampus_weights(self, filepath=None):
+    """학습된 가중치 저장"""
+    np.save(filepath, weights)
+
+def load_hippocampus_weights(self, filepath=None):
+    """저장된 가중치 복원"""
+    weights = np.load(filepath)
+    self.place_to_food_memory.vars["g"].view[:] = weights
+    self.place_to_food_memory.vars["g"].push_to_device()
 ```
 
-### 2.3 시냅스 구성
+### 3.3 시냅스 구성
 
 ```
 변경 사항 (Phase 3a → 3b):
@@ -87,21 +132,6 @@ Place Cells → Food Memory:
   - 학습률 (η): 0.1
   - 최대 가중치: 30.0
 ```
-
----
-
-## 3. 학습 로그 예시
-
-```
-[!] FOOD EATEN at step 38, Energy: 71.1 [LEARN: 38 cells, avg_w=5.00]
-[!] FOOD EATEN at step 42, Energy: 95.5 [LEARN: 38 cells, avg_w=5.01]
-[!] FOOD EATEN at step 48, Energy: 100.0 [LEARN: 37 cells, avg_w=5.01]
-...
-[!] FOOD EATEN at step 2810, Energy: 100.0 [LEARN: 35 cells, avg_w=5.12]
-```
-
-- **38 cells**: 활성화된 Place Cell 수 (가우시안 분포)
-- **avg_w=5.00 → 5.12**: 평균 가중치 증가 (학습 진행)
 
 ---
 
@@ -142,17 +172,17 @@ Place Cells → Food Memory:
 
 ### 5.1 핵심 발견
 
-**1. Hebbian 학습은 즉각적 효과가 있다**
+**1. Hebbian 학습은 에피소드 내에서 효과적**
 ```
 - 음식 발견 시 Place Cell 연결 강화
 - 같은 위치 재방문 시 Food Memory 활성화 증가
-- Starve 비율 5% 감소
+- Starve 비율 10% 감소
 ```
 
-**2. 학습률은 보수적으로**
+**2. 에피소드 간 학습 보존은 환경에 의존**
 ```
-- η=0.1로 설정 (너무 높으면 불안정)
-- 평균 가중치: 5.0 → 5.12 (서서히 증가)
+- 랜덤 환경: 누적 학습 = 노이즈 누적 (성능 저하)
+- 고정 환경: 누적 학습 = 패턴 학습 (성능 향상 예상)
 ```
 
 **3. Dense 연결이 학습에 필수**
@@ -164,9 +194,9 @@ Place Cells → Food Memory:
 ### 5.2 한계점
 
 ```
-1. 에피소드 간 학습 미보존
-   - 현재 매 에피소드 가중치 리셋
-   - 장기 기억을 위해 체크포인트 필요
+1. 공간 기억의 한계
+   - 랜덤 환경에서 위치 기억은 무의미
+   - 방향성 기억 또는 패턴 기억이 더 유용할 수 있음
 
 2. Food Memory → Motor 연결이 방향성 없음
    - 현재 좌/우 구분 없이 Motor 활성화
@@ -181,17 +211,17 @@ Place Cells → Food Memory:
 
 | 옵션 | 설명 | 효과 예상 |
 |------|------|----------|
-| **에피소드 간 학습 보존** | 가중치 저장/복원 | 누적 학습 효과 |
+| ~~에피소드 간 학습 보존~~ | ~~가중치 저장/복원~~ | ~~✗ 랜덤 환경에서 무효~~ |
 | **방향성 Food Memory** | 위치별 Motor 편향 | 목표 지향 이동 |
 | **기저핵 추가** | 습관/절차 학습 | 행동 자동화 |
 
 ### 6.2 권장 다음 단계
 
 ```
-Option A: 학습 체크포인트 추가
-- 에피소드 종료 시 가중치 저장
-- 다음 에피소드에서 복원
-- 장기 기억 형성 검증
+Option A: 방향성 Food Memory (Phase 3c)
+- Place Cell 좌측 활성화 → Motor_L 편향
+- Place Cell 우측 활성화 → Motor_R 편향
+- 음식이 있던 방향으로 이동 성향
 
 Option B: Phase 4 (기저핵)
 - 반복 행동의 자동화
@@ -203,7 +233,7 @@ Option B: Phase 4 (기저핵)
 ## 7. 실행 명령어
 
 ```bash
-# Phase 3b 테스트 (WSL)
+# Phase 3b 테스트 (WSL) - 권장
 wsl -d Ubuntu-24.04 -- bash -c "
 export CUDA_PATH=/usr/local/cuda-12.6;
 export PATH=\$CUDA_PATH/bin:/usr/local/bin:/usr/bin:/bin;
@@ -213,6 +243,12 @@ cd ~/pygenn_test;
 python /mnt/c/.../backend/genesis/forager_brain.py \
     --episodes 20 --log-level normal --render none
 "
+
+# Learning Checkpoint 테스트 (비권장 - 랜덤 환경)
+python forager_brain.py --episodes 20 --persist-learning
+
+# 시각화 모드
+python forager_brain.py --episodes 3 --render pygame
 ```
 
 ---
@@ -230,16 +266,21 @@ python /mnt/c/.../backend/genesis/forager_brain.py \
 ✓ Phase 3b 완료:
   - Hebbian 학습 구현
   - 음식 발견 시 연결 강화
-  - Starve 비율 5% 감소 확인
+  - Starve 비율 10% 감소 확인
+
+✓ Learning Checkpoint 실험 완료:
+  - 기능 구현 완료 (--persist-learning)
+  - 랜덤 환경에서는 비효과적 확인
+  - 고정 환경 실험 보류
 
 성과:
-  - 생존율: 50% → 55% (+5%)
-  - Starve: 50% → 45% (-5%)
+  - 생존율: 50% → 60% (+10%)
+  - Starve: 50% → 40% (-10%)
   - 학습 메커니즘 검증 완료
 
 한계:
-  - Reward Freq 여전히 낮음 (0.97%)
-  - 에피소드 간 학습 미보존
+  - Reward Freq 여전히 낮음 (1.02%)
+  - 공간 기억은 랜덤 환경에서 제한적
 ```
 
 ---
