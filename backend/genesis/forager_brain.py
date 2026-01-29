@@ -545,16 +545,23 @@ class ForagerBrain:
     # === Phase 3: Hippocampus Circuits ===
 
     def _build_hippocampus_circuit(self):
-        """해마 회로: Place Cells → Food Memory → Motor"""
-        print("  Building Hippocampus circuit (Phase 3)...")
+        """해마 회로: Place Cells → Food Memory → Motor (Phase 3b: 학습 포함)"""
+        print("  Building Hippocampus circuit (Phase 3b - Hebbian)...")
 
-        # 1. Place Cells → Food Memory (고정, 학습은 나중에)
-        # 현재 활성화된 Place Cell이 Food Memory를 활성화
-        self._create_static_synapse(
-            "place_to_food_memory", self.place_cells, self.food_memory,
-            self.config.place_to_food_memory_weight, sparsity=0.1)
+        # 1. Place Cells → Food Memory (학습 가능!)
+        # Dense 연결로 변경하여 학습 시 가중치 접근 용이
+        self.place_to_food_memory = self.model.add_synapse_population(
+            "place_to_food_memory", "DENSE",
+            self.place_cells, self.food_memory,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.place_to_food_memory_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0})
+        )
 
-        print(f"    PlaceCells→FoodMemory: {self.config.place_to_food_memory_weight}")
+        # 학습 추적을 위한 초기화
+        self.food_learning_enabled = True
+        self.last_active_place_cells = np.zeros(self.config.n_place_cells)
+
+        print(f"    PlaceCells→FoodMemory: {self.config.place_to_food_memory_weight} (LEARNABLE, eta={self.config.place_to_food_memory_eta})")
 
         # 2. Food Memory → Motor (약한 편향, 동측 배선)
         # Food Memory가 활성화되면 해당 방향으로 약하게 회전
@@ -588,6 +595,57 @@ class ForagerBrain:
 
         print(f"    Hunger→FoodMemory: {self.config.hunger_to_food_memory_weight} (amplify when hungry)")
 
+    def learn_food_location(self):
+        """
+        Phase 3b: 음식 발견 시 Hebbian 학습
+
+        음식을 먹었을 때 호출되어 현재 활성화된 Place Cells와
+        Food Memory 사이의 연결을 강화합니다.
+
+        Δw = η * pre_activity * post_activity
+        """
+        if not self.config.hippocampus_enabled or not self.food_learning_enabled:
+            return
+
+        # 1. 현재 가중치 가져오기
+        self.place_to_food_memory.vars["g"].pull_from_device()
+        weights = self.place_to_food_memory.vars["g"].view.copy()
+
+        # Dense 연결: (n_place_cells, n_food_memory) 형태로 reshape
+        n_pre = self.config.n_place_cells
+        n_post = self.config.n_food_memory
+        weights = weights.reshape(n_pre, n_post)
+
+        # 2. 활성화된 Place Cells 기반 학습
+        # last_active_place_cells는 _compute_place_cell_input에서 설정됨
+        active_cells = self.last_active_place_cells
+
+        # 3. Hebbian 학습: Δw = η * pre_activity
+        # 활성화된 Place Cell → 모든 Food Memory 연결 강화
+        eta = self.config.place_to_food_memory_eta
+        w_max = self.config.place_to_food_memory_w_max
+
+        for i in range(n_pre):
+            if active_cells[i] > 0.1:  # 활성화 임계값
+                delta_w = eta * active_cells[i]
+                weights[i, :] += delta_w
+                weights[i, :] = np.clip(weights[i, :], 0.0, w_max)
+
+        # 4. 가중치 다시 저장
+        self.place_to_food_memory.vars["g"].view[:] = weights.flatten()
+        self.place_to_food_memory.vars["g"].push_to_device()
+
+        # 학습 통계
+        n_strengthened = np.sum(active_cells > 0.1)
+        avg_weight = np.mean(weights)
+        max_weight = np.max(weights)
+
+        return {
+            "n_strengthened": int(n_strengthened),
+            "avg_weight": float(avg_weight),
+            "max_weight": float(max_weight)
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -599,13 +657,18 @@ class ForagerBrain:
             Place Cell 입력 전류 배열
         """
         currents = np.zeros(self.config.n_place_cells)
+        activations = np.zeros(self.config.n_place_cells)
         sigma = self.config.place_cell_sigma
 
         for i, (cx, cy) in enumerate(self.place_cell_centers):
             # 가우시안 활성화
             dist_sq = (pos_x - cx)**2 + (pos_y - cy)**2
             activation = np.exp(-dist_sq / (2 * sigma**2))
+            activations[i] = activation
             currents[i] = activation * 50.0  # 최대 전류 50
+
+        # Phase 3b: 학습을 위해 활성화 패턴 저장
+        self.last_active_place_cells = activations
 
         return currents
 
@@ -949,6 +1012,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     all_pain_steps = []
     death_causes = {"starve": 0, "timeout": 0, "pain": 0}
 
+    # Phase 3b: 학습 통계
+    all_learn_events = []  # 총 학습 이벤트 수
+
     for ep in range(episodes):
         obs = env.reset()
         brain.reset()
@@ -959,6 +1025,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         ep_hunger_rates = []
         ep_satiety_rates = []
         ep_fear_rates = []
+        ep_learn_events = 0  # Phase 3b: 학습 이벤트 카운트
 
         while not done:
             # 뇌 처리
@@ -985,9 +1052,19 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                       f"M_L={info['motor_left_rate']:.2f} M_R={info['motor_right_rate']:.2f} | "
                       f"{pain_str}")
 
-            # 음식 섭취 이벤트 (normal 이상)
-            if log_level in ["normal", "debug", "verbose"] and env_info["food_eaten"]:
-                print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}")
+            # 음식 섭취 이벤트 (normal 이상) + Phase 3b 학습
+            if env_info["food_eaten"]:
+                # Phase 3b: Hebbian 학습 실행
+                learn_info = brain.learn_food_location()
+                if learn_info:
+                    ep_learn_events += 1
+
+                if log_level in ["normal", "debug", "verbose"]:
+                    if learn_info:
+                        print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f} "
+                              f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}]")
+                    else:
+                        print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}")
 
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
@@ -1000,6 +1077,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         all_homeostasis.append(env_info["homeostasis_ratio"])
         all_pain_visits.append(env_info.get("pain_visits", 0))
         all_pain_steps.append(env_info.get("pain_steps", 0))
+        all_learn_events.append(ep_learn_events)  # Phase 3b
 
         if env_info["death_cause"]:
             death_causes[env_info["death_cause"]] = death_causes.get(env_info["death_cause"], 0) + 1
@@ -1045,6 +1123,12 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         print(f"  Avg Pain Time:   {np.mean(all_pain_steps):.1f} steps")
         pain_pct = np.sum(all_pain_steps) / np.sum(all_steps) * 100
         print(f"  Pain Time Ratio: {pain_pct:.1f}%")
+
+    # Phase 3b: 학습 통계
+    if brain_config.hippocampus_enabled and sum(all_learn_events) > 0:
+        print(f"\n  === Phase 3b: Hippocampus Learning ===")
+        print(f"  Total Learn Events: {sum(all_learn_events)}")
+        print(f"  Avg Learn/Episode:  {np.mean(all_learn_events):.1f}")
 
     print(f"\n  Death Causes:")
     for cause, count in death_causes.items():

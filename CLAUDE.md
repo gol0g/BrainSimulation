@@ -187,7 +187,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ---
 
-## Phase 2-3: 느끼는 뇌 (Affective Brain) - Phase 3a 완료
+## Phase 2-3: 느끼는 뇌 (Affective Brain) - Phase 3b 완료
 
 > **Phase 2a:** [docs/PHASE2A_DESIGN.md](docs/PHASE2A_DESIGN.md), [docs/PHASE2A_RESULTS.md](docs/PHASE2A_RESULTS.md)
 > **Phase 2b:** [docs/PHASE2B_DESIGN.md](docs/PHASE2B_DESIGN.md), [docs/PHASE2B_RESULTS.md](docs/PHASE2B_RESULTS.md)
@@ -208,21 +208,25 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║  3a: 해마 - Place Cells ✓ 완료 (2025-01-28)                  ║
 ║      └── 20x20 Place Cells, Food Memory 기본 구조            ║
 ║                                                               ║
-║  3b: 해마 - Hebbian 학습 ← 다음                              ║
-║      └── 음식 위치 기억 학습 (STDP)                          ║
+║  3b: 해마 - Hebbian 학습 ✓ 완료 (2025-01-29)                 ║
+║      └── 음식 위치 기억 학습, Starve 45% 달성                ║
+║                                                               ║
+║  4: 기저핵 - 습관 학습 ← 다음                                ║
+║      └── 반복 행동 자동화, 절차 기억                         ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
-### 현재 상태: Phase 3a (5,800 뉴런)
+### 현재 상태: Phase 3b (5,800 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 3a 결과 (Forager Brain)                                ║
+║  Phase 3b 결과 (Forager Brain + Hebbian Learning)             ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  생존율:        50% ✓ (목표: >40%)                            ║
+║  생존율:        55% ✓ (목표: >40%)                            ║
+║  Starve Death:  45% (Phase 2b: 50% → 45%)                     ║
 ║  Pain Avoidance:95% ✓ (목표: <15% pain time)                  ║
 ║  뉴런 수:       5,800 (Hypo+Amyg+Hippo)                        ║
-║  학습:          미구현 (Phase 3b에서)                         ║
+║  학습:          Hebbian STDP 작동 확인!                       ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
