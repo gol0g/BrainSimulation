@@ -195,6 +195,102 @@ class ForagerBrainConfig:
     dopamine_eta: float = 0.1                  # Dopamine 학습률
     dopamine_decay: float = 0.95               # Dopamine 감쇠율
 
+    # === PREFRONTAL CORTEX (Phase 5 신규) ===
+    prefrontal_enabled: bool = True            # PFC 활성화 여부
+    n_working_memory: int = 200                # 작업 기억 뉴런
+    n_goal_food: int = 50                      # 음식 탐색 목표
+    n_goal_safety: int = 50                    # 안전 추구 목표
+    n_inhibitory_control: int = 100            # 억제 제어
+
+    # === Phase 5 시냅스 가중치 ===
+    # 입력 → Working Memory
+    place_to_working_memory_weight: float = 10.0   # 위치 정보 유지
+    food_memory_to_working_memory_weight: float = 15.0  # 음식 기억 유지
+    fear_to_working_memory_weight: float = 12.0    # 위험 기억 유지
+
+    # Working Memory 재귀 연결 (지속 활성화)
+    working_memory_recurrent_weight: float = 8.0   # 자기 활성화 유지
+    working_memory_decay: float = 0.98             # 지속 활성화 감쇠
+
+    # Working Memory → Goal Unit
+    working_memory_to_goal_weight: float = 15.0    # 기억 → 목표 활성화
+
+    # 내부 상태 → Goal Unit
+    hunger_to_goal_food_weight: float = 25.0       # 배고픔 → 음식 목표
+    fear_to_goal_safety_weight: float = 20.0       # 공포 → 안전 목표
+    goal_wta_weight: float = -15.0                 # 목표 간 WTA 경쟁
+
+    # Goal → Inhibitory Control
+    goal_safety_to_inhibitory_weight: float = 20.0 # 안전 목표 → 억제 활성화
+
+    # Inhibitory Control 출력
+    inhibitory_to_direct_weight: float = -10.0     # 억제 → Direct pathway 억제 (15→10, 완화)
+    inhibitory_to_motor_weight: float = -2.0       # 억제 → Motor 억제 (5→2, MOTOR DEAD 완화)
+
+    # Goal → Motor (목표 지향 행동)
+    goal_food_to_motor_weight: float = 10.0        # 음식 목표 → Motor 활성화
+
+    # === CEREBELLUM (Phase 6a 신규) ===
+    cerebellum_enabled: bool = True                # 소뇌 활성화 여부
+    n_granule_cells: int = 300                     # 과립세포: 입력 통합
+    n_purkinje_cells: int = 100                    # 푸르키네세포: 운동 조절
+    n_deep_nuclei: int = 100                       # 심부핵: 최종 출력
+    n_error_signal: int = 50                       # 오류 신호 (Climbing Fiber)
+
+    # === THALAMUS (Phase 6b 신규) ===
+    thalamus_enabled: bool = True                  # 시상 활성화 여부
+    n_food_relay: int = 100                        # 음식 감각 중계
+    n_danger_relay: int = 100                      # 위험 감각 중계
+    n_trn: int = 100                               # TRN: 억제성 게이팅
+    n_arousal: int = 50                            # 각성 수준 조절
+
+    # === Phase 6b 시냅스 가중치 ===
+    # 감각 → Relay (감각 중계)
+    food_eye_to_food_relay_weight: float = 15.0    # 음식 감각 중계
+    pain_to_danger_relay_weight: float = 18.0      # 위험 감각 중계
+    wall_to_danger_relay_weight: float = 12.0      # 벽 감각 → 위험 중계
+
+    # 내부 상태 → TRN (게이팅 조절)
+    hunger_to_trn_weight: float = -12.0            # 배고픔 → TRN 억제 (Food 게이트 개방)
+    fear_to_trn_weight: float = -15.0              # 공포 → TRN 억제 (Danger 게이트 개방)
+
+    # TRN → Relay (억제성 게이팅)
+    trn_to_food_relay_weight: float = -10.0        # TRN → Food Relay 억제
+    trn_to_danger_relay_weight: float = -10.0      # TRN → Danger Relay 억제
+
+    # Goal → Relay (주의 집중)
+    goal_food_to_food_relay_weight: float = 12.0   # 음식 목표 → Food Relay 증폭
+    goal_safety_to_danger_relay_weight: float = 12.0  # 안전 목표 → Danger Relay 증폭
+
+    # Relay → 출력 (증폭된 감각)
+    food_relay_to_motor_weight: float = 8.0        # Food Relay → Motor (간접)
+    danger_relay_to_amygdala_weight: float = 15.0  # Danger Relay → Amygdala 증폭
+    danger_relay_to_motor_weight: float = 10.0     # Danger Relay → Motor (회피)
+
+    # 각성 조절
+    low_energy_to_arousal_weight: float = 20.0     # 낮은 에너지 → 높은 각성
+    high_energy_to_arousal_weight: float = -15.0   # 높은 에너지 → 낮은 각성
+    arousal_to_motor_weight: float = 6.0           # 각성 → Motor 활성화
+    arousal_to_relay_weight: float = 5.0           # 각성 → 감각 민감도
+
+    # === Phase 6a 시냅스 가중치 ===
+    # 입력 → Granule Cells
+    motor_to_granule_weight: float = 12.0          # 운동 명령 복사 (efference copy)
+    sensory_to_granule_weight: float = 10.0        # 감각 입력
+
+    # Granule → Purkinje (Parallel Fibers, 학습 가능)
+    granule_to_purkinje_weight: float = 5.0        # 초기 가중치
+    granule_purkinje_eta: float = 0.05             # 학습률 (LTD)
+
+    # Error → Purkinje (Climbing Fibers)
+    error_to_purkinje_weight: float = 30.0         # 강한 오류 신호
+
+    # Purkinje → Deep Nuclei (억제)
+    purkinje_to_deep_weight: float = -15.0         # 억제성 출력
+
+    # Deep Nuclei → Motor (조절)
+    deep_to_motor_weight: float = 8.0              # 운동 조절 출력
+
     dt: float = 1.0
 
     @property
@@ -212,6 +308,15 @@ class ForagerBrainConfig:
         if self.basal_ganglia_enabled:
             base += (self.n_striatum + self.n_direct_pathway +
                      self.n_indirect_pathway + self.n_dopamine)
+        if self.prefrontal_enabled:
+            base += (self.n_working_memory + self.n_goal_food +
+                     self.n_goal_safety + self.n_inhibitory_control)
+        if self.cerebellum_enabled:
+            base += (self.n_granule_cells + self.n_purkinje_cells +
+                     self.n_deep_nuclei + self.n_error_signal)
+        if self.thalamus_enabled:
+            base += (self.n_food_relay + self.n_danger_relay +
+                     self.n_trn + self.n_arousal)
         return base
 
 
@@ -415,6 +520,18 @@ class ForagerBrain:
         # Phase 4: Basal Ganglia circuits
         if self.config.basal_ganglia_enabled:
             self._build_basal_ganglia_circuit()
+
+        # Phase 5: Prefrontal Cortex circuits
+        if self.config.prefrontal_enabled:
+            self._build_prefrontal_cortex_circuit()
+
+        # Phase 6a: Cerebellum circuits
+        if self.config.cerebellum_enabled:
+            self._build_cerebellum_circuit()
+
+        # Phase 6b: Thalamus circuits
+        if self.config.thalamus_enabled:
+            self._build_thalamus_circuit()
 
         # Build and load
         print("Building model...")
@@ -828,6 +945,501 @@ class ForagerBrain:
         print(f"    Dopamine→Direct: {self.config.dopamine_to_direct_weight} (reward)")
         print(f"    Dopamine→Indirect: {self.config.dopamine_to_indirect_weight} (reward)")
 
+    def _build_prefrontal_cortex_circuit(self):
+        """
+        Phase 5: Prefrontal Cortex (전전두엽) 구축
+
+        구성:
+        1. Working Memory - 지속 활성화로 정보 유지
+        2. Goal Units (Food/Safety) - 목표 표상 및 경쟁
+        3. Inhibitory Control - 충동 억제
+
+        연결:
+        - 입력: Hippocampus, Amygdala, Hypothalamus → Working Memory
+        - 내부: Working Memory → Goal, Goal 간 WTA
+        - 출력: Goal → Motor, Inhibitory → Basal Ganglia
+        """
+        print("  Phase 5: Building PFC (Prefrontal Cortex)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. Working Memory (작업 기억) ===
+        self.working_memory = self.model.add_neuron_population(
+            "working_memory", self.config.n_working_memory,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 2. Goal Units (목표 단위) ===
+        self.goal_food = self.model.add_neuron_population(
+            "goal_food", self.config.n_goal_food,
+            sensory_lif_model, lif_params, lif_init)
+
+        self.goal_safety = self.model.add_neuron_population(
+            "goal_safety", self.config.n_goal_safety,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 3. Inhibitory Control (억제 제어) ===
+        self.inhibitory_control = self.model.add_neuron_population(
+            "inhibitory_control", self.config.n_inhibitory_control,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    Working Memory: {self.config.n_working_memory} neurons")
+        print(f"    Goal Food: {self.config.n_goal_food} neurons")
+        print(f"    Goal Safety: {self.config.n_goal_safety} neurons")
+        print(f"    Inhibitory Control: {self.config.n_inhibitory_control} neurons")
+
+        # === 입력 연결: 다른 영역 → Working Memory ===
+        # Hippocampus → Working Memory (공간 정보)
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "place_to_working_memory", self.place_cells, self.working_memory,
+                self.config.place_to_working_memory_weight, sparsity=0.05)
+
+            # Food Memory → Working Memory (음식 위치 기억)
+            if self.config.directional_food_memory:
+                self._create_static_synapse(
+                    "food_memory_left_to_wm", self.food_memory_left, self.working_memory,
+                    self.config.food_memory_to_working_memory_weight, sparsity=0.08)
+                self._create_static_synapse(
+                    "food_memory_right_to_wm", self.food_memory_right, self.working_memory,
+                    self.config.food_memory_to_working_memory_weight, sparsity=0.08)
+            elif hasattr(self, 'food_memory') and self.food_memory is not None:
+                self._create_static_synapse(
+                    "food_memory_to_wm", self.food_memory, self.working_memory,
+                    self.config.food_memory_to_working_memory_weight, sparsity=0.08)
+
+        # Amygdala → Working Memory (위험 기억)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_working_memory", self.fear_response, self.working_memory,
+                self.config.fear_to_working_memory_weight, sparsity=0.08)
+
+        print(f"    Input→WM: place={self.config.place_to_working_memory_weight}, "
+              f"food_mem={self.config.food_memory_to_working_memory_weight}, "
+              f"fear={self.config.fear_to_working_memory_weight}")
+
+        # === Working Memory 재귀 연결 (지속 활성화) ===
+        self.working_memory_recurrent = self.model.add_synapse_population(
+            "wm_recurrent", "SPARSE", self.working_memory, self.working_memory,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.working_memory_recurrent_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 10.0}),  # 느린 감쇠
+            init_sparse_connectivity("FixedProbability", {"prob": 0.1})
+        )
+        print(f"    WM Recurrent: {self.config.working_memory_recurrent_weight} (persistent activity)")
+
+        # === Working Memory → Goal Units ===
+        self._create_static_synapse(
+            "wm_to_goal_food", self.working_memory, self.goal_food,
+            self.config.working_memory_to_goal_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "wm_to_goal_safety", self.working_memory, self.goal_safety,
+            self.config.working_memory_to_goal_weight, sparsity=0.1)
+
+        # === 내부 상태 → Goal Units ===
+        # Hunger → Goal_Food (배고프면 음식 목표 활성화)
+        self._create_static_synapse(
+            "hunger_to_goal_food", self.hunger_drive, self.goal_food,
+            self.config.hunger_to_goal_food_weight, sparsity=0.1)
+
+        # Fear → Goal_Safety (공포 시 안전 목표 활성화)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_goal_safety", self.fear_response, self.goal_safety,
+                self.config.fear_to_goal_safety_weight, sparsity=0.1)
+
+        print(f"    Hunger→Goal_Food: {self.config.hunger_to_goal_food_weight}")
+        print(f"    Fear→Goal_Safety: {self.config.fear_to_goal_safety_weight}")
+
+        # === Goal Unit WTA 경쟁 ===
+        self._create_static_synapse(
+            "goal_food_to_safety", self.goal_food, self.goal_safety,
+            self.config.goal_wta_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "goal_safety_to_food", self.goal_safety, self.goal_food,
+            self.config.goal_wta_weight, sparsity=0.15)
+
+        print(f"    Goal WTA: {self.config.goal_wta_weight} (competition)")
+
+        # === Goal_Safety → Inhibitory Control ===
+        self._create_static_synapse(
+            "goal_safety_to_inhibitory", self.goal_safety, self.inhibitory_control,
+            self.config.goal_safety_to_inhibitory_weight, sparsity=0.15)
+
+        # === Inhibitory Control → Basal Ganglia Direct (억제) ===
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "inhibitory_to_direct", self.inhibitory_control, self.direct_pathway,
+                self.config.inhibitory_to_direct_weight, sparsity=0.1)
+            print(f"    Inhibitory→Direct: {self.config.inhibitory_to_direct_weight} (suppress impulsive Go)")
+
+        # === Inhibitory Control → Motor (직접 억제) ===
+        self._create_static_synapse(
+            "inhibitory_to_motor_left", self.inhibitory_control, self.motor_left,
+            self.config.inhibitory_to_motor_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "inhibitory_to_motor_right", self.inhibitory_control, self.motor_right,
+            self.config.inhibitory_to_motor_weight, sparsity=0.08)
+
+        print(f"    Inhibitory→Motor: {self.config.inhibitory_to_motor_weight}")
+
+        # === Goal_Food → Motor (목표 지향 행동) ===
+        # 음식 목표가 활성화되면 Motor 활성화 (탐색 촉진)
+        self._create_static_synapse(
+            "goal_food_to_motor_left", self.goal_food, self.motor_left,
+            self.config.goal_food_to_motor_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "goal_food_to_motor_right", self.goal_food, self.motor_right,
+            self.config.goal_food_to_motor_weight, sparsity=0.08)
+
+        print(f"    Goal_Food→Motor: {self.config.goal_food_to_motor_weight} (goal-directed)")
+
+        print(f"  PFC circuit complete: {self.config.n_working_memory + self.config.n_goal_food + self.config.n_goal_safety + self.config.n_inhibitory_control} neurons")
+
+    def _build_cerebellum_circuit(self):
+        """
+        Phase 6a: Cerebellum (소뇌) 구축
+
+        구성:
+        1. Granule Cells - 입력 통합, 희소 표현
+        2. Purkinje Cells - 운동 조절, 오류 학습
+        3. Deep Nuclei - 최종 운동 출력
+        4. Error Signal - 오류 감지 (Climbing Fiber)
+
+        연결:
+        - 입력: Motor, Sensory → Granule Cells
+        - 내부: Granule → Purkinje → Deep Nuclei
+        - 출력: Deep Nuclei → Motor (조절)
+        - 오류: Error → Purkinje (학습 신호)
+        """
+        print("  Phase 6a: Building Cerebellum...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. Granule Cells (과립세포) ===
+        self.granule_cells = self.model.add_neuron_population(
+            "granule_cells", self.config.n_granule_cells,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 2. Purkinje Cells (푸르키네세포) ===
+        self.purkinje_cells = self.model.add_neuron_population(
+            "purkinje_cells", self.config.n_purkinje_cells,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 3. Deep Cerebellar Nuclei (심부핵) ===
+        self.deep_nuclei = self.model.add_neuron_population(
+            "deep_nuclei", self.config.n_deep_nuclei,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 4. Error Signal (오류 신호 - Climbing Fiber 역할) ===
+        self.error_signal = self.model.add_neuron_population(
+            "error_signal", self.config.n_error_signal,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    Granule Cells: {self.config.n_granule_cells} neurons")
+        print(f"    Purkinje Cells: {self.config.n_purkinje_cells} neurons")
+        print(f"    Deep Nuclei: {self.config.n_deep_nuclei} neurons")
+        print(f"    Error Signal: {self.config.n_error_signal} neurons")
+
+        # === 입력 연결: Motor/Sensory → Granule Cells ===
+        # Motor efference copy (운동 명령 복사)
+        self._create_static_synapse(
+            "motor_left_to_granule", self.motor_left, self.granule_cells,
+            self.config.motor_to_granule_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "motor_right_to_granule", self.motor_right, self.granule_cells,
+            self.config.motor_to_granule_weight, sparsity=0.1)
+
+        # Sensory → Granule (현재 감각 상태)
+        self._create_static_synapse(
+            "food_eye_left_to_granule", self.food_eye_left, self.granule_cells,
+            self.config.sensory_to_granule_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "food_eye_right_to_granule", self.food_eye_right, self.granule_cells,
+            self.config.sensory_to_granule_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "wall_eye_left_to_granule", self.wall_eye_left, self.granule_cells,
+            self.config.sensory_to_granule_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "wall_eye_right_to_granule", self.wall_eye_right, self.granule_cells,
+            self.config.sensory_to_granule_weight, sparsity=0.08)
+
+        print(f"    Motor→Granule: {self.config.motor_to_granule_weight} (efference copy)")
+        print(f"    Sensory→Granule: {self.config.sensory_to_granule_weight}")
+
+        # === Granule → Purkinje (Parallel Fibers) ===
+        # DENSE 연결로 학습 가능하게 설정
+        self.granule_to_purkinje = self.model.add_synapse_population(
+            "granule_to_purkinje", "DENSE",
+            self.granule_cells, self.purkinje_cells,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.granule_to_purkinje_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0})
+        )
+
+        print(f"    Granule→Purkinje: {self.config.granule_to_purkinje_weight} (parallel fibers)")
+
+        # === Error Signal → Purkinje (Climbing Fibers) ===
+        self._create_static_synapse(
+            "error_to_purkinje", self.error_signal, self.purkinje_cells,
+            self.config.error_to_purkinje_weight, sparsity=0.2)
+
+        print(f"    Error→Purkinje: {self.config.error_to_purkinje_weight} (climbing fibers)")
+
+        # === Purkinje → Deep Nuclei (억제) ===
+        self._create_static_synapse(
+            "purkinje_to_deep", self.purkinje_cells, self.deep_nuclei,
+            self.config.purkinje_to_deep_weight, sparsity=0.15)
+
+        print(f"    Purkinje→Deep: {self.config.purkinje_to_deep_weight} (inhibitory)")
+
+        # === Deep Nuclei 기저 활성화 ===
+        # Purkinje 억제가 없을 때 기본 활성화 (tonic activity)
+        # Granule에서 직접 흥분 입력도 받음
+        self._create_static_synapse(
+            "granule_to_deep", self.granule_cells, self.deep_nuclei,
+            8.0, sparsity=0.1)  # 기저 흥분
+
+        # === Deep Nuclei → Motor (운동 조절) ===
+        self._create_static_synapse(
+            "deep_to_motor_left", self.deep_nuclei, self.motor_left,
+            self.config.deep_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "deep_to_motor_right", self.deep_nuclei, self.motor_right,
+            self.config.deep_to_motor_weight, sparsity=0.1)
+
+        print(f"    Deep→Motor: {self.config.deep_to_motor_weight} (motor modulation)")
+
+        # === Pain/Wall → Error Signal ===
+        # 오류 발생 시 (Pain Zone 진입, 벽 근처) Error Signal 활성화
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "pain_to_error", self.pain_eye_left, self.error_signal,
+                25.0, sparsity=0.15)
+            self._create_static_synapse(
+                "pain_to_error_r", self.pain_eye_right, self.error_signal,
+                25.0, sparsity=0.15)
+            self._create_static_synapse(
+                "fear_to_error", self.fear_response, self.error_signal,
+                20.0, sparsity=0.1)
+
+        # Wall → Error (벽에 가까우면 오류)
+        self._create_static_synapse(
+            "wall_to_error_l", self.wall_eye_left, self.error_signal,
+            15.0, sparsity=0.1)
+        self._create_static_synapse(
+            "wall_to_error_r", self.wall_eye_right, self.error_signal,
+            15.0, sparsity=0.1)
+
+        print(f"    Pain/Wall→Error: error signal triggers")
+
+        total_neurons = (self.config.n_granule_cells + self.config.n_purkinje_cells +
+                        self.config.n_deep_nuclei + self.config.n_error_signal)
+        print(f"  Cerebellum circuit complete: {total_neurons} neurons")
+
+    def _build_thalamus_circuit(self):
+        """
+        Phase 6b: Thalamus (시상) 구축
+
+        구성:
+        1. Food Relay - 음식 감각 중계
+        2. Danger Relay - 위험 감각 중계
+        3. TRN (Thalamic Reticular Nucleus) - 억제성 게이팅
+        4. Arousal - 각성 수준 조절
+
+        연결:
+        - 입력: Food Eye → Food Relay, Pain/Wall → Danger Relay
+        - 게이팅: Hunger/Fear → TRN → Relay (선택적 통과)
+        - 주의: Goal → Relay (목표 관련 증폭)
+        - 출력: Relay → Motor/Amygdala (증폭된 신호)
+        - 각성: Energy → Arousal → Motor/Relay
+        """
+        print("  Phase 6b: Building Thalamus...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. Food Relay (음식 감각 중계) ===
+        self.food_relay = self.model.add_neuron_population(
+            "food_relay", self.config.n_food_relay,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 2. Danger Relay (위험 감각 중계) ===
+        self.danger_relay = self.model.add_neuron_population(
+            "danger_relay", self.config.n_danger_relay,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 3. TRN (Thalamic Reticular Nucleus - 억제성 게이팅) ===
+        self.trn = self.model.add_neuron_population(
+            "trn", self.config.n_trn,
+            sensory_lif_model, lif_params, lif_init)
+
+        # === 4. Arousal (각성 수준 조절) ===
+        self.arousal = self.model.add_neuron_population(
+            "arousal", self.config.n_arousal,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    Food Relay: {self.config.n_food_relay} neurons")
+        print(f"    Danger Relay: {self.config.n_danger_relay} neurons")
+        print(f"    TRN: {self.config.n_trn} neurons")
+        print(f"    Arousal: {self.config.n_arousal} neurons")
+
+        # === 감각 → Relay 연결 ===
+        # Food Eye → Food Relay
+        self._create_static_synapse(
+            "food_eye_left_to_food_relay", self.food_eye_left, self.food_relay,
+            self.config.food_eye_to_food_relay_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "food_eye_right_to_food_relay", self.food_eye_right, self.food_relay,
+            self.config.food_eye_to_food_relay_weight, sparsity=0.15)
+
+        print(f"    Food Eye→Food Relay: {self.config.food_eye_to_food_relay_weight}")
+
+        # Pain/Wall → Danger Relay
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "pain_left_to_danger_relay", self.pain_eye_left, self.danger_relay,
+                self.config.pain_to_danger_relay_weight, sparsity=0.15)
+            self._create_static_synapse(
+                "pain_right_to_danger_relay", self.pain_eye_right, self.danger_relay,
+                self.config.pain_to_danger_relay_weight, sparsity=0.15)
+
+        self._create_static_synapse(
+            "wall_left_to_danger_relay", self.wall_eye_left, self.danger_relay,
+            self.config.wall_to_danger_relay_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "wall_right_to_danger_relay", self.wall_eye_right, self.danger_relay,
+            self.config.wall_to_danger_relay_weight, sparsity=0.12)
+
+        print(f"    Pain/Wall→Danger Relay: {self.config.pain_to_danger_relay_weight}/{self.config.wall_to_danger_relay_weight}")
+
+        # === 내부 상태 → TRN (게이팅 조절) ===
+        # Hunger → TRN 억제 (배고프면 Food 게이트 개방)
+        self._create_static_synapse(
+            "hunger_to_trn", self.hunger_drive, self.trn,
+            self.config.hunger_to_trn_weight, sparsity=0.1)
+
+        # Fear → TRN 억제 (공포 시 Danger 게이트 개방)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_trn", self.fear_response, self.trn,
+                self.config.fear_to_trn_weight, sparsity=0.1)
+
+        print(f"    Hunger/Fear→TRN: {self.config.hunger_to_trn_weight}/{self.config.fear_to_trn_weight} (gate control)")
+
+        # === TRN → Relay (억제성 게이팅) ===
+        self._create_static_synapse(
+            "trn_to_food_relay", self.trn, self.food_relay,
+            self.config.trn_to_food_relay_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "trn_to_danger_relay", self.trn, self.danger_relay,
+            self.config.trn_to_danger_relay_weight, sparsity=0.15)
+
+        print(f"    TRN→Relay: {self.config.trn_to_food_relay_weight} (inhibitory gating)")
+
+        # === Goal → Relay (주의 집중) ===
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "goal_food_to_food_relay", self.goal_food, self.food_relay,
+                self.config.goal_food_to_food_relay_weight, sparsity=0.15)
+            self._create_static_synapse(
+                "goal_safety_to_danger_relay", self.goal_safety, self.danger_relay,
+                self.config.goal_safety_to_danger_relay_weight, sparsity=0.15)
+
+            print(f"    Goal→Relay: {self.config.goal_food_to_food_relay_weight} (attention)")
+
+        # === Relay → 출력 (증폭된 감각) ===
+        # Food Relay → Motor (음식 방향 편향)
+        self._create_static_synapse(
+            "food_relay_to_motor_left", self.food_relay, self.motor_left,
+            self.config.food_relay_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "food_relay_to_motor_right", self.food_relay, self.motor_right,
+            self.config.food_relay_to_motor_weight, sparsity=0.1)
+
+        # Danger Relay → Amygdala (위험 신호 증폭)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "danger_relay_to_la", self.danger_relay, self.lateral_amygdala,
+                self.config.danger_relay_to_amygdala_weight, sparsity=0.12)
+
+        # Danger Relay → Motor (직접 회피 촉진)
+        self._create_static_synapse(
+            "danger_relay_to_motor_left", self.danger_relay, self.motor_left,
+            self.config.danger_relay_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "danger_relay_to_motor_right", self.danger_relay, self.motor_right,
+            self.config.danger_relay_to_motor_weight, sparsity=0.1)
+
+        print(f"    Relay→Output: Food→Motor {self.config.food_relay_to_motor_weight}, Danger→Amyg {self.config.danger_relay_to_amygdala_weight}")
+
+        # === 각성 조절 ===
+        # Low Energy → Arousal (배고프면 각성 상승)
+        self._create_static_synapse(
+            "low_energy_to_arousal", self.low_energy_sensor, self.arousal,
+            self.config.low_energy_to_arousal_weight, sparsity=0.15)
+
+        # High Energy → Arousal (배부르면 각성 감소)
+        self._create_static_synapse(
+            "high_energy_to_arousal", self.high_energy_sensor, self.arousal,
+            self.config.high_energy_to_arousal_weight, sparsity=0.15)
+
+        print(f"    Energy→Arousal: Low {self.config.low_energy_to_arousal_weight}, High {self.config.high_energy_to_arousal_weight}")
+
+        # Arousal → Motor (전체 활동 수준)
+        self._create_static_synapse(
+            "arousal_to_motor_left", self.arousal, self.motor_left,
+            self.config.arousal_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "arousal_to_motor_right", self.arousal, self.motor_right,
+            self.config.arousal_to_motor_weight, sparsity=0.1)
+
+        # Arousal → Relay (감각 민감도)
+        self._create_static_synapse(
+            "arousal_to_food_relay", self.arousal, self.food_relay,
+            self.config.arousal_to_relay_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "arousal_to_danger_relay", self.arousal, self.danger_relay,
+            self.config.arousal_to_relay_weight, sparsity=0.1)
+
+        print(f"    Arousal→Motor/Relay: {self.config.arousal_to_motor_weight}/{self.config.arousal_to_relay_weight}")
+
+        total_neurons = (self.config.n_food_relay + self.config.n_danger_relay +
+                        self.config.n_trn + self.config.n_arousal)
+        print(f"  Thalamus circuit complete: {total_neurons} neurons")
+
+    def trigger_error_signal(self, error_type: str = "general", intensity: float = 1.0):
+        """
+        Phase 6a: 오류 발생 시 Error Signal 활성화
+
+        Args:
+            error_type: 오류 유형 ('wall', 'pain', 'collision')
+            intensity: 오류 강도 (0~1)
+        """
+        if not self.config.cerebellum_enabled:
+            return
+
+        # Error Signal 뉴런에 입력 전류 주입
+        error_current = intensity * 60.0
+        self.error_signal.vars["I_input"].view[:] = error_current
+        self.error_signal.vars["I_input"].push_to_device()
+
+        return {"error_type": error_type, "intensity": intensity}
+
     def release_dopamine(self, reward_magnitude: float = 1.0):
         """
         Phase 4: 보상 시 Dopamine 방출
@@ -1214,6 +1826,30 @@ class ForagerBrain:
         place_cell_spikes = 0
         food_memory_spikes = 0
 
+        # Phase 4 스파이크 카운트
+        striatum_spikes = 0
+        direct_spikes = 0
+        indirect_spikes = 0
+        dopamine_spikes = 0
+
+        # Phase 5 스파이크 카운트
+        working_memory_spikes = 0
+        goal_food_spikes = 0
+        goal_safety_spikes = 0
+        inhibitory_spikes = 0
+
+        # Phase 6a 스파이크 카운트
+        granule_spikes = 0
+        purkinje_spikes = 0
+        deep_nuclei_spikes = 0
+        error_spikes = 0
+
+        # Phase 6b 스파이크 카운트
+        food_relay_spikes = 0
+        danger_relay_spikes = 0
+        trn_spikes = 0
+        arousal_spikes = 0
+
         for _ in range(10):
             self.model.step_time()
 
@@ -1256,6 +1892,54 @@ class ForagerBrain:
                     self.food_memory.vars["RefracTime"].pull_from_device()
                     food_memory_spikes += np.sum(self.food_memory.vars["RefracTime"].view > self.spike_threshold)
 
+            # Phase 4 스파이크 카운팅
+            if self.config.basal_ganglia_enabled:
+                self.striatum.vars["RefracTime"].pull_from_device()
+                self.direct_pathway.vars["RefracTime"].pull_from_device()
+                self.indirect_pathway.vars["RefracTime"].pull_from_device()
+                self.dopamine_neurons.vars["RefracTime"].pull_from_device()
+
+                striatum_spikes += np.sum(self.striatum.vars["RefracTime"].view > self.spike_threshold)
+                direct_spikes += np.sum(self.direct_pathway.vars["RefracTime"].view > self.spike_threshold)
+                indirect_spikes += np.sum(self.indirect_pathway.vars["RefracTime"].view > self.spike_threshold)
+                dopamine_spikes += np.sum(self.dopamine_neurons.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 5 스파이크 카운팅
+            if self.config.prefrontal_enabled:
+                self.working_memory.vars["RefracTime"].pull_from_device()
+                self.goal_food.vars["RefracTime"].pull_from_device()
+                self.goal_safety.vars["RefracTime"].pull_from_device()
+                self.inhibitory_control.vars["RefracTime"].pull_from_device()
+
+                working_memory_spikes += np.sum(self.working_memory.vars["RefracTime"].view > self.spike_threshold)
+                goal_food_spikes += np.sum(self.goal_food.vars["RefracTime"].view > self.spike_threshold)
+                goal_safety_spikes += np.sum(self.goal_safety.vars["RefracTime"].view > self.spike_threshold)
+                inhibitory_spikes += np.sum(self.inhibitory_control.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 6a 스파이크 카운팅
+            if self.config.cerebellum_enabled:
+                self.granule_cells.vars["RefracTime"].pull_from_device()
+                self.purkinje_cells.vars["RefracTime"].pull_from_device()
+                self.deep_nuclei.vars["RefracTime"].pull_from_device()
+                self.error_signal.vars["RefracTime"].pull_from_device()
+
+                granule_spikes += np.sum(self.granule_cells.vars["RefracTime"].view > self.spike_threshold)
+                purkinje_spikes += np.sum(self.purkinje_cells.vars["RefracTime"].view > self.spike_threshold)
+                deep_nuclei_spikes += np.sum(self.deep_nuclei.vars["RefracTime"].view > self.spike_threshold)
+                error_spikes += np.sum(self.error_signal.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 6b 스파이크 카운팅
+            if self.config.thalamus_enabled:
+                self.food_relay.vars["RefracTime"].pull_from_device()
+                self.danger_relay.vars["RefracTime"].pull_from_device()
+                self.trn.vars["RefracTime"].pull_from_device()
+                self.arousal.vars["RefracTime"].pull_from_device()
+
+                food_relay_spikes += np.sum(self.food_relay.vars["RefracTime"].view > self.spike_threshold)
+                danger_relay_spikes += np.sum(self.danger_relay.vars["RefracTime"].view > self.spike_threshold)
+                trn_spikes += np.sum(self.trn.vars["RefracTime"].view > self.spike_threshold)
+                arousal_spikes += np.sum(self.arousal.vars["RefracTime"].view > self.spike_threshold)
+
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
         max_spikes_drive = self.config.n_hunger_drive * 5
@@ -1291,6 +1975,70 @@ class ForagerBrain:
             place_cell_rate = place_cell_spikes / max_spikes_place
             food_memory_rate = food_memory_spikes / max_spikes_food_memory
 
+        # Phase 4 스파이크율
+        striatum_rate = 0.0
+        direct_rate = 0.0
+        indirect_rate = 0.0
+        dopamine_rate = 0.0
+        if self.config.basal_ganglia_enabled:
+            max_spikes_striatum = self.config.n_striatum * 5
+            max_spikes_direct = self.config.n_direct_pathway * 5
+            max_spikes_indirect = self.config.n_indirect_pathway * 5
+            max_spikes_dopamine = self.config.n_dopamine * 5
+
+            striatum_rate = striatum_spikes / max_spikes_striatum
+            direct_rate = direct_spikes / max_spikes_direct
+            indirect_rate = indirect_spikes / max_spikes_indirect
+            dopamine_rate = dopamine_spikes / max_spikes_dopamine
+
+        # Phase 5 스파이크율
+        working_memory_rate = 0.0
+        goal_food_rate = 0.0
+        goal_safety_rate = 0.0
+        inhibitory_rate = 0.0
+        if self.config.prefrontal_enabled:
+            max_spikes_wm = self.config.n_working_memory * 5
+            max_spikes_goal_food = self.config.n_goal_food * 5
+            max_spikes_goal_safety = self.config.n_goal_safety * 5
+            max_spikes_inhibitory = self.config.n_inhibitory_control * 5
+
+            working_memory_rate = working_memory_spikes / max_spikes_wm
+            goal_food_rate = goal_food_spikes / max_spikes_goal_food
+            goal_safety_rate = goal_safety_spikes / max_spikes_goal_safety
+            inhibitory_rate = inhibitory_spikes / max_spikes_inhibitory
+
+        # Phase 6a 스파이크율
+        granule_rate = 0.0
+        purkinje_rate = 0.0
+        deep_nuclei_rate = 0.0
+        error_rate = 0.0
+        if self.config.cerebellum_enabled:
+            max_spikes_granule = self.config.n_granule_cells * 5
+            max_spikes_purkinje = self.config.n_purkinje_cells * 5
+            max_spikes_deep = self.config.n_deep_nuclei * 5
+            max_spikes_error = self.config.n_error_signal * 5
+
+            granule_rate = granule_spikes / max_spikes_granule
+            purkinje_rate = purkinje_spikes / max_spikes_purkinje
+            deep_nuclei_rate = deep_nuclei_spikes / max_spikes_deep
+            error_rate = error_spikes / max_spikes_error
+
+        # Phase 6b 스파이크율
+        food_relay_rate = 0.0
+        danger_relay_rate = 0.0
+        trn_rate = 0.0
+        arousal_rate = 0.0
+        if self.config.thalamus_enabled:
+            max_spikes_food_relay = self.config.n_food_relay * 5
+            max_spikes_danger_relay = self.config.n_danger_relay * 5
+            max_spikes_trn = self.config.n_trn * 5
+            max_spikes_arousal = self.config.n_arousal * 5
+
+            food_relay_rate = food_relay_spikes / max_spikes_food_relay
+            danger_relay_rate = danger_relay_spikes / max_spikes_danger_relay
+            trn_rate = trn_spikes / max_spikes_trn
+            arousal_rate = arousal_spikes / max_spikes_arousal
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -1324,6 +2072,35 @@ class ForagerBrain:
             # Phase 3 뉴런 활성화
             "place_cell_rate": place_cell_rate,
             "food_memory_rate": food_memory_rate,
+
+            # Phase 4 뉴런 활성화
+            "striatum_rate": striatum_rate,
+            "direct_rate": direct_rate,
+            "indirect_rate": indirect_rate,
+            "dopamine_rate": dopamine_rate,
+            "dopamine_level": self.dopamine_level if self.config.basal_ganglia_enabled else 0.0,
+
+            # Phase 5 뉴런 활성화
+            "working_memory_rate": working_memory_rate,
+            "goal_food_rate": goal_food_rate,
+            "goal_safety_rate": goal_safety_rate,
+            "inhibitory_rate": inhibitory_rate,
+
+            # Phase 6a 뉴런 활성화
+            "granule_rate": granule_rate,
+            "purkinje_rate": purkinje_rate,
+            "deep_nuclei_rate": deep_nuclei_rate,
+            "error_rate": error_rate,
+
+            # Phase 6b 뉴런 활성화
+            "food_relay_rate": food_relay_rate,
+            "danger_relay_rate": danger_relay_rate,
+            "trn_rate": trn_rate,
+            "arousal_rate": arousal_rate,
+
+            # 에이전트 위치 (Place Cell 시각화용)
+            "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
+            "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
 
             # 출력
             "angle_delta": angle_delta,
@@ -1400,6 +2177,11 @@ class ForagerBrain:
         if self.config.hippocampus_enabled:
             sensory_pops.append(self.place_cells)
 
+        # Phase 6b: Thalamus 추가 (I_input 있음)
+        if self.config.thalamus_enabled:
+            sensory_pops.extend([self.food_relay, self.danger_relay,
+                                 self.trn, self.arousal])
+
         for pop in sensory_pops:
             pop.vars["V"].view[:] = self.config.v_rest
             pop.vars["RefracTime"].view[:] = 0.0
@@ -1428,6 +2210,16 @@ class ForagerBrain:
         if self.config.basal_ganglia_enabled:
             lif_pops.extend([self.striatum, self.direct_pathway, self.indirect_pathway])
 
+        # Phase 5: Prefrontal Cortex 추가
+        if self.config.prefrontal_enabled:
+            lif_pops.extend([self.working_memory, self.goal_food,
+                            self.goal_safety, self.inhibitory_control])
+
+        # Phase 6a: Cerebellum 추가
+        if self.config.cerebellum_enabled:
+            lif_pops.extend([self.granule_cells, self.purkinje_cells,
+                            self.deep_nuclei, self.error_signal])
+
         for pop in lif_pops:
             pop.vars["V"].view[:] = self.config.v_rest
             pop.vars["RefracTime"].view[:] = 0.0
@@ -1448,11 +2240,11 @@ class ForagerBrain:
 def run_training(episodes: int = 20, render_mode: str = "none",
                 log_level: str = "normal", debug: bool = False,
                 no_amygdala: bool = False, no_pain: bool = False,
-                persist_learning: bool = False):
-    """Phase 2a+2b 훈련 실행"""
+                persist_learning: bool = False, fps: int = 10):
+    """Phase 6b 훈련 실행"""
 
     print("=" * 70)
-    print("Phase 4: Forager Training with Basal Ganglia (Dopamine)")
+    print("Phase 6b: Forager Training with Thalamus (Sensory Gating & Attention)")
     print("=" * 70)
     if persist_learning:
         print("  [!] PERSIST LEARNING ENABLED - weights saved/loaded between episodes")
@@ -1470,6 +2262,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         print("  [!] Amygdala DISABLED (Phase 2a mode)")
 
     env = ForagerGym(env_config, render_mode=render_mode)
+    env.render_fps = fps  # FPS 설정 (시각화 속도 조절)
     brain = ForagerBrain(brain_config)
 
     # 통계
@@ -1510,6 +2303,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
             # Phase 4: Dopamine 감쇠 (매 스텝)
             brain.decay_dopamine()
+
+            # 시각화를 위해 뇌 정보 전달 (render 전에 설정)
+            env.set_brain_info(info)
 
             # 환경 스텝
             obs, reward, done, env_info = env.step(action)
@@ -1668,6 +2464,8 @@ if __name__ == "__main__":
                        help="Disable Pain Zone (Phase 2a mode)")
     parser.add_argument("--persist-learning", action="store_true",
                        help="Save/load Hippocampus weights between episodes (cumulative learning)")
+    parser.add_argument("--fps", type=int, default=10,
+                       help="Render FPS (default: 10, slower=easier to observe)")
     args = parser.parse_args()
 
     run_training(
@@ -1677,5 +2475,6 @@ if __name__ == "__main__":
         debug=args.debug,
         no_amygdala=args.no_amygdala,
         no_pain=args.no_pain,
-        persist_learning=args.persist_learning
+        persist_learning=args.persist_learning,
+        fps=args.fps
     )

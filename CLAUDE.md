@@ -142,6 +142,44 @@ python ... --episodes 20 --enemies 5
 1. **Pygame 렌더링:** 환경, 에이전트, 상태 바, 뉴런 패널
 2. **그래프 저장:** Energy/Drives 시계열, 궤적, 모터 출력
 3. **체크포인트 메타데이터:** 학습 이력 포함
+4. **뇌 활성화 패널 (NEW):** 실시간 뇌 영역별 활성화 시각화
+
+**뇌 활성화 패널 (Brain Activity Panel):**
+```
+┌─────────────────────────────┐
+│  Brain Activity             │
+├─────────────────────────────┤
+│  HYPOTHALAMUS               │
+│  ▓▓▓▓▓░░░░░ Hunger    45%   │
+│  ▓▓░░░░░░░░ Satiety   20%   │
+├─────────────────────────────┤
+│  AMYGDALA                   │
+│  ▓▓▓░░░░░░░ LA        30%   │
+│  ▓▓░░░░░░░░ CEA       20%   │
+│  ▓░░░░░░░░░ Fear      10%   │
+├─────────────────────────────┤
+│  HIPPOCAMPUS                │
+│  ▓▓▓▓▓▓▓░░░ Place     70%   │
+│  ▓▓▓░░░░░░░ FoodMem   30%   │
+├─────────────────────────────┤
+│  BASAL GANGLIA              │
+│  ▓▓▓▓░░░░░░ Striatum  40%   │
+│  ▓▓▓░░░░░░░ Direct    30%   │
+│  ▓▓░░░░░░░░ Indirect  20%   │
+│  ▓▓▓▓▓▓▓▓░░ Dopamine  80%   │
+├─────────────────────────────┤
+│  PREFRONTAL                 │
+│  ▓▓▓▓░░░░░░ WorkMem   40%   │
+│  ▓▓▓▓▓▓░░░░ GoalFood  60%   │
+│  ▓▓░░░░░░░░ GoalSafe  20%   │
+│  ▓░░░░░░░░░ Inhibit   10%   │
+├─────────────────────────────┤
+│  MOTOR OUTPUT               │
+│  ▓▓▓░░░░░░░ Motor L   30%   │
+│  ▓▓▓▓▓▓░░░░ Motor R   60%   │
+│  Turn: >> RIGHT             │
+└─────────────────────────────┘
+```
 
 > **상세 스펙:** [docs/PHASE2A_DESIGN.md - 섹션 4.3](docs/PHASE2A_DESIGN.md)
 
@@ -217,21 +255,38 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║  4: 기저핵 - Dopamine ✓ 완료 (2025-01-30)                    ║
 ║      └── Striatum + Direct/Indirect pathways, 생존율 40%     ║
 ║      └── 랜덤 환경에서 즉각적 향상 없음 (습관 학습 특성)     ║
+║                                                               ║
+║  5: 전전두엽 - Executive Function ✓ 완료 (2025-01-31)        ║
+║      └── Working Memory + Goal Units + Inhibitory Control    ║
+║      └── 목표 지향 행동, 충동 억제, 의사결정                 ║
+║                                                               ║
+║  6a: 소뇌 - Motor Coordination ✓ 완료 (2025-01-31)           ║
+║      └── Granule + Purkinje + Deep Nuclei + Error Signal     ║
+║      └── 운동 조정, 오류 기반 학습, 생존율 80%               ║
+║                                                               ║
+║  6b: 시상 - Sensory Gating & Attention ✓ 완료 (2025-01-31)   ║
+║      └── Food Relay + Danger Relay + TRN + Arousal           ║
+║      └── 감각 게이팅, 선택적 주의, 각성 조절                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
-### 현재 상태: Phase 4 완료 (6,700 뉴런)
+### 현재 상태: Phase 6b 완료 (8,000 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 4 결과 (Basal Ganglia + Dopamine)                      ║
+║  Phase 6b 결과 (Thalamus - 시상)                              ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  생존율:        40% ✓ (목표: >40%, 경계)                      ║
-║  Starve Death:  60%                                           ║
-║  Pain Avoidance:94% ✓ (목표: <15% pain time)                  ║
-║  뉴런 수:       6,700 (Hypo+Amyg+Hippo+BG)                     ║
-║  학습:          Dopamine 보상 신호 + Hebbian 학습             ║
-║  참고:          습관 학습은 패턴 환경에서 더 효과적           ║
+║  생존율:        테스트 중 (Pain Avoidance 94.7% 유지)         ║
+║  뉴런 수:       8,000 (Phase 6a: 7,650 + Thalamus: 350)       ║
+║  신규 회로:                                                   ║
+║    - Food Relay (100): 음식 감각 중계                        ║
+║    - Danger Relay (100): 위험 감각 중계                      ║
+║    - TRN (100): 억제성 게이팅                                ║
+║    - Arousal (50): 각성 수준 조절                            ║
+║  구현 기능:                                                   ║
+║    - 감각 게이팅: Hunger/Fear → TRN → Relay                  ║
+║    - 선택적 주의: Goal → Relay (목표 관련 증폭)              ║
+║    - 각성 조절: Energy → Arousal → Motor                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 

@@ -569,6 +569,10 @@ class ForagerGym:
                     self.foods.append((x, y))
                     break
 
+    def set_brain_info(self, brain_info: dict):
+        """뇌 활성화 정보 설정 (시각화용)"""
+        self.brain_info = brain_info
+
     def render(self):
         """Pygame 렌더링"""
         if self.render_mode != "pygame":
@@ -578,11 +582,12 @@ class ForagerGym:
         if self.screen is None:
             import pygame
             pygame.init()
-            self.screen = pygame.display.set_mode((600, 500))  # 환경 400x400 + 패널
-            pygame.display.set_caption("ForagerGym - Phase 2b (Fear Conditioning)")
+            self.screen = pygame.display.set_mode((900, 650))  # 환경 400 + 정보 200 + 뇌 300 + 소뇌
+            pygame.display.set_caption("ForagerGym - Phase 6a (Cerebellum)")
             self.clock = pygame.time.Clock()
             self.font = pygame.font.Font(None, 24)
             self.small_font = pygame.font.Font(None, 18)
+            self.brain_info = {}  # 뇌 활성화 정보
 
         import pygame
 
@@ -704,8 +709,425 @@ class ForagerGym:
                 text = self.font.render(danger_text, True, (255, 50, 50))
                 self.screen.blit(text, (10, status_y + 25))
 
+        # === 뇌 활성화 패널 (공간 배치형) ===
+        self._render_brain_schematic(600, 0)
+
         pygame.display.flip()
-        self.clock.tick(60)
+        # 속도 조절: 기본 15 FPS (느리게), --fast 옵션 시 60 FPS
+        target_fps = getattr(self, 'render_fps', 15)
+        self.clock.tick(target_fps)
+
+    def _render_brain_schematic(self, x: int, y: int):
+        """뇌 영역을 공간 배치하고 활성화 시 밝게 표시"""
+        import pygame
+
+        if not hasattr(self, 'brain_info') or not self.brain_info:
+            return
+
+        info = self.brain_info
+
+        # 패널 배경
+        panel_width = 280
+        panel_height = 650
+        pygame.draw.rect(self.screen, (15, 15, 20), (x, y, panel_width, panel_height))
+        pygame.draw.line(self.screen, (60, 60, 70), (x, y), (x, y + panel_height), 2)
+
+        # 타이틀
+        title = self.font.render("Brain Schematic", True, (180, 180, 220))
+        self.screen.blit(title, (x + 10, y + 5))
+
+        # === 뇌 영역 배치 (위에서 아래로: PFC → BG → Limbic → Brainstem) ===
+        region_width = 50
+        region_height = 35
+        cx = x + panel_width // 2  # 중앙 x
+
+        # 헬퍼: 활성화 기반 색상 계산
+        def get_color(base_color, activity):
+            activity = min(1.0, max(0.0, activity))
+            # 비활성: 어둡게, 활성: 밝게
+            dim = 0.2
+            brightness = dim + (1.0 - dim) * activity
+            return tuple(int(c * brightness) for c in base_color)
+
+        # 헬퍼: 영역 박스 그리기
+        def draw_region(cx, cy, w, h, color, label, activity):
+            rect = pygame.Rect(cx - w//2, cy - h//2, w, h)
+            fill_color = get_color(color, activity)
+            pygame.draw.rect(self.screen, fill_color, rect)
+            pygame.draw.rect(self.screen, (100, 100, 100), rect, 1)
+            # 라벨
+            text = self.small_font.render(label, True, (200, 200, 200))
+            text_rect = text.get_rect(center=(cx, cy))
+            self.screen.blit(text, text_rect)
+            # 활성도 표시
+            pct = self.small_font.render(f"{activity*100:.0f}%", True, (255, 255, 255))
+            self.screen.blit(pct, (cx - w//2 + 2, cy + h//2 - 12))
+
+        # 헬퍼: 연결선 그리기
+        def draw_connection(x1, y1, x2, y2, color=(60, 60, 80)):
+            pygame.draw.line(self.screen, color, (x1, y1), (x2, y2), 1)
+
+        # === 1. PREFRONTAL CORTEX (최상단) ===
+        pfc_y = y + 50
+        wm = info.get("working_memory_rate", 0)
+        gf = info.get("goal_food_rate", 0)
+        gs = info.get("goal_safety_rate", 0)
+        inh = info.get("inhibitory_rate", 0)
+
+        draw_region(cx - 55, pfc_y, 45, 30, (180, 150, 255), "WM", wm)
+        draw_region(cx, pfc_y, 45, 30, (100, 255, 150), "Goal", max(gf, gs))
+        draw_region(cx + 55, pfc_y, 45, 30, (255, 100, 150), "Inhib", inh)
+
+        # PFC 라벨
+        lbl = self.small_font.render("PREFRONTAL", True, (150, 120, 200))
+        self.screen.blit(lbl, (x + 5, pfc_y - 15))
+
+        # === 2. BASAL GANGLIA ===
+        bg_y = y + 110
+        striatum = info.get("striatum_rate", 0)
+        direct = info.get("direct_rate", 0)
+        indirect = info.get("indirect_rate", 0)
+        dopamine = info.get("dopamine_level", 0)
+
+        draw_region(cx - 40, bg_y, 50, 30, (255, 180, 50), "Stri", striatum)
+        draw_region(cx + 40, bg_y, 50, 30, (255, 255, 50), "DA", dopamine)
+        draw_region(cx - 30, bg_y + 40, 40, 25, (100, 255, 100), "Go", direct)
+        draw_region(cx + 30, bg_y + 40, 40, 25, (255, 100, 100), "NoGo", indirect)
+
+        # 연결선
+        draw_connection(cx - 40, bg_y + 15, cx - 30, bg_y + 27)
+        draw_connection(cx - 40, bg_y + 15, cx + 30, bg_y + 27)
+
+        lbl = self.small_font.render("BASAL GANGLIA", True, (200, 150, 80))
+        self.screen.blit(lbl, (x + 5, bg_y - 15))
+
+        # === 3. LIMBIC (Hypothalamus + Amygdala) ===
+        limbic_y = y + 200
+        hunger = info.get("hunger_rate", 0)
+        satiety = info.get("satiety_rate", 0)
+        fear = info.get("fear_rate", 0)
+        la = info.get("la_rate", 0)
+
+        # Hypothalamus (좌)
+        draw_region(cx - 55, limbic_y, 45, 30, (255, 150, 50), "Hung", hunger)
+        draw_region(cx - 55, limbic_y + 35, 45, 30, (50, 200, 100), "Sati", satiety)
+
+        # Amygdala (우)
+        draw_region(cx + 55, limbic_y, 45, 30, (255, 100, 100), "LA", la)
+        draw_region(cx + 55, limbic_y + 35, 45, 30, (255, 50, 50), "Fear", fear)
+
+        # 경쟁 표시 (Hunger vs Fear)
+        if hunger > 0.3 and fear > 0.3:
+            comp_color = (255, 255, 0) if hunger > fear else (255, 100, 100)
+            pygame.draw.line(self.screen, comp_color,
+                           (cx - 30, limbic_y + 17), (cx + 30, limbic_y + 17), 2)
+            vs_text = self.small_font.render("VS", True, comp_color)
+            self.screen.blit(vs_text, (cx - 8, limbic_y + 5))
+
+        lbl = self.small_font.render("HYPO", True, (150, 200, 100))
+        self.screen.blit(lbl, (x + 5, limbic_y - 10))
+        lbl = self.small_font.render("AMYG", True, (200, 100, 100))
+        self.screen.blit(lbl, (x + panel_width - 45, limbic_y - 10))
+
+        # === 4. HIPPOCAMPUS (Place Cells 그리드) ===
+        hippo_y = y + 290
+        place_rate = info.get("place_cell_rate", 0)
+        food_mem = info.get("food_memory_rate", 0)
+
+        # Place Cells를 10x10 미니 그리드로 표시 (실제 20x20 요약)
+        grid_size = 10
+        cell_size = 8
+        grid_x = cx - (grid_size * cell_size) // 2
+        grid_y = hippo_y
+
+        # Place cell 활성화 패턴 (실제 데이터가 있으면 사용, 없으면 시뮬레이션)
+        place_cells_data = info.get("place_cells_grid", None)
+        if place_cells_data is None:
+            # 에이전트 위치 기반 가우시안 패턴 생성
+            agent_x = info.get("agent_grid_x", 5)
+            agent_y = info.get("agent_grid_y", 5)
+            for i in range(grid_size):
+                for j in range(grid_size):
+                    # 가우시안 활성화
+                    dist = ((i - agent_x)**2 + (j - agent_y)**2) ** 0.5
+                    activation = max(0, 1.0 - dist / 3) * place_rate * 5
+                    activation = min(1.0, activation)
+                    color = (int(50 + 150 * activation), int(50 + 100 * activation), int(150 + 100 * activation))
+                    pygame.draw.rect(self.screen, color,
+                                   (grid_x + i * cell_size, grid_y + j * cell_size,
+                                    cell_size - 1, cell_size - 1))
+
+        # Food Memory 표시
+        draw_region(cx + 70, hippo_y + 40, 45, 30, (150, 100, 255), "FMem", food_mem)
+
+        lbl = self.small_font.render("HIPPOCAMPUS", True, (100, 100, 200))
+        self.screen.blit(lbl, (x + 5, hippo_y - 15))
+
+        # === 5. CEREBELLUM (소뇌) ===
+        cerebellum_y = y + 380
+        granule = info.get("granule_rate", 0)
+        purkinje = info.get("purkinje_rate", 0)
+        deep_nuc = info.get("deep_nuclei_rate", 0)
+        error = info.get("error_rate", 0)
+
+        # 소뇌 박스들 (좌우 배치)
+        draw_region(cx - 55, cerebellum_y, 40, 25, (200, 255, 150), "Gran", granule)
+        draw_region(cx, cerebellum_y, 40, 25, (150, 200, 255), "Purk", purkinje)
+        draw_region(cx + 55, cerebellum_y, 40, 25, (255, 200, 150), "Deep", deep_nuc)
+
+        # Error 신호 (오류 시 빨갛게)
+        error_color = (255, 50, 50) if error > 0.3 else (100, 50, 50)
+        draw_region(cx, cerebellum_y + 30, 50, 20, error_color, "Error", error)
+
+        lbl = self.small_font.render("CEREBELLUM", True, (150, 200, 150))
+        self.screen.blit(lbl, (x + 5, cerebellum_y - 15))
+
+        # === 6. THALAMUS (시상 - 감각 게이팅) ===
+        thalamus_y = y + 430
+        food_relay = info.get("food_relay_rate", 0)
+        danger_relay = info.get("danger_relay_rate", 0)
+        trn = info.get("trn_rate", 0)
+        arousal = info.get("arousal_rate", 0)
+
+        # Thalamus 박스들
+        draw_region(cx - 55, thalamus_y, 45, 25, (100, 200, 255), "Food", food_relay)
+        draw_region(cx, thalamus_y, 45, 25, (255, 150, 100), "Dang", danger_relay)
+        draw_region(cx + 55, thalamus_y, 45, 25, (150, 150, 200), "TRN", trn)
+
+        # Arousal 바 (각성 수준)
+        arousal_bar_y = thalamus_y + 30
+        bar_width = 100
+        pygame.draw.rect(self.screen, (40, 40, 50), (cx - bar_width//2, arousal_bar_y, bar_width, 12))
+        arousal_width = int(bar_width * min(1.0, arousal))
+        arousal_color = (255, 200, 100) if arousal > 0.5 else (100, 150, 200)
+        pygame.draw.rect(self.screen, arousal_color, (cx - bar_width//2, arousal_bar_y, arousal_width, 12))
+        arousal_text = self.small_font.render(f"Arousal {arousal*100:.0f}%", True, (200, 200, 200))
+        self.screen.blit(arousal_text, (cx - bar_width//2 + 15, arousal_bar_y - 1))
+
+        lbl = self.small_font.render("THALAMUS", True, (150, 180, 220))
+        self.screen.blit(lbl, (x + 5, thalamus_y - 15))
+
+        # === 7. MOTOR OUTPUT (하단) ===
+        motor_y = y + 510
+        motor_l = info.get("motor_left_rate", 0)
+        motor_r = info.get("motor_right_rate", 0)
+
+        draw_region(cx - 45, motor_y, 55, 40, (100, 200, 255), "M_L", motor_l)
+        draw_region(cx + 45, motor_y, 55, 40, (100, 255, 200), "M_R", motor_r)
+
+        # 턴 방향 화살표
+        angle_delta = info.get("angle_delta", 0)
+        arrow_x = cx
+        arrow_y = motor_y + 50
+        if abs(angle_delta) > 0.05:
+            arrow_color = (100, 200, 255) if angle_delta < 0 else (100, 255, 200)
+            arrow_dir = -1 if angle_delta < 0 else 1
+            pygame.draw.polygon(self.screen, arrow_color, [
+                (arrow_x, arrow_y),
+                (arrow_x + arrow_dir * 30, arrow_y - 10),
+                (arrow_x + arrow_dir * 30, arrow_y + 10)
+            ])
+            turn_text = "LEFT" if angle_delta < 0 else "RIGHT"
+        else:
+            pygame.draw.circle(self.screen, (150, 150, 150), (arrow_x, arrow_y), 8)
+            turn_text = "STRAIGHT"
+
+        text = self.small_font.render(turn_text, True, (200, 200, 200))
+        self.screen.blit(text, (arrow_x - 25, arrow_y + 15))
+
+        lbl = self.small_font.render("MOTOR", True, (150, 200, 200))
+        self.screen.blit(lbl, (x + 5, motor_y - 15))
+
+        # === 8. 상태 요약 (최하단) ===
+        summary_y = y + 590
+        energy = info.get("energy_input", 0.5)
+
+        # Energy bar
+        pygame.draw.rect(self.screen, (40, 40, 50), (x + 10, summary_y, panel_width - 20, 15))
+        energy_width = int((panel_width - 20) * energy)
+        energy_color = (50, 200, 50) if energy > 0.5 else (255, 200, 50) if energy > 0.25 else (255, 50, 50)
+        pygame.draw.rect(self.screen, energy_color, (x + 10, summary_y, energy_width, 15))
+        energy_text = self.small_font.render(f"Energy: {energy*100:.0f}%", True, (255, 255, 255))
+        self.screen.blit(energy_text, (x + 15, summary_y + 1))
+
+        # 현재 상태 텍스트
+        state_y = summary_y + 25
+        if fear > 0.5:
+            state = "FEAR MODE"
+            state_color = (255, 100, 100)
+        elif hunger > 0.5:
+            state = "HUNGRY"
+            state_color = (255, 200, 100)
+        elif satiety > 0.5:
+            state = "SATISFIED"
+            state_color = (100, 255, 100)
+        else:
+            state = "EXPLORING"
+            state_color = (150, 150, 200)
+
+        state_text = self.font.render(state, True, state_color)
+        self.screen.blit(state_text, (x + 10, state_y))
+
+    def _render_brain_panel(self, x: int, y: int):
+        """뇌 활성화 상태 시각화 패널"""
+        import pygame
+
+        if not hasattr(self, 'brain_info') or not self.brain_info:
+            return
+
+        info = self.brain_info
+        panel_width = 240
+        bar_height = 16
+        bar_width = 140
+        section_gap = 8
+
+        # 패널 배경
+        pygame.draw.rect(self.screen, (25, 25, 35), (x, y, panel_width, 600))
+        pygame.draw.line(self.screen, (80, 80, 80), (x, y), (x, y + 600), 2)
+
+        # 타이틀
+        title = self.font.render("Brain Activity", True, (200, 200, 255))
+        self.screen.blit(title, (x + 10, y + 10))
+
+        current_y = y + 40
+
+        # === 시상하부 (Hypothalamus) ===
+        section_title = self.small_font.render("HYPOTHALAMUS", True, (150, 255, 150))
+        self.screen.blit(section_title, (x + 10, current_y))
+        current_y += 20
+
+        hunger = info.get("hunger_rate", 0)
+        satiety = info.get("satiety_rate", 0)
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            hunger, (255, 150, 50), "Hunger")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            satiety, (50, 200, 100), "Satiety")
+        current_y += bar_height + section_gap
+
+        # === 편도체 (Amygdala) ===
+        section_title = self.small_font.render("AMYGDALA", True, (255, 150, 150))
+        self.screen.blit(section_title, (x + 10, current_y))
+        current_y += 20
+
+        fear = info.get("fear_rate", 0)
+        la = info.get("la_rate", 0)
+        cea = info.get("cea_rate", 0)
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            la, (255, 100, 100), "LA")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            cea, (255, 80, 80), "CEA")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            fear, (255, 50, 50), "Fear")
+        current_y += bar_height + section_gap
+
+        # === 해마 (Hippocampus) ===
+        section_title = self.small_font.render("HIPPOCAMPUS", True, (150, 150, 255))
+        self.screen.blit(section_title, (x + 10, current_y))
+        current_y += 20
+
+        place = info.get("place_cell_rate", 0)
+        food_mem = info.get("food_memory_rate", 0)
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            place, (100, 150, 255), "Place")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            food_mem, (150, 100, 255), "FoodMem")
+        current_y += bar_height + section_gap
+
+        # === 기저핵 (Basal Ganglia) ===
+        section_title = self.small_font.render("BASAL GANGLIA", True, (255, 200, 100))
+        self.screen.blit(section_title, (x + 10, current_y))
+        current_y += 20
+
+        striatum = info.get("striatum_rate", 0)
+        direct = info.get("direct_rate", 0)
+        indirect = info.get("indirect_rate", 0)
+        dopamine = info.get("dopamine_level", 0)
+
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            striatum, (255, 180, 50), "Striatum")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            direct, (100, 255, 100), "Direct(Go)")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            indirect, (255, 100, 100), "Indirect")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            dopamine, (255, 255, 50), "Dopamine")
+        current_y += bar_height + section_gap
+
+        # === 전전두엽 (Prefrontal Cortex) ===
+        section_title = self.small_font.render("PREFRONTAL", True, (200, 150, 255))
+        self.screen.blit(section_title, (x + 10, current_y))
+        current_y += 20
+
+        working_mem = info.get("working_memory_rate", 0)
+        goal_food = info.get("goal_food_rate", 0)
+        goal_safety = info.get("goal_safety_rate", 0)
+        inhibitory = info.get("inhibitory_rate", 0)
+
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            working_mem, (180, 150, 255), "WorkMem")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            goal_food, (100, 255, 150), "GoalFood")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            goal_safety, (255, 150, 100), "GoalSafe")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            inhibitory, (255, 100, 150), "Inhibit")
+        current_y += bar_height + section_gap
+
+        # === 모터 (Motor) ===
+        section_title = self.small_font.render("MOTOR OUTPUT", True, (200, 200, 200))
+        self.screen.blit(section_title, (x + 10, current_y))
+        current_y += 20
+
+        motor_l = info.get("motor_left_rate", 0)
+        motor_r = info.get("motor_right_rate", 0)
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            motor_l, (100, 200, 255), "Motor L")
+        current_y += bar_height + 4
+        self._draw_brain_bar(x + 15, current_y, bar_width, bar_height,
+                            motor_r, (100, 255, 200), "Motor R")
+        current_y += bar_height + section_gap
+
+        # === 행동 출력 ===
+        angle_delta = info.get("angle_delta", 0)
+        turn_text = f"Turn: {'<< LEFT' if angle_delta < -0.1 else '>> RIGHT' if angle_delta > 0.1 else '-- STRAIGHT'}"
+        turn_color = (100, 200, 255) if angle_delta < -0.1 else (100, 255, 200) if angle_delta > 0.1 else (180, 180, 180)
+        text = self.small_font.render(turn_text, True, turn_color)
+        self.screen.blit(text, (x + 15, current_y))
+
+    def _draw_brain_bar(self, x: int, y: int, width: int, height: int,
+                        value: float, color: tuple, label: str):
+        """뇌 활성화 바 그리기"""
+        import pygame
+
+        # 배경
+        pygame.draw.rect(self.screen, (40, 40, 50), (x, y, width, height))
+
+        # 채우기
+        fill_width = int(width * min(1.0, max(0.0, value)))
+        if fill_width > 0:
+            # 그라데이션 효과
+            dark_color = tuple(max(0, c - 50) for c in color)
+            pygame.draw.rect(self.screen, dark_color, (x, y, fill_width, height))
+            pygame.draw.rect(self.screen, color, (x, y, fill_width, height // 2))
+
+        # 테두리
+        pygame.draw.rect(self.screen, (80, 80, 80), (x, y, width, height), 1)
+
+        # 라벨과 값
+        label_text = self.small_font.render(f"{label}", True, (180, 180, 180))
+        value_text = self.small_font.render(f"{value*100:.0f}%", True, (255, 255, 255))
+        self.screen.blit(label_text, (x + 3, y + 1))
+        self.screen.blit(value_text, (x + width - 35, y + 1))
 
     def _get_agent_color(self) -> Tuple[int, int, int]:
         """에너지 및 Pain 상태에 따른 에이전트 색상"""
