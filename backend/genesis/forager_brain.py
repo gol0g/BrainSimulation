@@ -140,7 +140,7 @@ class ForagerBrainConfig:
     # Phase 1 회로 (벽 회피, 음식 추적)
     wall_push_weight: float = 60.0           # 벽 회피 (Push)
     wall_pull_weight: float = -40.0          # 벽 회피 (Pull)
-    food_weight: float = 25.0                # 음식 추적 (동측)
+    food_weight: float = 40.0                # 음식 추적 (동측) Phase 7: 25→40
 
     # === Phase 2b 시냅스 가중치 (신규) ===
     # Pain → LA (무조건 반사, 고정)
@@ -168,7 +168,7 @@ class ForagerBrainConfig:
     place_to_food_memory_w_max: float = 30.0   # 최대 가중치
 
     # Food Memory → Motor (약한 편향)
-    food_memory_to_motor_weight: float = 8.0   # 음식 방향 편향 (Phase 3c: 5→8, 방향 신호 강화)
+    food_memory_to_motor_weight: float = 12.0  # 음식 방향 편향 (Phase 7: 8→12, 추적 강화)
 
     # Hunger → Food Memory (배고플 때 기억 활성화)
     hunger_to_food_memory_weight: float = 10.0 # 기억 탐색 활성화 (20→10, 간섭 최소화)
@@ -228,7 +228,7 @@ class ForagerBrainConfig:
     inhibitory_to_motor_weight: float = -2.0       # 억제 → Motor 억제 (5→2, MOTOR DEAD 완화)
 
     # Goal → Motor (목표 지향 행동)
-    goal_food_to_motor_weight: float = 10.0        # 음식 목표 → Motor 활성화
+    goal_food_to_motor_weight: float = 18.0        # 음식 목표 → Motor 활성화 Phase 7: 10→18
 
     # === CEREBELLUM (Phase 6a 신규) ===
     cerebellum_enabled: bool = True                # 소뇌 활성화 여부
