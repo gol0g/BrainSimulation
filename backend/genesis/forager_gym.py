@@ -34,20 +34,20 @@ class ForagerConfig:
     agent_speed: float = 3.0
     agent_radius: float = 10.0
 
-    # 음식 (Phase 2a 테스트용: 희소 음식으로 Hunger 테스트)
-    n_food: int = 15          # 30 → 15 (음식 희소화)
-    food_radius: float = 6.0  # 8 → 6 (작아서 찾기 어려움)
-    food_value: float = 25.0  # 20 → 25 (찾으면 보상 증가)
+    # 음식 (Phase 7: Reward Freq 개선)
+    n_food: int = 35          # 25 → 35 (음식 추가 증가)
+    food_radius: float = 8.0  # 더 쉽게 찾기
+    food_value: float = 25.0  # 음식 가치 유지
 
     # 에너지 (항상성)
     energy_start: float = 50.0  # 기본 시작 에너지
     energy_max: float = 100.0
-    energy_decay_field: float = 0.15   # 0.08 → 0.15 (더 빠른 감소)
-    energy_decay_nest: float = 0.05    # 0.03 → 0.05
+    energy_decay_field: float = 0.12   # Phase 7: 0.15 → 0.12 (약간 완화)
+    energy_decay_nest: float = 0.04    # Phase 7: 0.05 → 0.04
 
     # 감각
     n_rays: int = 16  # 음식/벽 감지 레이 수
-    view_range: float = 120.0  # 시야 거리
+    view_range: float = 150.0  # 시야 거리 (Phase 7: 120 → 150)
 
     # 보상
     reward_food: float = 1.0
@@ -552,13 +552,15 @@ class ForagerGym:
         return False
 
     def _spawn_foods(self, n: int):
-        """Field에 음식 생성 (Nest 외부)"""
+        """Field에 음식 생성 (Nest 외부, Pain Zone 외부)"""
         cx, cy = self.config.width / 2, self.config.height / 2
         half = self.config.nest_size / 2
-        margin = self.config.food_radius * 2
+        # Phase 7: Pain Zone 밖에 음식 생성 (pain_zone_thickness + margin)
+        pain_margin = self.config.pain_zone_thickness + self.config.food_radius * 2
+        margin = max(pain_margin, self.config.food_radius * 2)
 
         for _ in range(n):
-            # Nest 외부에 생성 시도
+            # Nest 외부, Pain Zone 외부에 생성 시도
             for _ in range(100):  # 최대 100번 시도
                 x = np.random.uniform(margin, self.config.width - margin)
                 y = np.random.uniform(margin, self.config.height - margin)

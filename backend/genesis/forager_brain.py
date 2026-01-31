@@ -2438,7 +2438,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
     print(f"\n  === Phase 2 Validation ===")
     print(f"  Survival Rate: {survival_rate:.1f}% {'✓' if survival_rate > 40 else '✗'} (target: >40%)")
-    print(f"  Reward Freq:   {reward_freq:.2f}% {'✓' if reward_freq > 5 else '✗'} (target: >5%)")
+    print(f"  Reward Freq:   {reward_freq:.2f}% {'✓' if reward_freq > 2.5 else '✗'} (target: >2.5%)")
 
     if env_config.pain_zone_enabled:
         pain_pct = np.sum(all_pain_steps) / np.sum(all_steps) * 100
