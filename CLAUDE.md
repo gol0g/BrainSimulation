@@ -1,5 +1,7 @@
 # Genesis Brain - 생물학적 SNN 기반 인공 뇌
 
+> **장기 로드맵**: [docs/ROADMAP.md](docs/ROADMAP.md) - Phase 8~20 계획
+
 ---
 
 ## 환경 설정 (CRITICAL - 반드시 읽을 것)
@@ -31,6 +33,76 @@ python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episo
 - CUDA: `/usr/local/cuda-12.6`
 - 작업 디렉토리: `~/pygenn_test/`
 - `<PROJECT_PATH>`: 이 프로젝트의 WSL 경로 (예: `/mnt/c/.../BrainSimulation`)
+
+---
+
+## Phase 검증 필수 (CRITICAL - 반드시 준수)
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  ⚠️  새 Phase 구현 후 반드시 20 에피소드 검증 실행!           ║
+║      검증 없이 다음 Phase 진행 절대 금지!                     ║
+║      성능 저하 시 즉시 수정 후 재검증!                        ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### Phase 검증 기준 (MANDATORY)
+
+| 지표 | 기준 | 실패 시 |
+|------|------|---------|
+| **Survival Rate** | > 40% | Phase 진행 금지, 수정 필요 |
+| **Reward Freq** | > 2.5% | 회로 연결 검토 |
+| **Pain Avoidance** | > 85% | Pain 회피 반사 간섭 확인 |
+
+### Phase 검증 명령어
+
+```bash
+# 새 Phase 구현 후 반드시 실행
+wsl -d Ubuntu-24.04 -- bash -c "
+unset PATH && unset LD_LIBRARY_PATH
+export CUDA_PATH=/usr/local/cuda-12.6
+export PATH=/usr/local/cuda-12.6/bin:/usr/local/bin:/usr/bin:/bin
+export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64
+source ~/pygenn_wsl/bin/activate
+cd ~/pygenn_test && rm -rf forager_brain_CODE
+python /mnt/c/.../forager_brain.py --episodes 20 --render none
+"
+```
+
+### 검증 프로세스
+
+1. **새 Phase 구현 완료**
+2. **20 에피소드 검증 실행**
+3. **결과 확인:**
+   - Survival Rate > 40% → 다음 Phase 진행
+   - Survival Rate ≤ 40% → 수정 후 재검증
+4. **문서 업데이트 (검증 결과 포함)**
+
+### Phase 12-14 실패 사례 (2026-02-02) - 교훈
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  CASE STUDY: 검증 없이 진행한 결과                            ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Phase 11 baseline:  60% 생존 ✓                               ║
+║  Phase 12 추가:      30% 생존 ✗ (-50%, 검증 없이 진행)        ║
+║  Phase 13 추가:       5% 생존 ✗ (-83%, 검증 없이 진행)        ║
+║  Phase 14 추가:       0% 생존 ✗ (-100%, 검증 없이 진행)       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  근본 원인: 새 회로가 기존 Pain 회피 반사를 방해               ║
+║  교훈: 각 Phase마다 검증했으면 Phase 12에서 문제 발견 가능    ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+**실패 원인 분석:**
+- Phase 12 (STS→Motor): 다감각 출력이 Pain Push-Pull과 충돌
+- Phase 13 (PPC→Motor): 공간 정보가 모터에 노이즈로 작용
+- Phase 14 (PMC→Motor): 운동 계획이 즉각적 회피 반응을 지연
+
+**수정 원칙:**
+- 새 회로는 기존 **생존 반사를 방해하지 않아야** 함
+- Motor 직접 연결보다 **기존 회로를 통한 조절** 선호
+- 가중치는 기존 Pain Push-Pull(60/-40)보다 **약하게** 설정
 
 ---
 
@@ -271,10 +343,82 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║  7: 통합 테스트 & 환경 조정 ✓ 완료 (2025-01-31)              ║
 ║      └── 가중치 강화 + 환경 조정 (음식↑, 시야↑, 감소율↓)    ║
 ║      └── 생존율: 10% → 80%, Reward Freq 2.77% ✓             ║
+║                                                               ║
+║  8: V1 시각 피질 ✓ 완료 (2025-02-01)                         ║
+║      └── V1_Food L/R + V1_Danger L/R (400 뉴런)              ║
+║      └── Lateral Inhibition, 방향 정보 보존                  ║
+║                                                               ║
+║  9: V2/V4 고차 시각 피질 ✓ 완료 (2025-02-01)                 ║
+║      └── V2_Edge_Food/Danger (300 뉴런) + V4_Object (300 뉴런)║
+║      └── 물체 분류, WTA 경쟁, Novelty Detection              ║
+║      └── Top-Down 주의 조절 (Hunger/Fear/Goal → V2/V4)       ║
+║                                                               ║
+║  10: IT Cortex (측두엽) ✓ 완료 (2025-02-01) ★ M1 마일스톤   ║
+║      └── IT_Food/Danger/Neutral (550 뉴런)                   ║
+║      └── IT_Association (200) + IT_Buffer (250)              ║
+║      └── "음식/위험" 범주 표상, 기억 통합                    ║
+║      └── 총 10,000 뉴런 달성!                                ║
+║                                                               ║
+║  11: 청각 피질 (Auditory Cortex) ✓ 완료 (2026-02-01)        ║
+║      └── Sound_Danger/Food L/R (400 뉴런)                    ║
+║      └── A1_Danger/Food (300 뉴런) + A2_Association (200)    ║
+║      └── 청각-공포 조건화, 다감각 통합 기반                  ║
+║      └── 총 10,900 뉴런 달성!                                ║
+║                                                               ║
+║  12: 다중 감각 통합 (Multimodal STS) ✓ 완료 (2026-02-01)    ║
+║      └── STS_Food/Danger (400 뉴런)                          ║
+║      └── STS_Congruence/Mismatch (250 뉴런)                  ║
+║      └── Multimodal_Buffer (150 뉴런)                        ║
+║      └── 시청각 일치/불일치 감지, 다감각 통합                ║
+║      └── 총 11,700 뉴런 달성!                                ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
-### 현재 상태: Phase 7 완료 - 통합 테스트 & 환경 조정 (8,000 뉴런)
+### 현재 상태: Phase 12 완료 - 다중 감각 통합 (11,700 뉴런)
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  Phase 12: Multimodal Integration (STS) ✓                     ║
+╠═══════════════════════════════════════════════════════════════╣
+║  신규 구조:                                                   ║
+║    - STS_Food: 200 뉴런 (음식 시청각 통합)                   ║
+║    - STS_Danger: 200 뉴런 (위험 시청각 통합)                 ║
+║    - STS_Congruence: 150 뉴런 (일치 감지)                    ║
+║    - STS_Mismatch: 100 뉴런 (불일치 감지)                    ║
+║    - Multimodal_Buffer: 150 뉴런 (다중 감각 기억)            ║
+║                                                               ║
+║  연결:                                                        ║
+║    - IT → STS (시각 입력)                                    ║
+║    - A1/A2 → STS (청각 입력)                                 ║
+║    - STS → Hippocampus (다중 감각 기억)                      ║
+║    - STS → Amygdala (통합 공포)                              ║
+║    - STS → Motor (통합 행동)                                 ║
+║    - STS → PFC (목표/작업 기억)                              ║
+║    - Top-Down: Hunger/Fear/WM → STS                          ║
+║                                                               ║
+║  성능:                                                        ║
+║    - Reward Freq: 3.24% ✓                                    ║
+║    - Pain Avoidance: 90.7% ✓                                 ║
+║    - Avg Food: 92.4                                          ║
+║    - Hebbian Learning: avg_w 2.0 → 3.33 ✓                   ║
+║                                                               ║
+║  뉴런 수:       10,900 → 11,700 (+800)                       ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### Phase 8 완료: V1 시각 피질
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  Phase 8: Primary Visual Cortex (V1) ✓                        ║
+╠═══════════════════════════════════════════════════════════════╣
+║    - V1_Food_Left/Right: 각 100 뉴런 (음식 시각 처리)        ║
+║    - V1_Danger_Left/Right: 각 100 뉴런 (위험 시각 처리)      ║
+║    - Lateral Inhibition: 좌우 대비 강화                      ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### Phase 7 결과 (이전)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
@@ -285,16 +429,6 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║  Pain Avoidance: 91.7% ✓                                      ║
 ║  Avg Food:      82.5 (초기 12.8, +545%)                       ║
 ║  뉴런 수:       8,000                                         ║
-║  가중치 조정:                                                 ║
-║    - food_weight: 25 → 40                                    ║
-║    - goal_food_to_motor_weight: 10 → 18                      ║
-║    - food_memory_to_motor_weight: 8 → 12                     ║
-║  환경 조정:                                                   ║
-║    - n_food: 15 → 35                                         ║
-║    - food_radius: 6 → 8                                      ║
-║    - view_range: 120 → 150                                   ║
-║    - energy_decay: 0.15 → 0.12                               ║
-║    - 음식 생성: Pain Zone 밖으로 제한                        ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -326,11 +460,50 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Food Patch 환경 (Hebbian 학습 검증용)
+
+```
+┌────────────────────────────────────────┐
+│                400x400                 │
+│    ┌──────┐              ┌──────┐     │
+│    │Patch1│              │      │     │
+│    │(100, │              │      │     │
+│    │ 100) │              │      │     │
+│    └──────┘              │      │     │
+│              ┌──────┐    │      │     │
+│              │ Nest │    │      │     │
+│              └──────┘    │      │     │
+│                          │Patch2│     │
+│                          │(300, │     │
+│                          │ 300) │     │
+│                          └──────┘     │
+└────────────────────────────────────────┘
+
+- 음식의 80%가 Patch 내에 생성
+- 한 번 찾으면 반복 방문 가능
+- Place Cells 학습이 실제로 도움됨
+```
+
+**실행 명령어:**
+```bash
+# Baseline (학습 OFF, Patch 없음)
+python forager_brain.py --episodes 20 --no-learning --render none
+
+# Food Patch + Learning (검증)
+python forager_brain.py --episodes 20 --food-patch --render none
+```
+
+**성공 기준:**
+- Patch 방문 증가: 초반 5에피소드 vs 후반 5에피소드 → 30% 이상 증가
+- avg_weight 증가: 초기 2.0 → 3.0 이상
+- 생존율 유지: 80% 이상
+
 ### 핵심 발견 (교훈)
 
 1. **방향성 Push-Pull이 핵심**: 무방향 Fear → 방향성 Pain Push-Pull로 변경 시 Pain Death 0%
 2. **MOTOR DEAD 해결**: Satiety 억제 완화 (-8 → -4)
 3. **학습 없는 Hippocampus는 노이즈**: Food Memory 가중치 최소화 필요
+4. **랜덤 환경에서 위치 기억은 무의미**: Food Patch 환경 필요 (위치-음식 인과관계)
 
 ### 실행 명령어
 

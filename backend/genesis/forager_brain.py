@@ -244,6 +244,13 @@ class ForagerBrainConfig:
     n_trn: int = 100                               # TRN: 억제성 게이팅
     n_arousal: int = 50                            # 각성 수준 조절
 
+    # === PRIMARY VISUAL CORTEX (Phase 8 신규) ===
+    v1_enabled: bool = True                        # V1 활성화 여부
+    n_v1_food_left: int = 100                      # 좌측 음식 시각 처리
+    n_v1_food_right: int = 100                     # 우측 음식 시각 처리
+    n_v1_danger_left: int = 100                    # 좌측 위험 시각 처리
+    n_v1_danger_right: int = 100                   # 우측 위험 시각 처리
+
     # === Phase 6b 시냅스 가중치 ===
     # 감각 → Relay (감각 중계)
     food_eye_to_food_relay_weight: float = 15.0    # 음식 감각 중계
@@ -291,6 +298,235 @@ class ForagerBrainConfig:
     # Deep Nuclei → Motor (조절)
     deep_to_motor_weight: float = 8.0              # 운동 조절 출력
 
+    # === Phase 8 시냅스 가중치 (V1) ===
+    # 입력: Relay → V1
+    food_relay_to_v1_weight: float = 20.0          # Food Relay → V1 Food
+    danger_relay_to_v1_weight: float = 20.0        # Danger Relay → V1 Danger
+
+    # 내부: Lateral Inhibition (대비 강화)
+    v1_lateral_inhibition: float = -8.0            # V1 좌우 상호 억제
+
+    # 출력: V1 → 다른 영역
+    v1_to_motor_weight: float = 15.0               # V1 → Motor
+    v1_to_hippocampus_weight: float = 10.0         # V1 Food → Place Cells
+    v1_to_amygdala_weight: float = 12.0            # V1 Danger → Amygdala LA
+
+    # === V2/V4 고차 시각 피질 (Phase 9 신규) ===
+    v2v4_enabled: bool = True                      # V2/V4 활성화 여부
+    n_v2_edge_food: int = 150                      # V2 음식 에지/윤곽
+    n_v2_edge_danger: int = 150                    # V2 위험 에지/윤곽
+    n_v4_food_object: int = 100                    # V4 음식 물체 표상
+    n_v4_danger_object: int = 100                  # V4 위험 물체 표상
+    n_v4_novel_object: int = 100                   # V4 새로운 물체 표상
+
+    # === Phase 9 시냅스 가중치 ===
+    # V1 → V2 (수렴)
+    v1_to_v2_weight: float = 15.0                  # V1 → V2 Edge
+
+    # V2 → V4 (분류)
+    v2_to_v4_weight: float = 20.0                  # V2 Edge → V4 Object
+    v4_wta_inhibition: float = -12.0               # V4 WTA (Food vs Danger vs Novel)
+
+    # V4 → 상위 영역
+    v4_food_to_hippocampus_weight: float = 15.0    # V4 Food → Hippocampus
+    v4_food_to_hunger_weight: float = 10.0         # V4 Food → Hunger Drive
+    v4_danger_to_amygdala_weight: float = 18.0     # V4 Danger → Amygdala
+    v4_novel_to_dopamine_weight: float = 20.0      # V4 Novel → Dopamine (호기심)
+
+    # Top-Down 조절
+    hunger_to_v4_food_weight: float = 8.0          # Hunger → V4 Food (주의 조절)
+    fear_to_v4_danger_weight: float = 10.0         # Fear → V4 Danger
+    goal_to_v2_weight: float = 6.0                 # Goal → V2 (선택적 주의)
+
+    # V2→V4 Hebbian 학습
+    v2_v4_eta: float = 0.1                         # 학습률
+    v2_v4_w_max: float = 40.0                      # 최대 가중치
+
+    # === IT Cortex (Phase 10 신규) ===
+    it_enabled: bool = True                        # IT Cortex 활성화 여부
+    n_it_food_category: int = 200                  # "음식" 범주 뉴런
+    n_it_danger_category: int = 200                # "위험" 범주 뉴런
+    n_it_neutral_category: int = 150               # 중립/미분류 물체
+    n_it_association: int = 200                    # 범주 간 연합
+    n_it_memory_buffer: int = 250                  # 단기 물체 기억
+
+    # === Phase 10 시냅스 가중치 ===
+    # V4 → IT (순방향)
+    v4_to_it_weight: float = 25.0                  # V4 → IT Category (강한 분류)
+
+    # IT ↔ Hippocampus (양방향)
+    it_to_hippocampus_weight: float = 15.0         # IT → Hippocampus (저장)
+    hippocampus_to_it_weight: float = 12.0         # Hippocampus → IT (인출)
+
+    # IT ↔ Amygdala (양방향)
+    it_to_amygdala_weight: float = 18.0            # IT_Danger → Amygdala
+    amygdala_to_it_weight: float = 15.0            # Fear → IT_Danger
+
+    # IT → Motor (행동 출력)
+    it_to_motor_weight: float = 12.0               # IT → Motor
+
+    # IT → PFC (목표 설정)
+    it_to_pfc_weight: float = 15.0                 # IT → Goal
+
+    # IT 내부 WTA
+    it_wta_inhibition: float = -15.0               # IT 범주 간 경쟁
+
+    # Top-Down 조절
+    hunger_to_it_food_weight: float = 10.0         # Hunger → IT_Food
+    fear_to_it_danger_weight: float = 12.0         # Fear → IT_Danger
+    wm_to_it_buffer_weight: float = 8.0            # Working Memory → IT_Buffer
+
+    # === Auditory Cortex (Phase 11 신규) ===
+    auditory_enabled: bool = True                   # 청각 피질 활성화 여부
+    n_sound_danger_left: int = 100                  # 왼쪽 위험 소리 입력
+    n_sound_danger_right: int = 100                 # 오른쪽 위험 소리 입력
+    n_sound_food_left: int = 100                    # 왼쪽 음식 소리 입력
+    n_sound_food_right: int = 100                   # 오른쪽 음식 소리 입력
+    n_a1_danger: int = 150                          # A1 위험 소리 처리
+    n_a1_food: int = 150                            # A1 음식 소리 처리
+    n_a2_association: int = 200                     # 청각 연합 영역
+
+    # === Phase 11 시냅스 가중치 ===
+    # Sound Input → A1
+    sound_to_a1_weight: float = 20.0                # Sound → A1 (순방향)
+
+    # A1 → Amygdala (청각-공포 경로)
+    a1_danger_to_amygdala_weight: float = 22.0      # A1_Danger → LA (빠른 공포)
+
+    # A1 → IT (청각-시각 통합)
+    a1_to_it_weight: float = 15.0                   # A1 → IT Category
+
+    # A1 → Motor (청각 유도 행동)
+    a1_to_motor_weight: float = 12.0                # A1 → Motor
+
+    # A2 Association
+    a1_to_a2_weight: float = 10.0                   # A1 → A2
+    it_to_a2_weight: float = 10.0                   # IT → A2 (다감각 통합)
+
+    # Top-Down
+    fear_to_a1_danger_weight: float = 8.0           # Fear → A1_Danger
+    hunger_to_a1_food_weight: float = 8.0           # Hunger → A1_Food
+
+    # A1 lateral inhibition
+    a1_lateral_inhibition: float = -10.0            # A1 좌우 경쟁
+
+    # === Multimodal Integration (Phase 12 신규) ===
+    multimodal_enabled: bool = True                  # 다중 감각 통합 활성화
+    n_sts_food: int = 200                            # STS 음식 통합
+    n_sts_danger: int = 200                          # STS 위험 통합
+    n_sts_congruence: int = 150                      # 시청각 일치 감지
+    n_sts_mismatch: int = 100                        # 시청각 불일치 감지
+    n_multimodal_buffer: int = 150                   # 다중 감각 작업 기억
+
+    # === Phase 12 시냅스 가중치 ===
+    # 시각 → STS
+    it_to_sts_weight: float = 20.0                   # IT → STS (시각 입력)
+
+    # 청각 → STS
+    a1_to_sts_weight: float = 20.0                   # A1 → STS (청각 입력)
+    a2_to_sts_weight: float = 15.0                   # A2 → STS (연합 청각)
+
+    # STS 내부 연결
+    sts_congruence_weight: float = 15.0              # 일치 감지 가중치
+    sts_mismatch_weight: float = 12.0                # 불일치 감지 가중치
+    sts_wta_inhibition: float = -8.0                 # STS WTA 경쟁
+
+    # STS → 출력
+    sts_to_hippocampus_weight: float = 15.0          # STS → Hippocampus
+    sts_to_amygdala_weight: float = 18.0             # STS_Danger → Amygdala
+    sts_to_motor_weight: float = 0.0                 # STS → Motor (비활성화 - Pain 반사 간섭 방지)
+    sts_to_pfc_weight: float = 10.0                  # STS → PFC
+
+    # Top-Down → STS
+    hunger_to_sts_weight: float = 8.0                # Hunger → STS_Food
+    fear_to_sts_weight: float = 10.0                 # Fear → STS_Danger
+    wm_to_sts_congruence_weight: float = 6.0         # Working Memory → Congruence
+
+    # === Parietal Cortex (Phase 13 신규) ===
+    parietal_enabled: bool = True                     # 두정엽 활성화 여부
+    n_ppc_space_left: int = 150                       # 왼쪽 공간 표상
+    n_ppc_space_right: int = 150                      # 오른쪽 공간 표상
+    n_ppc_goal_food: int = 150                        # 음식 목표 벡터
+    n_ppc_goal_safety: int = 150                      # 안전 목표 벡터
+    n_ppc_attention: int = 200                        # 공간 주의 조절
+    n_ppc_path_buffer: int = 200                      # 경로 계획 버퍼
+
+    # === Phase 13 시냅스 가중치 ===
+    # 감각 → PPC_Space
+    v1_to_ppc_weight: float = 15.0                    # V1 → PPC_Space (시각 위치)
+    it_to_ppc_weight: float = 12.0                    # IT → PPC_Space (물체 위치)
+    sts_to_ppc_weight: float = 15.0                   # STS → PPC_Space (다감각 위치)
+    place_to_ppc_weight: float = 12.0                 # Place Cells → PPC_Space (자기 위치)
+    food_memory_to_ppc_weight: float = 10.0           # Food Memory → PPC_Space (기억 위치)
+
+    # PFC → PPC (목표 설정)
+    goal_to_ppc_weight: float = 18.0                  # Goal → PPC_Goal_Food/Safety
+    wm_to_ppc_path_weight: float = 12.0               # Working Memory → Path Buffer
+
+    # PPC 내부 연결
+    ppc_space_goal_integration_weight: float = 15.0   # Space + Goal → Goal Vector
+    ppc_path_recurrent_weight: float = 10.0           # Path Buffer 자기 유지
+    ppc_wta_inhibition: float = -8.0                  # PPC 좌우/목표 경쟁
+    ppc_attention_weight: float = 12.0                # Goal → Attention
+
+    # PPC → 출력
+    ppc_to_motor_weight: float = 0.0                  # PPC_Goal → Motor (비활성화 - PMC 경유로 변경)
+    ppc_to_v1_attention_weight: float = 8.0           # PPC_Attention → V1 (Top-Down)
+    ppc_to_sts_attention_weight: float = 8.0          # PPC_Attention → STS (Top-Down)
+    ppc_to_hippocampus_weight: float = 10.0           # PPC_Space → Place Cells
+
+    # Top-Down → PPC
+    hunger_to_ppc_goal_food_weight: float = 10.0      # Hunger → PPC_Goal_Food
+    fear_to_ppc_goal_safety_weight: float = 12.0      # Fear → PPC_Goal_Safety
+    dopamine_to_ppc_attention_weight: float = 8.0     # Dopamine → PPC_Attention
+
+    # === Premotor Cortex (Phase 14 신규) ===
+    premotor_enabled: bool = True                      # 전운동 피질 활성화 여부
+    n_pmd_left: int = 100                              # PMd 왼쪽 방향 운동 계획
+    n_pmd_right: int = 100                             # PMd 오른쪽 방향 운동 계획
+    n_pmv_approach: int = 100                          # PMv 접근 운동 계획
+    n_pmv_avoid: int = 100                             # PMv 회피 운동 계획
+    n_sma_sequence: int = 150                          # SMA 시퀀스 생성
+    n_pre_sma: int = 100                               # pre-SMA 운동 의도
+    n_motor_preparation: int = 150                     # 운동 준비 버퍼
+
+    # === Phase 14 시냅스 가중치 ===
+    # PPC → PMd (공간 기반 운동 계획)
+    ppc_to_pmd_weight: float = 18.0                    # PPC_Goal/Space → PMd
+
+    # IT/STS → PMv (물체 기반 운동 계획)
+    it_to_pmv_weight: float = 15.0                     # IT → PMv
+    sts_to_pmv_weight: float = 15.0                    # STS → PMv
+
+    # PFC → SMA (목표 기반 시퀀스)
+    pfc_to_sma_weight: float = 15.0                    # Goal/WM → SMA
+    inhibitory_to_pre_sma_weight: float = -12.0        # Inhibitory → pre_SMA
+
+    # PMC 내부 연결
+    sma_recurrent_weight: float = 8.0                  # SMA 자기 유지
+    pre_sma_to_sma_weight: float = 12.0                # pre_SMA → SMA
+    pmd_pmv_integration_weight: float = 12.0           # PMd/PMv → Motor_Prep
+    sma_to_motor_prep_weight: float = 12.0             # SMA → Motor_Prep
+    pmc_wta_inhibition: float = -10.0                  # PMC 내 WTA 경쟁
+
+    # PMC → Motor (운동 출력) - 기존 반사 간섭 방지를 위해 약화
+    motor_prep_to_motor_weight: float = 2.0            # Motor_Prep → Motor (15→5→2 약화)
+    pmd_to_motor_weight: float = 0.0                   # PMd → Motor (비활성화)
+    pmv_to_motor_weight: float = 0.0                   # PMv → Motor (비활성화)
+
+    # PMC → Cerebellum (운동 조정)
+    motor_prep_to_cerebellum_weight: float = 10.0      # Motor_Prep → Granule
+
+    # BG → PMC (행동 선택)
+    direct_to_motor_prep_weight: float = 12.0          # Direct → Motor_Prep (Go)
+    indirect_to_motor_prep_weight: float = -8.0        # Indirect → Motor_Prep (NoGo)
+    dopamine_to_sma_weight: float = 10.0               # Dopamine → SMA
+
+    # Top-Down → PMC
+    hunger_to_pmv_approach_weight: float = 10.0        # Hunger → PMv_Approach
+    fear_to_pmv_avoid_weight: float = 12.0             # Fear → PMv_Avoid
+    arousal_to_motor_prep_weight: float = 8.0          # Arousal → Motor_Prep
+
     dt: float = 1.0
 
     @property
@@ -317,6 +553,34 @@ class ForagerBrainConfig:
         if self.thalamus_enabled:
             base += (self.n_food_relay + self.n_danger_relay +
                      self.n_trn + self.n_arousal)
+        if self.v1_enabled:
+            base += (self.n_v1_food_left + self.n_v1_food_right +
+                     self.n_v1_danger_left + self.n_v1_danger_right)
+        if self.v2v4_enabled:
+            base += (self.n_v2_edge_food + self.n_v2_edge_danger +
+                     self.n_v4_food_object + self.n_v4_danger_object +
+                     self.n_v4_novel_object)
+        if self.it_enabled:
+            base += (self.n_it_food_category + self.n_it_danger_category +
+                     self.n_it_neutral_category + self.n_it_association +
+                     self.n_it_memory_buffer)
+        if self.auditory_enabled:
+            base += (self.n_sound_danger_left + self.n_sound_danger_right +
+                     self.n_sound_food_left + self.n_sound_food_right +
+                     self.n_a1_danger + self.n_a1_food + self.n_a2_association)
+        if self.multimodal_enabled:
+            base += (self.n_sts_food + self.n_sts_danger +
+                     self.n_sts_congruence + self.n_sts_mismatch +
+                     self.n_multimodal_buffer)
+        if self.parietal_enabled:
+            base += (self.n_ppc_space_left + self.n_ppc_space_right +
+                     self.n_ppc_goal_food + self.n_ppc_goal_safety +
+                     self.n_ppc_attention + self.n_ppc_path_buffer)
+        if self.premotor_enabled:
+            base += (self.n_pmd_left + self.n_pmd_right +
+                     self.n_pmv_approach + self.n_pmv_avoid +
+                     self.n_sma_sequence + self.n_pre_sma +
+                     self.n_motor_preparation)
         return base
 
 
@@ -532,6 +796,34 @@ class ForagerBrain:
         # Phase 6b: Thalamus circuits
         if self.config.thalamus_enabled:
             self._build_thalamus_circuit()
+
+        # Phase 8: V1 (Primary Visual Cortex) circuits
+        if self.config.v1_enabled:
+            self._build_v1_circuit()
+
+        # Phase 9: V2/V4 (Higher Visual Cortex) circuits
+        if self.config.v2v4_enabled and self.config.v1_enabled:
+            self._build_v2v4_circuit()
+
+        # Phase 10: IT Cortex (Inferior Temporal) circuits
+        if self.config.it_enabled and self.config.v2v4_enabled:
+            self._build_it_cortex_circuit()
+
+        # Phase 11: Auditory Cortex circuits
+        if self.config.auditory_enabled:
+            self._build_auditory_cortex_circuit()
+
+        # Phase 12: Multimodal Integration circuits
+        if self.config.multimodal_enabled and self.config.it_enabled and self.config.auditory_enabled:
+            self._build_multimodal_integration_circuit()
+
+        # Phase 13: Parietal Cortex circuits
+        if self.config.parietal_enabled:
+            self._build_parietal_cortex_circuit()
+
+        # Phase 14: Premotor Cortex circuits
+        if self.config.premotor_enabled:
+            self._build_premotor_cortex_circuit()
 
         # Build and load
         print("Building model...")
@@ -1422,6 +1714,1521 @@ class ForagerBrain:
                         self.config.n_trn + self.config.n_arousal)
         print(f"  Thalamus circuit complete: {total_neurons} neurons")
 
+    def _build_v1_circuit(self):
+        """
+        Phase 8: Primary Visual Cortex (V1) 구축
+
+        구성:
+        1. V1_Food_Left/Right - 좌/우 음식 시각 처리
+        2. V1_Danger_Left/Right - 좌/우 위험 시각 처리
+
+        연결:
+        - 입력: Thalamus Relay → V1 (방향 정보 보존)
+        - 내부: 좌우 Lateral Inhibition (대비 강화)
+        - 출력: V1 → Motor (ipsi/contra), Hippocampus, Amygdala
+        """
+        print("  Phase 8: Building Primary Visual Cortex (V1)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. V1 Food Populations (좌/우 분리) ===
+        self.v1_food_left = self.model.add_neuron_population(
+            "v1_food_left", self.config.n_v1_food_left,
+            sensory_lif_model, lif_params, lif_init)
+        self.v1_food_right = self.model.add_neuron_population(
+            "v1_food_right", self.config.n_v1_food_right,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    V1_Food: L({self.config.n_v1_food_left}) + R({self.config.n_v1_food_right})")
+
+        # === 2. V1 Danger Populations (좌/우 분리) ===
+        self.v1_danger_left = self.model.add_neuron_population(
+            "v1_danger_left", self.config.n_v1_danger_left,
+            sensory_lif_model, lif_params, lif_init)
+        self.v1_danger_right = self.model.add_neuron_population(
+            "v1_danger_right", self.config.n_v1_danger_right,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    V1_Danger: L({self.config.n_v1_danger_left}) + R({self.config.n_v1_danger_right})")
+
+        # === 입력 연결: Thalamus Relay → V1 (방향 정보 보존) ===
+        if self.config.thalamus_enabled:
+            # Food Relay → V1 Food (방향 정보 보존을 위해 L/R 분리 필요)
+            # Thalamus에서 L/R 정보가 합쳐져 있으므로 Food Eye에서 직접 받음
+            pass  # Relay에서는 L/R 구분이 없음, 아래에서 Food Eye로부터 직접 연결
+
+        # Food Eye → V1 Food (방향 정보 보존)
+        self._create_static_synapse(
+            "food_eye_left_to_v1_food_left", self.food_eye_left, self.v1_food_left,
+            self.config.food_relay_to_v1_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "food_eye_right_to_v1_food_right", self.food_eye_right, self.v1_food_right,
+            self.config.food_relay_to_v1_weight, sparsity=0.15)
+
+        print(f"    FoodEye→V1_Food: {self.config.food_relay_to_v1_weight}")
+
+        # Pain Eye → V1 Danger (방향 정보 보존)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "pain_eye_left_to_v1_danger_left", self.pain_eye_left, self.v1_danger_left,
+                self.config.danger_relay_to_v1_weight, sparsity=0.15)
+            self._create_static_synapse(
+                "pain_eye_right_to_v1_danger_right", self.pain_eye_right, self.v1_danger_right,
+                self.config.danger_relay_to_v1_weight, sparsity=0.15)
+
+            print(f"    PainEye→V1_Danger: {self.config.danger_relay_to_v1_weight}")
+
+        # Wall Eye → V1 Danger (벽도 위험)
+        self._create_static_synapse(
+            "wall_eye_left_to_v1_danger_left", self.wall_eye_left, self.v1_danger_left,
+            self.config.danger_relay_to_v1_weight * 0.6, sparsity=0.12)
+        self._create_static_synapse(
+            "wall_eye_right_to_v1_danger_right", self.wall_eye_right, self.v1_danger_right,
+            self.config.danger_relay_to_v1_weight * 0.6, sparsity=0.12)
+
+        print(f"    WallEye→V1_Danger: {self.config.danger_relay_to_v1_weight * 0.6:.1f}")
+
+        # === 내부 연결: Lateral Inhibition (대비 강화) ===
+        # V1 Food 좌우 상호 억제
+        self._create_static_synapse(
+            "v1_food_left_to_right", self.v1_food_left, self.v1_food_right,
+            self.config.v1_lateral_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v1_food_right_to_left", self.v1_food_right, self.v1_food_left,
+            self.config.v1_lateral_inhibition, sparsity=0.1)
+
+        # V1 Danger 좌우 상호 억제
+        self._create_static_synapse(
+            "v1_danger_left_to_right", self.v1_danger_left, self.v1_danger_right,
+            self.config.v1_lateral_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v1_danger_right_to_left", self.v1_danger_right, self.v1_danger_left,
+            self.config.v1_lateral_inhibition, sparsity=0.1)
+
+        print(f"    V1 Lateral Inhibition: {self.config.v1_lateral_inhibition}")
+
+        # === 출력 연결: V1 → Motor (ipsilateral for food, contralateral for danger) ===
+        # V1 Food → Motor (동측: 음식 쪽으로 회전)
+        self._create_static_synapse(
+            "v1_food_left_to_motor_left", self.v1_food_left, self.motor_left,
+            self.config.v1_to_motor_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "v1_food_right_to_motor_right", self.v1_food_right, self.motor_right,
+            self.config.v1_to_motor_weight, sparsity=0.12)
+
+        print(f"    V1_Food→Motor (ipsi): {self.config.v1_to_motor_weight}")
+
+        # V1 Danger → Motor (반대측: 위험 반대편으로 회전)
+        self._create_static_synapse(
+            "v1_danger_left_to_motor_right", self.v1_danger_left, self.motor_right,
+            self.config.v1_to_motor_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "v1_danger_right_to_motor_left", self.v1_danger_right, self.motor_left,
+            self.config.v1_to_motor_weight, sparsity=0.12)
+
+        print(f"    V1_Danger→Motor (contra): {self.config.v1_to_motor_weight}")
+
+        # === 출력 연결: V1 → Hippocampus (Place Cells) ===
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "v1_food_left_to_place_cells", self.v1_food_left, self.place_cells,
+                self.config.v1_to_hippocampus_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "v1_food_right_to_place_cells", self.v1_food_right, self.place_cells,
+                self.config.v1_to_hippocampus_weight, sparsity=0.08)
+
+            print(f"    V1_Food→PlaceCells: {self.config.v1_to_hippocampus_weight}")
+
+        # === 출력 연결: V1 Danger → Amygdala LA ===
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "v1_danger_left_to_la", self.v1_danger_left, self.lateral_amygdala,
+                self.config.v1_to_amygdala_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "v1_danger_right_to_la", self.v1_danger_right, self.lateral_amygdala,
+                self.config.v1_to_amygdala_weight, sparsity=0.1)
+
+            print(f"    V1_Danger→Amygdala LA: {self.config.v1_to_amygdala_weight}")
+
+        total_neurons = (self.config.n_v1_food_left + self.config.n_v1_food_right +
+                        self.config.n_v1_danger_left + self.config.n_v1_danger_right)
+        print(f"  V1 circuit complete: {total_neurons} neurons")
+
+    def _build_v2v4_circuit(self):
+        """
+        Phase 9: V2/V4 Higher Visual Cortex 구축
+
+        V2 (Secondary Visual Cortex):
+        - 에지/윤곽 검출
+        - 좌우 V1 정보 수렴 (크기 불변성)
+
+        V4 (Visual Area V4):
+        - 물체 분류 (Food, Danger, Novel)
+        - WTA 경쟁 (하나의 분류만 활성화)
+
+        연결:
+        - 입력: V1_Food L/R → V2_Edge_Food (수렴)
+        - 내부: V2 → V4 (분류)
+        - 출력: V4 → Hippocampus, Amygdala, Dopamine
+        - Top-Down: Hunger/Fear/Goal → V2/V4 (주의 조절)
+        """
+        print("  Phase 9: Building Higher Visual Cortex (V2/V4)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. V2 Edge Populations (에지/윤곽 검출) ===
+        self.v2_edge_food = self.model.add_neuron_population(
+            "v2_edge_food", self.config.n_v2_edge_food,
+            sensory_lif_model, lif_params, lif_init)
+        self.v2_edge_danger = self.model.add_neuron_population(
+            "v2_edge_danger", self.config.n_v2_edge_danger,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    V2_Edge: Food({self.config.n_v2_edge_food}) + Danger({self.config.n_v2_edge_danger})")
+
+        # === 2. V4 Object Populations (물체 분류) ===
+        self.v4_food_object = self.model.add_neuron_population(
+            "v4_food_object", self.config.n_v4_food_object,
+            sensory_lif_model, lif_params, lif_init)
+        self.v4_danger_object = self.model.add_neuron_population(
+            "v4_danger_object", self.config.n_v4_danger_object,
+            sensory_lif_model, lif_params, lif_init)
+        self.v4_novel_object = self.model.add_neuron_population(
+            "v4_novel_object", self.config.n_v4_novel_object,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    V4_Object: Food({self.config.n_v4_food_object}) + "
+              f"Danger({self.config.n_v4_danger_object}) + Novel({self.config.n_v4_novel_object})")
+
+        # === 입력 연결: V1 → V2 (좌우 수렴, 크기 불변성) ===
+        # V1_Food_Left + V1_Food_Right → V2_Edge_Food
+        self._create_static_synapse(
+            "v1_food_left_to_v2_edge", self.v1_food_left, self.v2_edge_food,
+            self.config.v1_to_v2_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "v1_food_right_to_v2_edge", self.v1_food_right, self.v2_edge_food,
+            self.config.v1_to_v2_weight, sparsity=0.15)
+
+        # V1_Danger_Left + V1_Danger_Right → V2_Edge_Danger
+        self._create_static_synapse(
+            "v1_danger_left_to_v2_edge", self.v1_danger_left, self.v2_edge_danger,
+            self.config.v1_to_v2_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "v1_danger_right_to_v2_edge", self.v1_danger_right, self.v2_edge_danger,
+            self.config.v1_to_v2_weight, sparsity=0.15)
+
+        print(f"    V1→V2 (수렴): {self.config.v1_to_v2_weight}")
+
+        # === 내부 연결: V2 → V4 (분류) ===
+        self._create_static_synapse(
+            "v2_edge_food_to_v4_food", self.v2_edge_food, self.v4_food_object,
+            self.config.v2_to_v4_weight, sparsity=0.2)
+        self._create_static_synapse(
+            "v2_edge_danger_to_v4_danger", self.v2_edge_danger, self.v4_danger_object,
+            self.config.v2_to_v4_weight, sparsity=0.2)
+
+        print(f"    V2→V4 (분류): {self.config.v2_to_v4_weight}")
+
+        # === V4 WTA (Winner-Take-All) ===
+        # Food vs Danger vs Novel 경쟁
+        self._create_static_synapse(
+            "v4_food_to_danger", self.v4_food_object, self.v4_danger_object,
+            self.config.v4_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v4_danger_to_food", self.v4_danger_object, self.v4_food_object,
+            self.config.v4_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v4_food_to_novel", self.v4_food_object, self.v4_novel_object,
+            self.config.v4_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v4_danger_to_novel", self.v4_danger_object, self.v4_novel_object,
+            self.config.v4_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v4_novel_to_food", self.v4_novel_object, self.v4_food_object,
+            self.config.v4_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "v4_novel_to_danger", self.v4_novel_object, self.v4_danger_object,
+            self.config.v4_wta_inhibition, sparsity=0.1)
+
+        print(f"    V4 WTA (경쟁): {self.config.v4_wta_inhibition}")
+
+        # === Novelty Detection: V1 활성 + V4 비활성 → Novel ===
+        # V1이 활성화되었는데 V4 Food/Danger가 비활성이면 = 새로운 물체
+        # 구현: V1 → V4_Novel (약한 흥분) + V4_Food/Danger → V4_Novel (강한 억제)
+        # 결과: V4_Food/Danger가 활성화되면 Novel은 억제됨
+        self._create_static_synapse(
+            "v1_food_left_to_v4_novel", self.v1_food_left, self.v4_novel_object,
+            self.config.v1_to_v2_weight * 0.3, sparsity=0.1)
+        self._create_static_synapse(
+            "v1_food_right_to_v4_novel", self.v1_food_right, self.v4_novel_object,
+            self.config.v1_to_v2_weight * 0.3, sparsity=0.1)
+        self._create_static_synapse(
+            "v1_danger_left_to_v4_novel", self.v1_danger_left, self.v4_novel_object,
+            self.config.v1_to_v2_weight * 0.3, sparsity=0.1)
+        self._create_static_synapse(
+            "v1_danger_right_to_v4_novel", self.v1_danger_right, self.v4_novel_object,
+            self.config.v1_to_v2_weight * 0.3, sparsity=0.1)
+
+        print(f"    V1→V4_Novel (novelty): {self.config.v1_to_v2_weight * 0.3:.1f}")
+
+        # === 출력 연결: V4 → 상위 영역 ===
+        # V4_Food → Hippocampus (음식 기억 강화)
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "v4_food_to_hippocampus", self.v4_food_object, self.place_cells,
+                self.config.v4_food_to_hippocampus_weight, sparsity=0.1)
+            print(f"    V4_Food→Hippocampus: {self.config.v4_food_to_hippocampus_weight}")
+
+        # V4_Food → Hunger Drive (음식 인지 → 배고픔 활성화)
+        self._create_static_synapse(
+            "v4_food_to_hunger", self.v4_food_object, self.hunger_drive,
+            self.config.v4_food_to_hunger_weight, sparsity=0.1)
+        print(f"    V4_Food→Hunger: {self.config.v4_food_to_hunger_weight}")
+
+        # V4_Danger → Amygdala (위험 인지 → 공포 활성화)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "v4_danger_to_amygdala", self.v4_danger_object, self.lateral_amygdala,
+                self.config.v4_danger_to_amygdala_weight, sparsity=0.12)
+            print(f"    V4_Danger→Amygdala: {self.config.v4_danger_to_amygdala_weight}")
+
+        # V4_Novel → Dopamine (새로운 물체 → 호기심/탐색)
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "v4_novel_to_dopamine", self.v4_novel_object, self.dopamine_neurons,
+                self.config.v4_novel_to_dopamine_weight, sparsity=0.15)
+            print(f"    V4_Novel→Dopamine: {self.config.v4_novel_to_dopamine_weight}")
+
+        # === Top-Down 조절: Hunger/Fear/Goal → V2/V4 ===
+        # Hunger → V4_Food (배고플 때 음식 탐지 증가)
+        self._create_static_synapse(
+            "hunger_to_v4_food", self.hunger_drive, self.v4_food_object,
+            self.config.hunger_to_v4_food_weight, sparsity=0.1)
+        print(f"    Hunger→V4_Food (top-down): {self.config.hunger_to_v4_food_weight}")
+
+        # Fear → V4_Danger (공포 시 위험 탐지 증가)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_v4_danger", self.fear_response, self.v4_danger_object,
+                self.config.fear_to_v4_danger_weight, sparsity=0.1)
+            print(f"    Fear→V4_Danger (top-down): {self.config.fear_to_v4_danger_weight}")
+
+        # Goal → V2_Edge (목표에 따른 선택적 주의)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "goal_food_to_v2_food", self.goal_food, self.v2_edge_food,
+                self.config.goal_to_v2_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "goal_safety_to_v2_danger", self.goal_safety, self.v2_edge_danger,
+                self.config.goal_to_v2_weight, sparsity=0.1)
+            print(f"    Goal→V2 (attention): {self.config.goal_to_v2_weight}")
+
+        total_v2v4 = (self.config.n_v2_edge_food + self.config.n_v2_edge_danger +
+                      self.config.n_v4_food_object + self.config.n_v4_danger_object +
+                      self.config.n_v4_novel_object)
+        print(f"  V2/V4 circuit complete: {total_v2v4} neurons")
+
+    def _build_it_cortex_circuit(self):
+        """
+        Phase 10: Inferior Temporal Cortex (IT) 구축
+
+        IT Cortex는 시각 처리의 최상위 단계로:
+        - V4에서 입력을 받아 물체의 정체성(identity) 표상
+        - 학습을 통해 범주별 뉴런 군집 형성 ("음식", "위험")
+        - 해마와 양방향 연결 (기억 저장/인출)
+
+        구성:
+        - IT_Food_Category: "음식" 범주 뉴런
+        - IT_Danger_Category: "위험" 범주 뉴런
+        - IT_Neutral_Category: 중립/미분류 물체
+        - IT_Association: 범주 간 연합
+        - IT_Memory_Buffer: 단기 물체 기억
+        """
+        print("  Phase 10: Building Inferior Temporal Cortex (IT)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. IT Category Populations ===
+        self.it_food_category = self.model.add_neuron_population(
+            "it_food_category", self.config.n_it_food_category,
+            sensory_lif_model, lif_params, lif_init)
+        self.it_danger_category = self.model.add_neuron_population(
+            "it_danger_category", self.config.n_it_danger_category,
+            sensory_lif_model, lif_params, lif_init)
+        self.it_neutral_category = self.model.add_neuron_population(
+            "it_neutral_category", self.config.n_it_neutral_category,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    IT_Category: Food({self.config.n_it_food_category}) + "
+              f"Danger({self.config.n_it_danger_category}) + "
+              f"Neutral({self.config.n_it_neutral_category})")
+
+        # === 2. IT Association & Memory Buffer ===
+        self.it_association = self.model.add_neuron_population(
+            "it_association", self.config.n_it_association,
+            sensory_lif_model, lif_params, lif_init)
+        self.it_memory_buffer = self.model.add_neuron_population(
+            "it_memory_buffer", self.config.n_it_memory_buffer,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    IT_Association: {self.config.n_it_association} neurons")
+        print(f"    IT_Memory_Buffer: {self.config.n_it_memory_buffer} neurons")
+
+        # === 입력 연결: V4 → IT (순방향) ===
+        self._create_static_synapse(
+            "v4_food_to_it_food", self.v4_food_object, self.it_food_category,
+            self.config.v4_to_it_weight, sparsity=0.2)
+        self._create_static_synapse(
+            "v4_danger_to_it_danger", self.v4_danger_object, self.it_danger_category,
+            self.config.v4_to_it_weight, sparsity=0.2)
+        self._create_static_synapse(
+            "v4_novel_to_it_neutral", self.v4_novel_object, self.it_neutral_category,
+            self.config.v4_to_it_weight * 0.8, sparsity=0.15)
+
+        print(f"    V4→IT: {self.config.v4_to_it_weight}")
+
+        # === IT ↔ Hippocampus (양방향) ===
+        if self.config.hippocampus_enabled:
+            # IT → Hippocampus (음식 범주 기억 저장)
+            self._create_static_synapse(
+                "it_food_to_place_cells", self.it_food_category, self.place_cells,
+                self.config.it_to_hippocampus_weight, sparsity=0.1)
+
+            # Hippocampus → IT (기억 기반 범주 활성화)
+            self._create_static_synapse(
+                "place_cells_to_it_food", self.place_cells, self.it_food_category,
+                self.config.hippocampus_to_it_weight, sparsity=0.1)
+
+            # Food Memory → IT_Food (음식 기억 → 음식 범주)
+            if self.config.directional_food_memory:
+                self._create_static_synapse(
+                    "food_mem_left_to_it_food", self.food_memory_left, self.it_food_category,
+                    self.config.hippocampus_to_it_weight, sparsity=0.12)
+                self._create_static_synapse(
+                    "food_mem_right_to_it_food", self.food_memory_right, self.it_food_category,
+                    self.config.hippocampus_to_it_weight, sparsity=0.12)
+
+            print(f"    IT↔Hippocampus: {self.config.it_to_hippocampus_weight}/{self.config.hippocampus_to_it_weight}")
+
+        # === IT ↔ Amygdala (양방향) ===
+        if self.config.amygdala_enabled:
+            # IT_Danger → Amygdala (위험 범주 → 공포)
+            self._create_static_synapse(
+                "it_danger_to_la", self.it_danger_category, self.lateral_amygdala,
+                self.config.it_to_amygdala_weight, sparsity=0.12)
+
+            # Fear → IT_Danger (공포 → 위험 인식 강화)
+            self._create_static_synapse(
+                "fear_to_it_danger", self.fear_response, self.it_danger_category,
+                self.config.amygdala_to_it_weight, sparsity=0.1)
+
+            print(f"    IT↔Amygdala: {self.config.it_to_amygdala_weight}/{self.config.amygdala_to_it_weight}")
+
+        # === IT → Motor (행동 출력) ===
+        # IT_Food → Motor (ipsilateral: 음식 쪽으로)
+        self._create_static_synapse(
+            "it_food_to_motor_left", self.it_food_category, self.motor_left,
+            self.config.it_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "it_food_to_motor_right", self.it_food_category, self.motor_right,
+            self.config.it_to_motor_weight, sparsity=0.1)
+
+        # IT_Danger → Motor (contralateral: 회피)
+        self._create_static_synapse(
+            "it_danger_to_motor_left", self.it_danger_category, self.motor_right,
+            self.config.it_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "it_danger_to_motor_right", self.it_danger_category, self.motor_left,
+            self.config.it_to_motor_weight, sparsity=0.1)
+
+        print(f"    IT→Motor: {self.config.it_to_motor_weight}")
+
+        # === IT → PFC (목표 설정) ===
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "it_food_to_goal_food", self.it_food_category, self.goal_food,
+                self.config.it_to_pfc_weight, sparsity=0.12)
+            self._create_static_synapse(
+                "it_danger_to_goal_safety", self.it_danger_category, self.goal_safety,
+                self.config.it_to_pfc_weight, sparsity=0.12)
+
+            print(f"    IT→PFC Goal: {self.config.it_to_pfc_weight}")
+
+        # === IT 내부 WTA (범주 간 경쟁) ===
+        self._create_static_synapse(
+            "it_food_to_danger", self.it_food_category, self.it_danger_category,
+            self.config.it_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "it_danger_to_food", self.it_danger_category, self.it_food_category,
+            self.config.it_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "it_food_to_neutral", self.it_food_category, self.it_neutral_category,
+            self.config.it_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "it_danger_to_neutral", self.it_danger_category, self.it_neutral_category,
+            self.config.it_wta_inhibition, sparsity=0.1)
+
+        print(f"    IT WTA: {self.config.it_wta_inhibition}")
+
+        # === IT Category → Association ===
+        self._create_static_synapse(
+            "it_food_to_assoc", self.it_food_category, self.it_association,
+            15.0, sparsity=0.12)
+        self._create_static_synapse(
+            "it_danger_to_assoc", self.it_danger_category, self.it_association,
+            15.0, sparsity=0.12)
+
+        # === IT Memory Buffer 연결 ===
+        # Categories → Buffer (단기 저장)
+        self._create_static_synapse(
+            "it_food_to_buffer", self.it_food_category, self.it_memory_buffer,
+            12.0, sparsity=0.1)
+        self._create_static_synapse(
+            "it_danger_to_buffer", self.it_danger_category, self.it_memory_buffer,
+            12.0, sparsity=0.1)
+
+        # Buffer → Categories (인출)
+        self._create_static_synapse(
+            "buffer_to_it_food", self.it_memory_buffer, self.it_food_category,
+            10.0, sparsity=0.08)
+        self._create_static_synapse(
+            "buffer_to_it_danger", self.it_memory_buffer, self.it_danger_category,
+            10.0, sparsity=0.08)
+
+        print(f"    IT↔Buffer: 12.0/10.0")
+
+        # === Top-Down 조절 ===
+        # Hunger → IT_Food (배고플 때 음식 범주 민감도 증가)
+        self._create_static_synapse(
+            "hunger_to_it_food", self.hunger_drive, self.it_food_category,
+            self.config.hunger_to_it_food_weight, sparsity=0.1)
+
+        # Fear → IT_Danger (공포 시 위험 범주 민감도 증가)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_it_danger_topdown", self.fear_response, self.it_danger_category,
+                self.config.fear_to_it_danger_weight, sparsity=0.1)
+
+        # Working Memory → IT_Buffer (작업 기억 유지)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "wm_to_it_buffer", self.working_memory, self.it_memory_buffer,
+                self.config.wm_to_it_buffer_weight, sparsity=0.1)
+
+        print(f"    Top-Down: Hunger→IT_Food {self.config.hunger_to_it_food_weight}")
+
+        total_it = (self.config.n_it_food_category + self.config.n_it_danger_category +
+                    self.config.n_it_neutral_category + self.config.n_it_association +
+                    self.config.n_it_memory_buffer)
+        print(f"  IT Cortex complete: {total_it} neurons")
+        print(f"  *** M1 Milestone: Total neurons now = {self.config.total_neurons:,} ***")
+
+    def _build_auditory_cortex_circuit(self):
+        """
+        Phase 11: Auditory Cortex (청각 피질) 구축
+
+        청각 경로:
+        - Sound Input (L/R) → A1 (Primary Auditory Cortex) → A2 (Association)
+        - A1 → Amygdala (청각-공포 경로)
+        - A1 → IT (청각-시각 통합)
+        - A1 → Motor (청각 유도 행동)
+
+        구성:
+        - Sound_Danger_L/R: 위험 소리 입력
+        - Sound_Food_L/R: 음식 소리 입력
+        - A1_Danger: 위험 소리 처리
+        - A1_Food: 음식 소리 처리
+        - A2_Association: 청각 연합 영역
+        """
+        print("  Phase 11: Building Auditory Cortex...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. Sound Input Populations ===
+        self.sound_danger_left = self.model.add_neuron_population(
+            "sound_danger_left", self.config.n_sound_danger_left,
+            sensory_lif_model, lif_params, lif_init)
+        self.sound_danger_right = self.model.add_neuron_population(
+            "sound_danger_right", self.config.n_sound_danger_right,
+            sensory_lif_model, lif_params, lif_init)
+        self.sound_food_left = self.model.add_neuron_population(
+            "sound_food_left", self.config.n_sound_food_left,
+            sensory_lif_model, lif_params, lif_init)
+        self.sound_food_right = self.model.add_neuron_population(
+            "sound_food_right", self.config.n_sound_food_right,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    Sound Input: Danger L/R({self.config.n_sound_danger_left}x2) + "
+              f"Food L/R({self.config.n_sound_food_left}x2)")
+
+        # === 2. A1 (Primary Auditory Cortex) ===
+        self.a1_danger = self.model.add_neuron_population(
+            "a1_danger", self.config.n_a1_danger,
+            sensory_lif_model, lif_params, lif_init)
+        self.a1_food = self.model.add_neuron_population(
+            "a1_food", self.config.n_a1_food,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    A1: Danger({self.config.n_a1_danger}) + Food({self.config.n_a1_food})")
+
+        # === 3. A2 Association ===
+        self.a2_association = self.model.add_neuron_population(
+            "a2_association", self.config.n_a2_association,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    A2_Association: {self.config.n_a2_association} neurons")
+
+        # === Sound Input → A1 (순방향) ===
+        # Sound_Danger L/R → A1_Danger (좌우 수렴)
+        self._create_static_synapse(
+            "sound_danger_left_to_a1", self.sound_danger_left, self.a1_danger,
+            self.config.sound_to_a1_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "sound_danger_right_to_a1", self.sound_danger_right, self.a1_danger,
+            self.config.sound_to_a1_weight, sparsity=0.15)
+
+        # Sound_Food L/R → A1_Food (좌우 수렴)
+        self._create_static_synapse(
+            "sound_food_left_to_a1", self.sound_food_left, self.a1_food,
+            self.config.sound_to_a1_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "sound_food_right_to_a1", self.sound_food_right, self.a1_food,
+            self.config.sound_to_a1_weight, sparsity=0.15)
+
+        print(f"    Sound→A1: {self.config.sound_to_a1_weight}")
+
+        # === A1 Lateral Inhibition (좌우 경쟁) ===
+        # Sound Input 단계에서 좌우 경쟁
+        self._create_static_synapse(
+            "sound_danger_left_to_right", self.sound_danger_left, self.sound_danger_right,
+            self.config.a1_lateral_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "sound_danger_right_to_left", self.sound_danger_right, self.sound_danger_left,
+            self.config.a1_lateral_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "sound_food_left_to_right", self.sound_food_left, self.sound_food_right,
+            self.config.a1_lateral_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "sound_food_right_to_left", self.sound_food_right, self.sound_food_left,
+            self.config.a1_lateral_inhibition, sparsity=0.1)
+
+        print(f"    Sound Lateral Inhibition: {self.config.a1_lateral_inhibition}")
+
+        # === A1 → Amygdala (청각-공포 경로) ===
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "a1_danger_to_la", self.a1_danger, self.lateral_amygdala,
+                self.config.a1_danger_to_amygdala_weight, sparsity=0.12)
+            print(f"    A1_Danger→Amygdala LA: {self.config.a1_danger_to_amygdala_weight} (fast fear)")
+
+        # === A1 → IT (청각-시각 통합) ===
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "a1_danger_to_it_danger", self.a1_danger, self.it_danger_category,
+                self.config.a1_to_it_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "a1_food_to_it_food", self.a1_food, self.it_food_category,
+                self.config.a1_to_it_weight, sparsity=0.1)
+            print(f"    A1→IT: {self.config.a1_to_it_weight} (multimodal)")
+
+        # === A1 → Motor (청각 유도 행동) ===
+        # A1_Danger: 반대편 모터 활성화 (회피)
+        # Sound_Danger_Left → Motor_Right (왼쪽 위험 소리 → 오른쪽 회피)
+        self._create_static_synapse(
+            "sound_danger_left_to_motor_right", self.sound_danger_left, self.motor_right,
+            self.config.a1_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "sound_danger_right_to_motor_left", self.sound_danger_right, self.motor_left,
+            self.config.a1_to_motor_weight, sparsity=0.1)
+
+        # A1_Food: 같은편 모터 활성화 (접근)
+        # Sound_Food_Left → Motor_Left (왼쪽 음식 소리 → 왼쪽 접근)
+        self._create_static_synapse(
+            "sound_food_left_to_motor_left", self.sound_food_left, self.motor_left,
+            self.config.a1_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "sound_food_right_to_motor_right", self.sound_food_right, self.motor_right,
+            self.config.a1_to_motor_weight, sparsity=0.1)
+
+        print(f"    Sound→Motor: {self.config.a1_to_motor_weight} (directional)")
+
+        # === A1 → A2 Association ===
+        self._create_static_synapse(
+            "a1_danger_to_a2", self.a1_danger, self.a2_association,
+            self.config.a1_to_a2_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "a1_food_to_a2", self.a1_food, self.a2_association,
+            self.config.a1_to_a2_weight, sparsity=0.12)
+
+        # IT → A2 (다감각 통합)
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "it_food_to_a2", self.it_food_category, self.a2_association,
+                self.config.it_to_a2_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "it_danger_to_a2", self.it_danger_category, self.a2_association,
+                self.config.it_to_a2_weight, sparsity=0.1)
+
+        print(f"    A1/IT→A2: {self.config.a1_to_a2_weight}/{self.config.it_to_a2_weight}")
+
+        # === Top-Down 조절 ===
+        # Fear → A1_Danger (공포 시 위험 소리 민감도 증가)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_a1_danger", self.fear_response, self.a1_danger,
+                self.config.fear_to_a1_danger_weight, sparsity=0.1)
+
+        # Hunger → A1_Food (배고플 때 음식 소리 민감도 증가)
+        self._create_static_synapse(
+            "hunger_to_a1_food", self.hunger_drive, self.a1_food,
+            self.config.hunger_to_a1_food_weight, sparsity=0.1)
+
+        print(f"    Top-Down: Fear→A1_Danger {self.config.fear_to_a1_danger_weight}, "
+              f"Hunger→A1_Food {self.config.hunger_to_a1_food_weight}")
+
+        total_auditory = (self.config.n_sound_danger_left + self.config.n_sound_danger_right +
+                         self.config.n_sound_food_left + self.config.n_sound_food_right +
+                         self.config.n_a1_danger + self.config.n_a1_food +
+                         self.config.n_a2_association)
+        print(f"  Auditory Cortex complete: {total_auditory} neurons")
+
+    def _build_multimodal_integration_circuit(self):
+        """
+        Phase 12: Multimodal Integration (다중 감각 통합) 구축
+
+        상측두고랑 (STS) 모델링:
+        - 시각 (IT) + 청각 (A1/A2) 통합
+        - 시청각 일치/불일치 감지
+        - 통합된 감각 정보 → Hippocampus/Amygdala/Motor/PFC
+
+        구성:
+        - STS_Food: 음식 관련 시청각 통합
+        - STS_Danger: 위험 관련 시청각 통합
+        - STS_Congruence: 일치 감지 (신뢰도 증가)
+        - STS_Mismatch: 불일치 감지 (주의 증가)
+        - Multimodal_Buffer: 다중 감각 작업 기억
+        """
+        print("  Phase 12: Building Multimodal Integration (STS)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. STS Populations ===
+        self.sts_food = self.model.add_neuron_population(
+            "sts_food", self.config.n_sts_food,
+            sensory_lif_model, lif_params, lif_init)
+        self.sts_danger = self.model.add_neuron_population(
+            "sts_danger", self.config.n_sts_danger,
+            sensory_lif_model, lif_params, lif_init)
+        self.sts_congruence = self.model.add_neuron_population(
+            "sts_congruence", self.config.n_sts_congruence,
+            sensory_lif_model, lif_params, lif_init)
+        self.sts_mismatch = self.model.add_neuron_population(
+            "sts_mismatch", self.config.n_sts_mismatch,
+            sensory_lif_model, lif_params, lif_init)
+        self.multimodal_buffer = self.model.add_neuron_population(
+            "multimodal_buffer", self.config.n_multimodal_buffer,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    STS: Food({self.config.n_sts_food}) + Danger({self.config.n_sts_danger}) + "
+              f"Congruence({self.config.n_sts_congruence}) + Mismatch({self.config.n_sts_mismatch})")
+        print(f"    Multimodal Buffer: {self.config.n_multimodal_buffer}")
+
+        # === 2. 시각 → STS (IT Cortex에서) ===
+        self._create_static_synapse(
+            "it_food_to_sts_food", self.it_food_category, self.sts_food,
+            self.config.it_to_sts_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "it_danger_to_sts_danger", self.it_danger_category, self.sts_danger,
+            self.config.it_to_sts_weight, sparsity=0.12)
+
+        print(f"    Visual→STS (IT): {self.config.it_to_sts_weight}")
+
+        # === 3. 청각 → STS (A1/A2에서) ===
+        self._create_static_synapse(
+            "a1_food_to_sts_food", self.a1_food, self.sts_food,
+            self.config.a1_to_sts_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "a1_danger_to_sts_danger", self.a1_danger, self.sts_danger,
+            self.config.a1_to_sts_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "a2_to_sts_food", self.a2_association, self.sts_food,
+            self.config.a2_to_sts_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "a2_to_sts_danger", self.a2_association, self.sts_danger,
+            self.config.a2_to_sts_weight, sparsity=0.1)
+
+        print(f"    Auditory→STS (A1/A2): {self.config.a1_to_sts_weight}/{self.config.a2_to_sts_weight}")
+
+        # === 4. STS 내부 연결 ===
+
+        # 4.1 일치 감지 (Congruence Detection)
+        # STS_Food → Congruence (음식 시청각 일치)
+        self._create_static_synapse(
+            "sts_food_to_congruence", self.sts_food, self.sts_congruence,
+            self.config.sts_congruence_weight, sparsity=0.15)
+        # STS_Danger → Congruence (위험 시청각 일치)
+        self._create_static_synapse(
+            "sts_danger_to_congruence", self.sts_danger, self.sts_congruence,
+            self.config.sts_congruence_weight, sparsity=0.15)
+
+        print(f"    Congruence Detection: {self.config.sts_congruence_weight}")
+
+        # 4.2 불일치 감지 (Mismatch Detection)
+        # IT_Food + A1_Danger → Mismatch (시각 음식 + 청각 위험 = 불일치)
+        self._create_static_synapse(
+            "it_food_to_mismatch", self.it_food_category, self.sts_mismatch,
+            self.config.sts_mismatch_weight * 0.5, sparsity=0.08)
+        self._create_static_synapse(
+            "a1_danger_to_mismatch", self.a1_danger, self.sts_mismatch,
+            self.config.sts_mismatch_weight * 0.5, sparsity=0.08)
+        # IT_Danger + A1_Food → Mismatch (시각 위험 + 청각 음식 = 불일치)
+        self._create_static_synapse(
+            "it_danger_to_mismatch", self.it_danger_category, self.sts_mismatch,
+            self.config.sts_mismatch_weight * 0.5, sparsity=0.08)
+        self._create_static_synapse(
+            "a1_food_to_mismatch", self.a1_food, self.sts_mismatch,
+            self.config.sts_mismatch_weight * 0.5, sparsity=0.08)
+
+        print(f"    Mismatch Detection: {self.config.sts_mismatch_weight}")
+
+        # 4.3 WTA 경쟁
+        # STS_Food ↔ STS_Danger (상호 억제)
+        self._create_static_synapse(
+            "sts_food_to_danger_wta", self.sts_food, self.sts_danger,
+            self.config.sts_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "sts_danger_to_food_wta", self.sts_danger, self.sts_food,
+            self.config.sts_wta_inhibition, sparsity=0.1)
+        # Congruence ↔ Mismatch (상호 억제)
+        self._create_static_synapse(
+            "congruence_to_mismatch_wta", self.sts_congruence, self.sts_mismatch,
+            self.config.sts_wta_inhibition * 1.5, sparsity=0.15)
+        self._create_static_synapse(
+            "mismatch_to_congruence_wta", self.sts_mismatch, self.sts_congruence,
+            self.config.sts_wta_inhibition * 1.5, sparsity=0.15)
+
+        print(f"    STS WTA: {self.config.sts_wta_inhibition}")
+
+        # === 5. STS → Hippocampus ===
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "sts_food_to_food_memory_l", self.sts_food, self.food_memory_left,
+                self.config.sts_to_hippocampus_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "sts_food_to_food_memory_r", self.sts_food, self.food_memory_right,
+                self.config.sts_to_hippocampus_weight, sparsity=0.1)
+            # Congruence → Place Cells (일치 시 기억 강화)
+            self._create_static_synapse(
+                "congruence_to_place", self.sts_congruence, self.place_cells,
+                self.config.sts_to_hippocampus_weight * 0.5, sparsity=0.05)
+
+            print(f"    STS→Hippocampus: {self.config.sts_to_hippocampus_weight}")
+
+        # === 6. STS → Amygdala ===
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "sts_danger_to_la", self.sts_danger, self.lateral_amygdala,
+                self.config.sts_to_amygdala_weight, sparsity=0.1)
+            # Mismatch → LA (불일치 = 경계)
+            self._create_static_synapse(
+                "mismatch_to_la", self.sts_mismatch, self.lateral_amygdala,
+                self.config.sts_to_amygdala_weight * 0.6, sparsity=0.08)
+
+            print(f"    STS→Amygdala: {self.config.sts_to_amygdala_weight}")
+
+        # === 7. STS → Motor ===
+        # STS_Food → Motor (ipsi, 통합된 음식 방향)
+        self._create_static_synapse(
+            "sts_food_to_motor_left", self.sts_food, self.motor_left,
+            self.config.sts_to_motor_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "sts_food_to_motor_right", self.sts_food, self.motor_right,
+            self.config.sts_to_motor_weight, sparsity=0.08)
+        # STS_Danger → Motor (contra, 통합된 위험 회피)
+        self._create_static_synapse(
+            "sts_danger_to_motor_left", self.sts_danger, self.motor_right,
+            self.config.sts_to_motor_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "sts_danger_to_motor_right", self.sts_danger, self.motor_left,
+            self.config.sts_to_motor_weight, sparsity=0.08)
+
+        print(f"    STS→Motor: {self.config.sts_to_motor_weight}")
+
+        # === 8. STS → PFC ===
+        if self.config.prefrontal_enabled:
+            # Congruence → Working Memory (확실한 정보)
+            self._create_static_synapse(
+                "congruence_to_wm", self.sts_congruence, self.working_memory,
+                self.config.sts_to_pfc_weight, sparsity=0.1)
+            # Mismatch → Goal_Safety (불확실 = 안전 우선)
+            self._create_static_synapse(
+                "mismatch_to_goal_safety", self.sts_mismatch, self.goal_safety,
+                self.config.sts_to_pfc_weight * 1.2, sparsity=0.1)
+
+            print(f"    STS→PFC: {self.config.sts_to_pfc_weight}")
+
+        # === 9. STS → Multimodal Buffer ===
+        self._create_static_synapse(
+            "sts_food_to_buffer", self.sts_food, self.multimodal_buffer,
+            12.0, sparsity=0.1)
+        self._create_static_synapse(
+            "sts_danger_to_buffer", self.sts_danger, self.multimodal_buffer,
+            12.0, sparsity=0.1)
+        self._create_static_synapse(
+            "congruence_to_buffer", self.sts_congruence, self.multimodal_buffer,
+            15.0, sparsity=0.12)
+
+        print(f"    STS→Multimodal Buffer: 12-15")
+
+        # === 10. Top-Down 조절 ===
+        # Hunger → STS_Food (배고플 때 음식 통합 민감도 증가)
+        self._create_static_synapse(
+            "hunger_to_sts_food", self.hunger_drive, self.sts_food,
+            self.config.hunger_to_sts_weight, sparsity=0.08)
+
+        # Fear → STS_Danger (공포 시 위험 통합 민감도 증가)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_sts_danger", self.fear_response, self.sts_danger,
+                self.config.fear_to_sts_weight, sparsity=0.08)
+
+        # Working Memory → Congruence (목표 집중 시 일치 감지 강화)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "wm_to_congruence", self.working_memory, self.sts_congruence,
+                self.config.wm_to_sts_congruence_weight, sparsity=0.08)
+
+        print(f"    Top-Down: Hunger→STS_Food {self.config.hunger_to_sts_weight}, "
+              f"Fear→STS_Danger {self.config.fear_to_sts_weight}")
+
+        total_multimodal = (self.config.n_sts_food + self.config.n_sts_danger +
+                          self.config.n_sts_congruence + self.config.n_sts_mismatch +
+                          self.config.n_multimodal_buffer)
+        print(f"  Multimodal Integration complete: {total_multimodal} neurons")
+        print(f"  Total neurons now = {self.config.total_neurons:,}")
+
+    def _build_parietal_cortex_circuit(self):
+        """
+        Phase 13: Parietal Cortex (두정엽) 구축
+
+        후두정 피질 (PPC) 모델링:
+        - 공간 표상: 시각/청각/체감각 통합
+        - 목표 벡터: 현재 위치 → 목표 위치 방향 계산
+        - 공간 주의: 중요한 위치에 선택적 주의 배분
+        - 경로 계획: 연속적 행동 시퀀스 생성 기초
+
+        구성:
+        - PPC_Space_Left/Right: 좌우 공간 표상
+        - PPC_Goal_Food/Safety: 음식/안전 목표 벡터
+        - PPC_Attention: 공간 주의 조절
+        - PPC_Path_Buffer: 경로 계획 버퍼
+        """
+        print("  Phase 13: Building Parietal Cortex (PPC)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. PPC Populations ===
+        self.ppc_space_left = self.model.add_neuron_population(
+            "ppc_space_left", self.config.n_ppc_space_left,
+            sensory_lif_model, lif_params, lif_init)
+        self.ppc_space_right = self.model.add_neuron_population(
+            "ppc_space_right", self.config.n_ppc_space_right,
+            sensory_lif_model, lif_params, lif_init)
+        self.ppc_goal_food = self.model.add_neuron_population(
+            "ppc_goal_food", self.config.n_ppc_goal_food,
+            sensory_lif_model, lif_params, lif_init)
+        self.ppc_goal_safety = self.model.add_neuron_population(
+            "ppc_goal_safety", self.config.n_ppc_goal_safety,
+            sensory_lif_model, lif_params, lif_init)
+        self.ppc_attention = self.model.add_neuron_population(
+            "ppc_attention", self.config.n_ppc_attention,
+            sensory_lif_model, lif_params, lif_init)
+        self.ppc_path_buffer = self.model.add_neuron_population(
+            "ppc_path_buffer", self.config.n_ppc_path_buffer,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    PPC_Space: Left({self.config.n_ppc_space_left}) + Right({self.config.n_ppc_space_right})")
+        print(f"    PPC_Goal: Food({self.config.n_ppc_goal_food}) + Safety({self.config.n_ppc_goal_safety})")
+        print(f"    PPC_Attention: {self.config.n_ppc_attention}, Path_Buffer: {self.config.n_ppc_path_buffer}")
+
+        # === 2. 감각 → PPC_Space (공간 입력) ===
+
+        # 2.1 V1 → PPC_Space (시각 위치)
+        if self.config.v1_enabled:
+            self._create_static_synapse(
+                "v1_food_left_to_ppc_left", self.v1_food_left, self.ppc_space_left,
+                self.config.v1_to_ppc_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "v1_food_right_to_ppc_right", self.v1_food_right, self.ppc_space_right,
+                self.config.v1_to_ppc_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "v1_danger_left_to_ppc_left", self.v1_danger_left, self.ppc_space_left,
+                self.config.v1_to_ppc_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "v1_danger_right_to_ppc_right", self.v1_danger_right, self.ppc_space_right,
+                self.config.v1_to_ppc_weight, sparsity=0.1)
+
+            print(f"    V1→PPC_Space: {self.config.v1_to_ppc_weight}")
+
+        # 2.2 IT → PPC_Space (물체 인식 기반 위치)
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "it_food_to_ppc_left", self.it_food_category, self.ppc_space_left,
+                self.config.it_to_ppc_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "it_food_to_ppc_right", self.it_food_category, self.ppc_space_right,
+                self.config.it_to_ppc_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "it_danger_to_ppc_left", self.it_danger_category, self.ppc_space_left,
+                self.config.it_to_ppc_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "it_danger_to_ppc_right", self.it_danger_category, self.ppc_space_right,
+                self.config.it_to_ppc_weight, sparsity=0.08)
+
+            print(f"    IT→PPC_Space: {self.config.it_to_ppc_weight}")
+
+        # 2.3 STS → PPC_Space (다감각 위치)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_food_to_ppc_left", self.sts_food, self.ppc_space_left,
+                self.config.sts_to_ppc_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "sts_food_to_ppc_right", self.sts_food, self.ppc_space_right,
+                self.config.sts_to_ppc_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "sts_danger_to_ppc_left", self.sts_danger, self.ppc_space_left,
+                self.config.sts_to_ppc_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "sts_danger_to_ppc_right", self.sts_danger, self.ppc_space_right,
+                self.config.sts_to_ppc_weight, sparsity=0.1)
+
+            print(f"    STS→PPC_Space: {self.config.sts_to_ppc_weight}")
+
+        # 2.4 Hippocampus → PPC_Space (자기 위치, 기억된 음식 위치)
+        if self.config.hippocampus_enabled:
+            # Place Cells → PPC_Space (왼쪽 Place Cells → 왼쪽 공간, 오른쪽도 마찬가지)
+            self._create_static_synapse(
+                "place_to_ppc_left", self.place_cells, self.ppc_space_left,
+                self.config.place_to_ppc_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "place_to_ppc_right", self.place_cells, self.ppc_space_right,
+                self.config.place_to_ppc_weight, sparsity=0.08)
+
+            # Food Memory → PPC_Space (기억된 음식 위치)
+            if self.config.directional_food_memory:
+                self._create_static_synapse(
+                    "food_mem_left_to_ppc_left", self.food_memory_left, self.ppc_space_left,
+                    self.config.food_memory_to_ppc_weight, sparsity=0.1)
+                self._create_static_synapse(
+                    "food_mem_right_to_ppc_right", self.food_memory_right, self.ppc_space_right,
+                    self.config.food_memory_to_ppc_weight, sparsity=0.1)
+
+            print(f"    Hippocampus→PPC_Space: {self.config.place_to_ppc_weight}")
+
+        # === 3. PFC → PPC (목표 설정) ===
+        if self.config.prefrontal_enabled:
+            # Goal_Food → PPC_Goal_Food
+            self._create_static_synapse(
+                "pfc_goal_food_to_ppc", self.goal_food, self.ppc_goal_food,
+                self.config.goal_to_ppc_weight, sparsity=0.15)
+            # Goal_Safety → PPC_Goal_Safety
+            self._create_static_synapse(
+                "pfc_goal_safety_to_ppc", self.goal_safety, self.ppc_goal_safety,
+                self.config.goal_to_ppc_weight, sparsity=0.15)
+            # Working Memory → Path Buffer
+            self._create_static_synapse(
+                "wm_to_ppc_path", self.working_memory, self.ppc_path_buffer,
+                self.config.wm_to_ppc_path_weight, sparsity=0.1)
+
+            print(f"    PFC→PPC: Goal({self.config.goal_to_ppc_weight}), WM→Path({self.config.wm_to_ppc_path_weight})")
+
+        # === 4. PPC 내부 연결 ===
+
+        # 4.1 공간-목표 통합 (Space + Goal → Goal Vector)
+        # PPC_Space_Left + Goal_Food → PPC_Goal_Food (왼쪽에 음식 목표)
+        self._create_static_synapse(
+            "ppc_left_to_goal_food", self.ppc_space_left, self.ppc_goal_food,
+            self.config.ppc_space_goal_integration_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "ppc_right_to_goal_food", self.ppc_space_right, self.ppc_goal_food,
+            self.config.ppc_space_goal_integration_weight, sparsity=0.12)
+
+        # PPC_Space + Goal_Safety → PPC_Goal_Safety (위험 반대 방향)
+        self._create_static_synapse(
+            "ppc_left_to_goal_safety", self.ppc_space_left, self.ppc_goal_safety,
+            self.config.ppc_space_goal_integration_weight * 0.8, sparsity=0.1)
+        self._create_static_synapse(
+            "ppc_right_to_goal_safety", self.ppc_space_right, self.ppc_goal_safety,
+            self.config.ppc_space_goal_integration_weight * 0.8, sparsity=0.1)
+
+        print(f"    Space-Goal Integration: {self.config.ppc_space_goal_integration_weight}")
+
+        # 4.2 경로 계획 (Path Buffer 연결)
+        self._create_static_synapse(
+            "goal_food_to_path", self.ppc_goal_food, self.ppc_path_buffer,
+            self.config.ppc_path_recurrent_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "goal_safety_to_path", self.ppc_goal_safety, self.ppc_path_buffer,
+            self.config.ppc_path_recurrent_weight, sparsity=0.1)
+        # Path Buffer 자기 유지 (재귀 연결)
+        self._create_static_synapse(
+            "path_buffer_recurrent", self.ppc_path_buffer, self.ppc_path_buffer,
+            self.config.ppc_path_recurrent_weight * 0.5, sparsity=0.05)
+
+        print(f"    Path Buffer: {self.config.ppc_path_recurrent_weight}")
+
+        # 4.3 WTA 경쟁
+        # PPC_Space_Left ↔ PPC_Space_Right (좌우 경쟁)
+        self._create_static_synapse(
+            "ppc_left_right_wta", self.ppc_space_left, self.ppc_space_right,
+            self.config.ppc_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "ppc_right_left_wta", self.ppc_space_right, self.ppc_space_left,
+            self.config.ppc_wta_inhibition, sparsity=0.1)
+
+        # PPC_Goal_Food ↔ PPC_Goal_Safety (목표 경쟁)
+        self._create_static_synapse(
+            "ppc_goal_food_safety_wta", self.ppc_goal_food, self.ppc_goal_safety,
+            self.config.ppc_wta_inhibition * 1.2, sparsity=0.12)
+        self._create_static_synapse(
+            "ppc_goal_safety_food_wta", self.ppc_goal_safety, self.ppc_goal_food,
+            self.config.ppc_wta_inhibition * 1.2, sparsity=0.12)
+
+        print(f"    PPC WTA: {self.config.ppc_wta_inhibition}")
+
+        # 4.4 주의 조절 (Attention)
+        self._create_static_synapse(
+            "goal_food_to_attention", self.ppc_goal_food, self.ppc_attention,
+            self.config.ppc_attention_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "goal_safety_to_attention", self.ppc_goal_safety, self.ppc_attention,
+            self.config.ppc_attention_weight * 1.2, sparsity=0.1)  # 안전 목표 시 주의 더 강화
+
+        # Amygdala Fear → Attention (공포 시 주의 강화)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_ppc_attention", self.fear_response, self.ppc_attention,
+                self.config.ppc_attention_weight * 1.5, sparsity=0.12)
+
+        print(f"    Attention: {self.config.ppc_attention_weight}")
+
+        # === 5. PPC → Motor (공간 유도 행동) ===
+
+        # 5.1 PPC_Goal_Food → Motor (음식 방향 이동)
+        # 왼쪽 공간 + 음식 목표 → 왼쪽 모터
+        self._create_static_synapse(
+            "ppc_goal_food_to_motor_left", self.ppc_goal_food, self.motor_left,
+            self.config.ppc_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "ppc_goal_food_to_motor_right", self.ppc_goal_food, self.motor_right,
+            self.config.ppc_to_motor_weight, sparsity=0.1)
+
+        # 5.2 PPC_Goal_Safety → Motor (위험 반대 방향)
+        # Safety 목표는 위험의 반대 방향으로 이동
+        self._create_static_synapse(
+            "ppc_goal_safety_to_motor_left", self.ppc_goal_safety, self.motor_right,
+            self.config.ppc_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "ppc_goal_safety_to_motor_right", self.ppc_goal_safety, self.motor_left,
+            self.config.ppc_to_motor_weight, sparsity=0.1)
+
+        # 5.3 PPC_Path_Buffer → Motor (경로 실행)
+        self._create_static_synapse(
+            "ppc_path_to_motor_left", self.ppc_path_buffer, self.motor_left,
+            self.config.ppc_to_motor_weight * 0.7, sparsity=0.08)
+        self._create_static_synapse(
+            "ppc_path_to_motor_right", self.ppc_path_buffer, self.motor_right,
+            self.config.ppc_to_motor_weight * 0.7, sparsity=0.08)
+
+        print(f"    PPC→Motor: {self.config.ppc_to_motor_weight}")
+
+        # === 6. PPC → V1/STS (Top-Down 주의) ===
+        if self.config.v1_enabled:
+            # PPC_Attention → V1 (시각 처리 강화)
+            self._create_static_synapse(
+                "ppc_attention_to_v1_food_left", self.ppc_attention, self.v1_food_left,
+                self.config.ppc_to_v1_attention_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "ppc_attention_to_v1_food_right", self.ppc_attention, self.v1_food_right,
+                self.config.ppc_to_v1_attention_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "ppc_attention_to_v1_danger_left", self.ppc_attention, self.v1_danger_left,
+                self.config.ppc_to_v1_attention_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "ppc_attention_to_v1_danger_right", self.ppc_attention, self.v1_danger_right,
+                self.config.ppc_to_v1_attention_weight, sparsity=0.08)
+
+            print(f"    PPC→V1 (Top-Down): {self.config.ppc_to_v1_attention_weight}")
+
+        if self.config.multimodal_enabled:
+            # PPC_Attention → STS (다감각 주의 조절)
+            self._create_static_synapse(
+                "ppc_attention_to_sts_food", self.ppc_attention, self.sts_food,
+                self.config.ppc_to_sts_attention_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "ppc_attention_to_sts_danger", self.ppc_attention, self.sts_danger,
+                self.config.ppc_to_sts_attention_weight, sparsity=0.08)
+
+            print(f"    PPC→STS (Top-Down): {self.config.ppc_to_sts_attention_weight}")
+
+        # === 7. PPC → Hippocampus (공간 기억) ===
+        if self.config.hippocampus_enabled:
+            # PPC_Space → Place Cells (공간 표상 업데이트)
+            self._create_static_synapse(
+                "ppc_left_to_place", self.ppc_space_left, self.place_cells,
+                self.config.ppc_to_hippocampus_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "ppc_right_to_place", self.ppc_space_right, self.place_cells,
+                self.config.ppc_to_hippocampus_weight, sparsity=0.08)
+
+            # PPC_Goal_Food → Food Memory (목표 위치 기억)
+            if self.config.directional_food_memory:
+                self._create_static_synapse(
+                    "ppc_goal_food_to_food_mem_left", self.ppc_goal_food, self.food_memory_left,
+                    self.config.ppc_to_hippocampus_weight * 0.8, sparsity=0.08)
+                self._create_static_synapse(
+                    "ppc_goal_food_to_food_mem_right", self.ppc_goal_food, self.food_memory_right,
+                    self.config.ppc_to_hippocampus_weight * 0.8, sparsity=0.08)
+
+            print(f"    PPC→Hippocampus: {self.config.ppc_to_hippocampus_weight}")
+
+        # === 8. Top-Down 조절 ===
+        # Hunger → PPC_Goal_Food (배고플 때 음식 목표 강화)
+        self._create_static_synapse(
+            "hunger_to_ppc_goal_food", self.hunger_drive, self.ppc_goal_food,
+            self.config.hunger_to_ppc_goal_food_weight, sparsity=0.1)
+
+        # Fear → PPC_Goal_Safety (공포 시 안전 목표 강화)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_ppc_goal_safety", self.fear_response, self.ppc_goal_safety,
+                self.config.fear_to_ppc_goal_safety_weight, sparsity=0.1)
+
+        # Dopamine → PPC_Attention (보상 예측 시 주의 강화)
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "dopamine_to_ppc_attention", self.dopamine_neurons, self.ppc_attention,
+                self.config.dopamine_to_ppc_attention_weight, sparsity=0.1)
+
+        print(f"    Top-Down: Hunger→Goal_Food {self.config.hunger_to_ppc_goal_food_weight}, "
+              f"Fear→Goal_Safety {self.config.fear_to_ppc_goal_safety_weight}")
+
+        total_parietal = (self.config.n_ppc_space_left + self.config.n_ppc_space_right +
+                        self.config.n_ppc_goal_food + self.config.n_ppc_goal_safety +
+                        self.config.n_ppc_attention + self.config.n_ppc_path_buffer)
+        print(f"  Parietal Cortex complete: {total_parietal} neurons")
+        print(f"  Total neurons now = {self.config.total_neurons:,}")
+
+    def _build_premotor_cortex_circuit(self):
+        """
+        Phase 14: Premotor Cortex (전운동 피질) 구축
+
+        전운동 피질 모델링:
+        - PMd (Dorsal Premotor): 공간 기반 운동 계획
+        - PMv (Ventral Premotor): 물체 기반 운동 계획
+        - SMA (Supplementary Motor Area): 시퀀스 생성
+        - pre-SMA: 운동 의도/선택
+        - Motor_Preparation: 운동 준비 버퍼
+
+        구성:
+        - PPC → PMd: 공간 기반 운동 계획
+        - IT/STS → PMv: 물체 기반 운동 계획
+        - PFC → SMA: 목표 기반 시퀀스
+        - PMC → Motor: 운동 출력
+        """
+        print("  Phase 14: Building Premotor Cortex (PMC)...")
+
+        # LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. PMC Populations ===
+        self.pmd_left = self.model.add_neuron_population(
+            "pmd_left", self.config.n_pmd_left,
+            sensory_lif_model, lif_params, lif_init)
+        self.pmd_right = self.model.add_neuron_population(
+            "pmd_right", self.config.n_pmd_right,
+            sensory_lif_model, lif_params, lif_init)
+        self.pmv_approach = self.model.add_neuron_population(
+            "pmv_approach", self.config.n_pmv_approach,
+            sensory_lif_model, lif_params, lif_init)
+        self.pmv_avoid = self.model.add_neuron_population(
+            "pmv_avoid", self.config.n_pmv_avoid,
+            sensory_lif_model, lif_params, lif_init)
+        self.sma_sequence = self.model.add_neuron_population(
+            "sma_sequence", self.config.n_sma_sequence,
+            sensory_lif_model, lif_params, lif_init)
+        self.pre_sma = self.model.add_neuron_population(
+            "pre_sma", self.config.n_pre_sma,
+            sensory_lif_model, lif_params, lif_init)
+        self.motor_preparation = self.model.add_neuron_population(
+            "motor_preparation", self.config.n_motor_preparation,
+            sensory_lif_model, lif_params, lif_init)
+
+        print(f"    PMd: Left({self.config.n_pmd_left}) + Right({self.config.n_pmd_right})")
+        print(f"    PMv: Approach({self.config.n_pmv_approach}) + Avoid({self.config.n_pmv_avoid})")
+        print(f"    SMA: Sequence({self.config.n_sma_sequence}), pre_SMA({self.config.n_pre_sma})")
+        print(f"    Motor_Preparation: {self.config.n_motor_preparation}")
+
+        # === 2. PPC → PMd (공간 기반 운동 계획) ===
+        if self.config.parietal_enabled:
+            # PPC_Goal_Food + PPC_Space_Left → PMd_Left (왼쪽 음식 방향)
+            self._create_static_synapse(
+                "ppc_goal_food_to_pmd_left", self.ppc_goal_food, self.pmd_left,
+                self.config.ppc_to_pmd_weight, sparsity=0.12)
+            self._create_static_synapse(
+                "ppc_space_left_to_pmd_left", self.ppc_space_left, self.pmd_left,
+                self.config.ppc_to_pmd_weight * 0.8, sparsity=0.1)
+
+            # PPC_Goal_Food + PPC_Space_Right → PMd_Right (오른쪽 음식 방향)
+            self._create_static_synapse(
+                "ppc_goal_food_to_pmd_right", self.ppc_goal_food, self.pmd_right,
+                self.config.ppc_to_pmd_weight, sparsity=0.12)
+            self._create_static_synapse(
+                "ppc_space_right_to_pmd_right", self.ppc_space_right, self.pmd_right,
+                self.config.ppc_to_pmd_weight * 0.8, sparsity=0.1)
+
+            # PPC_Goal_Safety → PMd (반대 방향 회피)
+            self._create_static_synapse(
+                "ppc_goal_safety_to_pmd_right", self.ppc_goal_safety, self.pmd_right,
+                self.config.ppc_to_pmd_weight * 0.7, sparsity=0.1)
+            self._create_static_synapse(
+                "ppc_goal_safety_to_pmd_left", self.ppc_goal_safety, self.pmd_left,
+                self.config.ppc_to_pmd_weight * 0.7, sparsity=0.1)
+
+            print(f"    PPC→PMd: {self.config.ppc_to_pmd_weight}")
+
+        # === 3. IT/STS → PMv (물체 기반 운동 계획) ===
+        if self.config.it_enabled:
+            # IT_Food → PMv_Approach
+            self._create_static_synapse(
+                "it_food_to_pmv_approach", self.it_food_category, self.pmv_approach,
+                self.config.it_to_pmv_weight, sparsity=0.12)
+            # IT_Danger → PMv_Avoid
+            self._create_static_synapse(
+                "it_danger_to_pmv_avoid", self.it_danger_category, self.pmv_avoid,
+                self.config.it_to_pmv_weight, sparsity=0.12)
+
+            print(f"    IT→PMv: {self.config.it_to_pmv_weight}")
+
+        if self.config.multimodal_enabled:
+            # STS_Food → PMv_Approach
+            self._create_static_synapse(
+                "sts_food_to_pmv_approach", self.sts_food, self.pmv_approach,
+                self.config.sts_to_pmv_weight, sparsity=0.12)
+            # STS_Danger → PMv_Avoid
+            self._create_static_synapse(
+                "sts_danger_to_pmv_avoid", self.sts_danger, self.pmv_avoid,
+                self.config.sts_to_pmv_weight, sparsity=0.12)
+
+            print(f"    STS→PMv: {self.config.sts_to_pmv_weight}")
+
+        # === 4. PFC → SMA (목표 기반 시퀀스) ===
+        if self.config.prefrontal_enabled:
+            # Goal_Food → SMA_Sequence
+            self._create_static_synapse(
+                "goal_food_to_sma", self.goal_food, self.sma_sequence,
+                self.config.pfc_to_sma_weight, sparsity=0.12)
+            # Goal_Safety → SMA_Sequence
+            self._create_static_synapse(
+                "goal_safety_to_sma", self.goal_safety, self.sma_sequence,
+                self.config.pfc_to_sma_weight, sparsity=0.12)
+            # Working_Memory → pre_SMA
+            self._create_static_synapse(
+                "wm_to_pre_sma", self.working_memory, self.pre_sma,
+                self.config.pfc_to_sma_weight, sparsity=0.1)
+            # Inhibitory_Control → pre_SMA (억제)
+            self._create_static_synapse(
+                "inhibitory_to_pre_sma", self.inhibitory_control, self.pre_sma,
+                self.config.inhibitory_to_pre_sma_weight, sparsity=0.1)
+
+            print(f"    PFC→SMA: {self.config.pfc_to_sma_weight}")
+
+        # === 5. PMC 내부 연결 ===
+
+        # 5.1 SMA 재귀 연결 (시퀀스 유지)
+        self._create_static_synapse(
+            "sma_recurrent", self.sma_sequence, self.sma_sequence,
+            self.config.sma_recurrent_weight, sparsity=0.05)
+
+        # 5.2 pre_SMA → SMA (의도 → 시퀀스 시작)
+        self._create_static_synapse(
+            "pre_sma_to_sma", self.pre_sma, self.sma_sequence,
+            self.config.pre_sma_to_sma_weight, sparsity=0.12)
+
+        print(f"    SMA Recurrent: {self.config.sma_recurrent_weight}, pre_SMA→SMA: {self.config.pre_sma_to_sma_weight}")
+
+        # 5.3 PMd/PMv → Motor_Preparation (통합)
+        self._create_static_synapse(
+            "pmd_left_to_motor_prep", self.pmd_left, self.motor_preparation,
+            self.config.pmd_pmv_integration_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "pmd_right_to_motor_prep", self.pmd_right, self.motor_preparation,
+            self.config.pmd_pmv_integration_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "pmv_approach_to_motor_prep", self.pmv_approach, self.motor_preparation,
+            self.config.pmd_pmv_integration_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "pmv_avoid_to_motor_prep", self.pmv_avoid, self.motor_preparation,
+            self.config.pmd_pmv_integration_weight, sparsity=0.12)
+
+        # 5.4 SMA → Motor_Preparation (시퀀스 실행)
+        self._create_static_synapse(
+            "sma_to_motor_prep", self.sma_sequence, self.motor_preparation,
+            self.config.sma_to_motor_prep_weight, sparsity=0.1)
+
+        print(f"    PMd/PMv/SMA→Motor_Prep: {self.config.pmd_pmv_integration_weight}")
+
+        # 5.5 WTA 경쟁
+        # PMd_Left ↔ PMd_Right
+        self._create_static_synapse(
+            "pmd_left_right_wta", self.pmd_left, self.pmd_right,
+            self.config.pmc_wta_inhibition, sparsity=0.1)
+        self._create_static_synapse(
+            "pmd_right_left_wta", self.pmd_right, self.pmd_left,
+            self.config.pmc_wta_inhibition, sparsity=0.1)
+
+        # PMv_Approach ↔ PMv_Avoid
+        self._create_static_synapse(
+            "pmv_approach_avoid_wta", self.pmv_approach, self.pmv_avoid,
+            self.config.pmc_wta_inhibition * 1.2, sparsity=0.12)
+        self._create_static_synapse(
+            "pmv_avoid_approach_wta", self.pmv_avoid, self.pmv_approach,
+            self.config.pmc_wta_inhibition * 1.2, sparsity=0.12)
+
+        print(f"    PMC WTA: {self.config.pmc_wta_inhibition}")
+
+        # === 6. PMC → Motor (운동 출력) ===
+
+        # 6.1 Motor_Preparation → Motor
+        self._create_static_synapse(
+            "motor_prep_to_motor_left", self.motor_preparation, self.motor_left,
+            self.config.motor_prep_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "motor_prep_to_motor_right", self.motor_preparation, self.motor_right,
+            self.config.motor_prep_to_motor_weight, sparsity=0.1)
+
+        # 6.2 PMd → Motor (직접 경로)
+        self._create_static_synapse(
+            "pmd_left_to_motor_left", self.pmd_left, self.motor_left,
+            self.config.pmd_to_motor_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "pmd_right_to_motor_right", self.pmd_right, self.motor_right,
+            self.config.pmd_to_motor_weight, sparsity=0.1)
+
+        # 6.3 PMv → Motor
+        # PMv_Approach → 양측 Motor (전진)
+        self._create_static_synapse(
+            "pmv_approach_to_motor_left", self.pmv_approach, self.motor_left,
+            self.config.pmv_to_motor_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "pmv_approach_to_motor_right", self.pmv_approach, self.motor_right,
+            self.config.pmv_to_motor_weight, sparsity=0.08)
+
+        # PMv_Avoid → Motor (회피)
+        self._create_static_synapse(
+            "pmv_avoid_to_motor_left", self.pmv_avoid, self.motor_right,
+            self.config.pmv_to_motor_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "pmv_avoid_to_motor_right", self.pmv_avoid, self.motor_left,
+            self.config.pmv_to_motor_weight, sparsity=0.08)
+
+        print(f"    PMC→Motor: {self.config.motor_prep_to_motor_weight}")
+
+        # === 7. PMC → Cerebellum (운동 조정) ===
+        if self.config.cerebellum_enabled:
+            self._create_static_synapse(
+                "motor_prep_to_granule", self.motor_preparation, self.granule_cells,
+                self.config.motor_prep_to_cerebellum_weight, sparsity=0.08)
+
+            print(f"    PMC→Cerebellum: {self.config.motor_prep_to_cerebellum_weight}")
+
+        # === 8. Basal Ganglia → PMC (행동 선택) ===
+        if self.config.basal_ganglia_enabled:
+            # Direct → Motor_Preparation (Go 신호)
+            self._create_static_synapse(
+                "direct_to_motor_prep", self.direct_pathway, self.motor_preparation,
+                self.config.direct_to_motor_prep_weight, sparsity=0.1)
+            # Indirect → Motor_Preparation (NoGo 신호)
+            self._create_static_synapse(
+                "indirect_to_motor_prep", self.indirect_pathway, self.motor_preparation,
+                self.config.indirect_to_motor_prep_weight, sparsity=0.1)
+            # Dopamine → SMA (보상 → 시퀀스 강화)
+            self._create_static_synapse(
+                "dopamine_to_sma", self.dopamine_neurons, self.sma_sequence,
+                self.config.dopamine_to_sma_weight, sparsity=0.1)
+
+            print(f"    BG→PMC: Direct {self.config.direct_to_motor_prep_weight}, "
+                  f"Indirect {self.config.indirect_to_motor_prep_weight}")
+
+        # === 9. Top-Down 조절 ===
+        # Hunger → PMv_Approach
+        self._create_static_synapse(
+            "hunger_to_pmv_approach", self.hunger_drive, self.pmv_approach,
+            self.config.hunger_to_pmv_approach_weight, sparsity=0.1)
+
+        # Fear → PMv_Avoid
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_pmv_avoid", self.fear_response, self.pmv_avoid,
+                self.config.fear_to_pmv_avoid_weight, sparsity=0.1)
+
+        # Arousal → Motor_Preparation
+        if self.config.thalamus_enabled:
+            self._create_static_synapse(
+                "arousal_to_motor_prep", self.arousal, self.motor_preparation,
+                self.config.arousal_to_motor_prep_weight, sparsity=0.1)
+
+        print(f"    Top-Down: Hunger→PMv_Approach {self.config.hunger_to_pmv_approach_weight}, "
+              f"Fear→PMv_Avoid {self.config.fear_to_pmv_avoid_weight}")
+
+        total_premotor = (self.config.n_pmd_left + self.config.n_pmd_right +
+                        self.config.n_pmv_approach + self.config.n_pmv_avoid +
+                        self.config.n_sma_sequence + self.config.n_pre_sma +
+                        self.config.n_motor_preparation)
+        print(f"  Premotor Cortex complete: {total_premotor} neurons")
+        print(f"  Total neurons now = {self.config.total_neurons:,}")
+
     def trigger_error_signal(self, error_type: str = "general", intensity: float = 1.0):
         """
         Phase 6a: 오류 발생 시 Error Signal 활성화
@@ -1808,6 +3615,30 @@ class ForagerBrain:
             self.place_cells.vars["I_input"].view[:] = place_cell_currents
             self.place_cells.vars["I_input"].push_to_device()
 
+        # === Phase 11: Sound 감각 입력 ===
+        sound_danger_l = 0.0
+        sound_danger_r = 0.0
+        sound_food_l = 0.0
+        sound_food_r = 0.0
+
+        if self.config.auditory_enabled:
+            sound_danger_l = observation.get("sound_danger_left", 0.0)
+            sound_danger_r = observation.get("sound_danger_right", 0.0)
+            sound_food_l = observation.get("sound_food_left", 0.0)
+            sound_food_r = observation.get("sound_food_right", 0.0)
+
+            # Sound Input 뉴런에 전류 주입
+            sound_sensitivity = 50.0
+            self.sound_danger_left.vars["I_input"].view[:] = sound_danger_l * sound_sensitivity
+            self.sound_danger_right.vars["I_input"].view[:] = sound_danger_r * sound_sensitivity
+            self.sound_food_left.vars["I_input"].view[:] = sound_food_l * sound_sensitivity
+            self.sound_food_right.vars["I_input"].view[:] = sound_food_r * sound_sensitivity
+
+            self.sound_danger_left.vars["I_input"].push_to_device()
+            self.sound_danger_right.vars["I_input"].push_to_device()
+            self.sound_food_left.vars["I_input"].push_to_device()
+            self.sound_food_right.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -1849,6 +3680,53 @@ class ForagerBrain:
         danger_relay_spikes = 0
         trn_spikes = 0
         arousal_spikes = 0
+
+        # Phase 8 스파이크 카운트 (V1)
+        v1_food_left_spikes = 0
+        v1_food_right_spikes = 0
+        v1_danger_left_spikes = 0
+        v1_danger_right_spikes = 0
+
+        # Phase 9 스파이크 카운트 (V2/V4)
+        v2_edge_food_spikes = 0
+        v2_edge_danger_spikes = 0
+        v4_food_object_spikes = 0
+        v4_danger_object_spikes = 0
+        v4_novel_object_spikes = 0
+
+        # Phase 10 스파이크 카운트 (IT Cortex)
+        it_food_category_spikes = 0
+        it_danger_category_spikes = 0
+        it_neutral_category_spikes = 0
+        it_association_spikes = 0
+        it_memory_buffer_spikes = 0
+
+        # Phase 11 스파이크 카운트 (Auditory Cortex)
+        a1_danger_spikes = 0
+        a1_food_spikes = 0
+        a2_association_spikes = 0
+
+        # Phase 12 스파이크 카운트 (Multimodal Integration)
+        sts_food_spikes = 0
+        sts_danger_spikes = 0
+        sts_congruence_spikes = 0
+        sts_mismatch_spikes = 0
+
+        # Phase 13 스파이크 카운트 (Parietal Cortex)
+        ppc_space_left_spikes = 0
+        ppc_space_right_spikes = 0
+        ppc_goal_food_spikes = 0
+        ppc_goal_safety_spikes = 0
+        ppc_attention_spikes = 0
+        ppc_path_buffer_spikes = 0
+
+        # Phase 14 스파이크 카운트 (Premotor Cortex)
+        pmd_left_spikes = 0
+        pmd_right_spikes = 0
+        pmv_approach_spikes = 0
+        pmv_avoid_spikes = 0
+        sma_sequence_spikes = 0
+        motor_prep_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -1939,6 +3817,100 @@ class ForagerBrain:
                 danger_relay_spikes += np.sum(self.danger_relay.vars["RefracTime"].view > self.spike_threshold)
                 trn_spikes += np.sum(self.trn.vars["RefracTime"].view > self.spike_threshold)
                 arousal_spikes += np.sum(self.arousal.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 8 스파이크 카운팅 (V1)
+            if self.config.v1_enabled:
+                self.v1_food_left.vars["RefracTime"].pull_from_device()
+                self.v1_food_right.vars["RefracTime"].pull_from_device()
+                self.v1_danger_left.vars["RefracTime"].pull_from_device()
+                self.v1_danger_right.vars["RefracTime"].pull_from_device()
+
+                v1_food_left_spikes += np.sum(self.v1_food_left.vars["RefracTime"].view > self.spike_threshold)
+                v1_food_right_spikes += np.sum(self.v1_food_right.vars["RefracTime"].view > self.spike_threshold)
+                v1_danger_left_spikes += np.sum(self.v1_danger_left.vars["RefracTime"].view > self.spike_threshold)
+                v1_danger_right_spikes += np.sum(self.v1_danger_right.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 9 스파이크 카운팅 (V2/V4)
+            if self.config.v2v4_enabled and self.config.v1_enabled:
+                self.v2_edge_food.vars["RefracTime"].pull_from_device()
+                self.v2_edge_danger.vars["RefracTime"].pull_from_device()
+                self.v4_food_object.vars["RefracTime"].pull_from_device()
+                self.v4_danger_object.vars["RefracTime"].pull_from_device()
+                self.v4_novel_object.vars["RefracTime"].pull_from_device()
+
+                v2_edge_food_spikes += np.sum(self.v2_edge_food.vars["RefracTime"].view > self.spike_threshold)
+                v2_edge_danger_spikes += np.sum(self.v2_edge_danger.vars["RefracTime"].view > self.spike_threshold)
+                v4_food_object_spikes += np.sum(self.v4_food_object.vars["RefracTime"].view > self.spike_threshold)
+                v4_danger_object_spikes += np.sum(self.v4_danger_object.vars["RefracTime"].view > self.spike_threshold)
+                v4_novel_object_spikes += np.sum(self.v4_novel_object.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 10 스파이크 카운팅 (IT Cortex)
+            if self.config.it_enabled and self.config.v2v4_enabled:
+                self.it_food_category.vars["RefracTime"].pull_from_device()
+                self.it_danger_category.vars["RefracTime"].pull_from_device()
+                self.it_neutral_category.vars["RefracTime"].pull_from_device()
+                self.it_association.vars["RefracTime"].pull_from_device()
+                self.it_memory_buffer.vars["RefracTime"].pull_from_device()
+
+                it_food_category_spikes += np.sum(self.it_food_category.vars["RefracTime"].view > self.spike_threshold)
+                it_danger_category_spikes += np.sum(self.it_danger_category.vars["RefracTime"].view > self.spike_threshold)
+                it_neutral_category_spikes += np.sum(self.it_neutral_category.vars["RefracTime"].view > self.spike_threshold)
+                it_association_spikes += np.sum(self.it_association.vars["RefracTime"].view > self.spike_threshold)
+                it_memory_buffer_spikes += np.sum(self.it_memory_buffer.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 11 스파이크 카운팅 (Auditory Cortex)
+            if self.config.auditory_enabled:
+                self.a1_danger.vars["RefracTime"].pull_from_device()
+                self.a1_food.vars["RefracTime"].pull_from_device()
+                self.a2_association.vars["RefracTime"].pull_from_device()
+
+                a1_danger_spikes += np.sum(self.a1_danger.vars["RefracTime"].view > self.spike_threshold)
+                a1_food_spikes += np.sum(self.a1_food.vars["RefracTime"].view > self.spike_threshold)
+                a2_association_spikes += np.sum(self.a2_association.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 12 스파이크 카운팅 (Multimodal Integration)
+            if self.config.multimodal_enabled:
+                self.sts_food.vars["RefracTime"].pull_from_device()
+                self.sts_danger.vars["RefracTime"].pull_from_device()
+                self.sts_congruence.vars["RefracTime"].pull_from_device()
+                self.sts_mismatch.vars["RefracTime"].pull_from_device()
+
+                sts_food_spikes += np.sum(self.sts_food.vars["RefracTime"].view > self.spike_threshold)
+                sts_danger_spikes += np.sum(self.sts_danger.vars["RefracTime"].view > self.spike_threshold)
+                sts_congruence_spikes += np.sum(self.sts_congruence.vars["RefracTime"].view > self.spike_threshold)
+                sts_mismatch_spikes += np.sum(self.sts_mismatch.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 13 스파이크 카운팅 (Parietal Cortex)
+            if self.config.parietal_enabled:
+                self.ppc_space_left.vars["RefracTime"].pull_from_device()
+                self.ppc_space_right.vars["RefracTime"].pull_from_device()
+                self.ppc_goal_food.vars["RefracTime"].pull_from_device()
+                self.ppc_goal_safety.vars["RefracTime"].pull_from_device()
+                self.ppc_attention.vars["RefracTime"].pull_from_device()
+                self.ppc_path_buffer.vars["RefracTime"].pull_from_device()
+
+                ppc_space_left_spikes += np.sum(self.ppc_space_left.vars["RefracTime"].view > self.spike_threshold)
+                ppc_space_right_spikes += np.sum(self.ppc_space_right.vars["RefracTime"].view > self.spike_threshold)
+                ppc_goal_food_spikes += np.sum(self.ppc_goal_food.vars["RefracTime"].view > self.spike_threshold)
+                ppc_goal_safety_spikes += np.sum(self.ppc_goal_safety.vars["RefracTime"].view > self.spike_threshold)
+                ppc_attention_spikes += np.sum(self.ppc_attention.vars["RefracTime"].view > self.spike_threshold)
+                ppc_path_buffer_spikes += np.sum(self.ppc_path_buffer.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 14 스파이크 카운팅 (Premotor Cortex)
+            if self.config.premotor_enabled:
+                self.pmd_left.vars["RefracTime"].pull_from_device()
+                self.pmd_right.vars["RefracTime"].pull_from_device()
+                self.pmv_approach.vars["RefracTime"].pull_from_device()
+                self.pmv_avoid.vars["RefracTime"].pull_from_device()
+                self.sma_sequence.vars["RefracTime"].pull_from_device()
+                self.motor_preparation.vars["RefracTime"].pull_from_device()
+
+                pmd_left_spikes += np.sum(self.pmd_left.vars["RefracTime"].view > self.spike_threshold)
+                pmd_right_spikes += np.sum(self.pmd_right.vars["RefracTime"].view > self.spike_threshold)
+                pmv_approach_spikes += np.sum(self.pmv_approach.vars["RefracTime"].view > self.spike_threshold)
+                pmv_avoid_spikes += np.sum(self.pmv_avoid.vars["RefracTime"].view > self.spike_threshold)
+                sma_sequence_spikes += np.sum(self.sma_sequence.vars["RefracTime"].view > self.spike_threshold)
+                motor_prep_spikes += np.sum(self.motor_preparation.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -2039,6 +4011,127 @@ class ForagerBrain:
             trn_rate = trn_spikes / max_spikes_trn
             arousal_rate = arousal_spikes / max_spikes_arousal
 
+        # Phase 8 스파이크율 (V1)
+        v1_food_left_rate = 0.0
+        v1_food_right_rate = 0.0
+        v1_danger_left_rate = 0.0
+        v1_danger_right_rate = 0.0
+        if self.config.v1_enabled:
+            max_spikes_v1_food = self.config.n_v1_food_left * 5
+            max_spikes_v1_danger = self.config.n_v1_danger_left * 5
+
+            v1_food_left_rate = v1_food_left_spikes / max_spikes_v1_food
+            v1_food_right_rate = v1_food_right_spikes / max_spikes_v1_food
+            v1_danger_left_rate = v1_danger_left_spikes / max_spikes_v1_danger
+            v1_danger_right_rate = v1_danger_right_spikes / max_spikes_v1_danger
+
+        # Phase 9 스파이크율 (V2/V4)
+        v2_edge_food_rate = 0.0
+        v2_edge_danger_rate = 0.0
+        v4_food_object_rate = 0.0
+        v4_danger_object_rate = 0.0
+        v4_novel_object_rate = 0.0
+        if self.config.v2v4_enabled and self.config.v1_enabled:
+            max_spikes_v2_food = self.config.n_v2_edge_food * 5
+            max_spikes_v2_danger = self.config.n_v2_edge_danger * 5
+            max_spikes_v4_food = self.config.n_v4_food_object * 5
+            max_spikes_v4_danger = self.config.n_v4_danger_object * 5
+            max_spikes_v4_novel = self.config.n_v4_novel_object * 5
+
+            v2_edge_food_rate = v2_edge_food_spikes / max_spikes_v2_food
+            v2_edge_danger_rate = v2_edge_danger_spikes / max_spikes_v2_danger
+            v4_food_object_rate = v4_food_object_spikes / max_spikes_v4_food
+            v4_danger_object_rate = v4_danger_object_spikes / max_spikes_v4_danger
+            v4_novel_object_rate = v4_novel_object_spikes / max_spikes_v4_novel
+
+        # Phase 10 스파이크율 (IT Cortex)
+        it_food_category_rate = 0.0
+        it_danger_category_rate = 0.0
+        it_neutral_category_rate = 0.0
+        it_association_rate = 0.0
+        it_memory_buffer_rate = 0.0
+        if self.config.it_enabled and self.config.v2v4_enabled:
+            max_spikes_it_food = self.config.n_it_food_category * 5
+            max_spikes_it_danger = self.config.n_it_danger_category * 5
+            max_spikes_it_neutral = self.config.n_it_neutral_category * 5
+            max_spikes_it_assoc = self.config.n_it_association * 5
+            max_spikes_it_buffer = self.config.n_it_memory_buffer * 5
+
+            it_food_category_rate = it_food_category_spikes / max_spikes_it_food
+            it_danger_category_rate = it_danger_category_spikes / max_spikes_it_danger
+            it_neutral_category_rate = it_neutral_category_spikes / max_spikes_it_neutral
+            it_association_rate = it_association_spikes / max_spikes_it_assoc
+            it_memory_buffer_rate = it_memory_buffer_spikes / max_spikes_it_buffer
+
+        # Phase 11 스파이크율 (Auditory Cortex)
+        a1_danger_rate = 0.0
+        a1_food_rate = 0.0
+        a2_association_rate = 0.0
+        if self.config.auditory_enabled:
+            max_spikes_a1_danger = self.config.n_a1_danger * 5
+            max_spikes_a1_food = self.config.n_a1_food * 5
+            max_spikes_a2 = self.config.n_a2_association * 5
+
+            a1_danger_rate = a1_danger_spikes / max_spikes_a1_danger
+            a1_food_rate = a1_food_spikes / max_spikes_a1_food
+            a2_association_rate = a2_association_spikes / max_spikes_a2
+
+        # Phase 12 스파이크율 (Multimodal Integration)
+        sts_food_rate = 0.0
+        sts_danger_rate = 0.0
+        sts_congruence_rate = 0.0
+        sts_mismatch_rate = 0.0
+        if self.config.multimodal_enabled:
+            max_spikes_sts_food = self.config.n_sts_food * 5
+            max_spikes_sts_danger = self.config.n_sts_danger * 5
+            max_spikes_congruence = self.config.n_sts_congruence * 5
+            max_spikes_mismatch = self.config.n_sts_mismatch * 5
+
+            sts_food_rate = sts_food_spikes / max_spikes_sts_food
+            sts_danger_rate = sts_danger_spikes / max_spikes_sts_danger
+            sts_congruence_rate = sts_congruence_spikes / max_spikes_congruence
+            sts_mismatch_rate = sts_mismatch_spikes / max_spikes_mismatch
+
+        # Phase 13 스파이크율 (Parietal Cortex)
+        ppc_space_left_rate = 0.0
+        ppc_space_right_rate = 0.0
+        ppc_goal_food_rate = 0.0
+        ppc_goal_safety_rate = 0.0
+        ppc_attention_rate = 0.0
+        ppc_path_buffer_rate = 0.0
+        if self.config.parietal_enabled:
+            max_spikes_ppc_space = self.config.n_ppc_space_left * 5
+            max_spikes_ppc_goal = self.config.n_ppc_goal_food * 5
+            max_spikes_ppc_attention = self.config.n_ppc_attention * 5
+            max_spikes_ppc_path = self.config.n_ppc_path_buffer * 5
+
+            ppc_space_left_rate = ppc_space_left_spikes / max_spikes_ppc_space
+            ppc_space_right_rate = ppc_space_right_spikes / max_spikes_ppc_space
+            ppc_goal_food_rate = ppc_goal_food_spikes / max_spikes_ppc_goal
+            ppc_goal_safety_rate = ppc_goal_safety_spikes / max_spikes_ppc_goal
+            ppc_attention_rate = ppc_attention_spikes / max_spikes_ppc_attention
+            ppc_path_buffer_rate = ppc_path_buffer_spikes / max_spikes_ppc_path
+
+        # Phase 14 스파이크율 (Premotor Cortex)
+        pmd_left_rate = 0.0
+        pmd_right_rate = 0.0
+        pmv_approach_rate = 0.0
+        pmv_avoid_rate = 0.0
+        sma_sequence_rate = 0.0
+        motor_prep_rate = 0.0
+        if self.config.premotor_enabled:
+            max_spikes_pmd = self.config.n_pmd_left * 5
+            max_spikes_pmv = self.config.n_pmv_approach * 5
+            max_spikes_sma = self.config.n_sma_sequence * 5
+            max_spikes_motor_prep = self.config.n_motor_preparation * 5
+
+            pmd_left_rate = pmd_left_spikes / max_spikes_pmd
+            pmd_right_rate = pmd_right_spikes / max_spikes_pmd
+            pmv_approach_rate = pmv_approach_spikes / max_spikes_pmv
+            pmv_avoid_rate = pmv_avoid_spikes / max_spikes_pmv
+            sma_sequence_rate = sma_sequence_spikes / max_spikes_sma
+            motor_prep_rate = motor_prep_spikes / max_spikes_motor_prep
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -2097,6 +4190,59 @@ class ForagerBrain:
             "danger_relay_rate": danger_relay_rate,
             "trn_rate": trn_rate,
             "arousal_rate": arousal_rate,
+
+            # Phase 8 뉴런 활성화 (V1)
+            "v1_food_left_rate": v1_food_left_rate,
+            "v1_food_right_rate": v1_food_right_rate,
+            "v1_danger_left_rate": v1_danger_left_rate,
+            "v1_danger_right_rate": v1_danger_right_rate,
+
+            # Phase 9 뉴런 활성화 (V2/V4)
+            "v2_edge_food_rate": v2_edge_food_rate,
+            "v2_edge_danger_rate": v2_edge_danger_rate,
+            "v4_food_object_rate": v4_food_object_rate,
+            "v4_danger_object_rate": v4_danger_object_rate,
+            "v4_novel_object_rate": v4_novel_object_rate,
+
+            # Phase 10 뉴런 활성화 (IT Cortex)
+            "it_food_category_rate": it_food_category_rate,
+            "it_danger_category_rate": it_danger_category_rate,
+            "it_neutral_category_rate": it_neutral_category_rate,
+            "it_association_rate": it_association_rate,
+            "it_memory_buffer_rate": it_memory_buffer_rate,
+
+            # Phase 11 뉴런 활성화 (Auditory Cortex)
+            "a1_danger_rate": a1_danger_rate,
+            "a1_food_rate": a1_food_rate,
+            "a2_association_rate": a2_association_rate,
+
+            # Phase 11 Sound 입력
+            "sound_danger_l": sound_danger_l,
+            "sound_danger_r": sound_danger_r,
+            "sound_food_l": sound_food_l,
+            "sound_food_r": sound_food_r,
+
+            # Phase 12 뉴런 활성화 (Multimodal Integration)
+            "sts_food_rate": sts_food_rate,
+            "sts_danger_rate": sts_danger_rate,
+            "sts_congruence_rate": sts_congruence_rate,
+            "sts_mismatch_rate": sts_mismatch_rate,
+
+            # Phase 13 뉴런 활성화 (Parietal Cortex)
+            "ppc_space_left_rate": ppc_space_left_rate,
+            "ppc_space_right_rate": ppc_space_right_rate,
+            "ppc_goal_food_rate": ppc_goal_food_rate,
+            "ppc_goal_safety_rate": ppc_goal_safety_rate,
+            "ppc_attention_rate": ppc_attention_rate,
+            "ppc_path_buffer_rate": ppc_path_buffer_rate,
+
+            # Phase 14 뉴런 활성화 (Premotor Cortex)
+            "pmd_left_rate": pmd_left_rate,
+            "pmd_right_rate": pmd_right_rate,
+            "pmv_approach_rate": pmv_approach_rate,
+            "pmv_avoid_rate": pmv_avoid_rate,
+            "sma_sequence_rate": sma_sequence_rate,
+            "motor_prep_rate": motor_prep_rate,
 
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
@@ -2240,7 +4386,10 @@ class ForagerBrain:
 def run_training(episodes: int = 20, render_mode: str = "none",
                 log_level: str = "normal", debug: bool = False,
                 no_amygdala: bool = False, no_pain: bool = False,
-                persist_learning: bool = False, fps: int = 10):
+                persist_learning: bool = False, no_learning: bool = False,
+                fps: int = 10, food_patch: bool = False,
+                no_multimodal: bool = False, no_parietal: bool = False,
+                no_premotor: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -2248,6 +4397,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     print("=" * 70)
     if persist_learning:
         print("  [!] PERSIST LEARNING ENABLED - weights saved/loaded between episodes")
+    if no_learning:
+        print("  [!] LEARNING DISABLED - baseline mode (no Hebbian learning)")
+    if food_patch:
+        print("  [!] FOOD PATCH MODE ENABLED - Hebbian learning validation")
 
     # 환경 및 뇌 생성
     env_config = ForagerConfig()
@@ -2260,10 +4413,27 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_amygdala:
         brain_config.amygdala_enabled = False
         print("  [!] Amygdala DISABLED (Phase 2a mode)")
+    if no_multimodal:
+        brain_config.multimodal_enabled = False
+        print("  [!] Phase 12 (Multimodal Integration) DISABLED")
+    if no_parietal:
+        brain_config.parietal_enabled = False
+        print("  [!] Phase 13 (Parietal Cortex) DISABLED")
+    if no_premotor:
+        brain_config.premotor_enabled = False
+        print("  [!] Phase 14 (Premotor Cortex) DISABLED")
+    if food_patch:
+        env_config.food_patch_enabled = True
+        print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
+        print(f"      Spawn in patch: {env_config.food_spawn_in_patch_prob*100:.0f}%")
 
     env = ForagerGym(env_config, render_mode=render_mode)
     env.render_fps = fps  # FPS 설정 (시각화 속도 조절)
     brain = ForagerBrain(brain_config)
+
+    # 학습 비활성화 옵션
+    if no_learning:
+        brain.food_learning_enabled = False
 
     # 통계
     all_steps = []
@@ -2275,6 +4445,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
     # Phase 3b: 학습 통계
     all_learn_events = []  # 총 학습 이벤트 수
+
+    # Food Patch 통계
+    all_patch_visits = []   # 에피소드별 [patch0_visits, patch1_visits, ...]
+    all_patch_food = []     # 에피소드별 [patch0_food, patch1_food, ...]
 
     for ep in range(episodes):
         obs = env.reset()
@@ -2361,6 +4535,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         all_pain_steps.append(env_info.get("pain_steps", 0))
         all_learn_events.append(ep_learn_events)  # Phase 3b
 
+        # Food Patch 통계
+        if env_config.food_patch_enabled:
+            all_patch_visits.append(env_info.get("patch_visits", []))
+            all_patch_food.append(env_info.get("patch_food_eaten", []))
+
         if env_info["death_cause"]:
             death_causes[env_info["death_cause"]] = death_causes.get(env_info["death_cause"], 0) + 1
 
@@ -2394,6 +4573,16 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"  Avg Fear:     {avg_fear:.3f}")
             print(f"  Pain Visits:  {env_info.get('pain_visits', 0)}")
             print(f"  Pain Time:    {env_info.get('pain_steps', 0)} steps")
+
+        # Food Patch 통계
+        if env_config.food_patch_enabled:
+            pv = env_info.get("patch_visits", [])
+            pf = env_info.get("patch_food_eaten", [])
+            print(f"  --- Food Patch ---")
+            print(f"  Total Patch Visits: {sum(pv)}")
+            print(f"  Patch Food: {sum(pf)}/{env.total_food_eaten} ({100*sum(pf)/max(1,env.total_food_eaten):.0f}%)")
+            for i, (v, f) in enumerate(zip(pv, pf)):
+                print(f"    Patch {i}: {v} visits, {f} food")
 
         print(f"{'='*60}\n")
 
@@ -2444,6 +4633,43 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         pain_pct = np.sum(all_pain_steps) / np.sum(all_steps) * 100
         print(f"  Pain Avoidance:{100-pain_pct:.1f}% {'✓' if pain_pct < 15 else '✗'} (target: <15% pain time)")
 
+    # Food Patch 학습 효과 검증
+    if env_config.food_patch_enabled and len(all_patch_visits) > 0:
+        print(f"\n  === Food Patch Learning Validation ===")
+
+        # 초반 vs 후반 Patch 방문 비교
+        n_early = min(5, episodes // 2)
+        n_late = min(5, episodes // 2)
+
+        if episodes >= 6:  # 최소 6 에피소드 필요
+            early_visits = sum(sum(v) for v in all_patch_visits[:n_early])
+            late_visits = sum(sum(v) for v in all_patch_visits[-n_late:])
+            visit_change = (late_visits - early_visits) / max(1, early_visits) * 100
+
+            early_patch_food = sum(sum(f) for f in all_patch_food[:n_early])
+            late_patch_food = sum(sum(f) for f in all_patch_food[-n_late:])
+            food_change = (late_patch_food - early_patch_food) / max(1, early_patch_food) * 100
+
+            print(f"  Early (ep 1-{n_early}):")
+            print(f"    Patch Visits: {early_visits}")
+            print(f"    Patch Food:   {early_patch_food}")
+            print(f"  Late (ep {episodes-n_late+1}-{episodes}):")
+            print(f"    Patch Visits: {late_visits}")
+            print(f"    Patch Food:   {late_patch_food}")
+            print(f"  Change:")
+            print(f"    Visit Change: {visit_change:+.1f}% {'✓' if visit_change > 30 else '✗'} (target: >30%)")
+            print(f"    Food Change:  {food_change:+.1f}%")
+
+        # 학습 후 가중치 변화
+        if brain_config.hippocampus_enabled:
+            stats = brain.get_hippocampus_stats()
+            if stats:
+                initial_weight = brain_config.place_to_food_memory_weight
+                weight_change = (stats['avg_weight'] - initial_weight) / initial_weight * 100
+                print(f"  Weight Change:")
+                print(f"    Initial: {initial_weight:.2f} → Final: {stats['avg_weight']:.2f}")
+                print(f"    Change:  {weight_change:+.1f}% {'✓' if stats['avg_weight'] > 3.0 else '✗'} (target: avg > 3.0)")
+
     print("=" * 70)
 
     env.close()
@@ -2464,8 +4690,19 @@ if __name__ == "__main__":
                        help="Disable Pain Zone (Phase 2a mode)")
     parser.add_argument("--persist-learning", action="store_true",
                        help="Save/load Hippocampus weights between episodes (cumulative learning)")
+    parser.add_argument("--no-learning", action="store_true",
+                       help="Disable Hebbian learning (for baseline comparison)")
     parser.add_argument("--fps", type=int, default=10,
                        help="Render FPS (default: 10, slower=easier to observe)")
+    parser.add_argument("--food-patch", action="store_true",
+                       help="Enable Food Patch mode for Hebbian learning validation")
+    # Phase 비활성화 플래그 (검증용)
+    parser.add_argument("--no-multimodal", action="store_true",
+                       help="Disable Phase 12 (Multimodal Integration)")
+    parser.add_argument("--no-parietal", action="store_true",
+                       help="Disable Phase 13 (Parietal Cortex)")
+    parser.add_argument("--no-premotor", action="store_true",
+                       help="Disable Phase 14 (Premotor Cortex)")
     args = parser.parse_args()
 
     run_training(
@@ -2476,5 +4713,10 @@ if __name__ == "__main__":
         no_amygdala=args.no_amygdala,
         no_pain=args.no_pain,
         persist_learning=args.persist_learning,
-        fps=args.fps
+        no_learning=args.no_learning,
+        fps=args.fps,
+        food_patch=args.food_patch,
+        no_multimodal=args.no_multimodal,
+        no_parietal=args.no_parietal,
+        no_premotor=args.no_premotor
     )

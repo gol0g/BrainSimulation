@@ -39,6 +39,12 @@ class ForagerConfig:
     food_radius: float = 8.0  # 더 쉽게 찾기
     food_value: float = 25.0  # 음식 가치 유지
 
+    # === Food Patch 설정 (Hebbian 학습 검증용) ===
+    food_patch_enabled: bool = False           # Food Patch 모드 활성화
+    n_patches: int = 2                         # Patch 개수
+    patch_radius: float = 50.0                 # Patch 반경
+    food_spawn_in_patch_prob: float = 0.8      # Patch 내 음식 생성 확률 (80%)
+
     # 에너지 (항상성)
     energy_start: float = 50.0  # 기본 시작 에너지
     energy_max: float = 100.0
@@ -65,6 +71,13 @@ class ForagerConfig:
     # Phase 2b 보상
     reward_pain: float = -0.5           # Pain Zone에서 매 스텝
     reward_escape: float = 0.1          # Pain Zone 탈출 시
+
+    # === Phase 11: Sound System (청각) ===
+    sound_enabled: bool = True          # 소리 시스템 활성화
+    danger_sound_range: float = 100.0   # Pain Zone 소리 범위
+    food_sound_range: float = 80.0      # 음식 소리 범위
+    sound_decay: float = 1.5            # 거리에 따른 감쇠 지수
+    food_cluster_bonus: float = 0.3     # 음식 클러스터 보너스
 
     # 시뮬레이션
     max_steps: int = 3000
@@ -107,6 +120,13 @@ class ForagerGym:
         self.pain_zone_steps: int = 0              # Pain Zone 내 체류 시간
         self.was_in_pain: bool = False             # 이전 스텝 Pain Zone 여부 (탈출 감지)
 
+        # === Food Patch 설정 및 통계 ===
+        self.patches: List[Tuple[float, float]] = []  # Patch 중심 좌표 (실제 픽셀)
+        self.patch_visits: List[int] = []             # 각 Patch 방문 횟수
+        self.patch_food_eaten: List[int] = []         # 각 Patch에서 먹은 음식 수
+        self.was_in_patch: List[bool] = []            # 이전 스텝 Patch 내 여부
+        self._init_patches()
+
         # Pygame (lazy init)
         self.screen = None
         self.clock = None
@@ -140,6 +160,11 @@ class ForagerGym:
         self.pain_zone_visits = 0
         self.pain_zone_steps = 0
         self.was_in_pain = False
+
+        # Food Patch 통계 초기화
+        self.patch_visits = [0] * self.config.n_patches
+        self.patch_food_eaten = [0] * self.config.n_patches
+        self.was_in_patch = [False] * self.config.n_patches
 
         return self._get_observation()
 
@@ -228,6 +253,16 @@ class ForagerGym:
 
         self.was_in_pain = in_pain
 
+        # === Food Patch 방문 추적 ===
+        if self.config.food_patch_enabled:
+            current_patch = self._get_current_patch()
+            for i in range(len(self.patches)):
+                in_this_patch = (current_patch == i)
+                # 새로 진입한 경우 방문 횟수 증가
+                if in_this_patch and not self.was_in_patch[i]:
+                    self.patch_visits[i] += 1
+                self.was_in_patch[i] = in_this_patch
+
         # 5. 통계 업데이트
         self.min_energy = min(self.min_energy, self.energy)
         self.max_energy = max(self.max_energy, self.energy)
@@ -266,6 +301,10 @@ class ForagerGym:
             "pain_damage": self.pain_damage_accumulated,
             "pain_visits": self.pain_zone_visits,
             "pain_steps": self.pain_zone_steps,
+            # Food Patch 정보
+            "patch_visits": self.patch_visits.copy() if self.config.food_patch_enabled else [],
+            "patch_food_eaten": self.patch_food_eaten.copy() if self.config.food_patch_enabled else [],
+            "current_patch": self._get_current_patch() if self.config.food_patch_enabled else -1,
         }
 
         # 렌더링
@@ -288,6 +327,37 @@ class ForagerGym:
                 self.agent_x > self.config.width - t or
                 self.agent_y < t or
                 self.agent_y > self.config.height - t)
+
+    def _init_patches(self):
+        """Food Patch 초기화 (고정 위치)"""
+        if not self.config.food_patch_enabled:
+            self.patches = []
+            return
+
+        # 기본 Patch 위치: 좌상단(100, 100)과 우하단(300, 300)
+        # Nest(200, 200) 중심을 피해 대칭 배치
+        default_positions = [
+            (0.25, 0.25),  # 좌상단 (100, 100)
+            (0.75, 0.75),  # 우하단 (300, 300)
+        ]
+
+        self.patches = []
+        for i in range(min(self.config.n_patches, len(default_positions))):
+            px = default_positions[i][0] * self.config.width
+            py = default_positions[i][1] * self.config.height
+            self.patches.append((px, py))
+
+    def _in_patch(self, x: float, y: float) -> int:
+        """주어진 좌표가 어느 Patch 내에 있는지 반환 (없으면 -1)"""
+        for i, (px, py) in enumerate(self.patches):
+            dist = np.sqrt((x - px)**2 + (y - py)**2)
+            if dist <= self.config.patch_radius:
+                return i
+        return -1
+
+    def _get_current_patch(self) -> int:
+        """에이전트가 현재 어느 Patch에 있는지 반환 (-1: 없음)"""
+        return self._in_patch(self.agent_x, self.agent_y)
 
     def _distance_to_pain_zone(self) -> float:
         """Pain Zone까지 최단 거리 (내부면 음수)"""
@@ -313,6 +383,117 @@ class ForagerGym:
         else:
             return 0.0
 
+    def _compute_danger_sound(self) -> Tuple[float, float]:
+        """
+        Phase 11: Pain Zone에서 발생하는 위험 소리 계산
+
+        Returns:
+            (left_sound, right_sound): 좌우 귀에 들리는 소리 강도 (0~1)
+        """
+        if not self.config.sound_enabled or not self.config.pain_zone_enabled:
+            return 0.0, 0.0
+
+        # Pain Zone 중심 (맵 가장자리 평균)
+        center_x = self.config.width / 2
+        center_y = self.config.height / 2
+
+        # 가장 가까운 Pain Zone 경계까지 거리
+        dist_to_pain = self._distance_to_pain_zone()
+
+        if dist_to_pain > self.config.danger_sound_range:
+            return 0.0, 0.0
+
+        # 거리에 따른 기본 강도 (Pain Zone 내부면 최대)
+        if dist_to_pain <= 0:
+            intensity = 1.0
+        else:
+            intensity = 1.0 - (dist_to_pain / self.config.danger_sound_range) ** self.config.sound_decay
+        intensity = max(0.0, min(1.0, intensity))
+
+        # 가장 가까운 경계 방향 계산
+        dist_left = self.agent_x
+        dist_right = self.config.width - self.agent_x
+        dist_top = self.agent_y
+        dist_bottom = self.config.height - self.agent_y
+
+        min_dist = min(dist_left, dist_right, dist_top, dist_bottom)
+
+        # 가장 가까운 경계 방향으로의 각도
+        if min_dist == dist_left:
+            danger_angle = np.pi  # 왼쪽
+        elif min_dist == dist_right:
+            danger_angle = 0  # 오른쪽
+        elif min_dist == dist_top:
+            danger_angle = -np.pi / 2  # 위
+        else:
+            danger_angle = np.pi / 2  # 아래
+
+        # 에이전트 방향 기준 상대 각도
+        rel_angle = danger_angle - self.agent_angle
+        rel_angle = (rel_angle + np.pi) % (2 * np.pi) - np.pi  # -π ~ π 정규화
+
+        # 좌우 분리 (왼쪽 귀: 음의 각도, 오른쪽 귀: 양의 각도)
+        left_factor = max(0.0, -np.sin(rel_angle))  # 왼쪽에서 오는 소리
+        right_factor = max(0.0, np.sin(rel_angle))  # 오른쪽에서 오는 소리
+
+        # 정면/후면에서도 양쪽에 들리도록 기본값 추가
+        base = 0.3
+        left_sound = intensity * (base + (1 - base) * left_factor)
+        right_sound = intensity * (base + (1 - base) * right_factor)
+
+        return left_sound, right_sound
+
+    def _compute_food_sound(self) -> Tuple[float, float]:
+        """
+        Phase 11: 음식에서 발생하는 소리 계산
+
+        여러 음식이 가까이 있으면 더 강한 소리 (클러스터 효과)
+
+        Returns:
+            (left_sound, right_sound): 좌우 귀에 들리는 소리 강도 (0~1)
+        """
+        if not self.config.sound_enabled or len(self.foods) == 0:
+            return 0.0, 0.0
+
+        left_total = 0.0
+        right_total = 0.0
+        food_count_nearby = 0
+
+        for food_x, food_y in self.foods:
+            dx = food_x - self.agent_x
+            dy = food_y - self.agent_y
+            dist = np.sqrt(dx * dx + dy * dy)
+
+            if dist > self.config.food_sound_range:
+                continue
+
+            food_count_nearby += 1
+
+            # 거리에 따른 강도
+            intensity = 1.0 - (dist / self.config.food_sound_range) ** self.config.sound_decay
+            intensity = max(0.0, min(1.0, intensity)) * 0.5  # 개별 음식은 약한 소리
+
+            # 음식 방향
+            food_angle = np.arctan2(dy, dx)
+            rel_angle = food_angle - self.agent_angle
+            rel_angle = (rel_angle + np.pi) % (2 * np.pi) - np.pi
+
+            # 좌우 분리
+            left_factor = max(0.0, -np.sin(rel_angle))
+            right_factor = max(0.0, np.sin(rel_angle))
+
+            base = 0.3
+            left_total += intensity * (base + (1 - base) * left_factor)
+            right_total += intensity * (base + (1 - base) * right_factor)
+
+        # 클러스터 보너스 (여러 음식이 가까이 있으면 더 강한 소리)
+        if food_count_nearby > 1:
+            cluster_bonus = 1.0 + self.config.food_cluster_bonus * (food_count_nearby - 1)
+            left_total *= cluster_bonus
+            right_total *= cluster_bonus
+
+        return min(1.0, left_total), min(1.0, right_total)
+
     def _get_observation(self) -> Dict:
         """관찰 반환"""
         food_rays_l, food_rays_r = self._cast_food_rays()
@@ -326,6 +507,14 @@ class ForagerGym:
             pain_rays_l = np.zeros(self.config.n_rays // 2)
             pain_rays_r = np.zeros(self.config.n_rays // 2)
             danger_signal = 0.0
+
+        # Phase 11: Sound 관련 관찰
+        if self.config.sound_enabled:
+            sound_danger_l, sound_danger_r = self._compute_danger_sound()
+            sound_food_l, sound_food_r = self._compute_food_sound()
+        else:
+            sound_danger_l, sound_danger_r = 0.0, 0.0
+            sound_food_l, sound_food_r = 0.0, 0.0
 
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
@@ -346,6 +535,12 @@ class ForagerGym:
             # Phase 3: 위치 정보 (신규)
             "position_x": self.agent_x / self.config.width,   # 0~1 정규화
             "position_y": self.agent_y / self.config.height,  # 0~1 정규화
+
+            # Phase 11: Sound 감각 (신규)
+            "sound_danger_left": sound_danger_l,
+            "sound_danger_right": sound_danger_r,
+            "sound_food_left": sound_food_l,
+            "sound_food_right": sound_food_r,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -546,13 +741,23 @@ class ForagerGym:
             dist = np.sqrt((self.agent_x - food_x)**2 +
                           (self.agent_y - food_y)**2)
             if dist < collision_dist:
+                # Food Patch 통계: 어느 Patch에서 먹었는지 기록
+                if self.config.food_patch_enabled:
+                    patch_idx = self._in_patch(food_x, food_y)
+                    if patch_idx >= 0:
+                        self.patch_food_eaten[patch_idx] += 1
                 self.foods.pop(i)
                 self._spawn_foods(1)  # 새 음식 생성
                 return True
         return False
 
     def _spawn_foods(self, n: int):
-        """Field에 음식 생성 (Nest 외부, Pain Zone 외부)"""
+        """Field에 음식 생성 (Nest 외부, Pain Zone 외부)
+
+        Food Patch 모드 활성화 시:
+        - 80%의 음식이 Patch 내에 생성
+        - 20%는 랜덤 위치에 생성
+        """
         cx, cy = self.config.width / 2, self.config.height / 2
         half = self.config.nest_size / 2
         # Phase 7: Pain Zone 밖에 음식 생성 (pain_zone_thickness + margin)
@@ -560,7 +765,28 @@ class ForagerGym:
         margin = max(pain_margin, self.config.food_radius * 2)
 
         for _ in range(n):
-            # Nest 외부, Pain Zone 외부에 생성 시도
+            # Food Patch 모드: 80% Patch 내, 20% 랜덤
+            if self.config.food_patch_enabled and self.patches:
+                if np.random.random() < self.config.food_spawn_in_patch_prob:
+                    # Patch 내에 음식 생성
+                    patch = self.patches[np.random.randint(len(self.patches))]
+                    for _ in range(100):
+                        # Patch 중심 주변 랜덤 위치 (균등 분포)
+                        angle = np.random.uniform(0, 2 * np.pi)
+                        r = np.sqrt(np.random.uniform(0, 1)) * self.config.patch_radius
+                        x = patch[0] + r * np.cos(angle)
+                        y = patch[1] + r * np.sin(angle)
+
+                        # 경계 체크: Pain Zone, Nest 외부 확인
+                        if (margin <= x <= self.config.width - margin and
+                            margin <= y <= self.config.height - margin and
+                            not (cx - half <= x <= cx + half and
+                                 cy - half <= y <= cy + half)):
+                            self.foods.append((x, y))
+                            break
+                    continue  # 다음 음식으로
+
+            # 기존 방식: 랜덤 위치 (Patch 모드 OFF 또는 20% 확률)
             for _ in range(100):  # 최대 100번 시도
                 x = np.random.uniform(margin, self.config.width - margin)
                 y = np.random.uniform(margin, self.config.height - margin)
@@ -618,6 +844,23 @@ class ForagerGym:
             pygame.draw.rect(env_surface, pain_color, (0, 0, t, 400))
             # 우측
             pygame.draw.rect(env_surface, pain_color, (400 - t, 0, t, 400))
+
+        # === Food Patches (반투명 원) ===
+        if self.config.food_patch_enabled and self.patches:
+            for i, (px, py) in enumerate(self.patches):
+                # Patch 영역 표시 (반투명 녹색)
+                patch_color = (50, 100, 50, 80)  # 반투명 녹색
+                patch_surf = pygame.Surface((int(self.config.patch_radius * 2),
+                                            int(self.config.patch_radius * 2)), pygame.SRCALPHA)
+                pygame.draw.circle(patch_surf, patch_color,
+                                  (int(self.config.patch_radius), int(self.config.patch_radius)),
+                                  int(self.config.patch_radius))
+                env_surface.blit(patch_surf,
+                                (int(px - self.config.patch_radius),
+                                 int(py - self.config.patch_radius)))
+                # Patch 테두리
+                pygame.draw.circle(env_surface, (80, 150, 80),
+                                  (int(px), int(py)), int(self.config.patch_radius), 2)
 
         # Nest 영역 (밝은 색)
         cx, cy = 200, 200  # 400/2
@@ -1202,6 +1445,17 @@ Episode Summary
   Pain Time:    {self.pain_zone_steps} steps ({pain_pct:.1f}%)
   Pain Damage:  {self.pain_damage_accumulated:.1f}
 """
+        if self.config.food_patch_enabled and self.patches:
+            total_patch_visits = sum(self.patch_visits)
+            total_patch_food = sum(self.patch_food_eaten)
+            summary += f"""
+  --- Food Patch (Hebbian Learning) ---
+  Patches:      {len(self.patches)}
+  Total Visits: {total_patch_visits}
+  Patch Food:   {total_patch_food}/{self.total_food_eaten} ({100*total_patch_food/max(1,self.total_food_eaten):.0f}%)
+"""
+            for i, (px, py) in enumerate(self.patches):
+                summary += f"    Patch {i} ({px:.0f},{py:.0f}): {self.patch_visits[i]} visits, {self.patch_food_eaten[i]} food\n"
         summary += f"{'='*60}\n"
         return summary
 
@@ -1222,6 +1476,7 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--random-seed", type=int, default=42)
     parser.add_argument("--no-pain", action="store_true", help="Disable Pain Zone (Phase 2a mode)")
+    parser.add_argument("--food-patch", action="store_true", help="Enable Food Patch mode (Hebbian learning)")
     args = parser.parse_args()
 
     np.random.seed(args.random_seed)
@@ -1236,6 +1491,11 @@ if __name__ == "__main__":
         print("  [!] Pain Zone DISABLED (Phase 2a mode)")
     else:
         print(f"  Pain Zone: thickness={config.pain_zone_thickness}, damage={config.pain_damage}")
+
+    if args.food_patch:
+        config.food_patch_enabled = True
+        print(f"  [!] Food Patch ENABLED: {config.n_patches} patches, radius={config.patch_radius}")
+        print(f"      Spawn probability in patch: {config.food_spawn_in_patch_prob*100:.0f}%")
 
     env = ForagerGym(config, render_mode=args.render)
 
