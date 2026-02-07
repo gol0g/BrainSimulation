@@ -431,9 +431,9 @@ class ForagerBrainConfig:
     sts_mismatch_weight: float = 12.0                # 불일치 감지 가중치
     sts_wta_inhibition: float = -8.0                 # STS WTA 경쟁
 
-    # STS → 출력
-    sts_to_hippocampus_weight: float = 15.0          # STS → Hippocampus
-    sts_to_amygdala_weight: float = 18.0             # STS_Danger → Amygdala
+    # STS → 출력 (간접 경로도 Pain 반사 간섭 주의 - 2026-02-08 수정)
+    sts_to_hippocampus_weight: float = 8.0           # STS → Hippocampus (15→8 약화: Food_Memory→Motor 간접 간섭 방지)
+    sts_to_amygdala_weight: float = 8.0              # STS_Danger → Amygdala (18→8 약화: Fear 과다 증폭 방지)
     sts_to_motor_weight: float = 0.0                 # STS → Motor (비활성화 - Pain 반사 간섭 방지)
     sts_to_pfc_weight: float = 10.0                  # STS → PFC
 
@@ -473,7 +473,7 @@ class ForagerBrainConfig:
     ppc_to_motor_weight: float = 0.0                  # PPC_Goal → Motor (비활성화 - PMC 경유로 변경)
     ppc_to_v1_attention_weight: float = 8.0           # PPC_Attention → V1 (Top-Down)
     ppc_to_sts_attention_weight: float = 8.0          # PPC_Attention → STS (Top-Down)
-    ppc_to_hippocampus_weight: float = 10.0           # PPC_Space → Place Cells
+    ppc_to_hippocampus_weight: float = 5.0            # PPC_Space → Place Cells (10→5 약화: Food_Memory 노이즈 감소)
 
     # Top-Down → PPC
     hunger_to_ppc_goal_food_weight: float = 10.0      # Hunger → PPC_Goal_Food
