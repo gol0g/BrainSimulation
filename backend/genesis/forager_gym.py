@@ -94,6 +94,11 @@ class ForagerConfig:
     npc_eating_signal_duration: int = 5         # NPC 먹기 이벤트 지속 시간 (steps)
     npc_food_observation_range: float = 120.0   # NPC 먹기 관찰 가능 거리
 
+    # === Phase 15c: Theory of Mind ===
+    npc_intention_observation_range: float = 120.0    # 의도 추론 관찰 거리
+    npc_competition_range: float = 80.0               # 경쟁 감지 거리
+    npc_food_seek_threshold: int = 20                  # 음식 추구 확신 threshold (steps)
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -114,6 +119,10 @@ class NPCAgent:
         self.target_food = None           # 현재 추적 중인 음식 위치
         self.last_eat_step = -100         # 마지막 먹기 시점
         self.heading_toward_food = False  # 목표지향 움직임 플래그
+        # Phase 15c: Theory of Mind tracking
+        self.last_heading = self.angle            # 이전 heading (방향 변화 감지)
+        self.heading_changed = False              # heading 크게 변했는지
+        self.consecutive_food_seeks = 0           # 연속 음식 추구 스텝 수
 
     def step(self, foods: list, player_pos: Tuple[float, float],
              map_width: float, map_height: float, config: 'ForagerConfig'):
@@ -156,6 +165,15 @@ class NPCAgent:
             if self._wander_timer <= 0:
                 self.angle += np.random.uniform(-0.5, 0.5)
                 self._wander_timer = np.random.randint(20, 60)
+
+        # Phase 15c: 방향 변화 및 음식 추구 일관성 추적
+        heading_diff = abs((self.angle - self.last_heading + math.pi) % (2 * math.pi) - math.pi)
+        self.heading_changed = heading_diff > 0.1  # >~5.7도
+        self.last_heading = self.angle
+        if self.heading_toward_food:
+            self.consecutive_food_seeks += 1
+        else:
+            self.consecutive_food_seeks = 0
 
         # 이동
         new_x = self.x + math.cos(self.angle) * self.speed
@@ -712,6 +730,10 @@ class ForagerGym:
             npc_eating_l, npc_eating_r = self._detect_npc_eating()
             npc_food_dir_l, npc_food_dir_r = self._compute_npc_food_direction()
             npc_near_food = self._compute_npc_near_food()
+            # Phase 15c: Theory of Mind observation channels
+            npc_intention_food = self._compute_npc_intention_food()
+            npc_heading_change = self._compute_npc_heading_change()
+            npc_competition = self._compute_npc_competition()
         else:
             n_half = self.config.n_rays // 2
             agent_rays_l = np.zeros(n_half)
@@ -721,6 +743,9 @@ class ForagerGym:
             npc_eating_l, npc_eating_r = 0.0, 0.0
             npc_food_dir_l, npc_food_dir_r = 0.0, 0.0
             npc_near_food = 0.0
+            npc_intention_food = 0.0
+            npc_heading_change = 0.0
+            npc_competition = 0.0
 
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
@@ -761,6 +786,11 @@ class ForagerGym:
             "npc_food_direction_left": npc_food_dir_l,
             "npc_food_direction_right": npc_food_dir_r,
             "npc_near_food": npc_near_food,
+
+            # Phase 15c: Theory of Mind 관찰 채널
+            "npc_intention_food": npc_intention_food,
+            "npc_heading_change": npc_heading_change,
+            "npc_competition": npc_competition,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1245,6 +1275,113 @@ class ForagerGym:
                     # 플레이어와의 거리로 감쇠
                     signal *= (1.0 - player_dist / obs_range)
                     best_signal = max(best_signal, signal)
+
+        return min(1.0, best_signal)
+
+    # === Phase 15c: Theory of Mind 관찰 메서드 ===
+
+    def _compute_npc_intention_food(self) -> float:
+        """
+        NPC의 음식 추구 의도 강도 (일관성 기반)
+
+        consecutive_food_seeks가 높을수록 "NPC가 음식을 원한다"는 확신 증가.
+
+        Returns:
+            intention: 0~1 (0=불확실, 1=확실히 음식 추구 중)
+        """
+        if not self.npc_agents:
+            return 0.0
+
+        obs_range = self.config.npc_intention_observation_range
+        threshold = self.config.npc_food_seek_threshold
+        best_signal = 0.0
+
+        for npc in self.npc_agents:
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist > obs_range or dist < 1.0:
+                continue
+
+            # 음식 추구 일관성
+            intention = min(1.0, npc.consecutive_food_seeks / threshold)
+            # 거리 감쇠
+            dist_factor = 1.0 - (dist / obs_range)
+            signal = intention * dist_factor
+
+            best_signal = max(best_signal, signal)
+
+        return min(1.0, best_signal)
+
+    def _compute_npc_heading_change(self) -> float:
+        """
+        NPC 방향 불안정성 (예측 오차 원천)
+
+        NPC가 갑자기 방향을 바꾸면 높은 신호 → 예측 오차.
+
+        Returns:
+            heading_change: 0~1 (0=안정, 1=급변)
+        """
+        if not self.npc_agents:
+            return 0.0
+
+        obs_range = self.config.npc_intention_observation_range
+        best_signal = 0.0
+
+        for npc in self.npc_agents:
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist > obs_range or dist < 1.0:
+                continue
+
+            if npc.heading_changed:
+                dist_factor = 1.0 - (dist / obs_range)
+                best_signal = max(best_signal, dist_factor)
+
+        return min(1.0, best_signal)
+
+    def _compute_npc_competition(self) -> float:
+        """
+        NPC가 플레이어 근처 음식을 노리고 있는지 감지
+
+        NPC의 target_food가 플레이어 근처 음식과 겹치면 경쟁 신호.
+
+        Returns:
+            competition: 0~1 (0=경쟁 없음, 1=강한 경쟁)
+        """
+        if not self.npc_agents or not self.foods:
+            return 0.0
+
+        comp_range = self.config.npc_competition_range
+        best_signal = 0.0
+
+        for npc in self.npc_agents:
+            if not npc.heading_toward_food or npc.target_food is None:
+                continue
+
+            # NPC가 관찰 범위 내인지
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            npc_dist = math.sqrt(dx * dx + dy * dy)
+            if npc_dist > self.config.npc_intention_observation_range:
+                continue
+
+            # NPC target_food가 플레이어 근처 음식인지
+            tfx, tfy = npc.target_food
+            player_to_food = math.sqrt(
+                (tfx - self.agent_x)**2 + (tfy - self.agent_y)**2)
+
+            if player_to_food < comp_range:
+                # 가까울수록 강한 경쟁 신호
+                signal = 1.0 - (player_to_food / comp_range)
+                # NPC도 가까울수록 긴급
+                npc_to_food = math.sqrt(
+                    (npc.x - tfx)**2 + (npc.y - tfy)**2)
+                urgency = max(0.0, 1.0 - npc_to_food / comp_range)
+                signal *= max(0.3, urgency)
+
+                best_signal = max(best_signal, signal)
 
         return min(1.0, best_signal)
 

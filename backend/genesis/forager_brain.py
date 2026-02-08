@@ -605,6 +605,55 @@ class ForagerBrainConfig:
     mirror_food_recurrent_weight: float = 5.0          # Mirror_Food 자기 유지
     social_memory_recurrent_weight: float = 8.0        # Social_Memory 자기 유지
 
+    # === Phase 15c: Theory of Mind & Cooperation/Competition ===
+    tom_enabled: bool = True
+    n_tom_intention: int = 100                          # NPC 의도 추론 (mPFC)
+    n_tom_belief: int = 80                              # NPC 신념 추적 (mPFC)
+    n_tom_prediction: int = 80                          # NPC 행동 예측
+    n_tom_surprise: int = 60                            # 사회적 예측 오차 (Ant. Insula)
+    n_coop_compete_coop: int = 80                       # 협력 가치 (vmPFC)
+    n_coop_compete_compete: int = 100                   # 경쟁 감지 (dACC)
+
+    # 내부 연결
+    social_obs_to_tom_intention_weight: float = 10.0    # Social_Obs → ToM_Intention
+    sts_social_to_tom_intention_weight: float = 8.0     # STS_Social → ToM_Intention
+    tom_intention_to_belief_weight: float = 12.0        # ToM_Intention → ToM_Belief
+    tpj_other_to_tom_belief_weight: float = 10.0        # TPJ_Other → ToM_Belief
+    social_obs_to_tom_belief_weight: float = 8.0        # Social_Obs → ToM_Belief
+    tom_intention_to_prediction_weight: float = 15.0    # ToM_Intention → ToM_Prediction
+    tom_belief_to_prediction_weight: float = 12.0       # ToM_Belief → ToM_Prediction
+    tom_prediction_recurrent_weight: float = 8.0        # ToM_Prediction 자기 유지
+    tom_prediction_to_surprise_weight: float = -10.0    # Prediction → Surprise (억제)
+    tom_surprise_to_prediction_weight: float = -6.0     # Surprise → Prediction (리셋)
+
+    # Coop/Compete
+    tom_intention_to_coop_weight: float = 10.0          # ToM_Intention → Coop (Hebbian)
+    social_memory_to_coop_weight: float = 8.0           # Social_Memory → Coop
+    coop_recurrent_weight: float = 6.0                  # Coop 자기 유지
+    tom_intention_to_compete_weight: float = 8.0        # ToM_Intention → Compete
+    acc_conflict_to_compete_weight: float = 8.0         # ACC_Conflict → Compete
+    coop_compete_wta_weight: float = -8.0               # Coop ↔ Compete 상호 억제
+
+    # 기존 회로 출력 (모두 ≤6.0, Motor 0.0!)
+    coop_to_social_approach_weight: float = 5.0         # Coop → Social_Approach
+    coop_to_goal_food_weight: float = 4.0               # Coop → Goal_Food
+    compete_to_social_avoid_weight: float = 5.0         # Compete → Social_Avoid
+    compete_to_hunger_weight: float = 4.0               # Compete → Hunger (긴급성)
+    compete_to_acc_weight: float = 5.0                  # Compete → ACC_Conflict
+    tom_surprise_to_acc_weight: float = 4.0             # Surprise → ACC_Monitor
+    tom_surprise_to_dopamine_weight: float = 5.0        # Surprise → Dopamine (novelty)
+    tom_intention_to_wm_weight: float = 5.0             # Intention → Working_Memory
+    tom_to_motor_weight: float = 0.0                    # Motor 직접 연결 없음!
+
+    # Top-Down
+    hunger_to_tom_intention_weight: float = 6.0         # Hunger → ToM_Intention
+    fear_to_tom_intention_weight: float = -4.0          # Fear → ToM_Intention (억제)
+    hunger_to_compete_weight: float = 6.0               # Hunger → Compete
+
+    # Hebbian (Cooperation value learning)
+    tom_coop_eta: float = 0.08                          # 학습률
+    tom_coop_w_max: float = 20.0                        # 최대 가중치
+
     dt: float = 1.0
 
     @property
@@ -668,6 +717,10 @@ class ForagerBrainConfig:
             if self.mirror_enabled:
                 base += (self.n_social_observation + self.n_mirror_food +
                          self.n_vicarious_reward + self.n_social_memory)
+            if self.tom_enabled:
+                base += (self.n_tom_intention + self.n_tom_belief +
+                         self.n_tom_prediction + self.n_tom_surprise +
+                         self.n_coop_compete_coop + self.n_coop_compete_compete)
         return base
 
 
@@ -701,6 +754,9 @@ class ForagerBrain:
         # Phase 15b: Mirror neuron state defaults
         self.mirror_self_eating_timer = 0
         self.last_social_obs_rate = 0.0
+
+        # Phase 15c: Theory of Mind state defaults
+        self.last_tom_intention_rate = 0.0
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -923,6 +979,10 @@ class ForagerBrain:
         # Phase 15b: Mirror Neuron circuits
         if self.config.social_brain_enabled and self.config.mirror_enabled:
             self._build_mirror_neuron_circuit()
+
+        # Phase 15c: Theory of Mind circuits
+        if self.config.social_brain_enabled and self.config.tom_enabled:
+            self._build_tom_circuit()
 
         # Build and load
         print("Building model...")
@@ -4025,6 +4085,275 @@ class ForagerBrain:
             "surprise": surprise,
         }
 
+    def _build_tom_circuit(self):
+        """
+        Phase 15c: Theory of Mind & Cooperation/Competition
+
+        생물학적 근거:
+        - mPFC: 의도/신념 표상 mentalizing (Frith & Frith, 2006)
+        - TPJ: 관점 취하기 (이미 15a에 존재, 확장)
+        - Anterior Insula: 사회적 예측 오차 (Singer et al., 2004)
+        - vmPFC: 협력 가치 학습 (Rilling et al., 2002)
+        - dACC: 경쟁 모니터링 (Behrens et al., 2008)
+
+        구조:
+        - ToM_Intention (100, SensoryLIF): NPC 의도 추론
+        - ToM_Belief (80, LIF): NPC 신념 추적
+        - ToM_Prediction (80, LIF): NPC 행동 예측
+        - ToM_Surprise (60, SensoryLIF): 예측 오차
+        - CoopCompete_Coop (80, LIF, Hebbian): 협력 가치
+        - CoopCompete_Compete (100, SensoryLIF): 경쟁 감지
+        """
+        print("  Phase 15c: Building Theory of Mind circuit...")
+
+        # SensoryLIF 파라미터 (I_input 필요)
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # LIF 파라미터 (시냅스 입력만)
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        # === 1. ToM_Intention (SensoryLIF) - NPC 의도 추론 ===
+        self.tom_intention = self.model.add_neuron_population(
+            "tom_intention", self.config.n_tom_intention,
+            sensory_lif_model, s_params, s_init)
+        print(f"    ToM_Intention: {self.config.n_tom_intention} neurons (SensoryLIF)")
+
+        # === 2. ToM_Belief (LIF) - NPC 신념 추적 ===
+        self.tom_belief = self.model.add_neuron_population(
+            "tom_belief", self.config.n_tom_belief,
+            "LIF", lif_params, lif_init)
+        print(f"    ToM_Belief: {self.config.n_tom_belief} neurons (LIF)")
+
+        # === 3. ToM_Prediction (LIF) - NPC 행동 예측 ===
+        self.tom_prediction = self.model.add_neuron_population(
+            "tom_prediction", self.config.n_tom_prediction,
+            "LIF", lif_params, lif_init)
+        print(f"    ToM_Prediction: {self.config.n_tom_prediction} neurons (LIF)")
+
+        # === 4. ToM_Surprise (SensoryLIF) - 예측 오차 ===
+        self.tom_surprise = self.model.add_neuron_population(
+            "tom_surprise", self.config.n_tom_surprise,
+            sensory_lif_model, s_params, s_init)
+        print(f"    ToM_Surprise: {self.config.n_tom_surprise} neurons (SensoryLIF)")
+
+        # === 5. CoopCompete_Coop (LIF, Hebbian 학습 대상) ===
+        self.coop_compete_coop = self.model.add_neuron_population(
+            "coop_compete_coop", self.config.n_coop_compete_coop,
+            "LIF", lif_params, lif_init)
+        print(f"    CoopCompete_Coop: {self.config.n_coop_compete_coop} neurons (LIF)")
+
+        # === 6. CoopCompete_Compete (SensoryLIF) ===
+        self.coop_compete_compete = self.model.add_neuron_population(
+            "coop_compete_compete", self.config.n_coop_compete_compete,
+            sensory_lif_model, s_params, s_init)
+        print(f"    CoopCompete_Compete: {self.config.n_coop_compete_compete} neurons (SensoryLIF)")
+
+        # === 7. 시냅스 연결 ===
+
+        # --- 입력 → ToM_Intention ---
+        self._create_static_synapse(
+            "social_obs_to_tom_intention", self.social_observation, self.tom_intention,
+            self.config.social_obs_to_tom_intention_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "sts_social_to_tom_intention", self.sts_social, self.tom_intention,
+            self.config.sts_social_to_tom_intention_weight, sparsity=0.08)
+
+        print(f"    Social_Obs→ToM_Intention: {self.config.social_obs_to_tom_intention_weight}")
+        print(f"    STS_Social→ToM_Intention: {self.config.sts_social_to_tom_intention_weight}")
+
+        # --- 입력 → ToM_Belief ---
+        self._create_static_synapse(
+            "tom_intention_to_belief", self.tom_intention, self.tom_belief,
+            self.config.tom_intention_to_belief_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "tpj_other_to_tom_belief", self.tpj_other, self.tom_belief,
+            self.config.tpj_other_to_tom_belief_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "social_obs_to_tom_belief", self.social_observation, self.tom_belief,
+            self.config.social_obs_to_tom_belief_weight, sparsity=0.08)
+
+        # --- ToM_Prediction ---
+        self._create_static_synapse(
+            "tom_intention_to_prediction", self.tom_intention, self.tom_prediction,
+            self.config.tom_intention_to_prediction_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "tom_belief_to_prediction", self.tom_belief, self.tom_prediction,
+            self.config.tom_belief_to_prediction_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "tom_prediction_recurrent", self.tom_prediction, self.tom_prediction,
+            self.config.tom_prediction_recurrent_weight, sparsity=0.05)
+
+        # --- Prediction-Surprise 회로 ---
+        # 예측 성공 → 놀라움 억제
+        self._create_static_synapse(
+            "tom_prediction_to_surprise", self.tom_prediction, self.tom_surprise,
+            self.config.tom_prediction_to_surprise_weight, sparsity=0.10)
+        # 놀라움 → 예측 리셋
+        self._create_static_synapse(
+            "tom_surprise_to_prediction", self.tom_surprise, self.tom_prediction,
+            self.config.tom_surprise_to_prediction_weight, sparsity=0.08)
+
+        print(f"    Prediction→Surprise: {self.config.tom_prediction_to_surprise_weight} (inhibitory)")
+
+        # --- CoopCompete_Coop 입력 ---
+        # ToM_Intention → Coop (DENSE, Hebbian 학습)
+        self.tom_intention_to_coop_hebbian = self.model.add_synapse_population(
+            "tom_intention_to_coop_hebbian", "DENSE",
+            self.tom_intention, self.coop_compete_coop,
+            init_weight_update("StaticPulse", {},
+                {"g": init_var("Constant", {"constant": self.config.tom_intention_to_coop_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0})
+        )
+        # Social_Memory → Coop
+        self._create_static_synapse(
+            "social_memory_to_coop", self.social_memory, self.coop_compete_coop,
+            self.config.social_memory_to_coop_weight, sparsity=0.08)
+        # Coop 재귀
+        self._create_static_synapse(
+            "coop_recurrent", self.coop_compete_coop, self.coop_compete_coop,
+            self.config.coop_recurrent_weight, sparsity=0.05)
+
+        print(f"    ToM_Intention→Coop: {self.config.tom_intention_to_coop_weight} (HEBBIAN)")
+
+        # --- CoopCompete_Compete 입력 ---
+        self._create_static_synapse(
+            "tom_intention_to_compete", self.tom_intention, self.coop_compete_compete,
+            self.config.tom_intention_to_compete_weight, sparsity=0.08)
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "acc_conflict_to_compete", self.acc_conflict, self.coop_compete_compete,
+                self.config.acc_conflict_to_compete_weight, sparsity=0.08)
+
+        # --- Coop ↔ Compete WTA ---
+        self._create_static_synapse(
+            "coop_to_compete_inhib", self.coop_compete_coop, self.coop_compete_compete,
+            self.config.coop_compete_wta_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "compete_to_coop_inhib", self.coop_compete_compete, self.coop_compete_coop,
+            self.config.coop_compete_wta_weight, sparsity=0.08)
+
+        print(f"    Coop↔Compete WTA: {self.config.coop_compete_wta_weight}")
+
+        # --- 기존 회로 출력 (모두 ≤6.0, Motor 0.0!) ---
+        # Coop → Social_Approach
+        self._create_static_synapse(
+            "coop_to_social_approach", self.coop_compete_coop, self.social_approach,
+            self.config.coop_to_social_approach_weight, sparsity=0.05)
+        # Coop → Goal_Food
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "coop_to_goal_food", self.coop_compete_coop, self.goal_food,
+                self.config.coop_to_goal_food_weight, sparsity=0.05)
+        # Compete → Social_Avoid
+        self._create_static_synapse(
+            "compete_to_social_avoid", self.coop_compete_compete, self.social_avoid,
+            self.config.compete_to_social_avoid_weight, sparsity=0.05)
+        # Compete → Hunger (긴급성)
+        self._create_static_synapse(
+            "compete_to_hunger", self.coop_compete_compete, self.hunger_drive,
+            self.config.compete_to_hunger_weight, sparsity=0.05)
+        # Compete → ACC_Conflict
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "compete_to_acc", self.coop_compete_compete, self.acc_conflict,
+                self.config.compete_to_acc_weight, sparsity=0.05)
+        # Surprise → ACC_Monitor
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "tom_surprise_to_acc", self.tom_surprise, self.acc_monitor,
+                self.config.tom_surprise_to_acc_weight, sparsity=0.05)
+        # Surprise → Dopamine
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "tom_surprise_to_dopamine", self.tom_surprise, self.dopamine_neurons,
+                self.config.tom_surprise_to_dopamine_weight, sparsity=0.05)
+        # Intention → Working_Memory
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "tom_intention_to_wm", self.tom_intention, self.working_memory,
+                self.config.tom_intention_to_wm_weight, sparsity=0.05)
+
+        print(f"    Coop→Social_Approach: {self.config.coop_to_social_approach_weight}")
+        print(f"    Compete→Social_Avoid: {self.config.compete_to_social_avoid_weight}")
+        print(f"    ToM→Motor: {self.config.tom_to_motor_weight} (DISABLED!)")
+
+        # --- Top-Down ---
+        # Hunger → ToM_Intention
+        self._create_static_synapse(
+            "hunger_to_tom_intention", self.hunger_drive, self.tom_intention,
+            self.config.hunger_to_tom_intention_weight, sparsity=0.05)
+        # Fear → ToM_Intention (억제)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_tom_intention", self.fear_response, self.tom_intention,
+                self.config.fear_to_tom_intention_weight, sparsity=0.05)
+        # Hunger → Compete
+        self._create_static_synapse(
+            "hunger_to_compete", self.hunger_drive, self.coop_compete_compete,
+            self.config.hunger_to_compete_weight, sparsity=0.05)
+
+        print(f"    Hunger→ToM_Intention: {self.config.hunger_to_tom_intention_weight}")
+        print(f"    Fear→ToM_Intention: {self.config.fear_to_tom_intention_weight}")
+
+        n_tom_total = (self.config.n_tom_intention + self.config.n_tom_belief +
+                       self.config.n_tom_prediction + self.config.n_tom_surprise +
+                       self.config.n_coop_compete_coop + self.config.n_coop_compete_compete)
+        print(f"    Phase 15c Theory of Mind: {n_tom_total} neurons")
+
+    def learn_cooperation_value(self, food_near_npc: bool):
+        """
+        Phase 15c: 협력 가치 Hebbian 학습
+
+        에이전트가 음식을 먹을 때 ToM_Intention이 활성화되어 있었으면
+        ToM_Intention → Coop 가중치 강화.
+        "NPC를 관찰/따라가면 음식을 찾는다"를 학습.
+
+        Args:
+            food_near_npc: 먹은 음식이 NPC target 근처인지 여부
+        """
+        if not (self.config.social_brain_enabled and self.config.tom_enabled):
+            return None
+
+        eta = self.config.tom_coop_eta
+        w_max = self.config.tom_coop_w_max
+        n_pre = self.config.n_tom_intention
+        n_post = self.config.n_coop_compete_coop
+
+        self.tom_intention_to_coop_hebbian.vars["g"].pull_from_device()
+        weights = self.tom_intention_to_coop_hebbian.vars["g"].view.copy()
+        weights = weights.reshape(n_pre, n_post)
+
+        # 학습 강도: NPC 근처 음식이면 강한 강화
+        if food_near_npc:
+            learning_factor = 1.0
+        else:
+            learning_factor = 0.3  # 약한 시간적 상관
+
+        # ToM_Intention 활성도에 비례
+        intention_scale = max(0.1, self.last_tom_intention_rate)
+        delta_w = eta * learning_factor * intention_scale
+        weights += delta_w
+        weights = np.clip(weights, 0.0, w_max)
+
+        self.tom_intention_to_coop_hebbian.vars["g"].view[:] = weights.flatten()
+        self.tom_intention_to_coop_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_weight": float(np.mean(weights)),
+            "max_weight": float(np.max(weights)),
+            "learning_factor": learning_factor,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -4229,6 +4558,28 @@ class ForagerBrain:
             self.vicarious_reward.vars["I_input"].view[:] = npc_eating * surprise_factor * 50.0
             self.vicarious_reward.vars["I_input"].push_to_device()
 
+        # === Phase 15c: Theory of Mind 감각 입력 ===
+        npc_intention_food = 0.0
+        npc_heading_change = 0.0
+        npc_competition = 0.0
+
+        if self.config.social_brain_enabled and self.config.tom_enabled:
+            npc_intention_food = observation.get("npc_intention_food", 0.0)
+            npc_heading_change = observation.get("npc_heading_change", 0.0)
+            npc_competition = observation.get("npc_competition", 0.0)
+
+            # ToM_Intention: NPC 음식 추구 확신도 (I_input)
+            self.tom_intention.vars["I_input"].view[:] = npc_intention_food * 45.0
+            self.tom_intention.vars["I_input"].push_to_device()
+
+            # ToM_Surprise: NPC 방향 불안정성 (I_input)
+            self.tom_surprise.vars["I_input"].view[:] = npc_heading_change * 40.0
+            self.tom_surprise.vars["I_input"].push_to_device()
+
+            # CoopCompete_Compete: NPC 경쟁 신호 (I_input)
+            self.coop_compete_compete.vars["I_input"].view[:] = npc_competition * 45.0
+            self.coop_compete_compete.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -4333,6 +4684,14 @@ class ForagerBrain:
         mirror_food_spikes = 0
         vicarious_reward_spikes = 0
         social_memory_spikes = 0
+
+        # Phase 15c 스파이크 카운트 (Theory of Mind)
+        tom_intention_spikes = 0
+        tom_belief_spikes = 0
+        tom_prediction_spikes = 0
+        tom_surprise_spikes = 0
+        coop_spikes = 0
+        compete_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -4549,6 +4908,22 @@ class ForagerBrain:
                     mirror_food_spikes += np.sum(self.mirror_food.vars["RefracTime"].view > self.spike_threshold)
                     vicarious_reward_spikes += np.sum(self.vicarious_reward.vars["RefracTime"].view > self.spike_threshold)
                     social_memory_spikes += np.sum(self.social_memory.vars["RefracTime"].view > self.spike_threshold)
+
+                # Phase 15c 스파이크 카운팅 (Theory of Mind)
+                if self.config.tom_enabled:
+                    self.tom_intention.vars["RefracTime"].pull_from_device()
+                    self.tom_belief.vars["RefracTime"].pull_from_device()
+                    self.tom_prediction.vars["RefracTime"].pull_from_device()
+                    self.tom_surprise.vars["RefracTime"].pull_from_device()
+                    self.coop_compete_coop.vars["RefracTime"].pull_from_device()
+                    self.coop_compete_compete.vars["RefracTime"].pull_from_device()
+
+                    tom_intention_spikes += np.sum(self.tom_intention.vars["RefracTime"].view > self.spike_threshold)
+                    tom_belief_spikes += np.sum(self.tom_belief.vars["RefracTime"].view > self.spike_threshold)
+                    tom_prediction_spikes += np.sum(self.tom_prediction.vars["RefracTime"].view > self.spike_threshold)
+                    tom_surprise_spikes += np.sum(self.tom_surprise.vars["RefracTime"].view > self.spike_threshold)
+                    coop_spikes += np.sum(self.coop_compete_coop.vars["RefracTime"].view > self.spike_threshold)
+                    compete_spikes += np.sum(self.coop_compete_compete.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -4802,6 +5177,22 @@ class ForagerBrain:
             # 예측 오차 계산을 위해 관찰율 저장
             self.last_social_obs_rate = social_obs_rate
 
+        # Phase 15c 스파이크율 (Theory of Mind)
+        tom_intention_rate = 0.0
+        tom_belief_rate = 0.0
+        tom_prediction_rate = 0.0
+        tom_surprise_rate = 0.0
+        coop_rate = 0.0
+        compete_rate = 0.0
+        if self.config.social_brain_enabled and self.config.tom_enabled:
+            tom_intention_rate = tom_intention_spikes / (self.config.n_tom_intention * 5)
+            tom_belief_rate = tom_belief_spikes / (self.config.n_tom_belief * 5)
+            tom_prediction_rate = tom_prediction_spikes / (self.config.n_tom_prediction * 5)
+            tom_surprise_rate = tom_surprise_spikes / (self.config.n_tom_surprise * 5)
+            coop_rate = coop_spikes / (self.config.n_coop_compete_coop * 5)
+            compete_rate = compete_spikes / (self.config.n_coop_compete_compete * 5)
+            self.last_tom_intention_rate = tom_intention_rate
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -4941,6 +5332,19 @@ class ForagerBrain:
             "npc_eating_l": npc_eating_l,
             "npc_eating_r": npc_eating_r,
             "npc_near_food": npc_near_food,
+
+            # Phase 15c 뉴런 활성화 (Theory of Mind)
+            "tom_intention_rate": tom_intention_rate,
+            "tom_belief_rate": tom_belief_rate,
+            "tom_prediction_rate": tom_prediction_rate,
+            "tom_surprise_rate": tom_surprise_rate,
+            "coop_rate": coop_rate,
+            "compete_rate": compete_rate,
+
+            # Phase 15c 입력
+            "npc_intention_food": npc_intention_food,
+            "npc_heading_change": npc_heading_change,
+            "npc_competition": npc_competition,
 
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
@@ -5088,7 +5492,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 fps: int = 10, food_patch: bool = False,
                 no_multimodal: bool = False, no_parietal: bool = False,
                 no_premotor: bool = False, no_social: bool = False,
-                no_mirror: bool = False):
+                no_mirror: bool = False, no_tom: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -5128,6 +5532,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_mirror:
         brain_config.mirror_enabled = False
         print("  [!] Phase 15b (Mirror Neurons) DISABLED")
+    if no_tom:
+        brain_config.tom_enabled = False
+        print("  [!] Phase 15c (Theory of Mind) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -5222,6 +5629,23 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 # Phase 15b: 자기 먹기 → Mirror 활성화
                 if brain_config.social_brain_enabled and brain_config.mirror_enabled:
                     brain.mirror_self_eating_timer = env_config.npc_eating_signal_duration
+
+                # Phase 15c: 협력 가치 학습 (음식 먹기 시)
+                if brain_config.social_brain_enabled and brain_config.tom_enabled:
+                    food_near_npc = False
+                    for npc in env.npc_agents:
+                        if npc.target_food is not None:
+                            tfx, tfy = npc.target_food
+                            dist_to_npc_target = np.sqrt(
+                                (obs["position_x"] * env_config.width - tfx)**2 +
+                                (obs["position_y"] * env_config.height - tfy)**2)
+                            if dist_to_npc_target < 50.0:
+                                food_near_npc = True
+                                break
+                    coop_learn = brain.learn_cooperation_value(food_near_npc)
+                    if coop_learn and log_level in ["debug", "verbose"]:
+                        print(f"  [TOM] Coop learning: avg_w={coop_learn['avg_weight']:.2f}, "
+                              f"factor={coop_learn['learning_factor']:.1f}")
 
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
@@ -5427,6 +5851,8 @@ if __name__ == "__main__":
                        help="Disable Phase 15 (Social Brain)")
     parser.add_argument("--no-mirror", action="store_true",
                        help="Disable Phase 15b (Mirror Neurons)")
+    parser.add_argument("--no-tom", action="store_true",
+                       help="Disable Phase 15c (Theory of Mind)")
     args = parser.parse_args()
 
     run_training(
@@ -5444,5 +5870,6 @@ if __name__ == "__main__":
         no_parietal=args.no_parietal,
         no_premotor=args.no_premotor,
         no_social=args.no_social,
-        no_mirror=args.no_mirror
+        no_mirror=args.no_mirror,
+        no_tom=args.no_tom
     )
