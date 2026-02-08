@@ -11,19 +11,20 @@ LLM이나 딥러닝이 아닌 실제 뇌의 생물학적 메커니즘(STDP, Push
 ## 현재 상태
 
 ```
-Phase 16 완료 | 16,800 뉴런 | 50% 생존율
+Phase 17 완료 | 17,800 뉴런 | 55% 생존율
 ```
 
 | 지표 | 결과 |
 |------|------|
-| Survival Rate | 50% |
-| Reward Freq | 3.46% |
-| Pain Avoidance | 91.0% |
+| Survival Rate | 55% |
+| Reward Freq | 3.19% |
+| Pain Avoidance | 90.9% |
 
-## 뇌 구조 (16 Phase)
+## 뇌 구조 (17 Phase)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│  Phase 17: Language Circuit (언어 회로 - Broca/Wernicke)      │
 │  Phase 16: Association Cortex (연합 피질)                     │
 │  Phase 15: Social Brain (사회적 뇌 + Mirror + ToM)           │
 │  Phase 12-14: Multimodal STS + PPC + PMC (다감각 통합)       │
@@ -84,7 +85,7 @@ python forager_brain.py --episodes 3 --render pygame
 
 ```
 backend/genesis/
-├── forager_brain.py   # 메인 뇌 (16,800 뉴런, Phase 1-16)
+├── forager_brain.py   # 메인 뇌 (17,800 뉴런, Phase 1-17)
 ├── forager_gym.py     # Forager 환경 (NPC + Pain Zone)
 └── checkpoints/       # 학습 체크포인트
 
@@ -105,7 +106,8 @@ docs/
 | Phase 4-7 | Forager | 8,000 | 도파민, 전전두엽, 소뇌, 시상 |
 | Phase 8-10 | Forager | 10,000 | 시각 경로 (V1→IT), 물체 범주화 |
 | Phase 11-14 | Forager | 13,500 | 청각, 다감각 통합, 운동 계획 |
-| Phase 15-16 | Forager | **16,800** | 사회적 뇌, 연합 피질 |
+| Phase 15-16 | Forager | 16,800 | 사회적 뇌, 연합 피질 |
+| Phase 17 | Forager | **17,800** | 언어 회로 (Broca/Wernicke) |
 
 ## 기술 스택
 

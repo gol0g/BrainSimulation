@@ -99,6 +99,16 @@ class ForagerConfig:
     npc_competition_range: float = 80.0               # 경쟁 감지 거리
     npc_food_seek_threshold: int = 20                  # 음식 추구 확신 threshold (steps)
 
+    # === Phase 17: NPC Vocalization (발성) ===
+    npc_vocalization_enabled: bool = True       # NPC 발성 활성화
+    npc_call_range: float = 100.0              # NPC 발성 가청 범위 (pixels)
+    npc_call_duration: int = 5                 # 발성 지속 시간 (steps)
+    npc_call_food_prob: float = 0.8            # NPC가 먹을 때 food call 확률
+    npc_call_danger_prob: float = 0.9          # NPC가 pain zone 근처에서 danger call 확률
+    agent_call_range: float = 80.0             # 에이전트 발성 가청 범위
+    agent_call_cooldown: int = 10              # 에이전트 발성 쿨다운 (steps)
+    npc_call_response_speed: float = 0.15      # NPC가 에이전트 call에 반응하는 강도
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -123,6 +133,10 @@ class NPCAgent:
         self.last_heading = self.angle            # 이전 heading (방향 변화 감지)
         self.heading_changed = False              # heading 크게 변했는지
         self.consecutive_food_seeks = 0           # 연속 음식 추구 스텝 수
+        # Phase 17: Vocalization
+        self.current_call = 0               # 0=none, 1=food, 2=danger
+        self.call_timer = 0                 # 발성 잔여 시간
+        self.near_pain_zone = False         # pain zone 근접 여부
 
     def step(self, foods: list, player_pos: Tuple[float, float],
              map_width: float, map_height: float, config: 'ForagerConfig'):
@@ -248,8 +262,31 @@ class NPCAgent:
                 foods.pop(i)
                 self.food_eaten += 1
                 self.last_eat_step = current_step  # Phase 15b
+                # Phase 17: 먹을 때 food call 발성
+                if config.npc_vocalization_enabled and self.call_timer <= 0:
+                    if np.random.random() < config.npc_call_food_prob:
+                        self.current_call = 1
+                        self.call_timer = config.npc_call_duration
                 return True
         return False
+
+    def update_call_state(self, config: 'ForagerConfig'):
+        """Phase 17: NPC 발성 상태 업데이트"""
+        # 타이머 감소
+        if self.call_timer > 0:
+            self.call_timer -= 1
+            if self.call_timer <= 0:
+                self.current_call = 0
+
+        # Pain zone 근접 확인 → danger call
+        t = config.pain_zone_thickness + config.danger_range
+        near_pain = (self.x < t or self.x > config.width - t or
+                     self.y < t or self.y > config.height - t)
+        if near_pain and not self.near_pain_zone and self.call_timer <= 0:
+            if np.random.random() < config.npc_call_danger_prob:
+                self.current_call = 2
+                self.call_timer = config.npc_call_duration
+        self.near_pain_zone = near_pain
 
 
 class ForagerGym:
@@ -338,6 +375,10 @@ class ForagerGym:
         self.patch_visits = [0] * self.config.n_patches
         self.patch_food_eaten = [0] * self.config.n_patches
         self.was_in_patch = [False] * self.config.n_patches
+
+        # Phase 17: Agent vocalization state
+        self._agent_call_type = 0
+        self._agent_call_cooldown = 0
 
         # Phase 15: NPC 초기화 (맵 사분면에 분산 배치)
         self.npc_agents = []
@@ -452,6 +493,29 @@ class ForagerGym:
                     self.npc_food_stolen += 1
                     npc_eating_events.append((npc.x, npc.y, self.steps))
                     self._spawn_foods(1)  # 새 음식 생성 (총 개수 유지)
+                # Phase 17: NPC 발성 상태 업데이트
+                if self.config.npc_vocalization_enabled:
+                    npc.update_call_state(self.config)
+
+        # === Phase 17: 에이전트 발성이 NPC에 미치는 영향 ===
+        if (self.config.social_enabled and self.config.npc_vocalization_enabled
+                and hasattr(self, '_agent_call_type') and self._agent_call_cooldown <= 0):
+            if self._agent_call_type in (1, 2):
+                for npc in self.npc_agents:
+                    dist = math.sqrt((npc.x - self.agent_x)**2 + (npc.y - self.agent_y)**2)
+                    if dist < self.config.agent_call_range and dist > 1.0:
+                        if self._agent_call_type == 1:
+                            # Food call: NPC가 에이전트 쪽으로 회전
+                            target_angle = math.atan2(self.agent_y - npc.y, self.agent_x - npc.x)
+                        else:
+                            # Danger call: NPC가 에이전트 반대쪽으로 회전 (도주)
+                            target_angle = math.atan2(npc.y - self.agent_y, npc.x - self.agent_x)
+                        angle_diff = (target_angle - npc.angle + math.pi) % (2 * math.pi) - math.pi
+                        npc.angle += np.clip(angle_diff, -self.config.npc_call_response_speed,
+                                             self.config.npc_call_response_speed)
+                self._agent_call_cooldown = self.config.agent_call_cooldown
+        if hasattr(self, '_agent_call_cooldown'):
+            self._agent_call_cooldown = max(0, self._agent_call_cooldown - 1)
 
         # === Food Patch 방문 추적 ===
         if self.config.food_patch_enabled:
@@ -510,6 +574,8 @@ class ForagerGym:
             "npc_positions": [(npc.x, npc.y) for npc in self.npc_agents] if self.config.social_enabled else [],
             # Phase 15b: NPC 먹기 이벤트
             "npc_eating_events": npc_eating_events,
+            # Phase 17: Agent vocalization
+            "agent_call_type": getattr(self, '_agent_call_type', 0),
         }
 
         # 렌더링
@@ -747,6 +813,14 @@ class ForagerGym:
             npc_heading_change = 0.0
             npc_competition = 0.0
 
+        # Phase 17: NPC vocalization observation
+        if self.config.npc_vocalization_enabled and self.npc_agents:
+            npc_call_food_l, npc_call_food_r = self._compute_npc_call_food()
+            npc_call_danger_l, npc_call_danger_r = self._compute_npc_call_danger()
+        else:
+            npc_call_food_l, npc_call_food_r = 0.0, 0.0
+            npc_call_danger_l, npc_call_danger_r = 0.0, 0.0
+
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
             "food_rays_left": food_rays_l,
@@ -791,6 +865,12 @@ class ForagerGym:
             "npc_intention_food": npc_intention_food,
             "npc_heading_change": npc_heading_change,
             "npc_competition": npc_competition,
+
+            # Phase 17: NPC vocalization 관찰 채널
+            "npc_call_food_left": npc_call_food_l,
+            "npc_call_food_right": npc_call_food_r,
+            "npc_call_danger_left": npc_call_danger_l,
+            "npc_call_danger_right": npc_call_danger_r,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1384,6 +1464,98 @@ class ForagerGym:
                 best_signal = max(best_signal, signal)
 
         return min(1.0, best_signal)
+
+    # === Phase 17: NPC Vocalization 관찰 메서드 ===
+
+    def _compute_npc_call_food(self) -> Tuple[float, float]:
+        """
+        NPC food call 감지 (좌우 분리)
+
+        NPC가 current_call==1 (food call)이고 call_timer>0이면,
+        거리와 방향에 따라 좌우 신호 발생.
+
+        Returns:
+            (call_food_left, call_food_right): 0~1
+        """
+        left_total = 0.0
+        right_total = 0.0
+
+        for npc in self.npc_agents:
+            if npc.current_call != 1 or npc.call_timer <= 0:
+                continue
+
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            if dist > self.config.npc_call_range or dist < 1.0:
+                continue
+
+            # 거리 감쇠
+            intensity = 1.0 - (dist / self.config.npc_call_range) ** self.config.sound_decay
+            intensity = max(0.0, intensity)
+            # 시간 감쇠 (call_timer / duration)
+            intensity *= npc.call_timer / self.config.npc_call_duration
+
+            # 좌우 분리
+            npc_angle = math.atan2(dy, dx)
+            rel_angle = npc_angle - self.agent_angle
+            direction = math.sin(rel_angle)
+
+            base = intensity * 0.3
+            directional = intensity * 0.7
+
+            if direction < 0:
+                left_total += base + directional * abs(direction)
+                right_total += base
+            else:
+                right_total += base + directional * abs(direction)
+                left_total += base
+
+        return min(1.0, left_total), min(1.0, right_total)
+
+    def _compute_npc_call_danger(self) -> Tuple[float, float]:
+        """
+        NPC danger call 감지 (좌우 분리)
+
+        NPC가 current_call==2 (danger call)이고 call_timer>0이면 신호 발생.
+
+        Returns:
+            (call_danger_left, call_danger_right): 0~1
+        """
+        left_total = 0.0
+        right_total = 0.0
+
+        for npc in self.npc_agents:
+            if npc.current_call != 2 or npc.call_timer <= 0:
+                continue
+
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            if dist > self.config.npc_call_range or dist < 1.0:
+                continue
+
+            intensity = 1.0 - (dist / self.config.npc_call_range) ** self.config.sound_decay
+            intensity = max(0.0, intensity)
+            intensity *= npc.call_timer / self.config.npc_call_duration
+
+            npc_angle = math.atan2(dy, dx)
+            rel_angle = npc_angle - self.agent_angle
+            direction = math.sin(rel_angle)
+
+            base = intensity * 0.3
+            directional = intensity * 0.7
+
+            if direction < 0:
+                left_total += base + directional * abs(direction)
+                right_total += base
+            else:
+                right_total += base + directional * abs(direction)
+                left_total += base
+
+        return min(1.0, left_total), min(1.0, right_total)
 
     def set_brain_info(self, brain_info: dict):
         """뇌 활성화 정보 설정 (시각화용)"""

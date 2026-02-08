@@ -4,13 +4,13 @@
 
 ---
 
-## 현재 상태: Phase 16 검증 완료 (16,800 뉴런)
+## 현재 상태: Phase 17 검증 완료 (17,800 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 16 검증 통과 ✓ (2026-02-08)                            ║
-║  생존율 50%, Reward Freq 3.46%, Pain Avoidance 91.0%         ║
-║  Association Cortex 700 뉴런 추가 (초범주 개념 형성)         ║
+║  Phase 17 검증 통과 ✓ (2026-02-08)                            ║
+║  생존율 55%, Reward Freq 3.19%, Pain Avoidance 90.9%         ║
+║  Language Circuit 1,000 뉴런 추가 (Broca/Wernicke 언어 회로) ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -37,7 +37,8 @@
 | 15a | 사회적 뇌 (Social Brain) | +1,500 | ✓ 완료 | 60% |
 | 15b | 거울 뉴런 (Mirror Neurons) | +600 | ✓ 완료 | 65% |
 | 15c | Theory of Mind (ToM) | +500 | ✓ 완료 | **70%** |
-| 16 | 연합 피질 (Association Cortex) | +700 | ✓ 완료 | **50%** |
+| 16 | 연합 피질 (Association Cortex) | +700 | ✓ 완료 | 50% |
+| 17 | 언어 회로 (Broca/Wernicke) | +1,000 | ✓ 완료 | **55%** |
 
 ### Phase 12-14 수정 이력
 
@@ -165,14 +166,25 @@
 
 **Phase 16 완료**: 16,800 뉴런
 
+### Phase 17: 언어 회로 (Broca/Wernicke) ✓ 완료
+- **구조**: +1,000 뉴런
+  - Call Input (200 SensoryLIF): Call_Food L/R (50×2) + Call_Danger L/R (50×2) - NPC 발성 청취
+  - Wernicke's Area (280 LIF): Food(80)/Danger(80)/Social(60)/Context(60) - 발성 이해
+  - Broca's Area (280 LIF): Food(80)/Danger(80)/Social(60)/Sequence(60) - 발성 생산
+  - Vocal Gate / PAG (80 SensoryLIF): 발성 AND 게이트 (Arousal + Broca - Fear 억제)
+  - Call Mirror (80 LIF): 듣기+생산 양쪽 활성 (거울 공명)
+  - Call Binding (80 LIF, Hebbian DENSE): 소리-의미 연합 학습
+- **연결**: Arcuate Fasciculus (Wernicke↔Broca 양방향), ~42 시냅스
+- **환경**: NPC 발성 (food call, danger call) + 에이전트 발성 출력 (vocalize_type)
+- **학습**: Call Binding Hebbian DENSE (eta=0.06, w_max=18.0) - 음식/위험 call 의미 연합
+- **연결 안전**: Motor 직접 연결 없음 (0.0), 간접 경로 ≤6.0, Pain Push-Pull 간섭 <5%
+- **검증 (2026-02-08)**: 생존율 55% ✓, Reward Freq 3.19% ✓, Pain Avoidance 90.9% ✓
+
+**Phase 17 완료**: 17,800 뉴런
+
 ---
 
-## 장기 계획 (Phase 17-20)
-
-### Phase 17: 언어 회로 (Broca/Wernicke)
-- 소리 패턴 → 의미 연결
-- 처음엔 단순 신호 (경고음, 음식 신호)
-- 점진적 복잡화
+## 장기 계획 (Phase 18-20)
 
 ### Phase 18: 작업 기억 확장
 - 다단계 추론
@@ -265,4 +277,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-08 (Phase 16 검증 통과, 생존율 50%, 16,800 뉴런)*
+*최종 업데이트: 2026-02-08 (Phase 17 검증 통과, 생존율 55%, 17,800 뉴런)*

@@ -723,6 +723,95 @@ class ForagerBrainConfig:
     assoc_binding_eta: float = 0.06                     # 학습률
     assoc_binding_w_max: float = 18.0                   # 최대 가중치
 
+    # === Phase 17: Language Circuit (언어 회로 - Broca/Wernicke) ===
+    language_enabled: bool = True
+
+    # 감각 입력 (SensoryLIF)
+    n_call_food_input_left: int = 50
+    n_call_food_input_right: int = 50
+    n_call_danger_input_left: int = 50
+    n_call_danger_input_right: int = 50
+
+    # Wernicke's Area (이해)
+    n_wernicke_food: int = 80
+    n_wernicke_danger: int = 80
+    n_wernicke_social: int = 60
+    n_wernicke_context: int = 60
+
+    # Broca's Area (생산)
+    n_broca_food: int = 80
+    n_broca_danger: int = 80
+    n_broca_social: int = 60
+    n_broca_sequence: int = 60
+
+    # Vocal Gate / PAG (SensoryLIF)
+    n_vocal_gate: int = 80
+
+    # Call Mirror + Call Binding
+    n_call_mirror: int = 80
+    n_call_binding: int = 80
+
+    # Call Input → Wernicke
+    call_to_wernicke_weight: float = 20.0
+
+    # Wernicke 내부
+    wernicke_food_danger_wta: float = -10.0
+    wernicke_to_social_weight: float = 8.0
+    wernicke_to_context_weight: float = 10.0
+    wernicke_context_recurrent: float = 6.0
+
+    # Broca 입력 (기존 회로 → Broca)
+    assoc_edible_to_broca_food_weight: float = 10.0
+    hunger_to_broca_food_weight: float = 8.0
+    assoc_threatening_to_broca_danger_weight: float = 10.0
+    fear_to_broca_danger_weight: float = 8.0
+    sts_social_to_broca_social_weight: float = 8.0
+    arousal_to_broca_social_weight: float = 6.0
+
+    # Broca 내부
+    broca_food_danger_wta: float = -10.0
+    broca_to_sequence_weight: float = 12.0
+    broca_sequence_to_broca_inh: float = -6.0
+    broca_sequence_recurrent: float = -8.0
+
+    # Arcuate Fasciculus (양방향)
+    wernicke_to_broca_weight: float = 8.0       # mirror resonance
+    broca_to_wernicke_weight: float = 6.0       # self-monitoring
+
+    # Vocal Gate / PAG
+    arousal_to_vocal_gate_weight: float = 10.0
+    broca_to_vocal_gate_weight: float = 12.0
+
+    # Call Mirror
+    wernicke_to_call_mirror_weight: float = 10.0
+    broca_to_call_mirror_weight: float = 10.0
+
+    # Call Binding (Hebbian)
+    wernicke_to_call_binding_weight: float = 10.0
+    assoc_to_call_binding_weight: float = 8.0
+    call_binding_recurrent: float = 6.0
+    call_binding_eta: float = 0.06
+    call_binding_w_max: float = 18.0
+
+    # 출력 (모두 ≤6.0, Motor=0.0!)
+    wernicke_food_to_goal_food_weight: float = 4.0
+    wernicke_danger_to_fear_weight: float = 5.0
+    wernicke_social_to_sts_social_weight: float = 4.0
+    call_mirror_to_assoc_binding_weight: float = 3.0
+    call_binding_to_assoc_edible_weight: float = 3.0
+    call_binding_to_assoc_threatening_weight: float = 3.0
+    call_binding_to_wm_weight: float = 3.0
+    language_to_motor_weight: float = 0.0       # 절대 비활성!
+
+    # Top-Down
+    hunger_to_wernicke_food_weight: float = 5.0
+    fear_to_wernicke_danger_weight: float = 6.0
+    wm_to_wernicke_context_weight: float = 4.0
+
+    # Context 입력
+    place_to_wernicke_context_weight: float = 4.0
+    sts_social_to_wernicke_context_weight: float = 5.0
+
     dt: float = 1.0
 
     @property
@@ -795,6 +884,14 @@ class ForagerBrainConfig:
                      self.n_assoc_animate + self.n_assoc_context +
                      self.n_assoc_valence + self.n_assoc_binding +
                      self.n_assoc_novelty)
+        if self.language_enabled:
+            base += (self.n_call_food_input_left + self.n_call_food_input_right +
+                     self.n_call_danger_input_left + self.n_call_danger_input_right +
+                     self.n_wernicke_food + self.n_wernicke_danger +
+                     self.n_wernicke_social + self.n_wernicke_context +
+                     self.n_broca_food + self.n_broca_danger +
+                     self.n_broca_social + self.n_broca_sequence +
+                     self.n_vocal_gate + self.n_call_mirror + self.n_call_binding)
         return base
 
 
@@ -834,6 +931,18 @@ class ForagerBrain:
 
         # Phase 16: Association Cortex state defaults
         self.last_assoc_binding_rate = 0.0
+
+        # Phase 16b: cached rates for cross-phase use
+        self.last_fear_rate = 0.0
+
+        # Phase 17: Language Circuit state defaults
+        self.last_wernicke_food_rate = 0.0
+        self.last_wernicke_danger_rate = 0.0
+        self.last_broca_food_rate = 0.0
+        self.last_broca_danger_rate = 0.0
+        self.last_vocal_gate_rate = 0.0
+        self.last_call_binding_rate = 0.0
+        self.vocalize_type = 0  # 0=none, 1=food_call, 2=danger_call
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -1064,6 +1173,10 @@ class ForagerBrain:
         # Phase 16: Association Cortex
         if self.config.association_cortex_enabled:
             self._build_association_cortex_circuit()
+
+        # Phase 17: Language Circuit
+        if self.config.language_enabled:
+            self._build_language_circuit()
 
         # Build and load
         print("Building model...")
@@ -4755,6 +4868,354 @@ class ForagerBrain:
             "learning_factor": learning_factor,
         }
 
+    def _build_language_circuit(self):
+        """
+        Phase 17: Language Circuit (언어 회로 - Broca/Wernicke)
+
+        Vervet monkey alarm call 모델 기반 proto-language:
+        - Wernicke's Area: 발성 청취 → 범주 이해 (comprehension)
+        - Broca's Area: 내부 상태 → 발성 생산 프로그램 (production)
+        - Arcuate Fasciculus: Broca↔Wernicke 양방향 연결
+        - Vocal Gate (PAG): 발성 게이팅 (언제 소리낼지)
+        - Call Mirror: 듣기+생산 양쪽에서 활성
+        - Call Binding: 소리-의미 연합 학습 (Hebbian)
+        """
+        print("  Phase 17: Building Language Circuit...")
+
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 1. 감각 입력 (4 SensoryLIF) ===
+        self.call_food_input_left = self.model.add_neuron_population(
+            "call_food_input_left", self.config.n_call_food_input_left,
+            sensory_lif_model, s_params, s_init)
+        self.call_food_input_right = self.model.add_neuron_population(
+            "call_food_input_right", self.config.n_call_food_input_right,
+            sensory_lif_model, s_params, s_init)
+        self.call_danger_input_left = self.model.add_neuron_population(
+            "call_danger_input_left", self.config.n_call_danger_input_left,
+            sensory_lif_model, s_params, s_init)
+        self.call_danger_input_right = self.model.add_neuron_population(
+            "call_danger_input_right", self.config.n_call_danger_input_right,
+            sensory_lif_model, s_params, s_init)
+
+        # === 2. Wernicke's Area (4 LIF - 이해) ===
+        self.wernicke_food = self.model.add_neuron_population(
+            "wernicke_food", self.config.n_wernicke_food, "LIF", lif_params, lif_init)
+        self.wernicke_danger = self.model.add_neuron_population(
+            "wernicke_danger", self.config.n_wernicke_danger, "LIF", lif_params, lif_init)
+        self.wernicke_social = self.model.add_neuron_population(
+            "wernicke_social", self.config.n_wernicke_social, "LIF", lif_params, lif_init)
+        self.wernicke_context = self.model.add_neuron_population(
+            "wernicke_context", self.config.n_wernicke_context, "LIF", lif_params, lif_init)
+
+        # === 3. Broca's Area (4 LIF - 생산) ===
+        self.broca_food = self.model.add_neuron_population(
+            "broca_food", self.config.n_broca_food, "LIF", lif_params, lif_init)
+        self.broca_danger = self.model.add_neuron_population(
+            "broca_danger", self.config.n_broca_danger, "LIF", lif_params, lif_init)
+        self.broca_social = self.model.add_neuron_population(
+            "broca_social", self.config.n_broca_social, "LIF", lif_params, lif_init)
+        self.broca_sequence = self.model.add_neuron_population(
+            "broca_sequence", self.config.n_broca_sequence, "LIF", lif_params, lif_init)
+
+        # === 4. Vocal Gate / PAG (SensoryLIF - Fear 억제용 I_input) ===
+        self.vocal_gate = self.model.add_neuron_population(
+            "vocal_gate", self.config.n_vocal_gate,
+            sensory_lif_model, s_params, s_init)
+
+        # === 5. Call Mirror + Call Binding (LIF) ===
+        self.call_mirror = self.model.add_neuron_population(
+            "call_mirror", self.config.n_call_mirror, "LIF", lif_params, lif_init)
+        self.call_binding = self.model.add_neuron_population(
+            "call_binding", self.config.n_call_binding, "LIF", lif_params, lif_init)
+
+        print(f"    Call Input: {self.config.n_call_food_input_left * 2 + self.config.n_call_danger_input_left * 2}")
+        print(f"    Wernicke: {self.config.n_wernicke_food + self.config.n_wernicke_danger + self.config.n_wernicke_social + self.config.n_wernicke_context}")
+        print(f"    Broca: {self.config.n_broca_food + self.config.n_broca_danger + self.config.n_broca_social + self.config.n_broca_sequence}")
+        print(f"    Vocal Gate: {self.config.n_vocal_gate}, Mirror: {self.config.n_call_mirror}, Binding: {self.config.n_call_binding}")
+
+        # === 6. Call Input → Wernicke (4 synapses) ===
+        self._create_static_synapse(
+            "call_food_l_to_wernicke_food", self.call_food_input_left, self.wernicke_food,
+            self.config.call_to_wernicke_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "call_food_r_to_wernicke_food", self.call_food_input_right, self.wernicke_food,
+            self.config.call_to_wernicke_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "call_danger_l_to_wernicke_danger", self.call_danger_input_left, self.wernicke_danger,
+            self.config.call_to_wernicke_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "call_danger_r_to_wernicke_danger", self.call_danger_input_right, self.wernicke_danger,
+            self.config.call_to_wernicke_weight, sparsity=0.10)
+
+        # === 7. Wernicke 내부 (7 synapses) ===
+        # Food ↔ Danger WTA
+        self._create_static_synapse(
+            "wernicke_food_to_danger_wta", self.wernicke_food, self.wernicke_danger,
+            self.config.wernicke_food_danger_wta, sparsity=0.08)
+        self._create_static_synapse(
+            "wernicke_danger_to_food_wta", self.wernicke_danger, self.wernicke_food,
+            self.config.wernicke_food_danger_wta, sparsity=0.08)
+        # Food/Danger → Social
+        self._create_static_synapse(
+            "wernicke_food_to_social", self.wernicke_food, self.wernicke_social,
+            self.config.wernicke_to_social_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "wernicke_danger_to_social", self.wernicke_danger, self.wernicke_social,
+            self.config.wernicke_to_social_weight, sparsity=0.08)
+        # Food/Danger → Context
+        self._create_static_synapse(
+            "wernicke_food_to_context", self.wernicke_food, self.wernicke_context,
+            self.config.wernicke_to_context_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "wernicke_danger_to_context", self.wernicke_danger, self.wernicke_context,
+            self.config.wernicke_to_context_weight, sparsity=0.08)
+        # Context recurrent
+        self._create_static_synapse(
+            "wernicke_context_recurrent", self.wernicke_context, self.wernicke_context,
+            self.config.wernicke_context_recurrent, sparsity=0.05)
+
+        # === 8. Broca 입력 (6 synapses from existing circuits) ===
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "assoc_edible_to_broca_food", self.assoc_edible, self.broca_food,
+                self.config.assoc_edible_to_broca_food_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "assoc_threatening_to_broca_danger", self.assoc_threatening, self.broca_danger,
+                self.config.assoc_threatening_to_broca_danger_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "hunger_to_broca_food", self.hunger_drive, self.broca_food,
+            self.config.hunger_to_broca_food_weight, sparsity=0.05)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_broca_danger", self.fear_response, self.broca_danger,
+                self.config.fear_to_broca_danger_weight, sparsity=0.05)
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "sts_social_to_broca_social", self.sts_social, self.broca_social,
+                self.config.sts_social_to_broca_social_weight, sparsity=0.08)
+        if self.config.thalamus_enabled:
+            self._create_static_synapse(
+                "arousal_to_broca_social", self.arousal, self.broca_social,
+                self.config.arousal_to_broca_social_weight, sparsity=0.05)
+
+        # === 9. Broca 내부 (6 synapses) ===
+        # Food ↔ Danger WTA
+        self._create_static_synapse(
+            "broca_food_to_danger_wta", self.broca_food, self.broca_danger,
+            self.config.broca_food_danger_wta, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_danger_to_food_wta", self.broca_danger, self.broca_food,
+            self.config.broca_food_danger_wta, sparsity=0.08)
+        # Food/Danger → Sequence
+        self._create_static_synapse(
+            "broca_food_to_sequence", self.broca_food, self.broca_sequence,
+            self.config.broca_to_sequence_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_danger_to_sequence", self.broca_danger, self.broca_sequence,
+            self.config.broca_to_sequence_weight, sparsity=0.08)
+        # Sequence → Broca inhibition (prevents continuous vocalization)
+        self._create_static_synapse(
+            "broca_seq_to_food_inh", self.broca_sequence, self.broca_food,
+            self.config.broca_sequence_to_broca_inh, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_seq_to_danger_inh", self.broca_sequence, self.broca_danger,
+            self.config.broca_sequence_to_broca_inh, sparsity=0.08)
+        # Sequence self-inhibition timer
+        self._create_static_synapse(
+            "broca_seq_recurrent", self.broca_sequence, self.broca_sequence,
+            self.config.broca_sequence_recurrent, sparsity=0.05)
+
+        # === 10. Arcuate Fasciculus (4 synapses - bidirectional mirror) ===
+        self._create_static_synapse(
+            "wernicke_food_to_broca_food", self.wernicke_food, self.broca_food,
+            self.config.wernicke_to_broca_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "wernicke_danger_to_broca_danger", self.wernicke_danger, self.broca_danger,
+            self.config.wernicke_to_broca_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_food_to_wernicke_food", self.broca_food, self.wernicke_food,
+            self.config.broca_to_wernicke_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "broca_danger_to_wernicke_danger", self.broca_danger, self.wernicke_danger,
+            self.config.broca_to_wernicke_weight, sparsity=0.05)
+
+        # === 11. Vocal Gate / PAG (3 excitatory synapses) ===
+        if self.config.thalamus_enabled:
+            self._create_static_synapse(
+                "arousal_to_vocal_gate", self.arousal, self.vocal_gate,
+                self.config.arousal_to_vocal_gate_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_food_to_vocal_gate", self.broca_food, self.vocal_gate,
+            self.config.broca_to_vocal_gate_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "broca_danger_to_vocal_gate", self.broca_danger, self.vocal_gate,
+            self.config.broca_to_vocal_gate_weight, sparsity=0.10)
+        # Fear inhibition via I_input in process()
+
+        # === 12. Call Mirror (4 synapses) ===
+        self._create_static_synapse(
+            "wernicke_food_to_mirror", self.wernicke_food, self.call_mirror,
+            self.config.wernicke_to_call_mirror_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "wernicke_danger_to_mirror", self.wernicke_danger, self.call_mirror,
+            self.config.wernicke_to_call_mirror_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_food_to_mirror", self.broca_food, self.call_mirror,
+            self.config.broca_to_call_mirror_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "broca_danger_to_mirror", self.broca_danger, self.call_mirror,
+            self.config.broca_to_call_mirror_weight, sparsity=0.08)
+
+        # === 13. Call Binding (Hebbian DENSE + sparse inputs + recurrent) ===
+        from pygenn import init_weight_update, init_postsynaptic
+        # Hebbian DENSE: Wernicke_Food → Call_Binding
+        self.wernicke_food_to_binding_hebbian = self.model.add_synapse_population(
+            "wernicke_food_to_call_binding_hebb", "DENSE",
+            self.wernicke_food, self.call_binding,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.wernicke_to_call_binding_weight}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        # Hebbian DENSE: Wernicke_Danger → Call_Binding
+        self.wernicke_danger_to_binding_hebbian = self.model.add_synapse_population(
+            "wernicke_danger_to_call_binding_hebb", "DENSE",
+            self.wernicke_danger, self.call_binding,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.wernicke_to_call_binding_weight}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        # Sparse: Assoc → Call_Binding
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "assoc_edible_to_call_binding", self.assoc_edible, self.call_binding,
+                self.config.assoc_to_call_binding_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_threatening_to_call_binding", self.assoc_threatening, self.call_binding,
+                self.config.assoc_to_call_binding_weight, sparsity=0.05)
+        # Recurrent
+        self._create_static_synapse(
+            "call_binding_recurrent", self.call_binding, self.call_binding,
+            self.config.call_binding_recurrent, sparsity=0.05)
+
+        # === 14. 출력 연결 (모두 ≤6.0, Motor=0.0!) ===
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "wernicke_food_to_goal_food", self.wernicke_food, self.goal_food,
+                self.config.wernicke_food_to_goal_food_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "call_binding_to_wm", self.call_binding, self.working_memory,
+                self.config.call_binding_to_wm_weight, sparsity=0.05)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "wernicke_danger_to_la", self.wernicke_danger, self.lateral_amygdala,
+                self.config.wernicke_danger_to_fear_weight, sparsity=0.05)
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "wernicke_social_to_sts_social", self.wernicke_social, self.sts_social,
+                self.config.wernicke_social_to_sts_social_weight, sparsity=0.05)
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "call_mirror_to_assoc_binding", self.call_mirror, self.assoc_binding,
+                self.config.call_mirror_to_assoc_binding_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "call_binding_to_assoc_edible", self.call_binding, self.assoc_edible,
+                self.config.call_binding_to_assoc_edible_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "call_binding_to_assoc_threatening", self.call_binding, self.assoc_threatening,
+                self.config.call_binding_to_assoc_threatening_weight, sparsity=0.05)
+
+        # === 15. Top-Down 조절 (3 synapses) ===
+        self._create_static_synapse(
+            "hunger_to_wernicke_food_td", self.hunger_drive, self.wernicke_food,
+            self.config.hunger_to_wernicke_food_weight, sparsity=0.05)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_wernicke_danger_td", self.fear_response, self.wernicke_danger,
+                self.config.fear_to_wernicke_danger_weight, sparsity=0.05)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "wm_to_wernicke_context_td", self.working_memory, self.wernicke_context,
+                self.config.wm_to_wernicke_context_weight, sparsity=0.05)
+
+        # === 16. Context 입력 (2 synapses) ===
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "place_to_wernicke_context", self.place_cells, self.wernicke_context,
+                self.config.place_to_wernicke_context_weight, sparsity=0.02)
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "sts_social_to_wernicke_context", self.sts_social, self.wernicke_context,
+                self.config.sts_social_to_wernicke_context_weight, sparsity=0.05)
+
+        n_lang_total = (self.config.n_call_food_input_left + self.config.n_call_food_input_right +
+                        self.config.n_call_danger_input_left + self.config.n_call_danger_input_right +
+                        self.config.n_wernicke_food + self.config.n_wernicke_danger +
+                        self.config.n_wernicke_social + self.config.n_wernicke_context +
+                        self.config.n_broca_food + self.config.n_broca_danger +
+                        self.config.n_broca_social + self.config.n_broca_sequence +
+                        self.config.n_vocal_gate + self.config.n_call_mirror + self.config.n_call_binding)
+        print(f"    Phase 17 Language Circuit: {n_lang_total} neurons")
+        print(f"    Motor direct: {self.config.language_to_motor_weight} (disabled)")
+        print(f"    Total neurons now = {self.config.total_neurons:,}")
+
+    def learn_call_binding(self, reward_context: bool):
+        """
+        Phase 17: Call Binding Hebbian 학습
+
+        Wernicke_Food/Danger → Call_Binding DENSE 시냅스 가중치를 조정.
+        NPC call을 듣고 음식을 찾으면 강한 학습, 그 외에는 약한 배경 학습.
+        "이 소리 = 음식이 있다" 연합 형성.
+
+        Args:
+            reward_context: True = 소리 듣고 음식/위험 확인 (강한 학습), False = 배경
+        """
+        if not self.config.language_enabled:
+            return None
+
+        eta = self.config.call_binding_eta
+        w_max = self.config.call_binding_w_max
+        learning_factor = 1.0 if reward_context else 0.2
+
+        binding_scale = max(0.1, self.last_call_binding_rate)
+
+        # Wernicke_Food → Call_Binding
+        n_pre_f = self.config.n_wernicke_food
+        n_post = self.config.n_call_binding
+        self.wernicke_food_to_binding_hebbian.vars["g"].pull_from_device()
+        w_f = self.wernicke_food_to_binding_hebbian.vars["g"].view.copy()
+        w_f = w_f.reshape(n_pre_f, n_post)
+        w_f += eta * learning_factor * binding_scale
+        w_f = np.clip(w_f, 0.0, w_max)
+        self.wernicke_food_to_binding_hebbian.vars["g"].view[:] = w_f.flatten()
+        self.wernicke_food_to_binding_hebbian.vars["g"].push_to_device()
+
+        # Wernicke_Danger → Call_Binding
+        n_pre_d = self.config.n_wernicke_danger
+        self.wernicke_danger_to_binding_hebbian.vars["g"].pull_from_device()
+        w_d = self.wernicke_danger_to_binding_hebbian.vars["g"].view.copy()
+        w_d = w_d.reshape(n_pre_d, n_post)
+        w_d += eta * learning_factor * binding_scale
+        w_d = np.clip(w_d, 0.0, w_max)
+        self.wernicke_danger_to_binding_hebbian.vars["g"].view[:] = w_d.flatten()
+        self.wernicke_danger_to_binding_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w_food": float(np.mean(w_f)),
+            "avg_w_danger": float(np.mean(w_d)),
+            "learning_factor": learning_factor,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -4981,6 +5442,33 @@ class ForagerBrain:
             self.coop_compete_compete.vars["I_input"].view[:] = npc_competition * 45.0
             self.coop_compete_compete.vars["I_input"].push_to_device()
 
+        # === Phase 17: Language Circuit 감각 입력 ===
+        npc_call_food_l = 0.0
+        npc_call_food_r = 0.0
+        npc_call_danger_l = 0.0
+        npc_call_danger_r = 0.0
+
+        if self.config.language_enabled:
+            npc_call_food_l = observation.get("npc_call_food_left", 0.0)
+            npc_call_food_r = observation.get("npc_call_food_right", 0.0)
+            npc_call_danger_l = observation.get("npc_call_danger_left", 0.0)
+            npc_call_danger_r = observation.get("npc_call_danger_right", 0.0)
+
+            call_sensitivity = 45.0
+            self.call_food_input_left.vars["I_input"].view[:] = npc_call_food_l * call_sensitivity
+            self.call_food_input_left.vars["I_input"].push_to_device()
+            self.call_food_input_right.vars["I_input"].view[:] = npc_call_food_r * call_sensitivity
+            self.call_food_input_right.vars["I_input"].push_to_device()
+            self.call_danger_input_left.vars["I_input"].view[:] = npc_call_danger_l * call_sensitivity
+            self.call_danger_input_left.vars["I_input"].push_to_device()
+            self.call_danger_input_right.vars["I_input"].view[:] = npc_call_danger_r * call_sensitivity
+            self.call_danger_input_right.vars["I_input"].push_to_device()
+
+            # Vocal Gate: Fear 억제 (I_input 직접 주입, 이전 스텝 fear_rate 사용)
+            fear_inhibition = -self.last_fear_rate * 8.0 if self.config.amygdala_enabled else 0.0
+            self.vocal_gate.vars["I_input"].view[:] = fear_inhibition
+            self.vocal_gate.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -5102,6 +5590,19 @@ class ForagerBrain:
         assoc_valence_spikes = 0
         assoc_binding_spikes = 0
         assoc_novelty_spikes = 0
+
+        # Phase 17 스파이크 카운트 (Language Circuit)
+        wernicke_food_spikes = 0
+        wernicke_danger_spikes = 0
+        wernicke_social_spikes = 0
+        wernicke_context_spikes = 0
+        broca_food_spikes = 0
+        broca_danger_spikes = 0
+        broca_social_spikes = 0
+        broca_sequence_spikes = 0
+        vocal_gate_spikes = 0
+        call_mirror_spikes = 0
+        call_binding_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -5353,6 +5854,32 @@ class ForagerBrain:
                 assoc_binding_spikes += np.sum(self.assoc_binding.vars["RefracTime"].view > self.spike_threshold)
                 assoc_novelty_spikes += np.sum(self.assoc_novelty.vars["RefracTime"].view > self.spike_threshold)
 
+            # Phase 17 스파이크 카운팅 (Language Circuit)
+            if self.config.language_enabled:
+                self.wernicke_food.vars["RefracTime"].pull_from_device()
+                self.wernicke_danger.vars["RefracTime"].pull_from_device()
+                self.wernicke_social.vars["RefracTime"].pull_from_device()
+                self.wernicke_context.vars["RefracTime"].pull_from_device()
+                self.broca_food.vars["RefracTime"].pull_from_device()
+                self.broca_danger.vars["RefracTime"].pull_from_device()
+                self.broca_social.vars["RefracTime"].pull_from_device()
+                self.broca_sequence.vars["RefracTime"].pull_from_device()
+                self.vocal_gate.vars["RefracTime"].pull_from_device()
+                self.call_mirror.vars["RefracTime"].pull_from_device()
+                self.call_binding.vars["RefracTime"].pull_from_device()
+
+                wernicke_food_spikes += np.sum(self.wernicke_food.vars["RefracTime"].view > self.spike_threshold)
+                wernicke_danger_spikes += np.sum(self.wernicke_danger.vars["RefracTime"].view > self.spike_threshold)
+                wernicke_social_spikes += np.sum(self.wernicke_social.vars["RefracTime"].view > self.spike_threshold)
+                wernicke_context_spikes += np.sum(self.wernicke_context.vars["RefracTime"].view > self.spike_threshold)
+                broca_food_spikes += np.sum(self.broca_food.vars["RefracTime"].view > self.spike_threshold)
+                broca_danger_spikes += np.sum(self.broca_danger.vars["RefracTime"].view > self.spike_threshold)
+                broca_social_spikes += np.sum(self.broca_social.vars["RefracTime"].view > self.spike_threshold)
+                broca_sequence_spikes += np.sum(self.broca_sequence.vars["RefracTime"].view > self.spike_threshold)
+                vocal_gate_spikes += np.sum(self.vocal_gate.vars["RefracTime"].view > self.spike_threshold)
+                call_mirror_spikes += np.sum(self.call_mirror.vars["RefracTime"].view > self.spike_threshold)
+                call_binding_spikes += np.sum(self.call_binding.vars["RefracTime"].view > self.spike_threshold)
+
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
         max_spikes_drive = self.config.n_hunger_drive * 5
@@ -5377,6 +5904,7 @@ class ForagerBrain:
             la_rate = la_spikes / max_spikes_la
             cea_rate = cea_spikes / max_spikes_cea
             fear_rate = fear_spikes / max_spikes_fear
+            self.last_fear_rate = fear_rate
 
         # Phase 3 스파이크율
         place_cell_rate = 0.0
@@ -5639,6 +6167,46 @@ class ForagerBrain:
             assoc_novelty_rate = assoc_novelty_spikes / (self.config.n_assoc_novelty * 5)
             self.last_assoc_binding_rate = assoc_binding_rate
 
+        # Phase 17 스파이크율 (Language Circuit)
+        wernicke_food_rate = 0.0
+        wernicke_danger_rate = 0.0
+        wernicke_social_rate = 0.0
+        wernicke_context_rate = 0.0
+        broca_food_rate = 0.0
+        broca_danger_rate = 0.0
+        broca_social_rate = 0.0
+        broca_sequence_rate = 0.0
+        vocal_gate_rate = 0.0
+        call_mirror_rate = 0.0
+        call_binding_rate = 0.0
+        if self.config.language_enabled:
+            wernicke_food_rate = wernicke_food_spikes / (self.config.n_wernicke_food * 5)
+            wernicke_danger_rate = wernicke_danger_spikes / (self.config.n_wernicke_danger * 5)
+            wernicke_social_rate = wernicke_social_spikes / (self.config.n_wernicke_social * 5)
+            wernicke_context_rate = wernicke_context_spikes / (self.config.n_wernicke_context * 5)
+            broca_food_rate = broca_food_spikes / (self.config.n_broca_food * 5)
+            broca_danger_rate = broca_danger_spikes / (self.config.n_broca_danger * 5)
+            broca_social_rate = broca_social_spikes / (self.config.n_broca_social * 5)
+            broca_sequence_rate = broca_sequence_spikes / (self.config.n_broca_sequence * 5)
+            vocal_gate_rate = vocal_gate_spikes / (self.config.n_vocal_gate * 5)
+            call_mirror_rate = call_mirror_spikes / (self.config.n_call_mirror * 5)
+            call_binding_rate = call_binding_spikes / (self.config.n_call_binding * 5)
+
+            self.last_wernicke_food_rate = wernicke_food_rate
+            self.last_wernicke_danger_rate = wernicke_danger_rate
+            self.last_broca_food_rate = broca_food_rate
+            self.last_broca_danger_rate = broca_danger_rate
+            self.last_vocal_gate_rate = vocal_gate_rate
+            self.last_call_binding_rate = call_binding_rate
+
+            # Vocalize type 결정: Broca + Vocal Gate
+            self.vocalize_type = 0
+            if vocal_gate_rate > 0.05:
+                if broca_food_rate > broca_danger_rate and broca_food_rate > 0.05:
+                    self.vocalize_type = 1  # food call
+                elif broca_danger_rate > 0.05:
+                    self.vocalize_type = 2  # danger call
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -5801,6 +6369,26 @@ class ForagerBrain:
             "assoc_binding_rate": assoc_binding_rate,
             "assoc_novelty_rate": assoc_novelty_rate,
 
+            # Phase 17 입력 (Language Circuit)
+            "npc_call_food_l": npc_call_food_l,
+            "npc_call_food_r": npc_call_food_r,
+            "npc_call_danger_l": npc_call_danger_l,
+            "npc_call_danger_r": npc_call_danger_r,
+
+            # Phase 17 뉴런 활성화 (Language Circuit)
+            "wernicke_food_rate": wernicke_food_rate,
+            "wernicke_danger_rate": wernicke_danger_rate,
+            "wernicke_social_rate": wernicke_social_rate,
+            "wernicke_context_rate": wernicke_context_rate,
+            "broca_food_rate": broca_food_rate,
+            "broca_danger_rate": broca_danger_rate,
+            "broca_social_rate": broca_social_rate,
+            "broca_sequence_rate": broca_sequence_rate,
+            "vocal_gate_rate": vocal_gate_rate,
+            "call_mirror_rate": call_mirror_rate,
+            "call_binding_rate": call_binding_rate,
+            "vocalize_type": self.vocalize_type if self.config.language_enabled else 0,
+
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
             "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
@@ -5948,7 +6536,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_multimodal: bool = False, no_parietal: bool = False,
                 no_premotor: bool = False, no_social: bool = False,
                 no_mirror: bool = False, no_tom: bool = False,
-                no_association: bool = False):
+                no_association: bool = False, no_language: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -5994,6 +6582,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_association:
         brain_config.association_cortex_enabled = False
         print("  [!] Phase 16 (Association Cortex) DISABLED")
+    if no_language:
+        brain_config.language_enabled = False
+        env_config.npc_vocalization_enabled = False
+        print("  [!] Phase 17 (Language Circuit) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -6049,6 +6641,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
             # Phase 4: Dopamine 감쇠 (매 스텝)
             brain.decay_dopamine()
+
+            # Phase 17: 발성 타입 전달
+            if brain_config.language_enabled:
+                env._agent_call_type = brain.vocalize_type
 
             # 시각화를 위해 뇌 정보 전달 (render 전에 설정)
             env.set_brain_info(info)
@@ -6110,6 +6706,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 if brain_config.association_cortex_enabled:
                     assoc_learn = brain.learn_association_binding(reward_context=True)
 
+                # Phase 17: Call Binding 학습 (food call 듣고 음식 찾기 = 강한 학습)
+                if brain_config.language_enabled:
+                    heard_food_call = info.get("npc_call_food_l", 0) > 0.01 or info.get("npc_call_food_r", 0) > 0.01
+                    call_learn = brain.learn_call_binding(reward_context=heard_food_call)
+
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
@@ -6129,10 +6730,19 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                         print(f"  [SOCIAL] NPC ate at ({npc_x:.0f},{npc_y:.0f}), "
                               f"avg_w={social_learn['avg_weight']:.2f}, surprise={social_learn['surprise']:.2f}")
 
+            # Phase 17: Pain zone + danger call → 강한 학습
+            if brain_config.language_enabled and env_info.get('in_pain', False):
+                heard_danger_call = info.get("npc_call_danger_l", 0) > 0.01 or info.get("npc_call_danger_r", 0) > 0.01
+                brain.learn_call_binding(reward_context=heard_danger_call)
+
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
                 if env_info.get('in_pain', False) and env.pain_zone_visits == 1 and env.pain_zone_steps == 1:
                     print(f"  [!] ENTERED Pain Zone at step {env.steps}!")
+
+            # Phase 17: 배경 학습 (약한 학습 = 항상)
+            if brain_config.language_enabled and env.steps % 5 == 0:
+                brain.learn_call_binding(reward_context=False)
 
         # 에피소드 종료
         all_steps.append(env.steps)
@@ -6318,6 +6928,8 @@ if __name__ == "__main__":
                        help="Disable Phase 15c (Theory of Mind)")
     parser.add_argument("--no-association", action="store_true",
                        help="Disable Phase 16 (Association Cortex)")
+    parser.add_argument("--no-language", action="store_true",
+                       help="Disable Phase 17 (Language Circuit)")
     args = parser.parse_args()
 
     run_training(
@@ -6337,5 +6949,6 @@ if __name__ == "__main__":
         no_social=args.no_social,
         no_mirror=args.no_mirror,
         no_tom=args.no_tom,
-        no_association=args.no_association
+        no_association=args.no_association,
+        no_language=args.no_language
     )
