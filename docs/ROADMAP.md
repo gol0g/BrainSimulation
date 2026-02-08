@@ -4,13 +4,13 @@
 
 ---
 
-## 현재 상태: Phase 15c 검증 완료 (16,100 뉴런)
+## 현재 상태: Phase 16 검증 완료 (16,800 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 15c 검증 통과 ✓ (2026-02-08)                           ║
-║  생존율 70%, Reward Freq 2.85%, Pain Avoidance 91.1%         ║
-║  Theory of Mind 500 뉴런 추가 (의도 추론 + 협력/경쟁)        ║
+║  Phase 16 검증 통과 ✓ (2026-02-08)                            ║
+║  생존율 50%, Reward Freq 3.46%, Pain Avoidance 91.0%         ║
+║  Association Cortex 700 뉴런 추가 (초범주 개념 형성)         ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -37,6 +37,7 @@
 | 15a | 사회적 뇌 (Social Brain) | +1,500 | ✓ 완료 | 60% |
 | 15b | 거울 뉴런 (Mirror Neurons) | +600 | ✓ 완료 | 65% |
 | 15c | Theory of Mind (ToM) | +500 | ✓ 완료 | **70%** |
+| 16 | 연합 피질 (Association Cortex) | +700 | ✓ 완료 | **50%** |
 
 ### Phase 12-14 수정 이력
 
@@ -149,14 +150,24 @@
 
 **Phase 15 완료**: 16,100 뉴런
 
+### Phase 16: 연합 피질 (Association Cortex) ✓ 완료
+- **구조**: +700 뉴런
+  - Assoc_Edible (120): "먹을 수 있는 것" 초범주 (IT_Food + STS_Food + A1_Food + Social_Memory + Mirror_Food)
+  - Assoc_Threatening (120): "위험한 것" 초범주 (IT_Danger + STS_Danger + A1_Danger + Fear)
+  - Assoc_Animate (100): "살아있는 것" 초범주 (ToM_Intention + Social_Obs + STS_Social)
+  - Assoc_Context (100): "익숙한 장소" 맥락 (Place_Cells + PPC_Space + Food_Memory)
+  - Assoc_Valence (80): "좋다/나쁘다" 가치 (Dopamine + Edible + Threatening)
+  - Assoc_Binding (100): 교차 연합 학습 (Hebbian DENSE)
+  - Assoc_Novelty (80): 새로운 조합 탐지 (IT_Neutral + STS_Mismatch - Binding)
+- **학습**: Edible→Binding, Context→Binding Hebbian DENSE (eta=0.06, w_max=18.0)
+- **연결**: Motor 직접 연결 없음 (0.0), 간접 경로 ≤6.0, Edible↔Threatening WTA (-6.0)
+- **검증 (2026-02-08)**: 생존율 50% ✓, Reward Freq 3.46% ✓, Pain Avoidance 91.0% ✓, Hebbian avg_w 2.0→7.12
+
+**Phase 16 완료**: 16,800 뉴런
+
 ---
 
-## 장기 계획 (Phase 16-20)
-
-### Phase 16: 연합 피질
-- 다중 감각 → 추상 개념
-- 범주의 범주 (메타 범주)
-- "먹을 수 있는 것들" 개념
+## 장기 계획 (Phase 17-20)
 
 ### Phase 17: 언어 회로 (Broca/Wernicke)
 - 소리 패턴 → 의미 연결
@@ -254,4 +265,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-08 (Phase 15c 검증 통과, 생존율 70%)*
+*최종 업데이트: 2026-02-08 (Phase 16 검증 통과, 생존율 50%, 16,800 뉴런)*

@@ -654,6 +654,75 @@ class ForagerBrainConfig:
     tom_coop_eta: float = 0.08                          # 학습률
     tom_coop_w_max: float = 20.0                        # 최대 가중치
 
+    # === Phase 16: Association Cortex (연합 피질) ===
+    association_cortex_enabled: bool = True
+    n_assoc_edible: int = 120                           # "먹을 수 있는 것" 초범주
+    n_assoc_threatening: int = 120                      # "위험한 것" 초범주
+    n_assoc_animate: int = 100                          # "살아있는 것" 초범주
+    n_assoc_context: int = 100                          # "익숙한 장소" 맥락
+    n_assoc_valence: int = 80                           # "좋다/나쁘다" 가치
+    n_assoc_binding: int = 100                          # 교차 연합 (Hebbian)
+    n_assoc_novelty: int = 80                           # 새로운 조합 탐지
+
+    # 입력 연결 (기존 회로 → 연합 피질)
+    it_food_to_assoc_edible_weight: float = 12.0
+    sts_food_to_assoc_edible_weight: float = 10.0
+    a1_food_to_assoc_edible_weight: float = 8.0
+    social_memory_to_assoc_edible_weight: float = 6.0
+    mirror_food_to_assoc_edible_weight: float = 5.0
+    it_danger_to_assoc_threatening_weight: float = 12.0
+    sts_danger_to_assoc_threatening_weight: float = 10.0
+    a1_danger_to_assoc_threatening_weight: float = 8.0
+    fear_to_assoc_threatening_weight: float = 8.0
+    tom_intention_to_assoc_animate_weight: float = 10.0
+    social_obs_to_assoc_animate_weight: float = 10.0
+    sts_social_to_assoc_animate_weight: float = 8.0
+    mirror_food_to_assoc_animate_weight: float = 5.0
+    place_cells_to_assoc_context_weight: float = 8.0
+    ppc_space_to_assoc_context_weight: float = 8.0
+    food_memory_to_assoc_context_weight: float = 6.0
+    dopamine_to_assoc_valence_weight: float = 10.0
+    assoc_edible_to_valence_weight: float = 8.0
+    assoc_threatening_to_valence_weight: float = -8.0   # inhibitory
+    satiety_to_assoc_valence_weight: float = 5.0
+
+    # 내부 연결
+    assoc_edible_threatening_wta: float = -6.0          # WTA 상호 억제
+    assoc_edible_recurrent: float = 6.0                 # 개념 지속성
+    assoc_threatening_recurrent: float = 6.0
+    assoc_context_recurrent: float = 5.0
+    assoc_binding_recurrent: float = 6.0
+    assoc_edible_to_binding_weight: float = 10.0        # Hebbian
+    assoc_context_to_binding_weight: float = 10.0       # Hebbian
+    assoc_animate_to_binding_weight: float = 8.0
+    assoc_valence_to_binding_weight: float = 8.0
+    it_neutral_to_assoc_novelty_weight: float = 10.0
+    sts_mismatch_to_assoc_novelty_weight: float = 8.0
+    assoc_binding_to_novelty_weight: float = -6.0       # 익숙한 것 억제
+
+    # 출력 연결 (모두 ≤6.0, Motor 0.0!)
+    assoc_edible_to_goal_food_weight: float = 5.0
+    assoc_edible_to_wm_weight: float = 4.0
+    assoc_threatening_to_goal_safety_weight: float = 5.0
+    assoc_threatening_to_acc_weight: float = 4.0
+    assoc_animate_to_tpj_weight: float = 4.0
+    assoc_context_to_wm_weight: float = 4.0
+    assoc_context_to_food_memory_weight: float = 3.0
+    assoc_valence_to_dopamine_weight: float = 4.0
+    assoc_novelty_to_arousal_weight: float = 5.0
+    assoc_novelty_to_dopamine_weight: float = 4.0
+    assoc_binding_to_it_assoc_weight: float = 5.0
+    assoc_to_motor_weight: float = 0.0                  # 절대 비활성!
+
+    # Top-Down
+    hunger_to_assoc_edible_weight: float = 6.0
+    fear_to_assoc_threatening_topdown_weight: float = 6.0
+    wm_to_assoc_binding_weight: float = 5.0
+
+    # Hebbian (Association binding learning)
+    assoc_binding_eta: float = 0.06                     # 학습률
+    assoc_binding_w_max: float = 18.0                   # 최대 가중치
+
     dt: float = 1.0
 
     @property
@@ -721,6 +790,11 @@ class ForagerBrainConfig:
                 base += (self.n_tom_intention + self.n_tom_belief +
                          self.n_tom_prediction + self.n_tom_surprise +
                          self.n_coop_compete_coop + self.n_coop_compete_compete)
+        if self.association_cortex_enabled:
+            base += (self.n_assoc_edible + self.n_assoc_threatening +
+                     self.n_assoc_animate + self.n_assoc_context +
+                     self.n_assoc_valence + self.n_assoc_binding +
+                     self.n_assoc_novelty)
         return base
 
 
@@ -757,6 +831,9 @@ class ForagerBrain:
 
         # Phase 15c: Theory of Mind state defaults
         self.last_tom_intention_rate = 0.0
+
+        # Phase 16: Association Cortex state defaults
+        self.last_assoc_binding_rate = 0.0
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -983,6 +1060,10 @@ class ForagerBrain:
         # Phase 15c: Theory of Mind circuits
         if self.config.social_brain_enabled and self.config.tom_enabled:
             self._build_tom_circuit()
+
+        # Phase 16: Association Cortex
+        if self.config.association_cortex_enabled:
+            self._build_association_cortex_circuit()
 
         # Build and load
         print("Building model...")
@@ -4354,6 +4435,326 @@ class ForagerBrain:
             "learning_factor": learning_factor,
         }
 
+    def _build_association_cortex_circuit(self):
+        """
+        Phase 16: Association Cortex (연합 피질) 구축
+
+        기존 범주 표상(IT, STS, A1)을 통합하여 감각 독립적 초범주 형성:
+        - Assoc_Edible: "먹을 수 있는 것" (시각+청각+사회적 음식 통합)
+        - Assoc_Threatening: "위험한 것" (시각+청각+공포 통합)
+        - Assoc_Animate: "살아있는 것" (ToM+사회적 관찰 통합)
+        - Assoc_Context: "익숙한 장소" (공간+기억 통합)
+        - Assoc_Valence: "좋다/나쁘다" (보상/처벌 가치)
+        - Assoc_Binding: 초범주 간 교차 연합 (Hebbian 학습)
+        - Assoc_Novelty: 새로운 조합 탐지 (탐색 유발)
+        """
+        print("  Phase 16: Building Association Cortex...")
+
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        # === 1. 초범주 인구 생성 (모두 LIF - 내부 통합 전용) ===
+        self.assoc_edible = self.model.add_neuron_population(
+            "assoc_edible", self.config.n_assoc_edible, "LIF", lif_params, lif_init)
+        self.assoc_threatening = self.model.add_neuron_population(
+            "assoc_threatening", self.config.n_assoc_threatening, "LIF", lif_params, lif_init)
+        self.assoc_animate = self.model.add_neuron_population(
+            "assoc_animate", self.config.n_assoc_animate, "LIF", lif_params, lif_init)
+        self.assoc_context = self.model.add_neuron_population(
+            "assoc_context", self.config.n_assoc_context, "LIF", lif_params, lif_init)
+        self.assoc_valence = self.model.add_neuron_population(
+            "assoc_valence", self.config.n_assoc_valence, "LIF", lif_params, lif_init)
+        self.assoc_binding = self.model.add_neuron_population(
+            "assoc_binding", self.config.n_assoc_binding, "LIF", lif_params, lif_init)
+        self.assoc_novelty = self.model.add_neuron_population(
+            "assoc_novelty", self.config.n_assoc_novelty, "LIF", lif_params, lif_init)
+
+        print(f"    Assoc_Edible: {self.config.n_assoc_edible}")
+        print(f"    Assoc_Threatening: {self.config.n_assoc_threatening}")
+        print(f"    Assoc_Animate: {self.config.n_assoc_animate}")
+        print(f"    Assoc_Context: {self.config.n_assoc_context}")
+        print(f"    Assoc_Valence: {self.config.n_assoc_valence}")
+        print(f"    Assoc_Binding: {self.config.n_assoc_binding}")
+        print(f"    Assoc_Novelty: {self.config.n_assoc_novelty}")
+
+        # === 2. Assoc_Edible 입력 ===
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "it_food_to_assoc_edible", self.it_food_category, self.assoc_edible,
+                self.config.it_food_to_assoc_edible_weight, sparsity=0.10)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_food_to_assoc_edible", self.sts_food, self.assoc_edible,
+                self.config.sts_food_to_assoc_edible_weight, sparsity=0.08)
+        if self.config.auditory_enabled:
+            self._create_static_synapse(
+                "a1_food_to_assoc_edible", self.a1_food, self.assoc_edible,
+                self.config.a1_food_to_assoc_edible_weight, sparsity=0.08)
+        if self.config.social_brain_enabled and self.config.mirror_enabled:
+            self._create_static_synapse(
+                "social_mem_to_assoc_edible", self.social_memory, self.assoc_edible,
+                self.config.social_memory_to_assoc_edible_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "mirror_food_to_assoc_edible", self.mirror_food, self.assoc_edible,
+                self.config.mirror_food_to_assoc_edible_weight, sparsity=0.05)
+        # Recurrent
+        self._create_static_synapse(
+            "assoc_edible_recurrent", self.assoc_edible, self.assoc_edible,
+            self.config.assoc_edible_recurrent, sparsity=0.05)
+
+        # === 3. Assoc_Threatening 입력 ===
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "it_danger_to_assoc_threatening", self.it_danger_category, self.assoc_threatening,
+                self.config.it_danger_to_assoc_threatening_weight, sparsity=0.10)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_danger_to_assoc_threatening", self.sts_danger, self.assoc_threatening,
+                self.config.sts_danger_to_assoc_threatening_weight, sparsity=0.08)
+        if self.config.auditory_enabled:
+            self._create_static_synapse(
+                "a1_danger_to_assoc_threatening", self.a1_danger, self.assoc_threatening,
+                self.config.a1_danger_to_assoc_threatening_weight, sparsity=0.08)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_assoc_threatening", self.fear_response, self.assoc_threatening,
+                self.config.fear_to_assoc_threatening_weight, sparsity=0.08)
+        # Recurrent
+        self._create_static_synapse(
+            "assoc_threatening_recurrent", self.assoc_threatening, self.assoc_threatening,
+            self.config.assoc_threatening_recurrent, sparsity=0.05)
+
+        # === 4. Edible ↔ Threatening WTA ===
+        self._create_static_synapse(
+            "assoc_edible_to_threatening", self.assoc_edible, self.assoc_threatening,
+            self.config.assoc_edible_threatening_wta, sparsity=0.08)
+        self._create_static_synapse(
+            "assoc_threatening_to_edible", self.assoc_threatening, self.assoc_edible,
+            self.config.assoc_edible_threatening_wta, sparsity=0.08)
+
+        print(f"    Edible↔Threatening WTA: {self.config.assoc_edible_threatening_wta}")
+
+        # === 5. Assoc_Animate 입력 ===
+        if self.config.social_brain_enabled and self.config.tom_enabled:
+            self._create_static_synapse(
+                "tom_intent_to_assoc_animate", self.tom_intention, self.assoc_animate,
+                self.config.tom_intention_to_assoc_animate_weight, sparsity=0.08)
+        if self.config.social_brain_enabled and self.config.mirror_enabled:
+            self._create_static_synapse(
+                "social_obs_to_assoc_animate", self.social_observation, self.assoc_animate,
+                self.config.social_obs_to_assoc_animate_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "mirror_food_to_assoc_animate", self.mirror_food, self.assoc_animate,
+                self.config.mirror_food_to_assoc_animate_weight, sparsity=0.05)
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "sts_social_to_assoc_animate", self.sts_social, self.assoc_animate,
+                self.config.sts_social_to_assoc_animate_weight, sparsity=0.08)
+
+        # === 6. Assoc_Context 입력 ===
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "place_cells_to_assoc_context", self.place_cells, self.assoc_context,
+                self.config.place_cells_to_assoc_context_weight, sparsity=0.02)
+            if self.config.directional_food_memory:
+                self._create_static_synapse(
+                    "food_mem_l_to_assoc_context", self.food_memory_left, self.assoc_context,
+                    self.config.food_memory_to_assoc_context_weight, sparsity=0.05)
+                self._create_static_synapse(
+                    "food_mem_r_to_assoc_context", self.food_memory_right, self.assoc_context,
+                    self.config.food_memory_to_assoc_context_weight, sparsity=0.05)
+        if self.config.parietal_enabled:
+            self._create_static_synapse(
+                "ppc_space_l_to_assoc_context", self.ppc_space_left, self.assoc_context,
+                self.config.ppc_space_to_assoc_context_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "ppc_space_r_to_assoc_context", self.ppc_space_right, self.assoc_context,
+                self.config.ppc_space_to_assoc_context_weight, sparsity=0.05)
+        # Recurrent
+        self._create_static_synapse(
+            "assoc_context_recurrent", self.assoc_context, self.assoc_context,
+            self.config.assoc_context_recurrent, sparsity=0.05)
+
+        # === 7. Assoc_Valence 입력 ===
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "dopamine_to_assoc_valence", self.dopamine_neurons, self.assoc_valence,
+                self.config.dopamine_to_assoc_valence_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "assoc_edible_to_valence", self.assoc_edible, self.assoc_valence,
+            self.config.assoc_edible_to_valence_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "assoc_threatening_to_valence", self.assoc_threatening, self.assoc_valence,
+            self.config.assoc_threatening_to_valence_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "satiety_to_assoc_valence", self.satiety_drive, self.assoc_valence,
+            self.config.satiety_to_assoc_valence_weight, sparsity=0.05)
+
+        # === 8. Assoc_Binding 입력 (2 Hebbian DENSE + 2 sparse + recurrent) ===
+        # Hebbian DENSE: Edible → Binding
+        from pygenn import init_weight_update, init_postsynaptic
+        self.assoc_edible_to_binding_hebbian = self.model.add_synapse_population(
+            "assoc_edible_to_binding_hebb", "DENSE",
+            self.assoc_edible, self.assoc_binding,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.assoc_edible_to_binding_weight}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        # Hebbian DENSE: Context → Binding
+        self.assoc_context_to_binding_hebbian = self.model.add_synapse_population(
+            "assoc_context_to_binding_hebb", "DENSE",
+            self.assoc_context, self.assoc_binding,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.assoc_context_to_binding_weight}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        # Sparse: Animate, Valence → Binding
+        self._create_static_synapse(
+            "assoc_animate_to_binding", self.assoc_animate, self.assoc_binding,
+            self.config.assoc_animate_to_binding_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "assoc_valence_to_binding", self.assoc_valence, self.assoc_binding,
+            self.config.assoc_valence_to_binding_weight, sparsity=0.08)
+        # Recurrent
+        self._create_static_synapse(
+            "assoc_binding_recurrent", self.assoc_binding, self.assoc_binding,
+            self.config.assoc_binding_recurrent, sparsity=0.05)
+
+        print(f"    Assoc_Binding: Hebbian DENSE (Edible, Context)")
+
+        # === 9. Assoc_Novelty 입력 ===
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "it_neutral_to_assoc_novelty", self.it_neutral_category, self.assoc_novelty,
+                self.config.it_neutral_to_assoc_novelty_weight, sparsity=0.08)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_mismatch_to_assoc_novelty", self.sts_mismatch, self.assoc_novelty,
+                self.config.sts_mismatch_to_assoc_novelty_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "assoc_binding_to_novelty", self.assoc_binding, self.assoc_novelty,
+            self.config.assoc_binding_to_novelty_weight, sparsity=0.08)
+
+        # === 10. Top-Down 조절 ===
+        self._create_static_synapse(
+            "hunger_to_assoc_edible", self.hunger_drive, self.assoc_edible,
+            self.config.hunger_to_assoc_edible_weight, sparsity=0.05)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_assoc_threatening_td", self.fear_response, self.assoc_threatening,
+                self.config.fear_to_assoc_threatening_topdown_weight, sparsity=0.05)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "wm_to_assoc_binding", self.working_memory, self.assoc_binding,
+                self.config.wm_to_assoc_binding_weight, sparsity=0.05)
+
+        # === 11. 출력 연결 (모두 ≤6.0, Motor = 0.0!) ===
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "assoc_edible_to_goal_food", self.assoc_edible, self.goal_food,
+                self.config.assoc_edible_to_goal_food_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_edible_to_wm", self.assoc_edible, self.working_memory,
+                self.config.assoc_edible_to_wm_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_threatening_to_goal_safety", self.assoc_threatening, self.goal_safety,
+                self.config.assoc_threatening_to_goal_safety_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_context_to_wm", self.assoc_context, self.working_memory,
+                self.config.assoc_context_to_wm_weight, sparsity=0.05)
+
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "assoc_threatening_to_acc", self.assoc_threatening, self.acc_conflict,
+                self.config.assoc_threatening_to_acc_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_animate_to_tpj", self.assoc_animate, self.tpj_other,
+                self.config.assoc_animate_to_tpj_weight, sparsity=0.05)
+
+        if self.config.hippocampus_enabled and self.config.directional_food_memory:
+            self._create_static_synapse(
+                "assoc_context_to_food_mem_l", self.assoc_context, self.food_memory_left,
+                self.config.assoc_context_to_food_memory_weight, sparsity=0.03)
+            self._create_static_synapse(
+                "assoc_context_to_food_mem_r", self.assoc_context, self.food_memory_right,
+                self.config.assoc_context_to_food_memory_weight, sparsity=0.03)
+
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "assoc_valence_to_dopamine", self.assoc_valence, self.dopamine_neurons,
+                self.config.assoc_valence_to_dopamine_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_novelty_to_dopamine", self.assoc_novelty, self.dopamine_neurons,
+                self.config.assoc_novelty_to_dopamine_weight, sparsity=0.05)
+
+        if self.config.thalamus_enabled:
+            self._create_static_synapse(
+                "assoc_novelty_to_arousal", self.assoc_novelty, self.arousal,
+                self.config.assoc_novelty_to_arousal_weight, sparsity=0.05)
+
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "assoc_binding_to_it_assoc", self.assoc_binding, self.it_association,
+                self.config.assoc_binding_to_it_assoc_weight, sparsity=0.05)
+
+        n_assoc_total = (self.config.n_assoc_edible + self.config.n_assoc_threatening +
+                         self.config.n_assoc_animate + self.config.n_assoc_context +
+                         self.config.n_assoc_valence + self.config.n_assoc_binding +
+                         self.config.n_assoc_novelty)
+        print(f"    Phase 16 Association Cortex: {n_assoc_total} neurons")
+        print(f"    Motor direct: {self.config.assoc_to_motor_weight} (disabled)")
+
+    def learn_association_binding(self, reward_context: bool):
+        """
+        Phase 16: 연합 바인딩 Hebbian 학습
+
+        Edible→Binding, Context→Binding DENSE 시냅스 가중치를 조정.
+        음식을 먹으면 강한 학습, 그 외에는 약한 배경 학습.
+        "이 장소에서 먹을 수 있는 것을 찾았다" 연합 형성.
+
+        Args:
+            reward_context: True = 음식 먹기 (강한 학습), False = 배경 (약한 학습)
+        """
+        if not self.config.association_cortex_enabled:
+            return None
+
+        eta = self.config.assoc_binding_eta
+        w_max = self.config.assoc_binding_w_max
+        learning_factor = 1.0 if reward_context else 0.2
+
+        binding_scale = max(0.1, self.last_assoc_binding_rate)
+
+        # Edible → Binding
+        n_pre_e = self.config.n_assoc_edible
+        n_post = self.config.n_assoc_binding
+        self.assoc_edible_to_binding_hebbian.vars["g"].pull_from_device()
+        w_e = self.assoc_edible_to_binding_hebbian.vars["g"].view.copy()
+        w_e = w_e.reshape(n_pre_e, n_post)
+        w_e += eta * learning_factor * binding_scale
+        w_e = np.clip(w_e, 0.0, w_max)
+        self.assoc_edible_to_binding_hebbian.vars["g"].view[:] = w_e.flatten()
+        self.assoc_edible_to_binding_hebbian.vars["g"].push_to_device()
+
+        # Context → Binding
+        n_pre_c = self.config.n_assoc_context
+        self.assoc_context_to_binding_hebbian.vars["g"].pull_from_device()
+        w_c = self.assoc_context_to_binding_hebbian.vars["g"].view.copy()
+        w_c = w_c.reshape(n_pre_c, n_post)
+        w_c += eta * learning_factor * binding_scale
+        w_c = np.clip(w_c, 0.0, w_max)
+        self.assoc_context_to_binding_hebbian.vars["g"].view[:] = w_c.flatten()
+        self.assoc_context_to_binding_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w_edible": float(np.mean(w_e)),
+            "avg_w_context": float(np.mean(w_c)),
+            "learning_factor": learning_factor,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -4693,6 +5094,15 @@ class ForagerBrain:
         coop_spikes = 0
         compete_spikes = 0
 
+        # Phase 16 스파이크 카운트 (Association Cortex)
+        assoc_edible_spikes = 0
+        assoc_threatening_spikes = 0
+        assoc_animate_spikes = 0
+        assoc_context_spikes = 0
+        assoc_valence_spikes = 0
+        assoc_binding_spikes = 0
+        assoc_novelty_spikes = 0
+
         for _ in range(10):
             self.model.step_time()
 
@@ -4924,6 +5334,24 @@ class ForagerBrain:
                     tom_surprise_spikes += np.sum(self.tom_surprise.vars["RefracTime"].view > self.spike_threshold)
                     coop_spikes += np.sum(self.coop_compete_coop.vars["RefracTime"].view > self.spike_threshold)
                     compete_spikes += np.sum(self.coop_compete_compete.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 16 스파이크 카운팅 (Association Cortex)
+            if self.config.association_cortex_enabled:
+                self.assoc_edible.vars["RefracTime"].pull_from_device()
+                self.assoc_threatening.vars["RefracTime"].pull_from_device()
+                self.assoc_animate.vars["RefracTime"].pull_from_device()
+                self.assoc_context.vars["RefracTime"].pull_from_device()
+                self.assoc_valence.vars["RefracTime"].pull_from_device()
+                self.assoc_binding.vars["RefracTime"].pull_from_device()
+                self.assoc_novelty.vars["RefracTime"].pull_from_device()
+
+                assoc_edible_spikes += np.sum(self.assoc_edible.vars["RefracTime"].view > self.spike_threshold)
+                assoc_threatening_spikes += np.sum(self.assoc_threatening.vars["RefracTime"].view > self.spike_threshold)
+                assoc_animate_spikes += np.sum(self.assoc_animate.vars["RefracTime"].view > self.spike_threshold)
+                assoc_context_spikes += np.sum(self.assoc_context.vars["RefracTime"].view > self.spike_threshold)
+                assoc_valence_spikes += np.sum(self.assoc_valence.vars["RefracTime"].view > self.spike_threshold)
+                assoc_binding_spikes += np.sum(self.assoc_binding.vars["RefracTime"].view > self.spike_threshold)
+                assoc_novelty_spikes += np.sum(self.assoc_novelty.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -5193,6 +5621,24 @@ class ForagerBrain:
             compete_rate = compete_spikes / (self.config.n_coop_compete_compete * 5)
             self.last_tom_intention_rate = tom_intention_rate
 
+        # Phase 16 스파이크율 (Association Cortex)
+        assoc_edible_rate = 0.0
+        assoc_threatening_rate = 0.0
+        assoc_animate_rate = 0.0
+        assoc_context_rate = 0.0
+        assoc_valence_rate = 0.0
+        assoc_binding_rate = 0.0
+        assoc_novelty_rate = 0.0
+        if self.config.association_cortex_enabled:
+            assoc_edible_rate = assoc_edible_spikes / (self.config.n_assoc_edible * 5)
+            assoc_threatening_rate = assoc_threatening_spikes / (self.config.n_assoc_threatening * 5)
+            assoc_animate_rate = assoc_animate_spikes / (self.config.n_assoc_animate * 5)
+            assoc_context_rate = assoc_context_spikes / (self.config.n_assoc_context * 5)
+            assoc_valence_rate = assoc_valence_spikes / (self.config.n_assoc_valence * 5)
+            assoc_binding_rate = assoc_binding_spikes / (self.config.n_assoc_binding * 5)
+            assoc_novelty_rate = assoc_novelty_spikes / (self.config.n_assoc_novelty * 5)
+            self.last_assoc_binding_rate = assoc_binding_rate
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -5346,6 +5792,15 @@ class ForagerBrain:
             "npc_heading_change": npc_heading_change,
             "npc_competition": npc_competition,
 
+            # Phase 16 뉴런 활성화 (Association Cortex)
+            "assoc_edible_rate": assoc_edible_rate,
+            "assoc_threatening_rate": assoc_threatening_rate,
+            "assoc_animate_rate": assoc_animate_rate,
+            "assoc_context_rate": assoc_context_rate,
+            "assoc_valence_rate": assoc_valence_rate,
+            "assoc_binding_rate": assoc_binding_rate,
+            "assoc_novelty_rate": assoc_novelty_rate,
+
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
             "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
@@ -5492,7 +5947,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 fps: int = 10, food_patch: bool = False,
                 no_multimodal: bool = False, no_parietal: bool = False,
                 no_premotor: bool = False, no_social: bool = False,
-                no_mirror: bool = False, no_tom: bool = False):
+                no_mirror: bool = False, no_tom: bool = False,
+                no_association: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -5535,6 +5991,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_tom:
         brain_config.tom_enabled = False
         print("  [!] Phase 15c (Theory of Mind) DISABLED")
+    if no_association:
+        brain_config.association_cortex_enabled = False
+        print("  [!] Phase 16 (Association Cortex) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -5646,6 +6105,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if coop_learn and log_level in ["debug", "verbose"]:
                         print(f"  [TOM] Coop learning: avg_w={coop_learn['avg_weight']:.2f}, "
                               f"factor={coop_learn['learning_factor']:.1f}")
+
+                # Phase 16: 연합 바인딩 학습 (음식 먹기 = 강한 학습)
+                if brain_config.association_cortex_enabled:
+                    assoc_learn = brain.learn_association_binding(reward_context=True)
 
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
@@ -5853,6 +6316,8 @@ if __name__ == "__main__":
                        help="Disable Phase 15b (Mirror Neurons)")
     parser.add_argument("--no-tom", action="store_true",
                        help="Disable Phase 15c (Theory of Mind)")
+    parser.add_argument("--no-association", action="store_true",
+                       help="Disable Phase 16 (Association Cortex)")
     args = parser.parse_args()
 
     run_training(
@@ -5871,5 +6336,6 @@ if __name__ == "__main__":
         no_premotor=args.no_premotor,
         no_social=args.no_social,
         no_mirror=args.no_mirror,
-        no_tom=args.no_tom
+        no_tom=args.no_tom,
+        no_association=args.no_association
     )
