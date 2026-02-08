@@ -17,14 +17,15 @@
 ```bash
 # PyGeNN 환경 - WSL Ubuntu-24.04 사용!
 
-# WSL 실행 명령어
-wsl -d Ubuntu-24.04 -e bash -c "
+# WSL 실행 명령어 (Forager Brain)
+wsl -d Ubuntu-24.04 -- bash -c "
+unset PATH && unset LD_LIBRARY_PATH
 export CUDA_PATH=/usr/local/cuda-12.6
-export PATH=\$CUDA_PATH/bin:\$PATH
-export LD_LIBRARY_PATH=\$CUDA_PATH/lib64:\$LD_LIBRARY_PATH
+export PATH=/usr/local/cuda-12.6/bin:/usr/local/bin:/usr/bin:/bin
+export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64
 source ~/pygenn_wsl/bin/activate
-cd ~/pygenn_test
-python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episodes 10 --enemies 3 --render pygame
+cd ~/pygenn_test && rm -rf forager_brain_CODE
+python /mnt/c/<PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --render none
 "
 ```
 
@@ -277,343 +278,63 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ---
 
-## 현재 상태: Phase 1 완료 (Slither.io 졸업)
+## 이전 Phase 히스토리
 
-> **상세 보고서:** [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
+### Phase 1: Slither.io 졸업 (2025-01-28)
+- v40b: Best 64, Avg 37.6, Kills 0.44/ep
+- Push-Pull, Disinhibition, WTA, 선천적 본능 검증
+- [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
 
-### Phase 1: 반사하는 뇌 - 완료 (2025-01-28)
+### Phase 2-3: 변연계 (2025-01-28~30)
+- 시상하부(항상성) + 편도체(공포) + 해마(공간기억)
+- [Phase 2a](docs/PHASE2A_DESIGN.md) | [Phase 2b](docs/PHASE2B_DESIGN.md) | [Phase 3](docs/PHASE3_DESIGN.md)
 
-```
-╔═══════════════════════════════════════════════════════════════╗
-║  SLITHER.IO PROJECT - GRADUATED (v40b)                        ║
-╠═══════════════════════════════════════════════════════════════╣
-║  Best Length: 64    │  Avg: 37.6    │  Kills: 0.44/ep         ║
-║  검증 완료: Push-Pull, Disinhibition, WTA, 선천적 본능        ║
-╚═══════════════════════════════════════════════════════════════╝
-```
+> **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-**달성한 것:**
-- 뇌간/척수 수준의 반사 회로 검증
-- 생물학적 배선 원칙 (Push-Pull, 탈억제) 확인
-- 선천적 본능의 시냅스 가중치 표현 검증
-- PyGeNN SNN 프레임워크 확립
-
----
-
-## Phase 2-3: 느끼는 뇌 (Affective Brain) - Phase 3b 완료
-
-> **Phase 2a:** [docs/PHASE2A_DESIGN.md](docs/PHASE2A_DESIGN.md), [docs/PHASE2A_RESULTS.md](docs/PHASE2A_RESULTS.md)
-> **Phase 2b:** [docs/PHASE2B_DESIGN.md](docs/PHASE2B_DESIGN.md), [docs/PHASE2B_RESULTS.md](docs/PHASE2B_RESULTS.md)
-> **Phase 3:** [docs/PHASE3_DESIGN.md](docs/PHASE3_DESIGN.md), [docs/PHASE3_RESULTS.md](docs/PHASE3_RESULTS.md)
-
-### Phase 로드맵
+### 현재 상태: Phase 16 완료 - 연합 피질 (16,800 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Forager Brain Project - 변연계 구현                          ║
+║  Phase 16: Association Cortex ✓ (2026-02-08)                  ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  2a: 시상하부 - 항상성 ✓ 완료 (2025-01-28)                   ║
-║      └── Hunger/Satiety 드라이브, Energy 기반 행동 조절      ║
-║                                                               ║
-║  2b: 편도체 - 공포 회피 ✓ 완료 (2025-01-28)                  ║
-║      └── Pain Zone 회피, Hunger-Fear 경쟁, 생존율 50%        ║
-║                                                               ║
-║  3a: 해마 - Place Cells ✓ 완료 (2025-01-28)                  ║
-║      └── 20x20 Place Cells, Food Memory 기본 구조            ║
-║                                                               ║
-║  3b: 해마 - Hebbian 학습 ✓ 완료 (2025-01-29)                 ║
-║      └── 음식 위치 기억 학습, 생존율 60%                     ║
-║                                                               ║
-║  3c: 해마 - 방향성 Food Memory ✓ 완료 (2025-01-30)           ║
-║      └── Food Memory Left/Right 분리, 생존율 55%             ║
-║                                                               ║
-║  4: 기저핵 - Dopamine ✓ 완료 (2025-01-30)                    ║
-║      └── Striatum + Direct/Indirect pathways, 생존율 40%     ║
-║      └── 랜덤 환경에서 즉각적 향상 없음 (습관 학습 특성)     ║
-║                                                               ║
-║  5: 전전두엽 - Executive Function ✓ 완료 (2025-01-31)        ║
-║      └── Working Memory + Goal Units + Inhibitory Control    ║
-║      └── 목표 지향 행동, 충동 억제, 의사결정                 ║
-║                                                               ║
-║  6a: 소뇌 - Motor Coordination ✓ 완료 (2025-01-31)           ║
-║      └── Granule + Purkinje + Deep Nuclei + Error Signal     ║
-║      └── 운동 조정, 오류 기반 학습, 생존율 80%               ║
-║                                                               ║
-║  6b: 시상 - Sensory Gating & Attention ✓ 완료 (2025-01-31)   ║
-║      └── Food Relay + Danger Relay + TRN + Arousal           ║
-║      └── 감각 게이팅, 선택적 주의, 각성 조절                 ║
-║                                                               ║
-║  7: 통합 테스트 & 환경 조정 ✓ 완료 (2025-01-31)              ║
-║      └── 가중치 강화 + 환경 조정 (음식↑, 시야↑, 감소율↓)    ║
-║      └── 생존율: 10% → 80%, Reward Freq 2.77% ✓             ║
-║                                                               ║
-║  8: V1 시각 피질 ✓ 완료 (2025-02-01)                         ║
-║      └── V1_Food L/R + V1_Danger L/R (400 뉴런)              ║
-║      └── Lateral Inhibition, 방향 정보 보존                  ║
-║                                                               ║
-║  9: V2/V4 고차 시각 피질 ✓ 완료 (2025-02-01)                 ║
-║      └── V2_Edge_Food/Danger (300 뉴런) + V4_Object (300 뉴런)║
-║      └── 물체 분류, WTA 경쟁, Novelty Detection              ║
-║      └── Top-Down 주의 조절 (Hunger/Fear/Goal → V2/V4)       ║
-║                                                               ║
-║  10: IT Cortex (측두엽) ✓ 완료 (2025-02-01) ★ M1 마일스톤   ║
-║      └── IT_Food/Danger/Neutral (550 뉴런)                   ║
-║      └── IT_Association (200) + IT_Buffer (250)              ║
-║      └── "음식/위험" 범주 표상, 기억 통합                    ║
-║      └── 총 10,000 뉴런 달성!                                ║
-║                                                               ║
-║  11: 청각 피질 (Auditory Cortex) ✓ 완료 (2026-02-01)        ║
-║      └── Sound_Danger/Food L/R (400 뉴런)                    ║
-║      └── A1_Danger/Food (300 뉴런) + A2_Association (200)    ║
-║      └── 청각-공포 조건화, 다감각 통합 기반                  ║
-║      └── 총 10,900 뉴런 달성!                                ║
-║                                                               ║
-║  12: 다중 감각 통합 (Multimodal STS) ✓ 완료 (2026-02-01)    ║
-║      └── STS_Food/Danger (400 뉴런)                          ║
-║      └── STS_Congruence/Mismatch (250 뉴런)                  ║
-║      └── Multimodal_Buffer (150 뉴런)                        ║
-║      └── 시청각 일치/불일치 감지, 다감각 통합                ║
-║      └── 총 11,700 뉴런 달성!                                ║
-║                                                               ║
-║  13: 두정엽 (PPC) ✓ 수정 완료 (2026-02-08)                  ║
-║      └── PPC_Space L/R (300) + PPC_Goal (300)                ║
-║      └── PPC_Attention (200) + Path_Buffer (200)             ║
-║      └── 공간 표상, 목표 벡터, 경로 계획                    ║
-║      └── 총 12,700 뉴런 달성!                                ║
-║                                                               ║
-║  14: 전운동 피질 (PMC) ✓ 수정 완료 (2026-02-08)             ║
-║      └── PMd L/R (200) + PMv (200) + SMA (150)              ║
-║      └── pre-SMA (100) + Motor_Prep (150)                    ║
-║      └── 운동 계획, 시퀀스 생성, 운동 준비                  ║
-║      └── 총 13,500 뉴런 달성!                                ║
-║      └── 생존율 60% ✓ (간접 경로 수정 후)                   ║
-║                                                               ║
-║  15a: 사회적 뇌 (Social Brain) ✓ 완료 (2026-02-08)          ║
-║      └── Agent_Eye L/R (200×2) + Agent_Sound L/R (100×2)     ║
-║      └── STS_Social (200) + TPJ (300) + ACC (200)            ║
-║      └── Social_Valuation (200): Approach/Avoid              ║
-║      └── NPC 에이전트 환경 (forager/predator)                ║
-║      └── 총 15,000 뉴런 달성!                                ║
-║      └── 생존율 60% ✓                                        ║
-╚═══════════════════════════════════════════════════════════════╝
-```
-
-### 현재 상태: Phase 15a 완료 - 사회적 뇌 (15,000 뉴런)
-
-```
-╔═══════════════════════════════════════════════════════════════╗
-║  Phase 15a: Social Brain ✓ (2026-02-08)                       ║
-╠═══════════════════════════════════════════════════════════════╣
-║  신규 구조:                                                   ║
-║    - Agent_Eye L/R: 200×2 뉴런 (에이전트 시각 감지)          ║
-║    - Agent_Sound L/R: 100×2 뉴런 (에이전트 청각 감지)        ║
-║    - STS_Social: 200 뉴런 (다른 에이전트 통합 인식)          ║
-║    - TPJ: Self(100) + Other(100) + Compare(100)              ║
-║    - ACC: Conflict(100) + Monitor(100)                        ║
-║    - Social_Valuation: Approach(100) + Avoid(100)            ║
-║                                                               ║
-║  환경 확장:                                                   ║
-║    - NPC 에이전트 2마리 (forager 행동)                        ║
-║    - 음식 경쟁, 에이전트 감각 (시각/청각)                    ║
+║  신규 구조 (+700 뉴런):                                      ║
+║    - Assoc_Edible (120): "먹을 수 있는 것" 초범주            ║
+║    - Assoc_Threatening (120): "위험한 것" 초범주             ║
+║    - Assoc_Animate (100): "살아있는 것" 초범주               ║
+║    - Assoc_Context (100): "익숙한 장소" 맥락                 ║
+║    - Assoc_Valence (80): "좋다/나쁘다" 가치                  ║
+║    - Assoc_Binding (100): 교차 연합 (Hebbian DENSE)          ║
+║    - Assoc_Novelty (80): 새로운 조합 탐지                    ║
 ║                                                               ║
 ║  연결 (Motor 간섭 방지):                                     ║
 ║    - Motor 직접 연결: 0.0 (비활성화)                         ║
-║    - 간접 경로: ACC→Amygdala 5.0, Social→PFC 5-6.0          ║
+║    - 모든 출력 ≤6.0, Edible↔Threatening WTA (-6.0)           ║
+║    - Hebbian avg_w: 2.0 → 7.12 (20 에피소드)                ║
 ║                                                               ║
 ║  검증 결과:                                                   ║
-║    - Survival Rate: 60% ✓                                    ║
-║    - Reward Freq: 3.33% ✓                                    ║
-║    - Pain Avoidance: 90.9% ✓                                 ║
+║    - Survival Rate: 50% ✓                                    ║
+║    - Reward Freq: 3.46% ✓                                    ║
+║    - Pain Avoidance: 91.0% ✓                                 ║
 ║                                                               ║
-║  뉴런 수:       15,000 (+1,500)                               ║
+║  뉴런 수:       16,800 (+700)                                 ║
 ╚═══════════════════════════════════════════════════════════════╝
-```
-
-### Phase 8 완료: V1 시각 피질
-
-```
-╔═══════════════════════════════════════════════════════════════╗
-║  Phase 8: Primary Visual Cortex (V1) ✓                        ║
-╠═══════════════════════════════════════════════════════════════╣
-║    - V1_Food_Left/Right: 각 100 뉴런 (음식 시각 처리)        ║
-║    - V1_Danger_Left/Right: 각 100 뉴런 (위험 시각 처리)      ║
-║    - Lateral Inhibition: 좌우 대비 강화                      ║
-╚═══════════════════════════════════════════════════════════════╝
-```
-
-### Phase 7 결과 (이전)
-
-```
-╔═══════════════════════════════════════════════════════════════╗
-║  Phase 7 최종 결과                                             ║
-╠═══════════════════════════════════════════════════════════════╣
-║  생존율:        80% ✓ (목표 40% 초과)                         ║
-║  Reward Freq:   2.77% ✓ (목표 2.5% 초과)                      ║
-║  Pain Avoidance: 91.7% ✓                                      ║
-║  Avg Food:      82.5 (초기 12.8, +545%)                       ║
-║  뉴런 수:       8,000                                         ║
-╚═══════════════════════════════════════════════════════════════╝
-```
-
-### Forager Brain 아키텍처 (5,800 뉴런)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Forager Brain v3a                        │
-├─────────────────────────────────────────────────────────────┤
-│  Sensory (1,800)                                            │
-│    Food Eye L/R (800) + Wall Eye L/R (400)                  │
-│    Pain Eye L/R (400) + Danger (200)                        │
-│                                                             │
-│  Hypothalamus (1,400) - Phase 2a                            │
-│    LowEnergy (200) + HighEnergy (200)                       │
-│    Hunger (500) ↔ Satiety (500) [WTA]                       │
-│                                                             │
-│  Amygdala (1,000) - Phase 2b                                │
-│    LA (500) → CEA (300) → Fear (200)                        │
-│    Pain → LA (US), Danger → LA (CS)                         │
-│    Hunger ↔ Fear 경쟁                                       │
-│                                                             │
-│  Hippocampus (600) - Phase 3a                               │
-│    Place Cells (400, 20x20) → Food Memory (200)             │
-│    [학습 미구현 - Phase 3b에서]                             │
-│                                                             │
-│  Motor (1,000)                                              │
-│    Motor L (500) ↔ Motor R (500) [WTA]                      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Food Patch 환경 (Hebbian 학습 검증용)
-
-```
-┌────────────────────────────────────────┐
-│                400x400                 │
-│    ┌──────┐              ┌──────┐     │
-│    │Patch1│              │      │     │
-│    │(100, │              │      │     │
-│    │ 100) │              │      │     │
-│    └──────┘              │      │     │
-│              ┌──────┐    │      │     │
-│              │ Nest │    │      │     │
-│              └──────┘    │      │     │
-│                          │Patch2│     │
-│                          │(300, │     │
-│                          │ 300) │     │
-│                          └──────┘     │
-└────────────────────────────────────────┘
-
-- 음식의 80%가 Patch 내에 생성
-- 한 번 찾으면 반복 방문 가능
-- Place Cells 학습이 실제로 도움됨
-```
-
-**실행 명령어:**
-```bash
-# Baseline (학습 OFF, Patch 없음)
-python forager_brain.py --episodes 20 --no-learning --render none
-
-# Food Patch + Learning (검증)
-python forager_brain.py --episodes 20 --food-patch --render none
-```
-
-**성공 기준:**
-- Patch 방문 증가: 초반 5에피소드 vs 후반 5에피소드 → 30% 이상 증가
-- avg_weight 증가: 초기 2.0 → 3.0 이상
-- 생존율 유지: 80% 이상
-
-### 핵심 발견 (교훈)
-
-1. **방향성 Push-Pull이 핵심**: 무방향 Fear → 방향성 Pain Push-Pull로 변경 시 Pain Death 0%
-2. **MOTOR DEAD 해결**: Satiety 억제 완화 (-8 → -4)
-3. **학습 없는 Hippocampus는 노이즈**: Food Memory 가중치 최소화 필요
-4. **랜덤 환경에서 위치 기억은 무의미**: Food Patch 환경 필요 (위치-음식 인과관계)
-
-### 실행 명령어
-
-```bash
-# Forager Brain 테스트 (WSL)
-wsl -d Ubuntu-24.04 -- bash -c "
-export CUDA_PATH=/usr/local/cuda-12.6;
-export PATH=\$CUDA_PATH/bin:/usr/local/bin:/usr/bin:/bin;
-export LD_LIBRARY_PATH=\$CUDA_PATH/lib64;
-source ~/pygenn_wsl/bin/activate;
-cd ~/pygenn_test;
-python /mnt/c/.../backend/genesis/forager_brain.py \
-    --episodes 20 --log-level normal --render none
-"
-
-# 시각화 모드
-python forager_brain.py --episodes 3 --render pygame
 ```
 
 ### 구현 파일
 
 ```
 backend/genesis/
-├── forager_gym.py     # ForagerGym 환경 (Pain Zone 포함)
-├── forager_brain.py   # Forager Brain (Hypo+Amyg+Hippo)
-└── checkpoints/
-    └── forager_hypothalamus/  # NEW: Phase 2a 체크포인트
+├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone)
+├── forager_brain.py   # Forager Brain (16,800 뉴런, Phase 1-16)
+└── checkpoints/       # 체크포인트 저장
 ```
 
-### WSL 실행 명령어 (Phase 2a)
+### 핵심 교훈
 
-```bash
-# Phase 2a 훈련
-wsl -d Ubuntu-24.04 -e bash -c "
-export CUDA_PATH=/usr/local/cuda-12.6
-source ~/pygenn_wsl/bin/activate
-cd ~/pygenn_test
-python <PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --render pygame
-"
-```
-
----
-
-## Phase 1 완료: Slither.io 졸업
-
-> **상세 보고서:** [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
-
-### Phase 1 최종 결과
-
-```
-╔═══════════════════════════════════════════════════════════════╗
-║  SLITHER.IO PROJECT - GRADUATED (v40b)                        ║
-╠═══════════════════════════════════════════════════════════════╣
-║  Best Length: 64    │  Avg: 37.6    │  Kills: 0.44/ep         ║
-║  검증 완료: Push-Pull, Disinhibition, WTA, 선천적 본능        ║
-╚═══════════════════════════════════════════════════════════════╝
-```
-
-### Slither.io 버전 히스토리 (요약)
-
-> **상세 내용:** [docs/SLITHER_GRADUATION.md](docs/SLITHER_GRADUATION.md)
-
-**핵심 마일스톤:**
-- v28c: Push-Pull 반사 회로 완성 (Baseline)
-- v31: Disinhibition 발견 (돌파구)
-- v32c: First Kill 달성
-- v37f: Defensive Kill 메커니즘 규명
-- v40b: 시간 제한 해제 → 진정한 성능 발현 (졸업)
-
-**핵심 교훈:**
-1. 양쪽 모터 동시 활성화 → 신호 상쇄 (실패)
-2. Fear 완전 상쇄 → 자살 공격 (실패)
-3. R-STDP는 빈번하고 즉각적인 보상 필요
-4. 환경의 시간 제한이 성능 병목일 수 있음
-
-### 진화 경로
-
-| 단계 | 환경 | 뉴런 | 성과 |
-|------|------|------|------|
-| 1단계 | Chrome Dino | 3,600 | High: 725 (졸업) |
-| 2단계 | Slither.io snnTorch | 15,800 | High: 57 (적 3마리) |
-| 3단계 | Slither.io PyGeNN | 158,000 | High: 16 (적 7마리) |
-| v19 | PyGeNN + 음식추적 | 13,800 (dev) | High: 10 |
-| v28c | Push-Pull 회피 | 13,800 (dev) | Best: 27~37, Avg: 15~19 |
-| v32c | First Kill | 13,800 (dev) | 4 Kills (100 ep) |
-| v37f | Defensive Kill | 13,800 (dev) | Best: 30, Kills: 6 (200 ep) |
-| **v40b** | **Uncapped (3000)** | **13,800 (dev)** | **Best: 64, Avg: 37.6, 0.44 kills/ep!** |
+1. **방향성 Push-Pull이 핵심**: Pain Push-Pull(60/-40)이 생존의 기반
+2. **새 회로의 Motor 간섭 방지**: 직접 0.0 + 간접 경로도 확인 필수
+3. **R-STDP는 빈번하고 즉각적인 보상 필요**: 보상 빈도 >1% 필수
+4. **Hebbian 학습은 안정적**: 보상 연관 학습 avg_w 2.0→7.12 (20 ep)
 
 ---
 
@@ -654,208 +375,10 @@ python <PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --render py
 
 ---
 
-## PyGeNN 아키텍처 (Phase 1 - Slither.io v40b)
-
-```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  Food Eye    │  │  Enemy Eye   │  │  Enemy Head  │  │   Body Eye   │
-│  L/R 분리    │  │  L/R 분리    │  │  L/R 분리    │  │   L/R 분리   │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │                 │
-       ▼                 ▼                 ▼                 ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│Hunger Circuit│  │ Fear Circuit │  │ Hunt Circuit │  │ Wall Avoid   │
-│   (Food)     │  │ (Push-Pull)  │  │ (Disinhibit) │  │ (Push-Pull)  │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │                 │
-       └────────────────┬┴─────────────────┴─────────────────┘
-                        ▼
-                   ┌─────────┐
-                   │  Motor  │
-                   │  L / R  │
-                   └────┬────┘
-                        │
-    ┌───────────────────┼───────────────────┐
-    │                   │                   │
-    ▼                   ▼                   ▼
-┌───────┐          ┌───────┐          ┌───────┐
-│ Left  │◄─────────│  WTA  │─────────►│ Right │
-└───────┘          └───────┘          └───────┘
-
-┌─────────────────────────────────────────────────┐
-│           INNATE REFLEX v37f (Static)           │
-├─────────────────────────────────────────────────┤
-│ [Fear - 약화된 회피]                            │
-│ Enemy_L → Motor_R (PUSH +80)                    │
-│ Enemy_L → Motor_L (PULL -60)                    │
-│                                                 │
-│ [Hunt - 강화된 사냥]                            │
-│ EnemyHead_L → Motor_L (HUNT +180)               │
-│                                                 │
-│ [Disinhibition - Fear 상쇄]                     │
-│ EnemyHead_L → Motor_R (DISINHIBIT -100)         │
-│ EnemyHead_L → Motor_L (RELEASE +80)             │
-│                                                 │
-│ [Wall/Food - 기존 유지]                         │
-│ Body_L → Motor_R (PUSH +80)                     │
-│ Food_L → Motor_L (IPSI +20)                     │
-└─────────────────────────────────────────────────┘
-```
-
-### 선천적 반사 회로 (Innate Reflex v37f)
-
-```python
-# 1. Fear (약화) - 적 body 회피
-Enemy_L → Motor_R (PUSH +80)   # 반대편 활성화
-Enemy_L → Motor_L (PULL -60)   # 같은편 억제
-
-# 2. Hunt - 적 head 추적 (동측)
-EnemyHead_L → Motor_L (HUNT +180)  # 사냥 본능
-
-# 3. Disinhibition - 사냥 시 Fear 상쇄
-EnemyHead_L → Motor_R (DISINHIBIT -100)  # Fear Push 상쇄
-EnemyHead_L → Motor_L (RELEASE +80)      # Fear Pull 상쇄
-
-# 4. 결합 효과
-# 적 body만: Fear(80) → 회피
-# 적 head도: Fear(80) - Disinhibit(100) + Hunt(180) = +160 → 돌진!
-
-# 5. 음식/벽 회피 (기존 유지)
-Food_L → Motor_L (IPSI +20)
-Body_L → Motor_R (PUSH +80)
-```
-
----
-
-## 파일 구조
-
-```
-backend/
-├── genesis/
-│   ├── # Phase 2a: Forager (현재 개발 중)
-│   ├── forager_gym.py                # Phase 2a 환경 (NEW)
-│   ├── forager_brain.py              # Phase 2a 뇌 - 시상하부 (NEW)
-│   │
-│   ├── # Phase 1: Slither.io (졸업)
-│   ├── slither_pygenn_biological.py  # v40b PyGeNN 에이전트 (졸업)
-│   ├── slither_gym.py                # Slither.io 환경
-│   ├── gpu_monitor.py                # GPU 온도/메모리 모니터링
-│   │
-│   ├── # Legacy (참조용)
-│   ├── slither_snn_agent.py          # snnTorch 에이전트
-│   ├── dino_dual_channel_agent.py    # Chrome Dino (725점, 졸업)
-│   │
-│   └── checkpoints/
-│       ├── forager_hypothalamus/     # Phase 2a 체크포인트 (NEW)
-│       ├── slither_pygenn_bio/       # Phase 1 체크포인트
-│       └── slither_snn/              # snnTorch 체크포인트
-│
-├── docs/
-│   ├── PHASE2A_DESIGN.md             # Phase 2a 설계 문서 (NEW)
-│   └── SLITHER_GRADUATION.md         # Phase 1 졸업 보고서
-│
-└── requirements.txt
-```
-
----
-
-## 실행 방법
-
-### PyGeNN Slither.io (WSL 필수!)
-
-```bash
-# WSL에서 실행 (필수!)
-wsl -d Ubuntu-24.04
-
-# 환경 설정
-export CUDA_PATH=/usr/local/cuda-12.6
-export PATH=$CUDA_PATH/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
-source ~/pygenn_wsl/bin/activate
-cd ~/pygenn_test
-
-# 훈련 (headless)
-python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py \
-    --dev --episodes 100 --enemies 5 --render none
-
-# 시각화 모드
-python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py \
-    --dev --episodes 10 --enemies 3 --render pygame
-
-# 모드 옵션
-# --dev   : 13,800 뉴런 (디버깅용)
-# --lite  : 50,000 뉴런 (중간)
-# (없음)  : 158,000 뉴런 (전체)
-```
-
-### 한 줄 실행 (PowerShell에서)
-
-```powershell
-wsl -d Ubuntu-24.04 -e bash -c "export CUDA_PATH=/usr/local/cuda-12.6 && source ~/pygenn_wsl/bin/activate && cd ~/pygenn_test && python <PROJECT_PATH>/backend/genesis/slither_pygenn_biological.py --dev --episodes 5 --enemies 3 --render pygame"
-```
-
----
-
-## 핵심 발견 & 교훈
-
-### v27i 세션 교훈 (CRITICAL!)
-
-1. **절대좌표 vs 상대각도**: `(target_x, target_y)` 절대좌표는 뱀의 현재 위치/방향과 무관하게 화면상의 점을 향함!
-   - 뱀이 오른쪽에 있고 왼쪽을 향할 때 `target_x=0.9`면 뒤로 돌아서 적에게 돌진!
-   - **해결**: `(angle_delta, boost)` 상대 회전 출력 사용
-
-2. **Gym 출력 포맷**: 두 가지 지원
-   - `(target_x, target_y, boost)` - 절대 화면 좌표 (문제!)
-   - `(angle_delta, boost)` - 상대 회전 각도 (정답!)
-
-3. **결과**: Best 14→27, Avg 6→12.5 (2배 향상!)
-
-### v26 세션 교훈
-
-1. **전압이 아닌 스파이크 누적**: 전압(V)은 스파이크 후 Vreset으로 리셋됨 → 매 스텝 RefracTime으로 스파이크 누적 필수
-2. **신호 체인 전체 확인**: Enemy→Motor 경로가 작동해도, 마지막 디코딩이 잘못되면 출력 0
-3. **Push-Pull 효과 확인됨**: Enemy 스파이크 시 Motor_R 100% 활성, Motor_L 강하게 억제 (-11000mV)
-
-### v19 세션 교훈 (이전)
-
-1. **WTA wMax 클리핑**: `wMax=0.0`이면 모든 가중치가 0으로 클리핑됨
-2. **cos는 짝수함수**: `cos(-x)=cos(x)` 라서 좌우 구분 불가
-3. **RefracTime 카운팅**: `>0` 대신 `>threshold`로 새 스파이크만 카운트
-4. **대칭 경로 상쇄**: 대칭 경로가 교차배선 효과를 상쇄함 → 비활성화
-5. **WSL 환경 사용**: Windows PyGeNN 대신 WSL PyGeNN 사용
-
-### 생물학적 원칙
-
-1. **빈 서판은 죽음**: 선천적 본능 = 시냅스 초기 가중치 (if문 아님)
-2. **교차 배선 (Contralateral)**: 적 회피 - 반대편으로 회전
-3. **동측 배선 (Ipsilateral)**: 음식 추적 - 같은 편으로 회전
-4. **Fight-or-Flight**: Fear↔Attack 상호 억제로 행동 선택
-
-### 디버깅 팁
-
-```python
-# v26: 스파이크 누적 카운팅 (CRITICAL!)
-# 전압(V)으로 활성도 측정하면 안 됨 - 스파이크 후 Vreset으로 리셋!
-# 반드시 시뮬레이션 루프 내에서 매 스텝마다 스파이크 누적해야 함
-spike_threshold = tau_refrac - 0.5  # 1.5 (새 스파이크 감지)
-for _ in range(10):
-    model.step_time()
-    motor_left.vars["RefracTime"].pull_from_device()
-    left_spike_count += np.sum(motor_left.vars["RefracTime"].view > spike_threshold)
-left_rate = left_spike_count / (n_neurons * 5)  # max 5 spikes per neuron (10ms/2ms)
-
-# 모터 출력 확인
-print(f"Motor: L={left_rate:.2f} R={right_rate:.2f} | Turn: {turn_delta:+.3f}")
-
-# 입력 신호 확인
-print(f"Enemy: L={enemy_l:.2f} R={enemy_r:.2f} | Food: L={food_l:.2f} R={food_r:.2f}")
-```
-
----
-
 ## 레거시 코드
 
-FEP, Predictive Coding, E6-E8 실험 등 이전 개발물은 `archive/legacy` 브랜치에 보존됨.
+- Slither.io (Phase 1): `slither_pygenn_biological.py` - [졸업 보고서](docs/SLITHER_GRADUATION.md)
+- FEP, Predictive Coding 등 이전 개발물: `archive/legacy` 브랜치
 
 ---
 
