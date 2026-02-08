@@ -568,6 +568,43 @@ class ForagerBrainConfig:
     fear_to_sts_social_weight: float = 8.0             # Fear → STS_Social
     hunger_to_social_approach_weight: float = 6.0      # Hunger → Social_Approach
 
+    # === Phase 15b: Mirror Neurons & Social Learning ===
+    mirror_enabled: bool = True
+    n_social_observation: int = 200                    # NPC 목표지향 움직임 감지
+    n_mirror_food: int = 150                           # 거울 뉴런 (자기+타인 먹기)
+    n_vicarious_reward: int = 100                      # 관찰 예측 오차 (대리 보상)
+    n_social_memory: int = 150                         # 사회적 음식 위치 기억
+
+    # 내부 연결
+    agent_eye_to_social_obs_weight: float = 12.0       # Agent_Eye → Social_Obs
+    sts_social_to_social_obs_weight: float = 10.0      # STS_Social → Social_Obs
+    social_obs_to_mirror_weight: float = 10.0          # Social_Obs → Mirror_Food
+    mirror_to_vicarious_weight: float = 12.0           # Mirror_Food → Vicarious_Reward
+    vicarious_to_social_memory_weight: float = 15.0    # Vicarious → Social_Memory (Hebbian)
+
+    # 기존 회로 출력 (약한 간접 경로, 모두 ≤6.0!)
+    social_memory_to_food_memory_weight: float = 5.0   # Social_Memory → Food_Memory L/R
+    social_obs_to_wm_weight: float = 5.0               # Social_Obs → Working_Memory
+    social_obs_to_dopamine_weight: float = 6.0         # Social_Obs → Dopamine
+    mirror_to_goal_food_weight: float = 5.0            # Mirror_Food → Goal_Food
+    mirror_to_hunger_weight: float = 4.0               # Mirror_Food → Hunger
+    mirror_to_motor_weight: float = 0.0                # Motor 직접 연결 없음!
+
+    # Top-Down → Mirror
+    hunger_to_social_obs_weight: float = 6.0           # Hunger → Social_Obs
+    fear_to_social_obs_weight: float = -4.0            # Fear → Social_Obs (억제)
+    hunger_to_mirror_weight: float = 8.0               # Hunger → Mirror_Food
+    food_eye_to_mirror_weight: float = 6.0             # Food_Eye → Mirror_Food
+
+    # Hebbian 학습 (Social_Memory)
+    social_memory_eta: float = 0.1                     # 학습률
+    social_memory_w_max: float = 20.0                  # 최대 가중치
+
+    # Recurrent
+    social_obs_recurrent_weight: float = 6.0           # Social_Obs 자기 유지
+    mirror_food_recurrent_weight: float = 5.0          # Mirror_Food 자기 유지
+    social_memory_recurrent_weight: float = 8.0        # Social_Memory 자기 유지
+
     dt: float = 1.0
 
     @property
@@ -628,6 +665,9 @@ class ForagerBrainConfig:
                      self.n_sts_social + self.n_tpj_self + self.n_tpj_other +
                      self.n_tpj_compare + self.n_acc_conflict + self.n_acc_monitor +
                      self.n_social_approach + self.n_social_avoid)
+            if self.mirror_enabled:
+                base += (self.n_social_observation + self.n_mirror_food +
+                         self.n_vicarious_reward + self.n_social_memory)
         return base
 
 
@@ -657,6 +697,10 @@ class ForagerBrain:
 
         print(f"Building Forager Brain ({self.config.total_neurons:,} neurons)...")
         print(f"  Phase 2a: Hypothalamus Circuit")
+
+        # Phase 15b: Mirror neuron state defaults
+        self.mirror_self_eating_timer = 0
+        self.last_social_obs_rate = 0.0
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -875,6 +919,10 @@ class ForagerBrain:
         # Phase 15: Social Brain circuits
         if self.config.social_brain_enabled:
             self._build_social_brain_circuit()
+
+        # Phase 15b: Mirror Neuron circuits
+        if self.config.social_brain_enabled and self.config.mirror_enabled:
+            self._build_mirror_neuron_circuit()
 
         # Build and load
         print("Building model...")
@@ -3753,6 +3801,230 @@ class ForagerBrain:
         print(f"    Fear→STS_Social: {self.config.fear_to_sts_social_weight}")
         print(f"    Phase 15 Social Brain: {self.config.n_agent_eye_left * 2 + self.config.n_agent_sound_left * 2 + self.config.n_sts_social + self.config.n_tpj_self + self.config.n_tpj_other + self.config.n_tpj_compare + self.config.n_acc_conflict + self.config.n_acc_monitor + self.config.n_social_approach + self.config.n_social_avoid} neurons")
 
+    def _build_mirror_neuron_circuit(self):
+        """
+        Phase 15b: Mirror Neurons & Social Learning
+
+        거울 뉴런 시스템: NPC가 음식 먹는 것을 관찰하고 학습
+
+        구조:
+        - Social_Observation (200, SensoryLIF): NPC 목표지향 움직임 감지
+        - Mirror_Food (150, SensoryLIF): 자기+타인 먹기 거울 뉴런
+        - Vicarious_Reward (100, SensoryLIF): 관찰 예측 오차
+        - Social_Memory (150, LIF): 사회적 음식 위치 기억 (Hebbian)
+        """
+        print("  Phase 15b: Building Mirror Neuron circuit...")
+
+        # SensoryLIF 파라미터 (I_input 필요한 인구)
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # LIF 파라미터 (I_input 불필요한 인구)
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        # === 1. Social_Observation (SensoryLIF) ===
+        self.social_observation = self.model.add_neuron_population(
+            "social_observation", self.config.n_social_observation,
+            sensory_lif_model, s_params, s_init)
+        print(f"    Social_Observation: {self.config.n_social_observation} neurons (SensoryLIF)")
+
+        # === 2. Mirror_Food (SensoryLIF) ===
+        self.mirror_food = self.model.add_neuron_population(
+            "mirror_food", self.config.n_mirror_food,
+            sensory_lif_model, s_params, s_init)
+        print(f"    Mirror_Food: {self.config.n_mirror_food} neurons (SensoryLIF)")
+
+        # === 3. Vicarious_Reward (SensoryLIF) ===
+        self.vicarious_reward = self.model.add_neuron_population(
+            "vicarious_reward", self.config.n_vicarious_reward,
+            sensory_lif_model, s_params, s_init)
+        print(f"    Vicarious_Reward: {self.config.n_vicarious_reward} neurons (SensoryLIF)")
+
+        # === 4. Social_Memory (LIF, Hebbian 학습 대상) ===
+        self.social_memory = self.model.add_neuron_population(
+            "social_memory", self.config.n_social_memory,
+            "LIF", lif_params, lif_init)
+        print(f"    Social_Memory: {self.config.n_social_memory} neurons (LIF)")
+
+        # === 5. 시냅스 연결 ===
+
+        # --- 입력 → Social_Observation ---
+        # Agent_Eye L/R → Social_Observation
+        self._create_static_synapse(
+            "agent_eye_l_to_social_obs", self.agent_eye_left, self.social_observation,
+            self.config.agent_eye_to_social_obs_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "agent_eye_r_to_social_obs", self.agent_eye_right, self.social_observation,
+            self.config.agent_eye_to_social_obs_weight, sparsity=0.10)
+
+        # STS_Social → Social_Observation
+        self._create_static_synapse(
+            "sts_social_to_social_obs", self.sts_social, self.social_observation,
+            self.config.sts_social_to_social_obs_weight, sparsity=0.08)
+
+        # Social_Observation 재귀 연결
+        self._create_static_synapse(
+            "social_obs_recurrent", self.social_observation, self.social_observation,
+            self.config.social_obs_recurrent_weight, sparsity=0.05)
+
+        print(f"    Agent_Eye→Social_Obs: {self.config.agent_eye_to_social_obs_weight}")
+        print(f"    STS_Social→Social_Obs: {self.config.sts_social_to_social_obs_weight}")
+
+        # --- Social_Observation → Mirror_Food ---
+        self._create_static_synapse(
+            "social_obs_to_mirror", self.social_observation, self.mirror_food,
+            self.config.social_obs_to_mirror_weight, sparsity=0.10)
+
+        # Mirror_Food 재귀 연결
+        self._create_static_synapse(
+            "mirror_food_recurrent", self.mirror_food, self.mirror_food,
+            self.config.mirror_food_recurrent_weight, sparsity=0.05)
+
+        # Hunger → Mirror_Food (자기 배고픔→먹기 모사)
+        self._create_static_synapse(
+            "hunger_to_mirror", self.hunger_drive, self.mirror_food,
+            self.config.hunger_to_mirror_weight, sparsity=0.05)
+
+        # Food_Eye → Mirror_Food (자기 음식 시각)
+        self._create_static_synapse(
+            "food_eye_l_to_mirror", self.food_eye_left, self.mirror_food,
+            self.config.food_eye_to_mirror_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "food_eye_r_to_mirror", self.food_eye_right, self.mirror_food,
+            self.config.food_eye_to_mirror_weight, sparsity=0.05)
+
+        print(f"    Social_Obs→Mirror_Food: {self.config.social_obs_to_mirror_weight}")
+        print(f"    Hunger→Mirror_Food: {self.config.hunger_to_mirror_weight}")
+
+        # --- Mirror_Food → Vicarious_Reward ---
+        self._create_static_synapse(
+            "mirror_to_vicarious", self.mirror_food, self.vicarious_reward,
+            self.config.mirror_to_vicarious_weight, sparsity=0.10)
+
+        print(f"    Mirror_Food→Vicarious_Reward: {self.config.mirror_to_vicarious_weight}")
+
+        # --- Vicarious_Reward → Social_Memory (DENSE, Hebbian 학습) ---
+        self.vicarious_to_social_memory = self.model.add_synapse_population(
+            "vicarious_to_social_memory", "DENSE",
+            self.vicarious_reward, self.social_memory,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.vicarious_to_social_memory_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0})
+        )
+
+        # Social_Memory 재귀 연결
+        self._create_static_synapse(
+            "social_memory_recurrent", self.social_memory, self.social_memory,
+            self.config.social_memory_recurrent_weight, sparsity=0.05)
+
+        print(f"    Vicarious→Social_Memory: {self.config.vicarious_to_social_memory_weight} (HEBBIAN, eta={self.config.social_memory_eta})")
+
+        # --- 기존 회로 출력 (약한 간접 경로 ≤6.0, Motor 0.0!) ---
+
+        # Social_Memory → Food_Memory L/R
+        if self.config.hippocampus_enabled and self.config.directional_food_memory:
+            self._create_static_synapse(
+                "social_mem_to_food_mem_l", self.social_memory, self.food_memory_left,
+                self.config.social_memory_to_food_memory_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "social_mem_to_food_mem_r", self.social_memory, self.food_memory_right,
+                self.config.social_memory_to_food_memory_weight, sparsity=0.05)
+
+        # Social_Obs → Working_Memory
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "social_obs_to_wm", self.social_observation, self.working_memory,
+                self.config.social_obs_to_wm_weight, sparsity=0.05)
+
+        # Social_Obs → Dopamine
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "social_obs_to_dopamine", self.social_observation, self.dopamine_neurons,
+                self.config.social_obs_to_dopamine_weight, sparsity=0.05)
+
+        # Mirror_Food → Goal_Food
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "mirror_to_goal_food", self.mirror_food, self.goal_food,
+                self.config.mirror_to_goal_food_weight, sparsity=0.05)
+
+        # Mirror_Food → Hunger (약한 활성화)
+        self._create_static_synapse(
+            "mirror_to_hunger", self.mirror_food, self.hunger_drive,
+            self.config.mirror_to_hunger_weight, sparsity=0.05)
+
+        print(f"    Social_Memory→Food_Memory: {self.config.social_memory_to_food_memory_weight}")
+        print(f"    Mirror→Goal_Food: {self.config.mirror_to_goal_food_weight}")
+        print(f"    Mirror→Motor: {self.config.mirror_to_motor_weight} (DISABLED!)")
+
+        # --- Top-Down → Mirror ---
+        # Hunger → Social_Observation
+        self._create_static_synapse(
+            "hunger_to_social_obs", self.hunger_drive, self.social_observation,
+            self.config.hunger_to_social_obs_weight, sparsity=0.05)
+
+        # Fear → Social_Observation (억제: 위험 시 관찰 억제)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_social_obs", self.fear_response, self.social_observation,
+                self.config.fear_to_social_obs_weight, sparsity=0.05)
+
+        print(f"    Hunger→Social_Obs: {self.config.hunger_to_social_obs_weight}")
+        print(f"    Fear→Social_Obs: {self.config.fear_to_social_obs_weight}")
+
+        # 상태 변수 초기화
+        self.mirror_self_eating_timer = 0
+        self.last_social_obs_rate = 0.0
+
+        n_mirror_total = (self.config.n_social_observation + self.config.n_mirror_food +
+                          self.config.n_vicarious_reward + self.config.n_social_memory)
+        print(f"    Phase 15b Mirror Neurons: {n_mirror_total} neurons")
+
+    def learn_social_food_location(self, npc_food_pos: tuple):
+        """
+        Phase 15b: NPC가 음식 먹는 것을 관찰했을 때 Hebbian 학습
+
+        Vicarious_Reward → Social_Memory 가중치 강화
+
+        Args:
+            npc_food_pos: (x, y) NPC가 먹은 음식의 정규화 위치
+        """
+        if not (self.config.social_brain_enabled and self.config.mirror_enabled):
+            return None
+
+        eta = self.config.social_memory_eta
+        w_max = self.config.social_memory_w_max
+        n_pre = self.config.n_vicarious_reward
+        n_post = self.config.n_social_memory
+
+        # Vicarious_Reward 뉴런의 최근 활성도 기반 학습
+        self.vicarious_to_social_memory.vars["g"].pull_from_device()
+        weights = self.vicarious_to_social_memory.vars["g"].view.copy()
+        weights = weights.reshape(n_pre, n_post)
+
+        # Surprise factor: social_obs_rate가 낮을수록 더 많이 학습 (놀라움)
+        surprise = max(0.1, 1.0 - self.last_social_obs_rate)
+        delta_w = eta * surprise
+        weights += delta_w
+        weights = np.clip(weights, 0.0, w_max)
+
+        self.vicarious_to_social_memory.vars["g"].view[:] = weights.flatten()
+        self.vicarious_to_social_memory.vars["g"].push_to_device()
+
+        return {
+            "avg_weight": float(np.mean(weights)),
+            "max_weight": float(np.max(weights)),
+            "surprise": surprise,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -3924,6 +4196,39 @@ class ForagerBrain:
                 self.acc_conflict.vars["I_input"].view[:] = social_proximity * 30.0
                 self.acc_conflict.vars["I_input"].push_to_device()
 
+        # === Phase 15b: Mirror Neuron 감각 입력 ===
+        npc_food_dir_l = 0.0
+        npc_food_dir_r = 0.0
+        npc_eating_l = 0.0
+        npc_eating_r = 0.0
+        npc_near_food = 0.0
+
+        if self.config.social_brain_enabled and self.config.mirror_enabled:
+            npc_food_dir_l = observation.get("npc_food_direction_left", 0.0)
+            npc_food_dir_r = observation.get("npc_food_direction_right", 0.0)
+            npc_eating_l = observation.get("npc_eating_left", 0.0)
+            npc_eating_r = observation.get("npc_eating_right", 0.0)
+            npc_near_food = observation.get("npc_near_food", 0.0)
+
+            # Social_Observation: NPC 목표지향 움직임 (I_input)
+            npc_food_dir = max(npc_food_dir_l, npc_food_dir_r)
+            self.social_observation.vars["I_input"].view[:] = npc_food_dir * 45.0
+            self.social_observation.vars["I_input"].push_to_device()
+
+            # Mirror_Food: 자기 먹기 이벤트 (I_input)
+            if self.mirror_self_eating_timer > 0:
+                self.mirror_food.vars["I_input"].view[:] = 40.0
+                self.mirror_self_eating_timer -= 1
+            else:
+                self.mirror_food.vars["I_input"].view[:] = 0.0
+            self.mirror_food.vars["I_input"].push_to_device()
+
+            # Vicarious_Reward: NPC 먹기 예측 오차 (I_input)
+            npc_eating = max(npc_eating_l, npc_eating_r)
+            surprise_factor = max(0.1, 1.0 - self.last_social_obs_rate)
+            self.vicarious_reward.vars["I_input"].view[:] = npc_eating * surprise_factor * 50.0
+            self.vicarious_reward.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -4022,6 +4327,12 @@ class ForagerBrain:
         acc_monitor_spikes = 0
         social_approach_spikes = 0
         social_avoid_spikes = 0
+
+        # Phase 15b 스파이크 카운트 (Mirror Neurons)
+        social_obs_spikes = 0
+        mirror_food_spikes = 0
+        vicarious_reward_spikes = 0
+        social_memory_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -4226,6 +4537,18 @@ class ForagerBrain:
                 acc_monitor_spikes += np.sum(self.acc_monitor.vars["RefracTime"].view > self.spike_threshold)
                 social_approach_spikes += np.sum(self.social_approach.vars["RefracTime"].view > self.spike_threshold)
                 social_avoid_spikes += np.sum(self.social_avoid.vars["RefracTime"].view > self.spike_threshold)
+
+                # Phase 15b 스파이크 카운팅 (Mirror Neurons)
+                if self.config.mirror_enabled:
+                    self.social_observation.vars["RefracTime"].pull_from_device()
+                    self.mirror_food.vars["RefracTime"].pull_from_device()
+                    self.vicarious_reward.vars["RefracTime"].pull_from_device()
+                    self.social_memory.vars["RefracTime"].pull_from_device()
+
+                    social_obs_spikes += np.sum(self.social_observation.vars["RefracTime"].view > self.spike_threshold)
+                    mirror_food_spikes += np.sum(self.mirror_food.vars["RefracTime"].view > self.spike_threshold)
+                    vicarious_reward_spikes += np.sum(self.vicarious_reward.vars["RefracTime"].view > self.spike_threshold)
+                    social_memory_spikes += np.sum(self.social_memory.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -4466,6 +4789,19 @@ class ForagerBrain:
             social_approach_rate = social_approach_spikes / (self.config.n_social_approach * 5)
             social_avoid_rate = social_avoid_spikes / (self.config.n_social_avoid * 5)
 
+        # Phase 15b 스파이크율 (Mirror Neurons)
+        social_obs_rate = 0.0
+        mirror_food_rate = 0.0
+        vicarious_reward_rate = 0.0
+        social_memory_rate = 0.0
+        if self.config.social_brain_enabled and self.config.mirror_enabled:
+            social_obs_rate = social_obs_spikes / (self.config.n_social_observation * 5)
+            mirror_food_rate = mirror_food_spikes / (self.config.n_mirror_food * 5)
+            vicarious_reward_rate = vicarious_reward_spikes / (self.config.n_vicarious_reward * 5)
+            social_memory_rate = social_memory_spikes / (self.config.n_social_memory * 5)
+            # 예측 오차 계산을 위해 관찰율 저장
+            self.last_social_obs_rate = social_obs_rate
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -4592,6 +4928,19 @@ class ForagerBrain:
             "agent_eye_l": agent_eye_l,
             "agent_eye_r": agent_eye_r,
             "social_proximity": social_proximity,
+
+            # Phase 15b 뉴런 활성화 (Mirror Neurons)
+            "social_obs_rate": social_obs_rate,
+            "mirror_food_rate": mirror_food_rate,
+            "vicarious_reward_rate": vicarious_reward_rate,
+            "social_memory_rate": social_memory_rate,
+
+            # Phase 15b 입력
+            "npc_food_dir_l": npc_food_dir_l,
+            "npc_food_dir_r": npc_food_dir_r,
+            "npc_eating_l": npc_eating_l,
+            "npc_eating_r": npc_eating_r,
+            "npc_near_food": npc_near_food,
 
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
@@ -4738,7 +5087,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 persist_learning: bool = False, no_learning: bool = False,
                 fps: int = 10, food_patch: bool = False,
                 no_multimodal: bool = False, no_parietal: bool = False,
-                no_premotor: bool = False, no_social: bool = False):
+                no_premotor: bool = False, no_social: bool = False,
+                no_mirror: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -4775,6 +5125,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         brain_config.social_brain_enabled = False
         env_config.social_enabled = False
         print("  [!] Phase 15 (Social Brain) DISABLED")
+    if no_mirror:
+        brain_config.mirror_enabled = False
+        print("  [!] Phase 15b (Mirror Neurons) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -4866,6 +5219,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 # Phase 4: Dopamine 방출 (보상)
                 dopamine_info = brain.release_dopamine(reward_magnitude=0.5)
 
+                # Phase 15b: 자기 먹기 → Mirror 활성화
+                if brain_config.social_brain_enabled and brain_config.mirror_enabled:
+                    brain.mirror_self_eating_timer = env_config.npc_eating_signal_duration
+
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
@@ -4874,6 +5231,16 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                               f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}{side_str}{da_str}]")
                     else:
                         print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}{da_str}")
+
+            # Phase 15b: NPC 먹기 관찰 → 사회적 학습
+            if brain_config.social_brain_enabled and brain_config.mirror_enabled:
+                npc_events = env_info.get("npc_eating_events", [])
+                for npc_x, npc_y, npc_step in npc_events:
+                    npc_pos = (npc_x / env_config.width, npc_y / env_config.height)
+                    social_learn = brain.learn_social_food_location(npc_pos)
+                    if social_learn and log_level in ["debug", "verbose"]:
+                        print(f"  [SOCIAL] NPC ate at ({npc_x:.0f},{npc_y:.0f}), "
+                              f"avg_w={social_learn['avg_weight']:.2f}, surprise={social_learn['surprise']:.2f}")
 
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
@@ -5058,6 +5425,8 @@ if __name__ == "__main__":
                        help="Disable Phase 14 (Premotor Cortex)")
     parser.add_argument("--no-social", action="store_true",
                        help="Disable Phase 15 (Social Brain)")
+    parser.add_argument("--no-mirror", action="store_true",
+                       help="Disable Phase 15b (Mirror Neurons)")
     args = parser.parse_args()
 
     run_training(
@@ -5074,5 +5443,6 @@ if __name__ == "__main__":
         no_multimodal=args.no_multimodal,
         no_parietal=args.no_parietal,
         no_premotor=args.no_premotor,
-        no_social=args.no_social
+        no_social=args.no_social,
+        no_mirror=args.no_mirror
     )

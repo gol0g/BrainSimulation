@@ -90,6 +90,10 @@ class ForagerConfig:
     npc_food_eat_enabled: bool = True       # NPC가 음식을 먹을 수 있는지
     social_proximity_range: float = 60.0    # 사회적 상호작용 거리
 
+    # === Phase 15b: Mirror Neuron 관찰 채널 ===
+    npc_eating_signal_duration: int = 5         # NPC 먹기 이벤트 지속 시간 (steps)
+    npc_food_observation_range: float = 120.0   # NPC 먹기 관찰 가능 거리
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -106,6 +110,10 @@ class NPCAgent:
         self.behavior = config.npc_behavior
         self.food_eaten = 0
         self._wander_timer = 0  # 랜덤 방향 전환 타이머
+        # Phase 15b: Mirror neuron support
+        self.target_food = None           # 현재 추적 중인 음식 위치
+        self.last_eat_step = -100         # 마지막 먹기 시점
+        self.heading_toward_food = False  # 목표지향 움직임 플래그
 
     def step(self, foods: list, player_pos: Tuple[float, float],
              map_width: float, map_height: float, config: 'ForagerConfig'):
@@ -133,6 +141,8 @@ class NPCAgent:
 
         if best_food and np.random.random() < 0.7:
             # 음식 방향으로 이동
+            self.target_food = best_food
+            self.heading_toward_food = True
             target_angle = math.atan2(best_food[1] - self.y,
                                        best_food[0] - self.x)
             # 부드러운 회전 (최대 0.2 rad/step)
@@ -140,6 +150,8 @@ class NPCAgent:
             self.angle += np.clip(angle_diff, -0.2, 0.2)
         else:
             # 랜덤 탐색
+            self.target_food = None
+            self.heading_toward_food = False
             self._wander_timer -= 1
             if self._wander_timer <= 0:
                 self.angle += np.random.uniform(-0.5, 0.5)
@@ -205,7 +217,8 @@ class NPCAgent:
         self.x = new_x
         self.y = new_y
 
-    def check_food_collision(self, foods: list, config: 'ForagerConfig') -> bool:
+    def check_food_collision(self, foods: list, config: 'ForagerConfig',
+                             current_step: int = 0) -> bool:
         """NPC 음식 충돌 확인 (먹으면 제거 + 새 음식 생성)"""
         if not config.npc_food_eat_enabled:
             return False
@@ -216,6 +229,7 @@ class NPCAgent:
             if dist < collision_dist:
                 foods.pop(i)
                 self.food_eaten += 1
+                self.last_eat_step = current_step  # Phase 15b
                 return True
         return False
 
@@ -409,13 +423,16 @@ class ForagerGym:
         self.was_in_pain = in_pain
 
         # === Phase 15: NPC 업데이트 ===
+        npc_eating_events = []
         if self.config.social_enabled:
             for npc in self.npc_agents:
                 npc.step(self.foods, (self.agent_x, self.agent_y),
                          self.config.width, self.config.height, self.config)
                 # NPC 음식 경쟁
-                if npc.check_food_collision(self.foods, self.config):
+                if npc.check_food_collision(self.foods, self.config,
+                                            current_step=self.steps):
                     self.npc_food_stolen += 1
+                    npc_eating_events.append((npc.x, npc.y, self.steps))
                     self._spawn_foods(1)  # 새 음식 생성 (총 개수 유지)
 
         # === Food Patch 방문 추적 ===
@@ -473,6 +490,8 @@ class ForagerGym:
             # Phase 15: NPC 정보
             "npc_food_stolen": self.npc_food_stolen,
             "npc_positions": [(npc.x, npc.y) for npc in self.npc_agents] if self.config.social_enabled else [],
+            # Phase 15b: NPC 먹기 이벤트
+            "npc_eating_events": npc_eating_events,
         }
 
         # 렌더링
@@ -689,12 +708,19 @@ class ForagerGym:
             agent_rays_l, agent_rays_r = self._cast_agent_rays()
             agent_sound_l, agent_sound_r = self._compute_agent_sound()
             social_proximity = self._get_social_proximity()
+            # Phase 15b: Mirror neuron observation channels
+            npc_eating_l, npc_eating_r = self._detect_npc_eating()
+            npc_food_dir_l, npc_food_dir_r = self._compute_npc_food_direction()
+            npc_near_food = self._compute_npc_near_food()
         else:
             n_half = self.config.n_rays // 2
             agent_rays_l = np.zeros(n_half)
             agent_rays_r = np.zeros(n_half)
             agent_sound_l, agent_sound_r = 0.0, 0.0
             social_proximity = 0.0
+            npc_eating_l, npc_eating_r = 0.0, 0.0
+            npc_food_dir_l, npc_food_dir_r = 0.0, 0.0
+            npc_near_food = 0.0
 
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
@@ -728,6 +754,13 @@ class ForagerGym:
             "agent_sound_left": agent_sound_l,
             "agent_sound_right": agent_sound_r,
             "social_proximity": social_proximity,
+
+            # Phase 15b: Mirror neuron 관찰 채널
+            "npc_eating_left": npc_eating_l,
+            "npc_eating_right": npc_eating_r,
+            "npc_food_direction_left": npc_food_dir_l,
+            "npc_food_direction_right": npc_food_dir_r,
+            "npc_near_food": npc_near_food,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1068,6 +1101,152 @@ class ForagerGym:
         if min_dist >= self.config.social_proximity_range:
             return 0.0
         return 1.0 - (min_dist / self.config.social_proximity_range)
+
+    # === Phase 15b: Mirror Neuron 관찰 메서드 ===
+
+    def _detect_npc_eating(self) -> Tuple[float, float]:
+        """
+        NPC가 음식 먹는 이벤트 감지 (좌우 분리)
+
+        NPC가 최근 npc_eating_signal_duration 스텝 내에 먹었고,
+        플레이어 관찰 범위 내에 있으면 신호 발생.
+
+        Returns:
+            (eating_left, eating_right): 0~1 좌우 먹기 신호
+        """
+        if not self.npc_agents:
+            return 0.0, 0.0
+
+        left_signal = 0.0
+        right_signal = 0.0
+        duration = self.config.npc_eating_signal_duration
+        obs_range = self.config.npc_food_observation_range
+
+        for npc in self.npc_agents:
+            # 최근에 먹었는지 확인
+            steps_since_eat = self.steps - npc.last_eat_step
+            if steps_since_eat > duration or steps_since_eat < 0:
+                continue
+
+            # 관찰 범위 내인지 확인
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist > obs_range or dist < 1.0:
+                continue
+
+            # 먹기 신호 강도 (거리 감쇠 + 시간 감쇠)
+            dist_factor = 1.0 - (dist / obs_range)
+            time_factor = 1.0 - (steps_since_eat / duration)
+            intensity = dist_factor * time_factor
+
+            # 좌우 분리
+            npc_angle = math.atan2(dy, dx)
+            rel_angle = npc_angle - self.agent_angle
+            direction = math.sin(rel_angle)
+
+            base = intensity * 0.3
+            directional = intensity * 0.7
+
+            if direction < 0:  # 왼쪽
+                left_signal = max(left_signal, base + directional * abs(direction))
+                right_signal = max(right_signal, base)
+            else:  # 오른쪽
+                right_signal = max(right_signal, base + directional * abs(direction))
+                left_signal = max(left_signal, base)
+
+        return min(1.0, left_signal), min(1.0, right_signal)
+
+    def _compute_npc_food_direction(self) -> Tuple[float, float]:
+        """
+        NPC가 음식을 향해 이동 중인지 감지 (좌우 분리)
+
+        NPC가 heading_toward_food이고 관찰 범위 내이면 신호 발생.
+
+        Returns:
+            (food_dir_left, food_dir_right): 0~1 좌우 방향 신호
+        """
+        if not self.npc_agents:
+            return 0.0, 0.0
+
+        left_signal = 0.0
+        right_signal = 0.0
+        obs_range = self.config.npc_food_observation_range
+
+        for npc in self.npc_agents:
+            if not npc.heading_toward_food or npc.target_food is None:
+                continue
+
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist > obs_range or dist < 1.0:
+                continue
+
+            # NPC의 target_food 방향 = NPC가 향하는 음식의 방향
+            # 플레이어 기준으로 NPC target_food의 방향을 계산
+            tfx, tfy = npc.target_food
+            tdx = tfx - self.agent_x
+            tdy = tfy - self.agent_y
+            target_dist = math.sqrt(tdx * tdx + tdy * tdy)
+
+            # 음식이 너무 멀면 무시
+            if target_dist > obs_range * 1.5:
+                continue
+
+            # NPC까지 거리 기반 강도
+            intensity = 1.0 - (dist / obs_range)
+
+            # 음식 방향의 좌우 분리 (플레이어 기준)
+            food_angle = math.atan2(tdy, tdx)
+            rel_angle = food_angle - self.agent_angle
+            direction = math.sin(rel_angle)
+
+            base = intensity * 0.3
+            directional = intensity * 0.7
+
+            if direction < 0:  # 왼쪽
+                left_signal = max(left_signal, base + directional * abs(direction))
+                right_signal = max(right_signal, base)
+            else:  # 오른쪽
+                right_signal = max(right_signal, base + directional * abs(direction))
+                left_signal = max(left_signal, base)
+
+        return min(1.0, left_signal), min(1.0, right_signal)
+
+    def _compute_npc_near_food(self) -> float:
+        """
+        가장 가까운 NPC-음식 거리 (먹기 직전 신호)
+
+        NPC가 음식에 가까워지면 높은 신호 → 곧 먹을 것 예측
+
+        Returns:
+            near_food: 0~1 (0=멀리/없음, 1=매우 가까움)
+        """
+        if not self.npc_agents or not self.foods:
+            return 0.0
+
+        obs_range = self.config.npc_food_observation_range
+        best_signal = 0.0
+
+        for npc in self.npc_agents:
+            # 플레이어 관찰 범위 내인지 확인
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            player_dist = math.sqrt(dx * dx + dy * dy)
+            if player_dist > obs_range:
+                continue
+
+            # NPC와 가장 가까운 음식 거리
+            for fx, fy in self.foods:
+                food_dist = math.sqrt((npc.x - fx)**2 + (npc.y - fy)**2)
+                if food_dist < 30.0:  # 30px 이내면 "가까움"
+                    signal = 1.0 - (food_dist / 30.0)
+                    # 플레이어와의 거리로 감쇠
+                    signal *= (1.0 - player_dist / obs_range)
+                    best_signal = max(best_signal, signal)
+
+        return min(1.0, best_signal)
 
     def set_brain_info(self, brain_info: dict):
         """뇌 활성화 정보 설정 (시각화용)"""
