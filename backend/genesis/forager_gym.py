@@ -79,8 +79,145 @@ class ForagerConfig:
     sound_decay: float = 1.5            # 거리에 따른 감쇠 지수
     food_cluster_bonus: float = 0.3     # 음식 클러스터 보너스
 
+    # === Phase 15: Social (다중 에이전트) ===
+    social_enabled: bool = True             # 다중 에이전트 활성화
+    n_npc_agents: int = 2                   # NPC 수
+    npc_speed: float = 2.5                  # NPC 이동 속도 (플레이어보다 약간 느림)
+    npc_radius: float = 10.0               # NPC 충돌 반경
+    npc_behavior: str = "forager"           # "forager" (음식 탐색) or "predator" (추적)
+    agent_view_range: float = 120.0         # 에이전트 감지 거리
+    agent_sound_range: float = 100.0        # 에이전트 소리 감지 거리
+    npc_food_eat_enabled: bool = True       # NPC가 음식을 먹을 수 있는지
+    social_proximity_range: float = 60.0    # 사회적 상호작용 거리
+
     # 시뮬레이션
     max_steps: int = 3000
+
+
+class NPCAgent:
+    """Phase 15: 간단한 NPC 에이전트 (반사적 행동)"""
+
+    def __init__(self, x: float, y: float, config: 'ForagerConfig'):
+        self.x = x
+        self.y = y
+        self.angle = np.random.uniform(0, 2 * np.pi)
+        self.speed = config.npc_speed
+        self.radius = config.npc_radius
+        self.behavior = config.npc_behavior
+        self.food_eaten = 0
+        self._wander_timer = 0  # 랜덤 방향 전환 타이머
+
+    def step(self, foods: list, player_pos: Tuple[float, float],
+             map_width: float, map_height: float, config: 'ForagerConfig'):
+        """NPC 행동 업데이트
+
+        forager: 가장 가까운 음식 방향으로 이동 (70%), 랜덤 탐색 (30%)
+        predator: 플레이어 추적
+        """
+        if self.behavior == "forager":
+            self._forager_step(foods, map_width, map_height, config)
+        elif self.behavior == "predator":
+            self._predator_step(player_pos, map_width, map_height, config)
+
+    def _forager_step(self, foods: list, map_w: float, map_h: float,
+                      config: 'ForagerConfig'):
+        """음식 탐색 행동"""
+        # 가장 가까운 음식 찾기
+        best_dist = float('inf')
+        best_food = None
+        for fx, fy in foods:
+            dist = math.sqrt((self.x - fx)**2 + (self.y - fy)**2)
+            if dist < config.view_range and dist < best_dist:
+                best_dist = dist
+                best_food = (fx, fy)
+
+        if best_food and np.random.random() < 0.7:
+            # 음식 방향으로 이동
+            target_angle = math.atan2(best_food[1] - self.y,
+                                       best_food[0] - self.x)
+            # 부드러운 회전 (최대 0.2 rad/step)
+            angle_diff = (target_angle - self.angle + math.pi) % (2 * math.pi) - math.pi
+            self.angle += np.clip(angle_diff, -0.2, 0.2)
+        else:
+            # 랜덤 탐색
+            self._wander_timer -= 1
+            if self._wander_timer <= 0:
+                self.angle += np.random.uniform(-0.5, 0.5)
+                self._wander_timer = np.random.randint(20, 60)
+
+        # 이동
+        new_x = self.x + math.cos(self.angle) * self.speed
+        new_y = self.y + math.sin(self.angle) * self.speed
+
+        # 벽 충돌
+        if new_x < self.radius:
+            new_x = self.radius
+            self.angle = math.pi - self.angle
+        elif new_x > map_w - self.radius:
+            new_x = map_w - self.radius
+            self.angle = math.pi - self.angle
+        if new_y < self.radius:
+            new_y = self.radius
+            self.angle = -self.angle
+        elif new_y > map_h - self.radius:
+            new_y = map_h - self.radius
+            self.angle = -self.angle
+
+        self.x = new_x
+        self.y = new_y
+
+    def _predator_step(self, player_pos: Tuple[float, float],
+                       map_w: float, map_h: float, config: 'ForagerConfig'):
+        """플레이어 추적 행동"""
+        px, py = player_pos
+        dist = math.sqrt((self.x - px)**2 + (self.y - py)**2)
+
+        if dist < config.view_range:
+            # 플레이어 방향으로 회전
+            target_angle = math.atan2(py - self.y, px - self.x)
+            angle_diff = (target_angle - self.angle + math.pi) % (2 * math.pi) - math.pi
+            self.angle += np.clip(angle_diff, -0.15, 0.15)
+        else:
+            # 랜덤 이동
+            self._wander_timer -= 1
+            if self._wander_timer <= 0:
+                self.angle += np.random.uniform(-0.5, 0.5)
+                self._wander_timer = np.random.randint(30, 80)
+
+        # 이동
+        new_x = self.x + math.cos(self.angle) * self.speed
+        new_y = self.y + math.sin(self.angle) * self.speed
+
+        # 벽 충돌
+        if new_x < self.radius:
+            new_x = self.radius
+            self.angle = math.pi - self.angle
+        elif new_x > map_w - self.radius:
+            new_x = map_w - self.radius
+            self.angle = math.pi - self.angle
+        if new_y < self.radius:
+            new_y = self.radius
+            self.angle = -self.angle
+        elif new_y > map_h - self.radius:
+            new_y = map_h - self.radius
+            self.angle = -self.angle
+
+        self.x = new_x
+        self.y = new_y
+
+    def check_food_collision(self, foods: list, config: 'ForagerConfig') -> bool:
+        """NPC 음식 충돌 확인 (먹으면 제거 + 새 음식 생성)"""
+        if not config.npc_food_eat_enabled:
+            return False
+
+        collision_dist = self.radius + config.food_radius
+        for i, (fx, fy) in enumerate(foods):
+            dist = math.sqrt((self.x - fx)**2 + (self.y - fy)**2)
+            if dist < collision_dist:
+                foods.pop(i)
+                self.food_eaten += 1
+                return True
+        return False
 
 
 class ForagerGym:
@@ -127,6 +264,10 @@ class ForagerGym:
         self.was_in_patch: List[bool] = []            # 이전 스텝 Patch 내 여부
         self._init_patches()
 
+        # === Phase 15: NPC 에이전트 ===
+        self.npc_agents: List[NPCAgent] = []
+        self.npc_food_stolen: int = 0                 # NPC가 빼앗은 음식 수
+
         # Pygame (lazy init)
         self.screen = None
         self.clock = None
@@ -165,6 +306,20 @@ class ForagerGym:
         self.patch_visits = [0] * self.config.n_patches
         self.patch_food_eaten = [0] * self.config.n_patches
         self.was_in_patch = [False] * self.config.n_patches
+
+        # Phase 15: NPC 초기화 (맵 사분면에 분산 배치)
+        self.npc_agents = []
+        self.npc_food_stolen = 0
+        if self.config.social_enabled:
+            spawn_positions = [
+                (self.config.width * 0.25, self.config.height * 0.25),
+                (self.config.width * 0.75, self.config.height * 0.75),
+                (self.config.width * 0.25, self.config.height * 0.75),
+                (self.config.width * 0.75, self.config.height * 0.25),
+            ]
+            for i in range(self.config.n_npc_agents):
+                sx, sy = spawn_positions[i % len(spawn_positions)]
+                self.npc_agents.append(NPCAgent(sx, sy, self.config))
 
         return self._get_observation()
 
@@ -253,6 +408,16 @@ class ForagerGym:
 
         self.was_in_pain = in_pain
 
+        # === Phase 15: NPC 업데이트 ===
+        if self.config.social_enabled:
+            for npc in self.npc_agents:
+                npc.step(self.foods, (self.agent_x, self.agent_y),
+                         self.config.width, self.config.height, self.config)
+                # NPC 음식 경쟁
+                if npc.check_food_collision(self.foods, self.config):
+                    self.npc_food_stolen += 1
+                    self._spawn_foods(1)  # 새 음식 생성 (총 개수 유지)
+
         # === Food Patch 방문 추적 ===
         if self.config.food_patch_enabled:
             current_patch = self._get_current_patch()
@@ -305,6 +470,9 @@ class ForagerGym:
             "patch_visits": self.patch_visits.copy() if self.config.food_patch_enabled else [],
             "patch_food_eaten": self.patch_food_eaten.copy() if self.config.food_patch_enabled else [],
             "current_patch": self._get_current_patch() if self.config.food_patch_enabled else -1,
+            # Phase 15: NPC 정보
+            "npc_food_stolen": self.npc_food_stolen,
+            "npc_positions": [(npc.x, npc.y) for npc in self.npc_agents] if self.config.social_enabled else [],
         }
 
         # 렌더링
@@ -516,6 +684,18 @@ class ForagerGym:
             sound_danger_l, sound_danger_r = 0.0, 0.0
             sound_food_l, sound_food_r = 0.0, 0.0
 
+        # Phase 15: Agent detection
+        if self.config.social_enabled and self.npc_agents:
+            agent_rays_l, agent_rays_r = self._cast_agent_rays()
+            agent_sound_l, agent_sound_r = self._compute_agent_sound()
+            social_proximity = self._get_social_proximity()
+        else:
+            n_half = self.config.n_rays // 2
+            agent_rays_l = np.zeros(n_half)
+            agent_rays_r = np.zeros(n_half)
+            agent_sound_l, agent_sound_r = 0.0, 0.0
+            social_proximity = 0.0
+
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
             "food_rays_left": food_rays_l,
@@ -541,6 +721,13 @@ class ForagerGym:
             "sound_danger_right": sound_danger_r,
             "sound_food_left": sound_food_l,
             "sound_food_right": sound_food_r,
+
+            # Phase 15: Agent 감각 (신규)
+            "agent_rays_left": agent_rays_l,
+            "agent_rays_right": agent_rays_r,
+            "agent_sound_left": agent_sound_l,
+            "agent_sound_right": agent_sound_r,
+            "social_proximity": social_proximity,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -797,6 +984,91 @@ class ForagerGym:
                     self.foods.append((x, y))
                     break
 
+    # === Phase 15: Agent Sensing Methods ===
+
+    def _cast_agent_rays(self) -> Tuple[np.ndarray, np.ndarray]:
+        """에이전트 방향 레이캐스트 (L/R 분리) - food_rays와 동일 구조"""
+        n_half = self.config.n_rays // 2
+        rays_left = np.zeros(n_half)
+        rays_right = np.zeros(n_half)
+
+        for i in range(n_half):
+            angle_l = self.agent_angle - np.pi/2 + (i / n_half) * np.pi/2
+            rays_left[i] = self._cast_single_agent_ray(angle_l)
+            angle_r = self.agent_angle + (i / n_half) * np.pi/2
+            rays_right[i] = self._cast_single_agent_ray(angle_r)
+
+        return rays_left, rays_right
+
+    def _cast_single_agent_ray(self, angle: float) -> float:
+        """단일 레이로 가장 가까운 NPC 감지 (0=없음, 1=매우가까움)"""
+        best_dist = self.config.agent_view_range
+
+        for npc in self.npc_agents:
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx*dx + dy*dy)
+
+            if dist > self.config.agent_view_range:
+                continue
+
+            npc_angle = math.atan2(dy, dx)
+            angle_diff = abs((npc_angle - angle + math.pi) % (2*math.pi) - math.pi)
+
+            if angle_diff < 0.26:  # ~15 degrees (food_rays와 동일)
+                if dist < best_dist:
+                    best_dist = dist
+
+        if best_dist >= self.config.agent_view_range:
+            return 0.0
+        return 1.0 - (best_dist / self.config.agent_view_range)
+
+    def _compute_agent_sound(self) -> Tuple[float, float]:
+        """NPC 에이전트 소리 (이동 중인 NPC가 소리 발생)"""
+        left_total = 0.0
+        right_total = 0.0
+
+        for npc in self.npc_agents:
+            dx = npc.x - self.agent_x
+            dy = npc.y - self.agent_y
+            dist = math.sqrt(dx*dx + dy*dy)
+
+            if dist > self.config.agent_sound_range or dist < 1.0:
+                continue
+
+            # 거리 감쇠
+            intensity = 1.0 - (dist / self.config.agent_sound_range) ** self.config.sound_decay
+            intensity = max(0.0, intensity) * 0.6  # 에이전트 소리는 음식보다 약간 약함
+
+            # 좌우 분리
+            npc_angle = math.atan2(dy, dx)
+            rel_angle = npc_angle - self.agent_angle
+            direction = math.sin(rel_angle)
+
+            base = intensity * 0.3  # 무방향 성분
+            directional = intensity * 0.7  # 방향성 성분
+
+            if direction < 0:  # 왼쪽
+                left_total += base + directional * abs(direction)
+                right_total += base
+            else:  # 오른쪽
+                right_total += base + directional * abs(direction)
+                left_total += base
+
+        return min(1.0, left_total), min(1.0, right_total)
+
+    def _get_social_proximity(self) -> float:
+        """가장 가까운 NPC까지의 근접도 (0=멀리, 1=매우가까움)"""
+        min_dist = float('inf')
+        for npc in self.npc_agents:
+            dist = math.sqrt((self.agent_x - npc.x)**2 + (self.agent_y - npc.y)**2)
+            if dist < min_dist:
+                min_dist = dist
+
+        if min_dist >= self.config.social_proximity_range:
+            return 0.0
+        return 1.0 - (min_dist / self.config.social_proximity_range)
+
     def set_brain_info(self, brain_info: dict):
         """뇌 활성화 정보 설정 (시각화용)"""
         self.brain_info = brain_info
@@ -874,6 +1146,20 @@ class ForagerGym:
         for food_x, food_y in self.foods:
             pygame.draw.circle(env_surface, (255, 220, 50),
                              (int(food_x), int(food_y)), int(self.config.food_radius))
+
+        # Phase 15: NPC 에이전트
+        if self.config.social_enabled:
+            for npc in self.npc_agents:
+                npc_color = (100, 150, 200) if npc.behavior == "forager" else (200, 80, 80)
+                pygame.draw.circle(env_surface, npc_color,
+                                   (int(npc.x), int(npc.y)), int(npc.radius))
+                # NPC 방향 화살표
+                npc_arrow_len = npc.radius * 1.2
+                npc_ax = npc.x + math.cos(npc.angle) * npc_arrow_len
+                npc_ay = npc.y + math.sin(npc.angle) * npc_arrow_len
+                pygame.draw.line(env_surface, (180, 180, 180),
+                                 (int(npc.x), int(npc.y)),
+                                 (int(npc_ax), int(npc_ay)), 1)
 
         # 에이전트
         agent_color = self._get_agent_color()

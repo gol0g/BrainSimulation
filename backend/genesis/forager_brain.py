@@ -527,6 +527,47 @@ class ForagerBrainConfig:
     fear_to_pmv_avoid_weight: float = 12.0             # Fear → PMv_Avoid
     arousal_to_motor_prep_weight: float = 8.0          # Arousal → Motor_Prep
 
+    # === Phase 15: Social Brain (사회적 뇌) ===
+    social_brain_enabled: bool = True
+
+    # 뉴런 수
+    n_agent_eye_left: int = 200                        # 에이전트 시각 입력 (좌)
+    n_agent_eye_right: int = 200                       # 에이전트 시각 입력 (우)
+    n_agent_sound_left: int = 100                      # 에이전트 청각 입력 (좌)
+    n_agent_sound_right: int = 100                     # 에이전트 청각 입력 (우)
+    n_sts_social: int = 200                            # STS 사회적 처리
+    n_tpj_self: int = 100                              # TPJ 자기 표상
+    n_tpj_other: int = 100                             # TPJ 타자 표상
+    n_tpj_compare: int = 100                           # TPJ 자기-타자 비교
+    n_acc_conflict: int = 100                          # ACC 갈등 감지
+    n_acc_monitor: int = 100                           # ACC 행동 모니터링
+    n_social_approach: int = 100                       # 사회적 접근 동기
+    n_social_avoid: int = 100                          # 사회적 회피 동기
+
+    # 시냅스 가중치
+    agent_eye_to_sts_social_weight: float = 15.0       # Agent_Eye → STS_Social
+    agent_sound_to_sts_social_weight: float = 12.0     # Agent_Sound → STS_Social
+    sts_social_recurrent_weight: float = 8.0           # STS_Social 자기 유지
+    sts_social_to_tpj_weight: float = 12.0             # STS_Social → TPJ_Other
+    internal_to_tpj_self_weight: float = 10.0          # Hunger/Satiety → TPJ_Self
+    tpj_compare_weight: float = 10.0                   # TPJ_Self/Other → TPJ_Compare
+    tpj_to_acc_weight: float = 12.0                    # TPJ_Compare → ACC_Conflict
+    social_proximity_to_acc_weight: float = 8.0        # 근접도 → ACC
+    sts_social_to_approach_weight: float = 8.0         # STS_Social → Approach
+    acc_to_avoid_weight: float = 10.0                  # ACC → Avoid
+    social_wta_inhibition: float = -8.0                # Approach ↔ Avoid WTA
+
+    # 기존 회로 연결 (약한 간접 경로 - Phase 12-14 교훈)
+    sts_social_to_pfc_weight: float = 6.0              # STS_Social → WM
+    acc_to_amygdala_weight: float = 5.0                # ACC → LA (약하게!)
+    social_approach_to_goal_food_weight: float = 5.0   # Approach → Goal_Food
+    social_avoid_to_goal_safety_weight: float = 5.0    # Avoid → Goal_Safety
+    social_to_motor_weight: float = 0.0                # Motor 직접 연결 없음!
+
+    # Top-Down → Social
+    fear_to_sts_social_weight: float = 8.0             # Fear → STS_Social
+    hunger_to_social_approach_weight: float = 6.0      # Hunger → Social_Approach
+
     dt: float = 1.0
 
     @property
@@ -581,6 +622,12 @@ class ForagerBrainConfig:
                      self.n_pmv_approach + self.n_pmv_avoid +
                      self.n_sma_sequence + self.n_pre_sma +
                      self.n_motor_preparation)
+        if self.social_brain_enabled:
+            base += (self.n_agent_eye_left + self.n_agent_eye_right +
+                     self.n_agent_sound_left + self.n_agent_sound_right +
+                     self.n_sts_social + self.n_tpj_self + self.n_tpj_other +
+                     self.n_tpj_compare + self.n_acc_conflict + self.n_acc_monitor +
+                     self.n_social_approach + self.n_social_avoid)
         return base
 
 
@@ -824,6 +871,10 @@ class ForagerBrain:
         # Phase 14: Premotor Cortex circuits
         if self.config.premotor_enabled:
             self._build_premotor_cortex_circuit()
+
+        # Phase 15: Social Brain circuits
+        if self.config.social_brain_enabled:
+            self._build_social_brain_circuit()
 
         # Build and load
         print("Building model...")
@@ -3499,6 +3550,209 @@ class ForagerBrain:
                 "n_strong_connections": int(n_strong)
             }
 
+    def _build_social_brain_circuit(self):
+        """
+        Phase 15: Social Brain (사회적 뇌)
+
+        생물학적 근거:
+        - STS: 생물학적 움직임 인식 (Allison et al., 2000)
+        - TPJ: 관점 전환, Theory of Mind (Saxe & Kanwisher, 2003)
+        - ACC: 갈등 모니터링, 사회적 통증 (Botvinick et al., 2004)
+        - vmPFC/OFC: 사회적 보상 평가 (Rushworth et al., 2007)
+        """
+        from pygenn import init_var, init_weight_update, init_postsynaptic, init_sparse_connectivity
+
+        print("  Phase 15: Building Social Brain...")
+
+        # Sensory populations (with I_input for external current injection)
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # Internal populations (standard LIF, no I_input needed)
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        # === 1. 감각 입력 인구 (SensoryLIF - I_input 필요) ===
+        self.agent_eye_left = self.model.add_neuron_population(
+            "agent_eye_left", self.config.n_agent_eye_left,
+            sensory_lif_model, s_params, s_init)
+        self.agent_eye_right = self.model.add_neuron_population(
+            "agent_eye_right", self.config.n_agent_eye_right,
+            sensory_lif_model, s_params, s_init)
+        self.agent_sound_left = self.model.add_neuron_population(
+            "agent_sound_left", self.config.n_agent_sound_left,
+            sensory_lif_model, s_params, s_init)
+        self.agent_sound_right = self.model.add_neuron_population(
+            "agent_sound_right", self.config.n_agent_sound_right,
+            sensory_lif_model, s_params, s_init)
+
+        # === 2. STS_Social (다른 에이전트 통합 인식) ===
+        self.sts_social = self.model.add_neuron_population(
+            "sts_social", self.config.n_sts_social,
+            "LIF", lif_params, lif_init)
+
+        # === 3. TPJ (Temporoparietal Junction) ===
+        self.tpj_self = self.model.add_neuron_population(
+            "tpj_self", self.config.n_tpj_self,
+            "LIF", lif_params, lif_init)
+        self.tpj_other = self.model.add_neuron_population(
+            "tpj_other", self.config.n_tpj_other,
+            "LIF", lif_params, lif_init)
+        self.tpj_compare = self.model.add_neuron_population(
+            "tpj_compare", self.config.n_tpj_compare,
+            "LIF", lif_params, lif_init)
+
+        # === 4. ACC (Anterior Cingulate Cortex) ===
+        # acc_conflict uses SensoryLIF (needs I_input for social proximity injection)
+        self.acc_conflict = self.model.add_neuron_population(
+            "acc_conflict", self.config.n_acc_conflict,
+            sensory_lif_model, s_params, s_init)
+        self.acc_monitor = self.model.add_neuron_population(
+            "acc_monitor", self.config.n_acc_monitor,
+            "LIF", lif_params, lif_init)
+
+        # === 5. Social Valuation (접근/회피 동기) ===
+        self.social_approach = self.model.add_neuron_population(
+            "social_approach", self.config.n_social_approach,
+            "LIF", lif_params, lif_init)
+        self.social_avoid = self.model.add_neuron_population(
+            "social_avoid", self.config.n_social_avoid,
+            "LIF", lif_params, lif_init)
+
+        print(f"    Populations: Agent_Eye({self.config.n_agent_eye_left}×2) + "
+              f"Agent_Sound({self.config.n_agent_sound_left}×2) + "
+              f"STS_Social({self.config.n_sts_social}) + "
+              f"TPJ({self.config.n_tpj_self}+{self.config.n_tpj_other}+{self.config.n_tpj_compare}) + "
+              f"ACC({self.config.n_acc_conflict}+{self.config.n_acc_monitor}) + "
+              f"Social_Val({self.config.n_social_approach}+{self.config.n_social_avoid})")
+
+        # ============================================================
+        # 시냅스 연결
+        # ============================================================
+
+        # === 6. 감각 입력 → STS_Social ===
+        self._create_static_synapse(
+            "agent_eye_left_to_sts_social", self.agent_eye_left, self.sts_social,
+            self.config.agent_eye_to_sts_social_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "agent_eye_right_to_sts_social", self.agent_eye_right, self.sts_social,
+            self.config.agent_eye_to_sts_social_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "agent_sound_left_to_sts_social", self.agent_sound_left, self.sts_social,
+            self.config.agent_sound_to_sts_social_weight, sparsity=0.12)
+        self._create_static_synapse(
+            "agent_sound_right_to_sts_social", self.agent_sound_right, self.sts_social,
+            self.config.agent_sound_to_sts_social_weight, sparsity=0.12)
+
+        # STS_Social 자기 유지 (recurrent)
+        self._create_static_synapse(
+            "sts_social_recurrent", self.sts_social, self.sts_social,
+            self.config.sts_social_recurrent_weight, sparsity=0.05)
+
+        print(f"    Agent_Eye→STS_Social: {self.config.agent_eye_to_sts_social_weight}")
+        print(f"    Agent_Sound→STS_Social: {self.config.agent_sound_to_sts_social_weight}")
+
+        # === 7. STS_Social → TPJ ===
+        self._create_static_synapse(
+            "sts_social_to_tpj_other", self.sts_social, self.tpj_other,
+            self.config.sts_social_to_tpj_weight, sparsity=0.10)
+
+        # TPJ_Self ← 내부 상태 (Hunger/Satiety)
+        self._create_static_synapse(
+            "hunger_to_tpj_self", self.hunger_drive, self.tpj_self,
+            self.config.internal_to_tpj_self_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "satiety_to_tpj_self", self.satiety_drive, self.tpj_self,
+            self.config.internal_to_tpj_self_weight * 0.8, sparsity=0.10)
+
+        # TPJ_Self/Other → TPJ_Compare (자기-타자 비교)
+        self._create_static_synapse(
+            "tpj_self_to_compare", self.tpj_self, self.tpj_compare,
+            self.config.tpj_compare_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "tpj_other_to_compare", self.tpj_other, self.tpj_compare,
+            self.config.tpj_compare_weight, sparsity=0.08)
+
+        print(f"    STS_Social→TPJ: {self.config.sts_social_to_tpj_weight}")
+
+        # === 8. TPJ → ACC (갈등 감지) ===
+        self._create_static_synapse(
+            "tpj_compare_to_acc", self.tpj_compare, self.acc_conflict,
+            self.config.tpj_to_acc_weight, sparsity=0.10)
+
+        # ACC_Conflict ↔ ACC_Monitor (상호 연결)
+        self._create_static_synapse(
+            "acc_conflict_to_monitor", self.acc_conflict, self.acc_monitor,
+            8.0, sparsity=0.08)
+        self._create_static_synapse(
+            "acc_monitor_to_conflict", self.acc_monitor, self.acc_conflict,
+            6.0, sparsity=0.08)
+
+        print(f"    TPJ→ACC: {self.config.tpj_to_acc_weight}")
+
+        # === 9. 사회적 가치 평가 ===
+        self._create_static_synapse(
+            "sts_social_to_approach", self.sts_social, self.social_approach,
+            self.config.sts_social_to_approach_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "acc_to_avoid", self.acc_conflict, self.social_avoid,
+            self.config.acc_to_avoid_weight, sparsity=0.10)
+
+        # Approach ↔ Avoid WTA 경쟁
+        self._create_static_synapse(
+            "approach_to_avoid_inhib", self.social_approach, self.social_avoid,
+            self.config.social_wta_inhibition, sparsity=0.08)
+        self._create_static_synapse(
+            "avoid_to_approach_inhib", self.social_avoid, self.social_approach,
+            self.config.social_wta_inhibition, sparsity=0.08)
+
+        print(f"    Social Approach↔Avoid WTA: {self.config.social_wta_inhibition}")
+
+        # === 10. 기존 회로 연결 (약한 간접 경로) ===
+        # STS_Social → PFC Working Memory
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "sts_social_to_wm", self.sts_social, self.working_memory,
+                self.config.sts_social_to_pfc_weight, sparsity=0.05)
+
+        # ACC → Amygdala LA (약하게! Phase 12-14 교훈)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "acc_to_la", self.acc_conflict, self.lateral_amygdala,
+                self.config.acc_to_amygdala_weight, sparsity=0.05)
+
+        # Social Approach → PFC Goal_Food
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "social_approach_to_goal_food", self.social_approach, self.goal_food,
+                self.config.social_approach_to_goal_food_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "social_avoid_to_goal_safety", self.social_avoid, self.goal_safety,
+                self.config.social_avoid_to_goal_safety_weight, sparsity=0.05)
+
+        print(f"    STS_Social→PFC: {self.config.sts_social_to_pfc_weight}")
+        print(f"    ACC→Amygdala: {self.config.acc_to_amygdala_weight} (약한 간접)")
+
+        # === 11. Top-Down 조절 ===
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_sts_social", self.fear_response, self.sts_social,
+                self.config.fear_to_sts_social_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "hunger_to_social_approach", self.hunger_drive, self.social_approach,
+            self.config.hunger_to_social_approach_weight, sparsity=0.05)
+
+        print(f"    Fear→STS_Social: {self.config.fear_to_sts_social_weight}")
+        print(f"    Phase 15 Social Brain: {self.config.n_agent_eye_left * 2 + self.config.n_agent_sound_left * 2 + self.config.n_sts_social + self.config.n_tpj_self + self.config.n_tpj_other + self.config.n_tpj_compare + self.config.n_acc_conflict + self.config.n_acc_monitor + self.config.n_social_approach + self.config.n_social_avoid} neurons")
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -3639,6 +3893,37 @@ class ForagerBrain:
             self.sound_food_left.vars["I_input"].push_to_device()
             self.sound_food_right.vars["I_input"].push_to_device()
 
+        # === Phase 15: Agent 감각 입력 ===
+        agent_eye_l = 0.0
+        agent_eye_r = 0.0
+        agent_sound_l = 0.0
+        agent_sound_r = 0.0
+        social_proximity = 0.0
+
+        if self.config.social_brain_enabled:
+            agent_eye_l = np.mean(observation.get("agent_rays_left", np.zeros(8)))
+            agent_eye_r = np.mean(observation.get("agent_rays_right", np.zeros(8)))
+            agent_sound_l = observation.get("agent_sound_left", 0.0)
+            agent_sound_r = observation.get("agent_sound_right", 0.0)
+            social_proximity = observation.get("social_proximity", 0.0)
+
+            # Agent Eye 뉴런에 전류 주입
+            agent_sensitivity = 50.0
+            self.agent_eye_left.vars["I_input"].view[:] = agent_eye_l * agent_sensitivity
+            self.agent_eye_right.vars["I_input"].view[:] = agent_eye_r * agent_sensitivity
+            self.agent_sound_left.vars["I_input"].view[:] = agent_sound_l * agent_sensitivity
+            self.agent_sound_right.vars["I_input"].view[:] = agent_sound_r * agent_sensitivity
+
+            self.agent_eye_left.vars["I_input"].push_to_device()
+            self.agent_eye_right.vars["I_input"].push_to_device()
+            self.agent_sound_left.vars["I_input"].push_to_device()
+            self.agent_sound_right.vars["I_input"].push_to_device()
+
+            # Social proximity → ACC (직접 전류 주입)
+            if social_proximity > 0:
+                self.acc_conflict.vars["I_input"].view[:] = social_proximity * 30.0
+                self.acc_conflict.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -3727,6 +4012,16 @@ class ForagerBrain:
         pmv_avoid_spikes = 0
         sma_sequence_spikes = 0
         motor_prep_spikes = 0
+
+        # Phase 15 스파이크 카운트 (Social Brain)
+        sts_social_spikes = 0
+        tpj_self_spikes = 0
+        tpj_other_spikes = 0
+        tpj_compare_spikes = 0
+        acc_conflict_spikes = 0
+        acc_monitor_spikes = 0
+        social_approach_spikes = 0
+        social_avoid_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -3911,6 +4206,26 @@ class ForagerBrain:
                 pmv_avoid_spikes += np.sum(self.pmv_avoid.vars["RefracTime"].view > self.spike_threshold)
                 sma_sequence_spikes += np.sum(self.sma_sequence.vars["RefracTime"].view > self.spike_threshold)
                 motor_prep_spikes += np.sum(self.motor_preparation.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 15 스파이크 카운팅 (Social Brain)
+            if self.config.social_brain_enabled:
+                self.sts_social.vars["RefracTime"].pull_from_device()
+                self.tpj_self.vars["RefracTime"].pull_from_device()
+                self.tpj_other.vars["RefracTime"].pull_from_device()
+                self.tpj_compare.vars["RefracTime"].pull_from_device()
+                self.acc_conflict.vars["RefracTime"].pull_from_device()
+                self.acc_monitor.vars["RefracTime"].pull_from_device()
+                self.social_approach.vars["RefracTime"].pull_from_device()
+                self.social_avoid.vars["RefracTime"].pull_from_device()
+
+                sts_social_spikes += np.sum(self.sts_social.vars["RefracTime"].view > self.spike_threshold)
+                tpj_self_spikes += np.sum(self.tpj_self.vars["RefracTime"].view > self.spike_threshold)
+                tpj_other_spikes += np.sum(self.tpj_other.vars["RefracTime"].view > self.spike_threshold)
+                tpj_compare_spikes += np.sum(self.tpj_compare.vars["RefracTime"].view > self.spike_threshold)
+                acc_conflict_spikes += np.sum(self.acc_conflict.vars["RefracTime"].view > self.spike_threshold)
+                acc_monitor_spikes += np.sum(self.acc_monitor.vars["RefracTime"].view > self.spike_threshold)
+                social_approach_spikes += np.sum(self.social_approach.vars["RefracTime"].view > self.spike_threshold)
+                social_avoid_spikes += np.sum(self.social_avoid.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -4132,6 +4447,25 @@ class ForagerBrain:
             sma_sequence_rate = sma_sequence_spikes / max_spikes_sma
             motor_prep_rate = motor_prep_spikes / max_spikes_motor_prep
 
+        # Phase 15 스파이크율 (Social Brain)
+        sts_social_rate = 0.0
+        tpj_self_rate = 0.0
+        tpj_other_rate = 0.0
+        tpj_compare_rate = 0.0
+        acc_conflict_rate = 0.0
+        acc_monitor_rate = 0.0
+        social_approach_rate = 0.0
+        social_avoid_rate = 0.0
+        if self.config.social_brain_enabled:
+            sts_social_rate = sts_social_spikes / (self.config.n_sts_social * 5)
+            tpj_self_rate = tpj_self_spikes / (self.config.n_tpj_self * 5)
+            tpj_other_rate = tpj_other_spikes / (self.config.n_tpj_other * 5)
+            tpj_compare_rate = tpj_compare_spikes / (self.config.n_tpj_compare * 5)
+            acc_conflict_rate = acc_conflict_spikes / (self.config.n_acc_conflict * 5)
+            acc_monitor_rate = acc_monitor_spikes / (self.config.n_acc_monitor * 5)
+            social_approach_rate = social_approach_spikes / (self.config.n_social_approach * 5)
+            social_avoid_rate = social_avoid_spikes / (self.config.n_social_avoid * 5)
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -4243,6 +4577,21 @@ class ForagerBrain:
             "pmv_avoid_rate": pmv_avoid_rate,
             "sma_sequence_rate": sma_sequence_rate,
             "motor_prep_rate": motor_prep_rate,
+
+            # Phase 15 뉴런 활성화 (Social Brain)
+            "sts_social_rate": sts_social_rate,
+            "tpj_self_rate": tpj_self_rate,
+            "tpj_other_rate": tpj_other_rate,
+            "tpj_compare_rate": tpj_compare_rate,
+            "acc_conflict_rate": acc_conflict_rate,
+            "acc_monitor_rate": acc_monitor_rate,
+            "social_approach_rate": social_approach_rate,
+            "social_avoid_rate": social_avoid_rate,
+
+            # Phase 15 입력
+            "agent_eye_l": agent_eye_l,
+            "agent_eye_r": agent_eye_r,
+            "social_proximity": social_proximity,
 
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
@@ -4389,7 +4738,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 persist_learning: bool = False, no_learning: bool = False,
                 fps: int = 10, food_patch: bool = False,
                 no_multimodal: bool = False, no_parietal: bool = False,
-                no_premotor: bool = False):
+                no_premotor: bool = False, no_social: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -4422,6 +4771,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_premotor:
         brain_config.premotor_enabled = False
         print("  [!] Phase 14 (Premotor Cortex) DISABLED")
+    if no_social:
+        brain_config.social_brain_enabled = False
+        env_config.social_enabled = False
+        print("  [!] Phase 15 (Social Brain) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -4703,6 +5056,8 @@ if __name__ == "__main__":
                        help="Disable Phase 13 (Parietal Cortex)")
     parser.add_argument("--no-premotor", action="store_true",
                        help="Disable Phase 14 (Premotor Cortex)")
+    parser.add_argument("--no-social", action="store_true",
+                       help="Disable Phase 15 (Social Brain)")
     args = parser.parse_args()
 
     run_training(
@@ -4718,5 +5073,6 @@ if __name__ == "__main__":
         food_patch=args.food_patch,
         no_multimodal=args.no_multimodal,
         no_parietal=args.no_parietal,
-        no_premotor=args.no_premotor
+        no_premotor=args.no_premotor,
+        no_social=args.no_social
     )
