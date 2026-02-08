@@ -4,13 +4,13 @@
 
 ---
 
-## 현재 상태: Phase 17 검증 완료 (17,800 뉴런)
+## 현재 상태: Phase 18 검증 완료 (18,420 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 17 검증 통과 ✓ (2026-02-08)                            ║
-║  생존율 55%, Reward Freq 3.19%, Pain Avoidance 90.9%         ║
-║  Language Circuit 1,000 뉴런 추가 (Broca/Wernicke 언어 회로) ║
+║  Phase 18 검증 통과 ✓ (2026-02-08)                            ║
+║  생존율 50%, Reward Freq 3.02%, Pain Avoidance 91.0%         ║
+║  WM Expansion 620 뉴런 추가 (시상-피질 루프, 시간 버퍼)      ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -38,7 +38,8 @@
 | 15b | 거울 뉴런 (Mirror Neurons) | +600 | ✓ 완료 | 65% |
 | 15c | Theory of Mind (ToM) | +500 | ✓ 완료 | **70%** |
 | 16 | 연합 피질 (Association Cortex) | +700 | ✓ 완료 | 50% |
-| 17 | 언어 회로 (Broca/Wernicke) | +1,000 | ✓ 완료 | **55%** |
+| 17 | 언어 회로 (Broca/Wernicke) | +1,000 | ✓ 완료 | 55% |
+| 18 | 작업 기억 확장 (WM Expansion) | +620 | ✓ 완료 | **50%** |
 
 ### Phase 12-14 수정 이력
 
@@ -182,14 +183,26 @@
 
 **Phase 17 완료**: 17,800 뉴런
 
+### Phase 18: 작업 기억 확장 (WM Expansion) ✓ 완료
+- **구조**: +620 뉴런
+  - WM_Thalamic (100 LIF): MD thalamus analog, WM↔Thalamic 양방향 유지 루프
+  - WM_Update_Gate (50 SensoryLIF): 도파민/갈등/신기 게이트 (I_input: dopamine×12 + novelty×15 + conflict×15)
+  - Temporal_Recent (80 LIF): 현재 이벤트 ~1초 유지 (recurrent 7.0)
+  - Temporal_Prior (40 LIF): 이전 이벤트 ~3초 유지 (recurrent 4.0)
+  - Goal_Pending (80 LIF): 대기 중 다음 목표, 활성 목표가 억제 (-8.0)
+  - Goal_Switch (70 LIF): 문맥 전환 감지기 (burst-only, self-inhibition -8.0)
+  - WM_Context_Binding (100 LIF, Hebbian DENSE): 시간 패턴 학습 (eta=0.05, w_max=16.0)
+  - WM_Inhibitory (100 LIF): 국소 억제, 이중 루프 폭주 방지
+- **연결**: ~42 시냅스, 1 Hebbian DENSE (Temporal_Recent → WM_Context_Binding)
+- **설계 원칙**: LSTM-style 3-gate 미사용 → 시상 릴레이 + 도파민 + TRN 게이팅으로 생물학적 구현
+- **연결 안전**: Motor 직접 연결 없음 (0.0), 간접 경로 3+ 홉, Pain Push-Pull 간섭 <1%
+- **검증 (2026-02-08)**: 생존율 50% ✓, Reward Freq 3.02% ✓, Pain Avoidance 91.0% ✓
+
+**Phase 18 완료**: 18,420 뉴런
+
 ---
 
-## 장기 계획 (Phase 18-20)
-
-### Phase 18: 작업 기억 확장
-- 다단계 추론
-- 계획의 계획
-- 시간적 추상화
+## 장기 계획 (Phase 19-20)
 
 ### Phase 19: 메타인지
 - "내가 뭘 모르는지 아는 것"
@@ -277,4 +290,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-08 (Phase 17 검증 통과, 생존율 55%, 17,800 뉴런)*
+*최종 업데이트: 2026-02-08 (Phase 18 검증 통과, 생존율 50%, 18,420 뉴런)*

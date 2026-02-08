@@ -812,6 +812,66 @@ class ForagerBrainConfig:
     place_to_wernicke_context_weight: float = 4.0
     sts_social_to_wernicke_context_weight: float = 5.0
 
+    # === Phase 18: Working Memory Expansion (작업 기억 확장) ===
+    wm_expansion_enabled: bool = True
+
+    # 인구 크기 (8개)
+    n_wm_thalamic: int = 100           # MD thalamus analog
+    n_wm_update_gate: int = 50         # Dopamine-gated update control
+    n_temporal_recent: int = 80        # Current event buffer (~1s)
+    n_temporal_prior: int = 40         # Previous event buffer (~3s)
+    n_goal_pending: int = 80           # Next goal in queue
+    n_goal_switch: int = 70            # Context switch detector
+    n_wm_context_binding: int = 100    # Temporal pattern association (Hebbian)
+    n_wm_inhibitory: int = 100         # WM-local inhibitory interneurons
+
+    # 시상-피질 루프
+    wm_to_wm_thalamic_weight: float = 5.0
+    wm_thalamic_to_wm_weight: float = 4.0
+    wm_gate_to_thalamic_weight: float = -10.0
+    trn_to_wm_thalamic_weight: float = -3.0
+    arousal_to_wm_thalamic_weight: float = 3.0
+
+    # Gate inputs (synaptic)
+    dopamine_to_wm_gate_weight: float = 6.0
+    acc_conflict_to_wm_gate_weight: float = 5.0
+    novelty_to_wm_gate_weight: float = 5.0
+
+    # Gate I_input scaling
+    wm_gate_dopamine_scale: float = 12.0
+    wm_gate_novelty_scale: float = 15.0
+    wm_gate_conflict_scale: float = 15.0
+
+    # 시간 버퍼
+    temporal_recent_recurrent_weight: float = 7.0
+    temporal_prior_recurrent_weight: float = 4.0
+    temporal_recent_to_prior_weight: float = 3.0
+    temporal_recent_to_wm_weight: float = 4.0
+
+    # 목표 순서화
+    wm_to_goal_pending_weight: float = 5.0
+    goal_to_pending_inhibit_weight: float = -8.0
+    goal_switch_self_inhibit_weight: float = -8.0
+    goal_switch_to_goal_inhibit_weight: float = -6.0
+
+    # WM 문맥 학습 (Hebbian)
+    wm_context_binding_eta: float = 0.05
+    wm_context_binding_w_max: float = 16.0
+    wm_context_binding_init_weight: float = 2.0
+    wm_context_to_wm_weight: float = 4.0
+    wm_context_to_pending_weight: float = 3.0
+
+    # 억제 균형
+    wm_to_inhibitory_weight: float = 6.0
+    wm_thalamic_to_inhibitory_weight: float = 4.0
+    inhibitory_to_wm_weight: float = -5.0
+    inhibitory_to_thalamic_weight: float = -4.0
+    inhibitory_to_temporal_weight: float = -3.0
+    inhibitory_to_pending_weight: float = -3.0
+
+    # WM expansion Motor 직접 연결 = 0.0 (절대 비활성)
+    wm_expansion_to_motor_weight: float = 0.0
+
     dt: float = 1.0
 
     @property
@@ -892,6 +952,11 @@ class ForagerBrainConfig:
                      self.n_broca_food + self.n_broca_danger +
                      self.n_broca_social + self.n_broca_sequence +
                      self.n_vocal_gate + self.n_call_mirror + self.n_call_binding)
+        if self.wm_expansion_enabled:
+            base += (self.n_wm_thalamic + self.n_wm_update_gate +
+                     self.n_temporal_recent + self.n_temporal_prior +
+                     self.n_goal_pending + self.n_goal_switch +
+                     self.n_wm_context_binding + self.n_wm_inhibitory)
         return base
 
 
@@ -943,6 +1008,19 @@ class ForagerBrain:
         self.last_vocal_gate_rate = 0.0
         self.last_call_binding_rate = 0.0
         self.vocalize_type = 0  # 0=none, 1=food_call, 2=danger_call
+
+        # Phase 18: WM Expansion state defaults
+        self.last_dopamine_rate = 0.0
+        self.last_acc_conflict_rate = 0.0
+        self.last_novelty_rate = 0.0
+        self.last_wm_thalamic_rate = 0.0
+        self.last_wm_update_gate_rate = 0.0
+        self.last_temporal_recent_rate = 0.0
+        self.last_temporal_prior_rate = 0.0
+        self.last_goal_pending_rate = 0.0
+        self.last_goal_switch_rate = 0.0
+        self.last_wm_context_binding_rate = 0.0
+        self.last_wm_inhibitory_rate = 0.0
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -1177,6 +1255,10 @@ class ForagerBrain:
         # Phase 17: Language Circuit
         if self.config.language_enabled:
             self._build_language_circuit()
+
+        # Phase 18: Working Memory Expansion
+        if self.config.wm_expansion_enabled:
+            self._build_wm_expansion_circuit()
 
         # Build and load
         print("Building model...")
@@ -5216,6 +5298,315 @@ class ForagerBrain:
             "learning_factor": learning_factor,
         }
 
+    def _build_wm_expansion_circuit(self):
+        """
+        Phase 18: Working Memory Expansion (작업 기억 확장)
+
+        시상-피질 루프 기반 WM 유지, 도파민 게이팅, 시간 버퍼, 목표 순서화.
+        생물학적 메커니즘: MD thalamus ↔ PFC loop, dopamine gating, TRN modulation.
+        LSTM-style 3게이트 사용하지 않음.
+        """
+        print("  Phase 18: Building WM Expansion Circuit...")
+
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === 18a: WM Thalamocortical Loop ===
+        self.wm_thalamic = self.model.add_neuron_population(
+            "wm_thalamic", self.config.n_wm_thalamic, "LIF", lif_params, lif_init)
+        self.wm_update_gate = self.model.add_neuron_population(
+            "wm_update_gate", self.config.n_wm_update_gate,
+            sensory_lif_model, s_params, s_init)
+
+        # === 18b: Temporal Buffer ===
+        self.temporal_recent = self.model.add_neuron_population(
+            "temporal_recent", self.config.n_temporal_recent, "LIF", lif_params, lif_init)
+        self.temporal_prior = self.model.add_neuron_population(
+            "temporal_prior", self.config.n_temporal_prior, "LIF", lif_params, lif_init)
+
+        # === 18c: Goal Sequencer ===
+        self.goal_pending = self.model.add_neuron_population(
+            "goal_pending", self.config.n_goal_pending, "LIF", lif_params, lif_init)
+        self.goal_switch = self.model.add_neuron_population(
+            "goal_switch", self.config.n_goal_switch, "LIF", lif_params, lif_init)
+
+        # === 18d: WM Context Learning ===
+        self.wm_context_binding = self.model.add_neuron_population(
+            "wm_context_binding", self.config.n_wm_context_binding, "LIF", lif_params, lif_init)
+
+        # === 18e: WM Inhibitory Balance ===
+        self.wm_inhibitory = self.model.add_neuron_population(
+            "wm_inhibitory", self.config.n_wm_inhibitory, "LIF", lif_params, lif_init)
+
+        print(f"    Populations: WM_Thalamic({self.config.n_wm_thalamic}) + "
+              f"Gate({self.config.n_wm_update_gate}) + "
+              f"Temporal({self.config.n_temporal_recent}+{self.config.n_temporal_prior}) + "
+              f"GoalSeq({self.config.n_goal_pending}+{self.config.n_goal_switch}) + "
+              f"Context({self.config.n_wm_context_binding}) + "
+              f"Inhibitory({self.config.n_wm_inhibitory})")
+
+        # ============================================================
+        # 18a: WM Thalamocortical Loop (8 synapses)
+        # ============================================================
+
+        # WM → WM_Thalamic (cortex → thalamus)
+        self._create_static_synapse(
+            "wm_to_wm_thalamic", self.working_memory, self.wm_thalamic,
+            self.config.wm_to_wm_thalamic_weight, sparsity=0.05)
+        # WM_Thalamic → WM (thalamus → cortex, maintenance)
+        self._create_static_synapse(
+            "wm_thalamic_to_wm", self.wm_thalamic, self.working_memory,
+            self.config.wm_thalamic_to_wm_weight, sparsity=0.03)
+        # WM_Update_Gate → WM_Thalamic (inhibitory: gate breaks maintenance)
+        self._create_static_synapse(
+            "wm_gate_to_thalamic", self.wm_update_gate, self.wm_thalamic,
+            self.config.wm_gate_to_thalamic_weight, sparsity=0.10)
+        # Dopamine → WM_Update_Gate
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "dopamine_to_wm_gate", self.dopamine_neurons, self.wm_update_gate,
+                self.config.dopamine_to_wm_gate_weight, sparsity=0.05)
+        # ACC_Conflict → WM_Update_Gate
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "acc_conflict_to_wm_gate", self.acc_conflict, self.wm_update_gate,
+                self.config.acc_conflict_to_wm_gate_weight, sparsity=0.05)
+        # Assoc_Novelty → WM_Update_Gate
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "novelty_to_wm_gate", self.assoc_novelty, self.wm_update_gate,
+                self.config.novelty_to_wm_gate_weight, sparsity=0.05)
+        # TRN → WM_Thalamic (thalamic gating consistency)
+        if self.config.thalamus_enabled:
+            self._create_static_synapse(
+                "trn_to_wm_thalamic", self.trn, self.wm_thalamic,
+                self.config.trn_to_wm_thalamic_weight, sparsity=0.05)
+            # Arousal → WM_Thalamic (arousal supports maintenance)
+            self._create_static_synapse(
+                "arousal_to_wm_thalamic", self.arousal, self.wm_thalamic,
+                self.config.arousal_to_wm_thalamic_weight, sparsity=0.05)
+
+        print(f"    18a: Thalamocortical loop - WM↔Thalamic + Gate")
+
+        # ============================================================
+        # 18b: Temporal Buffer (10 synapses)
+        # ============================================================
+
+        # Temporal_Recent recurrent
+        self._create_static_synapse(
+            "temporal_recent_recurrent", self.temporal_recent, self.temporal_recent,
+            self.config.temporal_recent_recurrent_weight, sparsity=0.08)
+        # Temporal_Prior recurrent
+        self._create_static_synapse(
+            "temporal_prior_recurrent", self.temporal_prior, self.temporal_prior,
+            self.config.temporal_prior_recurrent_weight, sparsity=0.05)
+        # Temporal_Recent → Temporal_Prior (slow transfer)
+        self._create_static_synapse(
+            "temporal_recent_to_prior", self.temporal_recent, self.temporal_prior,
+            self.config.temporal_recent_to_prior_weight, sparsity=0.05)
+        # Wernicke → Temporal_Recent (language events)
+        if self.config.language_enabled:
+            self._create_static_synapse(
+                "wernicke_food_to_temporal", self.wernicke_food, self.temporal_recent,
+                5.0, sparsity=0.05)
+            self._create_static_synapse(
+                "wernicke_danger_to_temporal", self.wernicke_danger, self.temporal_recent,
+                6.0, sparsity=0.05)
+        # Assoc → Temporal_Recent (concept events)
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "assoc_edible_to_temporal", self.assoc_edible, self.temporal_recent,
+                4.0, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_threatening_to_temporal", self.assoc_threatening, self.temporal_recent,
+                5.0, sparsity=0.05)
+        # Fear → Temporal_Recent (pain events)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_temporal", self.fear_response, self.temporal_recent,
+                6.0, sparsity=0.05)
+        # STS_Congruence → Temporal_Recent (multimodal events)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_congruence_to_temporal", self.sts_congruence, self.temporal_recent,
+                4.0, sparsity=0.05)
+        # Temporal_Recent → WM
+        self._create_static_synapse(
+            "temporal_recent_to_wm", self.temporal_recent, self.working_memory,
+            self.config.temporal_recent_to_wm_weight, sparsity=0.03)
+
+        print(f"    18b: Temporal buffer - Recent({self.config.n_temporal_recent}) + Prior({self.config.n_temporal_prior})")
+
+        # ============================================================
+        # 18c: Goal Sequencer (12 synapses)
+        # ============================================================
+
+        # WM → Goal_Pending
+        self._create_static_synapse(
+            "wm_to_goal_pending", self.working_memory, self.goal_pending,
+            self.config.wm_to_goal_pending_weight, sparsity=0.05)
+        # Temporal_Recent → Goal_Pending
+        self._create_static_synapse(
+            "temporal_to_goal_pending", self.temporal_recent, self.goal_pending,
+            4.0, sparsity=0.05)
+        # Assoc → Goal_Pending
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "assoc_edible_to_pending", self.assoc_edible, self.goal_pending,
+                4.0, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_threatening_to_pending", self.assoc_threatening, self.goal_pending,
+                4.0, sparsity=0.05)
+        # Goal_Food/Safety → Goal_Pending (inhibitory: active goal suppresses pending)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "goal_food_to_pending", self.goal_food, self.goal_pending,
+                self.config.goal_to_pending_inhibit_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "goal_safety_to_pending", self.goal_safety, self.goal_pending,
+                self.config.goal_to_pending_inhibit_weight, sparsity=0.08)
+        # ACC_Conflict → Goal_Switch
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "acc_conflict_to_goal_switch", self.acc_conflict, self.goal_switch,
+                6.0, sparsity=0.08)
+        # Assoc_Novelty → Goal_Switch
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "novelty_to_goal_switch", self.assoc_novelty, self.goal_switch,
+                5.0, sparsity=0.08)
+        # Goal_Pending → Goal_Switch (pending enables switch)
+        self._create_static_synapse(
+            "pending_to_goal_switch", self.goal_pending, self.goal_switch,
+            4.0, sparsity=0.05)
+        # Goal_Switch self-inhibition (burst only)
+        self._create_static_synapse(
+            "goal_switch_self_inhibit", self.goal_switch, self.goal_switch,
+            self.config.goal_switch_self_inhibit_weight, sparsity=0.15)
+        # Goal_Switch → Goal_Food/Safety (inhibitory: disrupts current goals)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "goal_switch_to_food", self.goal_switch, self.goal_food,
+                self.config.goal_switch_to_goal_inhibit_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "goal_switch_to_safety", self.goal_switch, self.goal_safety,
+                self.config.goal_switch_to_goal_inhibit_weight, sparsity=0.05)
+
+        print(f"    18c: Goal sequencer - Pending({self.config.n_goal_pending}) + Switch({self.config.n_goal_switch})")
+
+        # ============================================================
+        # 18d: WM Context Learning (6 synapses, 1 Hebbian DENSE)
+        # ============================================================
+
+        from pygenn import init_weight_update, init_postsynaptic
+        # Hebbian DENSE: Temporal_Recent → WM_Context_Binding
+        self.temporal_to_context_hebbian = self.model.add_synapse_population(
+            "temporal_to_wm_context_hebb", "DENSE",
+            self.temporal_recent, self.wm_context_binding,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.wm_context_binding_init_weight}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        # WM_Context recurrent
+        self._create_static_synapse(
+            "wm_context_recurrent", self.wm_context_binding, self.wm_context_binding,
+            5.0, sparsity=0.05)
+        # WM_Context → WM
+        self._create_static_synapse(
+            "wm_context_to_wm", self.wm_context_binding, self.working_memory,
+            self.config.wm_context_to_wm_weight, sparsity=0.03)
+        # WM_Context → Goal_Pending
+        self._create_static_synapse(
+            "wm_context_to_pending", self.wm_context_binding, self.goal_pending,
+            self.config.wm_context_to_pending_weight, sparsity=0.03)
+        # Dopamine → WM_Context
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "dopamine_to_wm_context", self.dopamine_neurons, self.wm_context_binding,
+                4.0, sparsity=0.05)
+        # Hunger → WM_Context (drive context)
+        self._create_static_synapse(
+            "hunger_to_wm_context", self.hunger_drive, self.wm_context_binding,
+            3.0, sparsity=0.03)
+
+        print(f"    18d: WM Context (Hebbian DENSE, eta={self.config.wm_context_binding_eta}, "
+              f"w_max={self.config.wm_context_binding_w_max})")
+
+        # ============================================================
+        # 18e: WM Inhibitory Balance (6 synapses)
+        # ============================================================
+
+        # WM → WM_Inhibitory (excitatory)
+        self._create_static_synapse(
+            "wm_to_wm_inhibitory", self.working_memory, self.wm_inhibitory,
+            self.config.wm_to_inhibitory_weight, sparsity=0.08)
+        # WM_Thalamic → WM_Inhibitory
+        self._create_static_synapse(
+            "wm_thalamic_to_inhibitory", self.wm_thalamic, self.wm_inhibitory,
+            self.config.wm_thalamic_to_inhibitory_weight, sparsity=0.05)
+        # WM_Inhibitory → WM (negative feedback)
+        self._create_static_synapse(
+            "inhibitory_to_wm", self.wm_inhibitory, self.working_memory,
+            self.config.inhibitory_to_wm_weight, sparsity=0.08)
+        # WM_Inhibitory → WM_Thalamic
+        self._create_static_synapse(
+            "inhibitory_to_thalamic", self.wm_inhibitory, self.wm_thalamic,
+            self.config.inhibitory_to_thalamic_weight, sparsity=0.05)
+        # WM_Inhibitory → Temporal_Recent
+        self._create_static_synapse(
+            "inhibitory_to_temporal", self.wm_inhibitory, self.temporal_recent,
+            self.config.inhibitory_to_temporal_weight, sparsity=0.03)
+        # WM_Inhibitory → Goal_Pending
+        self._create_static_synapse(
+            "inhibitory_to_pending", self.wm_inhibitory, self.goal_pending,
+            self.config.inhibitory_to_pending_weight, sparsity=0.03)
+
+        print(f"    18e: WM Inhibitory balance ({self.config.n_wm_inhibitory} neurons)")
+        print(f"    Motor direct: {self.config.wm_expansion_to_motor_weight} (disabled)")
+
+    def learn_wm_context(self, reward_context: bool):
+        """
+        Phase 18d: WM Context Binding Hebbian 학습
+
+        Temporal_Recent → WM_Context_Binding DENSE 시냅스 가중치를 조정.
+        음식 먹기/pain 시 강한 학습, 그 외에는 약한 배경 학습.
+        "이 시간 문맥에서 좋은/나쁜 일이 발생" 연합 형성.
+        """
+        if not self.config.wm_expansion_enabled:
+            return None
+
+        eta = self.config.wm_context_binding_eta
+        w_max = self.config.wm_context_binding_w_max
+        learning_factor = 1.0 if reward_context else 0.2
+
+        binding_scale = max(0.1, self.last_wm_context_binding_rate)
+
+        n_pre = self.config.n_temporal_recent
+        n_post = self.config.n_wm_context_binding
+        self.temporal_to_context_hebbian.vars["g"].pull_from_device()
+        w = self.temporal_to_context_hebbian.vars["g"].view.copy()
+        w = w.reshape(n_pre, n_post)
+        w += eta * learning_factor * binding_scale
+        w = np.clip(w, 0.0, w_max)
+        self.temporal_to_context_hebbian.vars["g"].view[:] = w.flatten()
+        self.temporal_to_context_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w": float(np.mean(w)),
+            "max_w": float(np.max(w)),
+            "learning_factor": learning_factor,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -5469,6 +5860,16 @@ class ForagerBrain:
             self.vocal_gate.vars["I_input"].view[:] = fear_inhibition
             self.vocal_gate.vars["I_input"].push_to_device()
 
+        # === Phase 18: WM Update Gate I_input 주입 ===
+        if self.config.wm_expansion_enabled:
+            gate_signal = (
+                self.last_dopamine_rate * self.config.wm_gate_dopamine_scale +
+                self.last_novelty_rate * self.config.wm_gate_novelty_scale +
+                self.last_acc_conflict_rate * self.config.wm_gate_conflict_scale
+            )
+            self.wm_update_gate.vars["I_input"].view[:] = gate_signal
+            self.wm_update_gate.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -5603,6 +6004,16 @@ class ForagerBrain:
         vocal_gate_spikes = 0
         call_mirror_spikes = 0
         call_binding_spikes = 0
+
+        # Phase 18 스파이크 카운트 (WM Expansion)
+        wm_thalamic_spikes = 0
+        wm_update_gate_spikes = 0
+        temporal_recent_spikes = 0
+        temporal_prior_spikes = 0
+        goal_pending_spikes = 0
+        goal_switch_spikes = 0
+        wm_context_binding_spikes = 0
+        wm_inhibitory_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -5880,6 +6291,26 @@ class ForagerBrain:
                 call_mirror_spikes += np.sum(self.call_mirror.vars["RefracTime"].view > self.spike_threshold)
                 call_binding_spikes += np.sum(self.call_binding.vars["RefracTime"].view > self.spike_threshold)
 
+            # Phase 18 스파이크 카운팅 (WM Expansion)
+            if self.config.wm_expansion_enabled:
+                self.wm_thalamic.vars["RefracTime"].pull_from_device()
+                self.wm_update_gate.vars["RefracTime"].pull_from_device()
+                self.temporal_recent.vars["RefracTime"].pull_from_device()
+                self.temporal_prior.vars["RefracTime"].pull_from_device()
+                self.goal_pending.vars["RefracTime"].pull_from_device()
+                self.goal_switch.vars["RefracTime"].pull_from_device()
+                self.wm_context_binding.vars["RefracTime"].pull_from_device()
+                self.wm_inhibitory.vars["RefracTime"].pull_from_device()
+
+                wm_thalamic_spikes += np.sum(self.wm_thalamic.vars["RefracTime"].view > self.spike_threshold)
+                wm_update_gate_spikes += np.sum(self.wm_update_gate.vars["RefracTime"].view > self.spike_threshold)
+                temporal_recent_spikes += np.sum(self.temporal_recent.vars["RefracTime"].view > self.spike_threshold)
+                temporal_prior_spikes += np.sum(self.temporal_prior.vars["RefracTime"].view > self.spike_threshold)
+                goal_pending_spikes += np.sum(self.goal_pending.vars["RefracTime"].view > self.spike_threshold)
+                goal_switch_spikes += np.sum(self.goal_switch.vars["RefracTime"].view > self.spike_threshold)
+                wm_context_binding_spikes += np.sum(self.wm_context_binding.vars["RefracTime"].view > self.spike_threshold)
+                wm_inhibitory_spikes += np.sum(self.wm_inhibitory.vars["RefracTime"].view > self.spike_threshold)
+
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
         max_spikes_drive = self.config.n_hunger_drive * 5
@@ -5931,6 +6362,7 @@ class ForagerBrain:
             direct_rate = direct_spikes / max_spikes_direct
             indirect_rate = indirect_spikes / max_spikes_indirect
             dopamine_rate = dopamine_spikes / max_spikes_dopamine
+            self.last_dopamine_rate = dopamine_rate
 
         # Phase 5 스파이크율
         working_memory_rate = 0.0
@@ -6119,6 +6551,7 @@ class ForagerBrain:
             acc_monitor_rate = acc_monitor_spikes / (self.config.n_acc_monitor * 5)
             social_approach_rate = social_approach_spikes / (self.config.n_social_approach * 5)
             social_avoid_rate = social_avoid_spikes / (self.config.n_social_avoid * 5)
+            self.last_acc_conflict_rate = acc_conflict_rate
 
         # Phase 15b 스파이크율 (Mirror Neurons)
         social_obs_rate = 0.0
@@ -6166,6 +6599,7 @@ class ForagerBrain:
             assoc_binding_rate = assoc_binding_spikes / (self.config.n_assoc_binding * 5)
             assoc_novelty_rate = assoc_novelty_spikes / (self.config.n_assoc_novelty * 5)
             self.last_assoc_binding_rate = assoc_binding_rate
+            self.last_novelty_rate = assoc_novelty_rate
 
         # Phase 17 스파이크율 (Language Circuit)
         wernicke_food_rate = 0.0
@@ -6206,6 +6640,34 @@ class ForagerBrain:
                     self.vocalize_type = 1  # food call
                 elif broca_danger_rate > 0.05:
                     self.vocalize_type = 2  # danger call
+
+        # Phase 18 스파이크율 (WM Expansion)
+        wm_thalamic_rate = 0.0
+        wm_update_gate_rate = 0.0
+        temporal_recent_rate = 0.0
+        temporal_prior_rate = 0.0
+        goal_pending_rate = 0.0
+        goal_switch_rate = 0.0
+        wm_context_binding_rate = 0.0
+        wm_inhibitory_rate = 0.0
+        if self.config.wm_expansion_enabled:
+            wm_thalamic_rate = wm_thalamic_spikes / (self.config.n_wm_thalamic * 5)
+            wm_update_gate_rate = wm_update_gate_spikes / (self.config.n_wm_update_gate * 5)
+            temporal_recent_rate = temporal_recent_spikes / (self.config.n_temporal_recent * 5)
+            temporal_prior_rate = temporal_prior_spikes / (self.config.n_temporal_prior * 5)
+            goal_pending_rate = goal_pending_spikes / (self.config.n_goal_pending * 5)
+            goal_switch_rate = goal_switch_spikes / (self.config.n_goal_switch * 5)
+            wm_context_binding_rate = wm_context_binding_spikes / (self.config.n_wm_context_binding * 5)
+            wm_inhibitory_rate = wm_inhibitory_spikes / (self.config.n_wm_inhibitory * 5)
+
+            self.last_wm_thalamic_rate = wm_thalamic_rate
+            self.last_wm_update_gate_rate = wm_update_gate_rate
+            self.last_temporal_recent_rate = temporal_recent_rate
+            self.last_temporal_prior_rate = temporal_prior_rate
+            self.last_goal_pending_rate = goal_pending_rate
+            self.last_goal_switch_rate = goal_switch_rate
+            self.last_wm_context_binding_rate = wm_context_binding_rate
+            self.last_wm_inhibitory_rate = wm_inhibitory_rate
 
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
@@ -6389,6 +6851,16 @@ class ForagerBrain:
             "call_binding_rate": call_binding_rate,
             "vocalize_type": self.vocalize_type if self.config.language_enabled else 0,
 
+            # Phase 18: WM Expansion
+            "wm_thalamic_rate": wm_thalamic_rate,
+            "wm_update_gate_rate": wm_update_gate_rate,
+            "temporal_recent_rate": temporal_recent_rate,
+            "temporal_prior_rate": temporal_prior_rate,
+            "goal_pending_rate": goal_pending_rate,
+            "goal_switch_rate": goal_switch_rate,
+            "wm_context_binding_rate": wm_context_binding_rate,
+            "wm_inhibitory_rate": wm_inhibitory_rate,
+
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
             "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
@@ -6536,7 +7008,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_multimodal: bool = False, no_parietal: bool = False,
                 no_premotor: bool = False, no_social: bool = False,
                 no_mirror: bool = False, no_tom: bool = False,
-                no_association: bool = False, no_language: bool = False):
+                no_association: bool = False, no_language: bool = False,
+                no_wm_expansion: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -6586,6 +7059,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         brain_config.language_enabled = False
         env_config.npc_vocalization_enabled = False
         print("  [!] Phase 17 (Language Circuit) DISABLED")
+    if no_wm_expansion:
+        brain_config.wm_expansion_enabled = False
+        print("  [!] Phase 18 (WM Expansion) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -6711,6 +7187,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     heard_food_call = info.get("npc_call_food_l", 0) > 0.01 or info.get("npc_call_food_r", 0) > 0.01
                     call_learn = brain.learn_call_binding(reward_context=heard_food_call)
 
+                # Phase 18: WM Context 학습 (음식 먹기 = 강한 학습)
+                if brain_config.wm_expansion_enabled:
+                    wm_ctx_learn = brain.learn_wm_context(reward_context=True)
+                    if wm_ctx_learn and log_level in ["debug", "verbose"]:
+                        print(f"  [WM] Context learn (food): avg_w={wm_ctx_learn['avg_w']:.2f}, "
+                              f"factor={wm_ctx_learn['learning_factor']:.1f}")
+
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
@@ -6735,6 +7218,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 heard_danger_call = info.get("npc_call_danger_l", 0) > 0.01 or info.get("npc_call_danger_r", 0) > 0.01
                 brain.learn_call_binding(reward_context=heard_danger_call)
 
+            # Phase 18: Pain zone → WM Context 강한 학습
+            if brain_config.wm_expansion_enabled and env_info.get('in_pain', False):
+                brain.learn_wm_context(reward_context=True)
+
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
                 if env_info.get('in_pain', False) and env.pain_zone_visits == 1 and env.pain_zone_steps == 1:
@@ -6743,6 +7230,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             # Phase 17: 배경 학습 (약한 학습 = 항상)
             if brain_config.language_enabled and env.steps % 5 == 0:
                 brain.learn_call_binding(reward_context=False)
+
+            # Phase 18: WM Context 배경 학습 (약한 학습 = 매 5스텝)
+            if brain_config.wm_expansion_enabled and env.steps % 5 == 0:
+                brain.learn_wm_context(reward_context=False)
 
         # 에피소드 종료
         all_steps.append(env.steps)
@@ -6930,6 +7421,8 @@ if __name__ == "__main__":
                        help="Disable Phase 16 (Association Cortex)")
     parser.add_argument("--no-language", action="store_true",
                        help="Disable Phase 17 (Language Circuit)")
+    parser.add_argument("--no-wm-expansion", action="store_true",
+                       help="Disable Phase 18 (WM Expansion)")
     args = parser.parse_args()
 
     run_training(
@@ -6950,5 +7443,6 @@ if __name__ == "__main__":
         no_mirror=args.no_mirror,
         no_tom=args.no_tom,
         no_association=args.no_association,
-        no_language=args.no_language
+        no_language=args.no_language,
+        no_wm_expansion=args.no_wm_expansion
     )
