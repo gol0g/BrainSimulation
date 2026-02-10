@@ -291,32 +291,31 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase 16 완료 - 연합 피질 (16,800 뉴런)
+### 현재 상태: Phase 19 완료 - 메타인지 (18,800 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 16: Association Cortex ✓ (2026-02-08)                  ║
+║  Phase 19: Metacognition ✓ (2026-02-11)                      ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  신규 구조 (+700 뉴런):                                      ║
-║    - Assoc_Edible (120): "먹을 수 있는 것" 초범주            ║
-║    - Assoc_Threatening (120): "위험한 것" 초범주             ║
-║    - Assoc_Animate (100): "살아있는 것" 초범주               ║
-║    - Assoc_Context (100): "익숙한 장소" 맥락                 ║
-║    - Assoc_Valence (80): "좋다/나쁘다" 가치                  ║
-║    - Assoc_Binding (100): 교차 연합 (Hebbian DENSE)          ║
-║    - Assoc_Novelty (80): 새로운 조합 탐지                    ║
+║  신규 구조 (+380 뉴런):                                      ║
+║    - Meta_Confidence (80): 확신 누적기 (전방 섬엽)           ║
+║    - Meta_Uncertainty (80): 불확실성 누적기 (dACC)           ║
+║    - Meta_Evaluate (80): 자기평가 게이트 (mPFC, SensoryLIF) ║
+║    - Meta_Arousal_Mod (70): 불확실성→각성 (청반/NE)          ║
+║    - Meta_Inhibitory (70): 국소 억제 균형                    ║
 ║                                                               ║
-║  연결 (Motor 간섭 방지):                                     ║
-║    - Motor 직접 연결: 0.0 (비활성화)                         ║
-║    - 모든 출력 ≤6.0, Edible↔Threatening WTA (-6.0)           ║
-║    - Hebbian avg_w: 2.0 → 7.12 (20 에피소드)                ║
+║  핵심 메커니즘:                                              ║
+║    - Confidence vs Uncertainty WTA 경쟁 (-5.0)              ║
+║    - Evaluate gate: I_input = uncert*6 - confid*5 + DA*4    ║
+║    - Hebbian DENSE: avg_w 2.0 → 6.22 (20 에피소드)          ║
+║    - 모든 출력 ≤2.0, Motor 직접 = 0.0                       ║
 ║                                                               ║
 ║  검증 결과:                                                   ║
-║    - Survival Rate: 50% ✓                                    ║
-║    - Reward Freq: 3.46% ✓                                    ║
+║    - Survival Rate: 55% ✓ (+5% vs Phase 18)                  ║
+║    - Reward Freq: 2.96% ✓                                    ║
 ║    - Pain Avoidance: 91.0% ✓                                 ║
 ║                                                               ║
-║  뉴런 수:       16,800 (+700)                                 ║
+║  뉴런 수:       18,800 (+380)                                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -325,7 +324,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone)
-├── forager_brain.py   # Forager Brain (16,800 뉴런, Phase 1-16)
+├── forager_brain.py   # Forager Brain (18,800 뉴런, Phase 1-19)
 └── checkpoints/       # 체크포인트 저장
 ```
 

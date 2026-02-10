@@ -4,13 +4,13 @@
 
 ---
 
-## 현재 상태: Phase 18 검증 완료 (18,420 뉴런)
+## 현재 상태: Phase 19 검증 완료 (18,800 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 18 검증 통과 ✓ (2026-02-08)                            ║
-║  생존율 50%, Reward Freq 3.02%, Pain Avoidance 91.0%         ║
-║  WM Expansion 620 뉴런 추가 (시상-피질 루프, 시간 버퍼)      ║
+║  Phase 19 검증 통과 ✓ (2026-02-11)                            ║
+║  생존율 55%, Reward Freq 2.96%, Pain Avoidance 91.0%         ║
+║  Metacognition 380 뉴런 추가 (확신/불확실성/자기평가)         ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -39,7 +39,8 @@
 | 15c | Theory of Mind (ToM) | +500 | ✓ 완료 | **70%** |
 | 16 | 연합 피질 (Association Cortex) | +700 | ✓ 완료 | 50% |
 | 17 | 언어 회로 (Broca/Wernicke) | +1,000 | ✓ 완료 | 55% |
-| 18 | 작업 기억 확장 (WM Expansion) | +620 | ✓ 완료 | **50%** |
+| 18 | 작업 기억 확장 (WM Expansion) | +620 | ✓ 완료 | 50% |
+| 19 | 메타인지 (Metacognition) | +380 | ✓ 완료 | **55%** |
 
 ### Phase 12-14 수정 이력
 
@@ -202,12 +203,23 @@
 
 ---
 
-## 장기 계획 (Phase 19-20)
+### Phase 19: 메타인지 (Metacognition) ✓ 완료
+- **구조**: +380 뉴런
+  - Meta_Confidence (80 LIF): 확신 누적기 (전방 섬엽 analog)
+  - Meta_Uncertainty (80 LIF): 불확실성 누적기 (dACC error-likelihood analog)
+  - Meta_Evaluate (80 SensoryLIF): 자기평가 게이트 (mPFC analog, I_input: uncert×6 - confid×5 + DA×4)
+  - Meta_Arousal_Mod (70 LIF): 불확실성→각성 커플링 (Locus coeruleus/NE analog)
+  - Meta_Inhibitory (70 LIF): 국소 억제 균형
+- **메커니즘**: Confidence vs Uncertainty WTA 경쟁 (-5.0), Evaluate gate가 불확실성 높을 때 목표 전환/각성 증폭
+- **학습**: assoc_valence → meta_confidence Hebbian DENSE (eta=0.04, w_max=14.0, avg_w 2.0→6.22)
+- **연결 안전**: Motor 직접 연결 없음 (0.0), 모든 출력 ≤2.0 (very gentle modulator)
+- **검증 (2026-02-11)**: 생존율 55% ✓, Reward Freq 2.96% ✓, Pain Avoidance 91.0% ✓
 
-### Phase 19: 메타인지
-- "내가 뭘 모르는지 아는 것"
-- 불확실성 표상
-- 탐색 vs 활용 의식적 결정
+**Phase 19 완료**: 18,800 뉴런
+
+---
+
+## 장기 계획 (Phase 20)
 
 ### Phase 20: ???
 - 의식의 창발?
@@ -290,4 +302,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-08 (Phase 18 검증 통과, 생존율 50%, 18,420 뉴런)*
+*최종 업데이트: 2026-02-11 (Phase 19 검증 통과, 생존율 55%, 18,800 뉴런)*
