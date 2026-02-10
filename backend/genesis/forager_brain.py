@@ -872,6 +872,66 @@ class ForagerBrainConfig:
     # WM expansion Motor 직접 연결 = 0.0 (절대 비활성)
     wm_expansion_to_motor_weight: float = 0.0
 
+    # === Phase 19: Metacognition (메타인지) ===
+    metacognition_enabled: bool = True
+
+    # Population sizes (5 populations, 380 total)
+    n_meta_confidence: int = 80       # Anterior Insula analog
+    n_meta_uncertainty: int = 80      # dACC error-likelihood
+    n_meta_evaluate: int = 80         # mPFC self-evaluation (SensoryLIF)
+    n_meta_arousal_mod: int = 70      # NE uncertainty-arousal coupling
+    n_meta_inhibitory: int = 70       # Local inhibitory balance
+
+    # 19a: Confidence inputs
+    assoc_valence_to_confidence_weight: float = 5.0
+    sts_congruence_to_confidence_weight: float = 4.0
+    goal_food_to_confidence_weight: float = 4.0
+    goal_safety_to_confidence_weight: float = 4.0
+    wm_context_to_confidence_weight: float = 3.0
+    meta_confidence_recurrent_weight: float = 5.0
+
+    # 19b: Uncertainty inputs
+    acc_conflict_to_uncertainty_weight: float = 4.0
+    error_signal_to_uncertainty_weight: float = 4.0
+    assoc_novelty_to_uncertainty_weight: float = 4.0
+    tom_surprise_to_uncertainty_weight: float = 3.0
+    sts_mismatch_to_uncertainty_weight: float = 3.0
+    meta_uncertainty_recurrent_weight: float = 4.0
+
+    # 19c: WTA
+    meta_confidence_uncertainty_wta_weight: float = -5.0
+
+    # 19d: Meta_Evaluate gate (I_input scaling)
+    meta_eval_uncertainty_scale: float = 6.0
+    meta_eval_confidence_scale: float = -5.0
+    meta_eval_dopamine_scale: float = 4.0
+
+    # 19e: Outputs (ALL <=2.0, NO Motor direct) - very gentle modulator
+    meta_confidence_to_goal_food_weight: float = 1.5
+    meta_confidence_to_goal_safety_weight: float = 1.5
+    meta_confidence_to_goal_switch_weight: float = -2.0
+    meta_confidence_to_wm_thalamic_weight: float = 1.0
+    meta_evaluate_to_goal_switch_weight: float = 1.5
+    meta_evaluate_to_arousal_mod_weight: float = 2.0
+    meta_evaluate_to_inhibitory_ctrl_weight: float = 1.5
+    meta_arousal_mod_to_arousal_weight: float = 2.0
+    meta_arousal_mod_to_dopamine_weight: float = 1.5
+
+    # 19f: Inhibitory balance
+    meta_conf_to_inhibitory_weight: float = 4.0
+    meta_uncert_to_inhibitory_weight: float = 4.0
+    meta_inhibitory_to_conf_weight: float = -3.0
+    meta_inhibitory_to_uncert_weight: float = -3.0
+    meta_inhibitory_to_eval_weight: float = -2.5
+
+    # 19g: Hebbian learning (Valence → Confidence)
+    meta_confidence_binding_eta: float = 0.04
+    meta_confidence_binding_w_max: float = 14.0
+    meta_confidence_binding_init_weight: float = 2.0
+
+    # Motor direct = 0.0
+    metacognition_to_motor_weight: float = 0.0
+
     dt: float = 1.0
 
     @property
@@ -957,6 +1017,10 @@ class ForagerBrainConfig:
                      self.n_temporal_recent + self.n_temporal_prior +
                      self.n_goal_pending + self.n_goal_switch +
                      self.n_wm_context_binding + self.n_wm_inhibitory)
+        if self.metacognition_enabled:
+            base += (self.n_meta_confidence + self.n_meta_uncertainty +
+                     self.n_meta_evaluate + self.n_meta_arousal_mod +
+                     self.n_meta_inhibitory)
         return base
 
 
@@ -1021,6 +1085,13 @@ class ForagerBrain:
         self.last_goal_switch_rate = 0.0
         self.last_wm_context_binding_rate = 0.0
         self.last_wm_inhibitory_rate = 0.0
+
+        # Phase 19: Metacognition state defaults
+        self.last_meta_confidence_rate = 0.0
+        self.last_meta_uncertainty_rate = 0.0
+        self.last_meta_evaluate_rate = 0.0
+        self.last_meta_arousal_mod_rate = 0.0
+        self.last_meta_inhibitory_rate = 0.0
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -1259,6 +1330,10 @@ class ForagerBrain:
         # Phase 18: Working Memory Expansion
         if self.config.wm_expansion_enabled:
             self._build_wm_expansion_circuit()
+
+        # Phase 19: Metacognition
+        if self.config.metacognition_enabled:
+            self._build_metacognition_circuit()
 
         # Build and load
         print("Building model...")
@@ -5607,6 +5682,234 @@ class ForagerBrain:
             "learning_factor": learning_factor,
         }
 
+    def _build_metacognition_circuit(self):
+        """
+        Phase 19: Metacognition (메타인지)
+
+        확신/불확실성 경쟁 회로. 전방 섬엽(확신), dACC(불확실성), mPFC(평가 게이트),
+        청반(불확실성→각성). 행동 조절: 확신→목표 유지, 불확실성→탐색 증가.
+        """
+        print("  Phase 19: Building Metacognition Circuit...")
+
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # === Populations ===
+        self.meta_confidence = self.model.add_neuron_population(
+            "meta_confidence", self.config.n_meta_confidence, "LIF", lif_params, lif_init)
+        self.meta_uncertainty = self.model.add_neuron_population(
+            "meta_uncertainty", self.config.n_meta_uncertainty, "LIF", lif_params, lif_init)
+        self.meta_evaluate = self.model.add_neuron_population(
+            "meta_evaluate", self.config.n_meta_evaluate,
+            sensory_lif_model, s_params, s_init)
+        self.meta_arousal_mod = self.model.add_neuron_population(
+            "meta_arousal_mod", self.config.n_meta_arousal_mod, "LIF", lif_params, lif_init)
+        self.meta_inhibitory_pop = self.model.add_neuron_population(
+            "meta_inhibitory_pop", self.config.n_meta_inhibitory, "LIF", lif_params, lif_init)
+
+        print(f"    Populations: Confidence({self.config.n_meta_confidence}) + "
+              f"Uncertainty({self.config.n_meta_uncertainty}) + "
+              f"Evaluate({self.config.n_meta_evaluate}) + "
+              f"ArousalMod({self.config.n_meta_arousal_mod}) + "
+              f"Inhibitory({self.config.n_meta_inhibitory})")
+
+        # ============================================================
+        # 19a: Confidence Inputs (6 synapses)
+        # ============================================================
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "assoc_valence_to_meta_conf", self.assoc_valence, self.meta_confidence,
+                self.config.assoc_valence_to_confidence_weight, sparsity=0.05)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_congruence_to_meta_conf", self.sts_congruence, self.meta_confidence,
+                self.config.sts_congruence_to_confidence_weight, sparsity=0.05)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "goal_food_to_meta_conf", self.goal_food, self.meta_confidence,
+                self.config.goal_food_to_confidence_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "goal_safety_to_meta_conf", self.goal_safety, self.meta_confidence,
+                self.config.goal_safety_to_confidence_weight, sparsity=0.05)
+        if self.config.wm_expansion_enabled:
+            self._create_static_synapse(
+                "wm_context_to_meta_conf", self.wm_context_binding, self.meta_confidence,
+                self.config.wm_context_to_confidence_weight, sparsity=0.05)
+        # Confidence recurrent
+        self._create_static_synapse(
+            "meta_conf_recurrent", self.meta_confidence, self.meta_confidence,
+            self.config.meta_confidence_recurrent_weight, sparsity=0.08)
+
+        print(f"    19a: Confidence inputs (valence, congruence, goals, context)")
+
+        # ============================================================
+        # 19b: Uncertainty Inputs (6 synapses)
+        # ============================================================
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "acc_conflict_to_meta_uncert", self.acc_conflict, self.meta_uncertainty,
+                self.config.acc_conflict_to_uncertainty_weight, sparsity=0.05)
+        if self.config.cerebellum_enabled:
+            self._create_static_synapse(
+                "error_signal_to_meta_uncert", self.error_signal, self.meta_uncertainty,
+                self.config.error_signal_to_uncertainty_weight, sparsity=0.05)
+        if self.config.association_cortex_enabled:
+            self._create_static_synapse(
+                "assoc_novelty_to_meta_uncert", self.assoc_novelty, self.meta_uncertainty,
+                self.config.assoc_novelty_to_uncertainty_weight, sparsity=0.05)
+        if self.config.social_brain_enabled:
+            self._create_static_synapse(
+                "tom_surprise_to_meta_uncert", self.tom_surprise, self.meta_uncertainty,
+                self.config.tom_surprise_to_uncertainty_weight, sparsity=0.05)
+        if self.config.multimodal_enabled:
+            self._create_static_synapse(
+                "sts_mismatch_to_meta_uncert", self.sts_mismatch, self.meta_uncertainty,
+                self.config.sts_mismatch_to_uncertainty_weight, sparsity=0.05)
+        # Uncertainty recurrent
+        self._create_static_synapse(
+            "meta_uncert_recurrent", self.meta_uncertainty, self.meta_uncertainty,
+            self.config.meta_uncertainty_recurrent_weight, sparsity=0.08)
+
+        print(f"    19b: Uncertainty inputs (conflict, error, novelty, surprise, mismatch)")
+
+        # ============================================================
+        # 19c: WTA (2 synapses)
+        # ============================================================
+        self._create_static_synapse(
+            "meta_conf_to_uncert_wta", self.meta_confidence, self.meta_uncertainty,
+            self.config.meta_confidence_uncertainty_wta_weight, sparsity=0.10)
+        self._create_static_synapse(
+            "meta_uncert_to_conf_wta", self.meta_uncertainty, self.meta_confidence,
+            self.config.meta_confidence_uncertainty_wta_weight, sparsity=0.10)
+
+        print(f"    19c: Confidence↔Uncertainty WTA ({self.config.meta_confidence_uncertainty_wta_weight})")
+
+        # ============================================================
+        # 19d: Outputs (8 synapses + 1 conditional)
+        # ============================================================
+        # Confidence outputs (stabilize)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "meta_conf_to_goal_food", self.meta_confidence, self.goal_food,
+                self.config.meta_confidence_to_goal_food_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "meta_conf_to_goal_safety", self.meta_confidence, self.goal_safety,
+                self.config.meta_confidence_to_goal_safety_weight, sparsity=0.05)
+        if self.config.wm_expansion_enabled:
+            self._create_static_synapse(
+                "meta_conf_to_goal_switch", self.meta_confidence, self.goal_switch,
+                self.config.meta_confidence_to_goal_switch_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "meta_conf_to_wm_thalamic", self.meta_confidence, self.wm_thalamic,
+                self.config.meta_confidence_to_wm_thalamic_weight, sparsity=0.05)
+
+        # Evaluate outputs (exploration)
+        if self.config.wm_expansion_enabled:
+            self._create_static_synapse(
+                "meta_eval_to_goal_switch", self.meta_evaluate, self.goal_switch,
+                self.config.meta_evaluate_to_goal_switch_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "meta_eval_to_arousal_mod", self.meta_evaluate, self.meta_arousal_mod,
+            self.config.meta_evaluate_to_arousal_mod_weight, sparsity=0.08)
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "meta_eval_to_inhibitory_ctrl", self.meta_evaluate, self.inhibitory_control,
+                self.config.meta_evaluate_to_inhibitory_ctrl_weight, sparsity=0.05)
+
+        # Arousal modulation
+        if self.config.thalamus_enabled:
+            self._create_static_synapse(
+                "meta_arousal_mod_to_arousal", self.meta_arousal_mod, self.arousal,
+                self.config.meta_arousal_mod_to_arousal_weight, sparsity=0.05)
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "meta_arousal_mod_to_dopamine", self.meta_arousal_mod, self.dopamine_neurons,
+                self.config.meta_arousal_mod_to_dopamine_weight, sparsity=0.05)
+
+        print(f"    19d: Outputs (conf→goals, eval→switch/arousal, arousal_mod→arousal/DA)")
+
+        # ============================================================
+        # 19e: Inhibitory Balance (5 synapses)
+        # ============================================================
+        self._create_static_synapse(
+            "meta_conf_to_meta_inhib", self.meta_confidence, self.meta_inhibitory_pop,
+            self.config.meta_conf_to_inhibitory_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "meta_uncert_to_meta_inhib", self.meta_uncertainty, self.meta_inhibitory_pop,
+            self.config.meta_uncert_to_inhibitory_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "meta_inhib_to_conf", self.meta_inhibitory_pop, self.meta_confidence,
+            self.config.meta_inhibitory_to_conf_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "meta_inhib_to_uncert", self.meta_inhibitory_pop, self.meta_uncertainty,
+            self.config.meta_inhibitory_to_uncert_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "meta_inhib_to_eval", self.meta_inhibitory_pop, self.meta_evaluate,
+            self.config.meta_inhibitory_to_eval_weight, sparsity=0.05)
+
+        print(f"    19e: Inhibitory balance ({self.config.n_meta_inhibitory} neurons)")
+
+        # ============================================================
+        # 19f: Hebbian DENSE (Valence → Confidence)
+        # ============================================================
+        if self.config.association_cortex_enabled:
+            from pygenn import init_weight_update, init_postsynaptic
+            self.valence_to_confidence_hebbian = self.model.add_synapse_population(
+                "valence_to_confidence_hebb", "DENSE",
+                self.assoc_valence, self.meta_confidence,
+                init_weight_update("StaticPulse", {},
+                                   {"g": self.config.meta_confidence_binding_init_weight}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+            print(f"    19f: Hebbian DENSE (Valence→Confidence, eta={self.config.meta_confidence_binding_eta}, "
+                  f"w_max={self.config.meta_confidence_binding_w_max})")
+
+        print(f"    Motor direct: {self.config.metacognition_to_motor_weight} (disabled)")
+        print(f"    Phase 19 Metacognition: {self.config.n_meta_confidence + self.config.n_meta_uncertainty + self.config.n_meta_evaluate + self.config.n_meta_arousal_mod + self.config.n_meta_inhibitory} neurons")
+
+    def learn_metacognitive_confidence(self, reward_context: bool):
+        """
+        Phase 19f: Valence → Meta_Confidence Hebbian 학습
+
+        보상 시(food eaten, pain) 강한 학습, 배경 시 약한 감쇠.
+        어떤 valence 패턴이 성공적 결과를 예측하는지 학습.
+        """
+        if not self.config.metacognition_enabled or not self.config.association_cortex_enabled:
+            return None
+
+        eta = self.config.meta_confidence_binding_eta
+        w_max = self.config.meta_confidence_binding_w_max
+        learning_factor = 1.0 if reward_context else 0.15
+
+        confidence_scale = max(0.1, self.last_meta_confidence_rate)
+
+        n_pre = self.config.n_assoc_valence
+        n_post = self.config.n_meta_confidence
+        self.valence_to_confidence_hebbian.vars["g"].pull_from_device()
+        w = self.valence_to_confidence_hebbian.vars["g"].view.copy()
+        w = w.reshape(n_pre, n_post)
+        w += eta * learning_factor * confidence_scale
+        w = np.clip(w, 0.0, w_max)
+        self.valence_to_confidence_hebbian.vars["g"].view[:] = w.flatten()
+        self.valence_to_confidence_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w": float(np.mean(w)),
+            "max_w": float(np.max(w)),
+            "learning_factor": learning_factor,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -5870,6 +6173,16 @@ class ForagerBrain:
             self.wm_update_gate.vars["I_input"].view[:] = gate_signal
             self.wm_update_gate.vars["I_input"].push_to_device()
 
+        # === Phase 19: Meta Evaluate I_input 주입 ===
+        if self.config.metacognition_enabled:
+            meta_eval_signal = (
+                self.last_meta_uncertainty_rate * self.config.meta_eval_uncertainty_scale +
+                self.last_meta_confidence_rate * self.config.meta_eval_confidence_scale +
+                self.last_dopamine_rate * self.config.meta_eval_dopamine_scale
+            )
+            self.meta_evaluate.vars["I_input"].view[:] = meta_eval_signal
+            self.meta_evaluate.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -6014,6 +6327,13 @@ class ForagerBrain:
         goal_switch_spikes = 0
         wm_context_binding_spikes = 0
         wm_inhibitory_spikes = 0
+
+        # Phase 19 스파이크 카운트 (Metacognition)
+        meta_confidence_spikes = 0
+        meta_uncertainty_spikes = 0
+        meta_evaluate_spikes = 0
+        meta_arousal_mod_spikes = 0
+        meta_inhibitory_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -6310,6 +6630,20 @@ class ForagerBrain:
                 goal_switch_spikes += np.sum(self.goal_switch.vars["RefracTime"].view > self.spike_threshold)
                 wm_context_binding_spikes += np.sum(self.wm_context_binding.vars["RefracTime"].view > self.spike_threshold)
                 wm_inhibitory_spikes += np.sum(self.wm_inhibitory.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase 19: Metacognition 스파이크 카운팅
+            if self.config.metacognition_enabled:
+                self.meta_confidence.vars["RefracTime"].pull_from_device()
+                self.meta_uncertainty.vars["RefracTime"].pull_from_device()
+                self.meta_evaluate.vars["RefracTime"].pull_from_device()
+                self.meta_arousal_mod.vars["RefracTime"].pull_from_device()
+                self.meta_inhibitory_pop.vars["RefracTime"].pull_from_device()
+
+                meta_confidence_spikes += np.sum(self.meta_confidence.vars["RefracTime"].view > self.spike_threshold)
+                meta_uncertainty_spikes += np.sum(self.meta_uncertainty.vars["RefracTime"].view > self.spike_threshold)
+                meta_evaluate_spikes += np.sum(self.meta_evaluate.vars["RefracTime"].view > self.spike_threshold)
+                meta_arousal_mod_spikes += np.sum(self.meta_arousal_mod.vars["RefracTime"].view > self.spike_threshold)
+                meta_inhibitory_spikes += np.sum(self.meta_inhibitory_pop.vars["RefracTime"].view > self.spike_threshold)
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
@@ -6669,6 +7003,25 @@ class ForagerBrain:
             self.last_wm_context_binding_rate = wm_context_binding_rate
             self.last_wm_inhibitory_rate = wm_inhibitory_rate
 
+        # Phase 19 스파이크율 (Metacognition)
+        meta_confidence_rate = 0.0
+        meta_uncertainty_rate = 0.0
+        meta_evaluate_rate = 0.0
+        meta_arousal_mod_rate = 0.0
+        meta_inhibitory_rate = 0.0
+        if self.config.metacognition_enabled:
+            meta_confidence_rate = meta_confidence_spikes / (self.config.n_meta_confidence * 5)
+            meta_uncertainty_rate = meta_uncertainty_spikes / (self.config.n_meta_uncertainty * 5)
+            meta_evaluate_rate = meta_evaluate_spikes / (self.config.n_meta_evaluate * 5)
+            meta_arousal_mod_rate = meta_arousal_mod_spikes / (self.config.n_meta_arousal_mod * 5)
+            meta_inhibitory_rate = meta_inhibitory_spikes / (self.config.n_meta_inhibitory * 5)
+
+            self.last_meta_confidence_rate = meta_confidence_rate
+            self.last_meta_uncertainty_rate = meta_uncertainty_rate
+            self.last_meta_evaluate_rate = meta_evaluate_rate
+            self.last_meta_arousal_mod_rate = meta_arousal_mod_rate
+            self.last_meta_inhibitory_rate = meta_inhibitory_rate
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -6861,6 +7214,13 @@ class ForagerBrain:
             "wm_context_binding_rate": wm_context_binding_rate,
             "wm_inhibitory_rate": wm_inhibitory_rate,
 
+            # Phase 19: Metacognition
+            "meta_confidence_rate": meta_confidence_rate,
+            "meta_uncertainty_rate": meta_uncertainty_rate,
+            "meta_evaluate_rate": meta_evaluate_rate,
+            "meta_arousal_mod_rate": meta_arousal_mod_rate,
+            "meta_inhibitory_rate": meta_inhibitory_rate,
+
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
             "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
@@ -7009,7 +7369,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_premotor: bool = False, no_social: bool = False,
                 no_mirror: bool = False, no_tom: bool = False,
                 no_association: bool = False, no_language: bool = False,
-                no_wm_expansion: bool = False):
+                no_wm_expansion: bool = False, no_metacognition: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -7062,6 +7422,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_wm_expansion:
         brain_config.wm_expansion_enabled = False
         print("  [!] Phase 18 (WM Expansion) DISABLED")
+    if no_metacognition:
+        brain_config.metacognition_enabled = False
+        print("  [!] Phase 19 (Metacognition) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -7194,6 +7557,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                         print(f"  [WM] Context learn (food): avg_w={wm_ctx_learn['avg_w']:.2f}, "
                               f"factor={wm_ctx_learn['learning_factor']:.1f}")
 
+                # Phase 19: Metacognitive Confidence 학습 (음식 먹기 = 강한 학습)
+                if brain_config.metacognition_enabled:
+                    meta_learn = brain.learn_metacognitive_confidence(reward_context=True)
+                    if meta_learn and log_level in ["debug", "verbose"]:
+                        print(f"  [META] Confidence learn (food): avg_w={meta_learn['avg_w']:.2f}, "
+                              f"factor={meta_learn['learning_factor']:.1f}")
+
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
@@ -7222,6 +7592,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if brain_config.wm_expansion_enabled and env_info.get('in_pain', False):
                 brain.learn_wm_context(reward_context=True)
 
+            # Phase 19: Pain zone → Metacognitive 강한 학습
+            if brain_config.metacognition_enabled and env_info.get('in_pain', False):
+                brain.learn_metacognitive_confidence(reward_context=True)
+
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
                 if env_info.get('in_pain', False) and env.pain_zone_visits == 1 and env.pain_zone_steps == 1:
@@ -7234,6 +7608,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             # Phase 18: WM Context 배경 학습 (약한 학습 = 매 5스텝)
             if brain_config.wm_expansion_enabled and env.steps % 5 == 0:
                 brain.learn_wm_context(reward_context=False)
+
+            # Phase 19: Metacognitive 배경 학습 (약한 학습 = 매 5스텝)
+            if brain_config.metacognition_enabled and env.steps % 5 == 0:
+                brain.learn_metacognitive_confidence(reward_context=False)
 
         # 에피소드 종료
         all_steps.append(env.steps)
@@ -7423,6 +7801,8 @@ if __name__ == "__main__":
                        help="Disable Phase 17 (Language Circuit)")
     parser.add_argument("--no-wm-expansion", action="store_true",
                        help="Disable Phase 18 (WM Expansion)")
+    parser.add_argument("--no-metacognition", action="store_true",
+                       help="Disable Phase 19 (Metacognition)")
     args = parser.parse_args()
 
     run_training(
@@ -7444,5 +7824,6 @@ if __name__ == "__main__":
         no_tom=args.no_tom,
         no_association=args.no_association,
         no_language=args.no_language,
-        no_wm_expansion=args.no_wm_expansion
+        no_wm_expansion=args.no_wm_expansion,
+        no_metacognition=args.no_metacognition
     )
