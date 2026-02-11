@@ -60,13 +60,14 @@ class ForagerConfig:
     reward_starve: float = -10.0
     reward_homeostasis: float = 0.01  # Energy 30-70 유지 시
 
-    # === Phase 2b: Pain Zone (신규) ===
+    # === Phase 2b: Pain Zone (내부 원형 영역) ===
     pain_zone_enabled: bool = True      # Pain Zone 활성화 여부
-    pain_zone_thickness: float = 25.0   # Pain Zone 두께 (가장자리)
+    pain_zone_count: int = 2            # 내부 원형 Pain Zone 개수
+    pain_zone_radius: float = 60.0      # 각 Pain Zone 반경 (px)
     pain_intensity: float = 1.0         # 고통 강도 (0~1)
     pain_damage: float = 0.3            # Pain Zone에서 매 스텝 Energy 감소
-    pain_max_damage: float = 80.0       # 누적 Pain 데미지 한계 (초과 시 사망)
-    danger_range: float = 50.0          # Danger Cue 감지 거리
+    pain_max_damage: float = 200.0      # 누적 Pain 데미지 한계
+    danger_range: float = 80.0          # Danger Cue 감지 거리 - 조기 경고
 
     # Phase 2b 보상
     reward_pain: float = -0.5           # Pain Zone에서 매 스텝
@@ -270,7 +271,7 @@ class NPCAgent:
                 return True
         return False
 
-    def update_call_state(self, config: 'ForagerConfig'):
+    def update_call_state(self, config: 'ForagerConfig', pain_zones: list = None):
         """Phase 17: NPC 발성 상태 업데이트"""
         # 타이머 감소
         if self.call_timer > 0:
@@ -278,10 +279,14 @@ class NPCAgent:
             if self.call_timer <= 0:
                 self.current_call = 0
 
-        # Pain zone 근접 확인 → danger call
-        t = config.pain_zone_thickness + config.danger_range
-        near_pain = (self.x < t or self.x > config.width - t or
-                     self.y < t or self.y > config.height - t)
+        # Pain zone 근접 확인 → danger call (내부 원형 영역)
+        near_pain = False
+        if pain_zones:
+            detect_r = config.pain_zone_radius + config.danger_range
+            for cx, cy in pain_zones:
+                if math.sqrt((self.x - cx)**2 + (self.y - cy)**2) < detect_r:
+                    near_pain = True
+                    break
         if near_pain and not self.near_pain_zone and self.call_timer <= 0:
             if np.random.random() < config.npc_call_danger_prob:
                 self.current_call = 2
@@ -320,11 +325,20 @@ class ForagerGym:
         self.energy_history: List[float] = []
         self.position_history: List[Tuple[float, float]] = []
 
-        # === Phase 2b: Pain Zone 통계 ===
+        # === Phase 2b: Pain Zone (내부 원형 영역) ===
+        self.pain_zones: List[Tuple[float, float]] = []  # [(cx, cy), ...] 원형 pain zone 중심 좌표
         self.pain_damage_accumulated: float = 0.0  # 누적 Pain 데미지
         self.pain_zone_visits: int = 0             # Pain Zone 진입 횟수
         self.pain_zone_steps: int = 0              # Pain Zone 내 체류 시간
         self.was_in_pain: bool = False             # 이전 스텝 Pain Zone 여부 (탈출 감지)
+        # === Pain Honest Metrics ===
+        self.wall_bounces_total: int = 0           # 전체 벽 반사 횟수
+        self.wall_bounces_in_pain: int = 0         # Pain Zone 내 벽 반사 횟수
+        self.pain_approach_steps: int = 0          # Pain boundary에 접근 중인 스텝 수
+        self.distance_to_pain_sum: float = 0.0     # pain boundary 거리 누적 (평균 계산용)
+        self.current_pain_dwell: int = 0           # 현재 연속 pain 체류
+        self.max_pain_dwell: int = 0               # 최대 연속 pain 체류
+        self.pain_dwell_times: List[int] = []      # 각 방문별 체류 시간
 
         # === Food Patch 설정 및 통계 ===
         self.patches: List[Tuple[float, float]] = []  # Patch 중심 좌표 (실제 픽셀)
@@ -352,7 +366,10 @@ class ForagerGym:
         self.agent_angle = np.random.uniform(0, 2 * np.pi)
         self.energy = self.config.energy_start
 
-        # 음식 생성 (Field에만)
+        # Pain Zone 위치 생성 (음식 생성 전에 해야 food가 pain zone을 피함)
+        self._generate_pain_zones()
+
+        # 음식 생성 (Field에만, Pain Zone 외부)
         self.foods = []
         self._spawn_foods(self.config.n_food)
 
@@ -370,6 +387,14 @@ class ForagerGym:
         self.pain_zone_visits = 0
         self.pain_zone_steps = 0
         self.was_in_pain = False
+        # Pain Honest Metrics 초기화
+        self.wall_bounces_total = 0
+        self.wall_bounces_in_pain = 0
+        self.pain_approach_steps = 0
+        self.distance_to_pain_sum = 0.0
+        self.current_pain_dwell = 0
+        self.max_pain_dwell = 0
+        self.pain_dwell_times = []
 
         # Food Patch 통계 초기화
         self.patch_visits = [0] * self.config.n_patches
@@ -416,22 +441,39 @@ class ForagerGym:
         new_y = self.agent_y + np.sin(self.agent_angle) * self.config.agent_speed
 
         # 벽 충돌 처리 (부드러운 바운스)
+        _bounced = False
         if new_x < self.config.agent_radius:
             new_x = self.config.agent_radius
             self.agent_angle = np.pi - self.agent_angle
+            _bounced = True
         elif new_x > self.config.width - self.config.agent_radius:
             new_x = self.config.width - self.config.agent_radius
             self.agent_angle = np.pi - self.agent_angle
+            _bounced = True
 
         if new_y < self.config.agent_radius:
             new_y = self.config.agent_radius
             self.agent_angle = -self.agent_angle
+            _bounced = True
         elif new_y > self.config.height - self.config.agent_radius:
             new_y = self.config.height - self.config.agent_radius
             self.agent_angle = -self.agent_angle
+            _bounced = True
+
+        if _bounced:
+            self.wall_bounces_total += 1
 
         self.agent_x = new_x
         self.agent_y = new_y
+
+        # Pain boundary 거리 추적
+        _prev_dist = self._distance_to_pain_boundary_xy(
+            self.agent_x - np.cos(self.agent_angle) * self.config.agent_speed,
+            self.agent_y - np.sin(self.agent_angle) * self.config.agent_speed)
+        _cur_dist = self._distance_to_pain_boundary()
+        self.distance_to_pain_sum += _cur_dist
+        if _cur_dist < _prev_dist:
+            self.pain_approach_steps += 1
 
         # 2. 에너지 감소 (위치에 따라 다름)
         if self._in_nest():
@@ -474,10 +516,21 @@ class ForagerGym:
             # 새로 진입한 경우 방문 횟수 증가
             if not self.was_in_pain:
                 self.pain_zone_visits += 1
+                self.current_pain_dwell = 0
+            self.current_pain_dwell += 1
+            self.max_pain_dwell = max(self.max_pain_dwell, self.current_pain_dwell)
+            # 벽 반사가 pain zone 안에서 발생했는지
+            if _bounced:
+                self.wall_bounces_in_pain += 1
 
         # Pain Zone 탈출 보상
         if self.was_in_pain and not in_pain:
             reward += self.config.reward_escape
+            self.pain_dwell_times.append(self.current_pain_dwell)
+            self.current_pain_dwell = 0
+
+        if not in_pain:
+            self.current_pain_dwell = 0
 
         self.was_in_pain = in_pain
 
@@ -495,7 +548,7 @@ class ForagerGym:
                     self._spawn_foods(1)  # 새 음식 생성 (총 개수 유지)
                 # Phase 17: NPC 발성 상태 업데이트
                 if self.config.npc_vocalization_enabled:
-                    npc.update_call_state(self.config)
+                    npc.update_call_state(self.config, self.pain_zones)
 
         # === Phase 17: 에이전트 발성이 NPC에 미치는 영향 ===
         if (self.config.social_enabled and self.config.npc_vocalization_enabled
@@ -565,6 +618,13 @@ class ForagerGym:
             "pain_damage": self.pain_damage_accumulated,
             "pain_visits": self.pain_zone_visits,
             "pain_steps": self.pain_zone_steps,
+            "wall_bounces_total": self.wall_bounces_total,
+            "wall_bounces_in_pain": self.wall_bounces_in_pain,
+            "pain_approach_steps": self.pain_approach_steps,
+            "avg_dist_to_pain": self.distance_to_pain_sum / max(1, self.steps),
+            "max_pain_dwell": self.max_pain_dwell,
+            "avg_pain_dwell": np.mean(self.pain_dwell_times) if self.pain_dwell_times else 0,
+            "pain_dwell_times": self.pain_dwell_times.copy(),
             # Food Patch 정보
             "patch_visits": self.patch_visits.copy() if self.config.food_patch_enabled else [],
             "patch_food_eaten": self.patch_food_eaten.copy() if self.config.food_patch_enabled else [],
@@ -591,13 +651,66 @@ class ForagerGym:
         return (cx - half <= self.agent_x <= cx + half and
                 cy - half <= self.agent_y <= cy + half)
 
+    def _generate_pain_zones(self):
+        """내부 원형 Pain Zone 위치 생성 (매 에피소드 랜덤)"""
+        if not self.config.pain_zone_enabled:
+            self.pain_zones = []
+            return
+
+        r = self.config.pain_zone_radius
+        margin = r + 10  # 벽에서 최소 10px 간격
+        nest_cx, nest_cy = self.config.width / 2, self.config.height / 2
+        nest_half = self.config.nest_size / 2
+
+        zones = []
+        for _ in range(self.config.pain_zone_count):
+            for _ in range(500):
+                cx = np.random.uniform(margin, self.config.width - margin)
+                cy = np.random.uniform(margin, self.config.height - margin)
+
+                # 둥지와 겹치지 않기 (circle-rect intersection)
+                nearest_x = max(nest_cx - nest_half, min(cx, nest_cx + nest_half))
+                nearest_y = max(nest_cy - nest_half, min(cy, nest_cy + nest_half))
+                dist_to_nest = math.sqrt((cx - nearest_x)**2 + (cy - nearest_y)**2)
+                if dist_to_nest < r + 10:
+                    continue
+
+                # 다른 pain zone과 겹치지 않기
+                overlap = False
+                for oz_x, oz_y in zones:
+                    if math.sqrt((cx - oz_x)**2 + (cy - oz_y)**2) < 2 * r + 20:
+                        overlap = True
+                        break
+                if overlap:
+                    continue
+
+                zones.append((cx, cy))
+                break
+
+        self.pain_zones = zones
+
     def _in_pain_zone(self) -> bool:
-        """Pain Zone (가장자리) 내부인지 확인"""
-        t = self.config.pain_zone_thickness
-        return (self.agent_x < t or
-                self.agent_x > self.config.width - t or
-                self.agent_y < t or
-                self.agent_y > self.config.height - t)
+        """내부 원형 Pain Zone 내부인지 확인"""
+        r_sq = self.config.pain_zone_radius ** 2
+        for cx, cy in self.pain_zones:
+            if (self.agent_x - cx)**2 + (self.agent_y - cy)**2 < r_sq:
+                return True
+        return False
+
+    def _distance_to_pain_boundary(self) -> float:
+        """현재 위치에서 가장 가까운 pain zone 경계까지의 거리 (외부=양수, 내부=음수)."""
+        return self._distance_to_pain_boundary_xy(self.agent_x, self.agent_y)
+
+    def _distance_to_pain_boundary_xy(self, x: float, y: float) -> float:
+        """임의 좌표에서 가장 가까운 pain zone 경계까지 거리."""
+        if not self.pain_zones:
+            return float('inf')
+        r = self.config.pain_zone_radius
+        min_dist = float('inf')
+        for cx, cy in self.pain_zones:
+            dist = math.sqrt((x - cx)**2 + (y - cy)**2) - r
+            min_dist = min(min_dist, dist)
+        return min_dist
 
     def _init_patches(self):
         """Food Patch 초기화 (고정 위치)"""
@@ -632,14 +745,7 @@ class ForagerGym:
 
     def _distance_to_pain_zone(self) -> float:
         """Pain Zone까지 최단 거리 (내부면 음수)"""
-        t = self.config.pain_zone_thickness
-        # 각 가장자리까지 거리
-        dist_left = self.agent_x - t
-        dist_right = (self.config.width - t) - self.agent_x
-        dist_top = self.agent_y - t
-        dist_bottom = (self.config.height - t) - self.agent_y
-        # 최소 거리 (가장 가까운 Pain Zone 경계)
-        return min(dist_left, dist_right, dist_top, dist_bottom)
+        return self._distance_to_pain_boundary()
 
     def _get_danger_signal(self) -> float:
         """Pain Zone까지 거리 기반 위험 신호 (0=안전, 1=위험)"""
@@ -664,40 +770,31 @@ class ForagerGym:
         if not self.config.sound_enabled or not self.config.pain_zone_enabled:
             return 0.0, 0.0
 
-        # Pain Zone 중심 (맵 가장자리 평균)
-        center_x = self.config.width / 2
-        center_y = self.config.height / 2
+        if not self.pain_zones:
+            return 0.0, 0.0
 
-        # 가장 가까운 Pain Zone 경계까지 거리
-        dist_to_pain = self._distance_to_pain_zone()
+        # 가장 가까운 원형 Pain Zone 찾기
+        closest_cx, closest_cy = self.pain_zones[0]
+        closest_dist = float('inf')
+        r = self.config.pain_zone_radius
+        for cx, cy in self.pain_zones:
+            dist = math.sqrt((self.agent_x - cx)**2 + (self.agent_y - cy)**2) - r
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_cx, closest_cy = cx, cy
 
-        if dist_to_pain > self.config.danger_sound_range:
+        if closest_dist > self.config.danger_sound_range:
             return 0.0, 0.0
 
         # 거리에 따른 기본 강도 (Pain Zone 내부면 최대)
-        if dist_to_pain <= 0:
+        if closest_dist <= 0:
             intensity = 1.0
         else:
-            intensity = 1.0 - (dist_to_pain / self.config.danger_sound_range) ** self.config.sound_decay
+            intensity = 1.0 - (closest_dist / self.config.danger_sound_range) ** self.config.sound_decay
         intensity = max(0.0, min(1.0, intensity))
 
-        # 가장 가까운 경계 방향 계산
-        dist_left = self.agent_x
-        dist_right = self.config.width - self.agent_x
-        dist_top = self.agent_y
-        dist_bottom = self.config.height - self.agent_y
-
-        min_dist = min(dist_left, dist_right, dist_top, dist_bottom)
-
-        # 가장 가까운 경계 방향으로의 각도
-        if min_dist == dist_left:
-            danger_angle = np.pi  # 왼쪽
-        elif min_dist == dist_right:
-            danger_angle = 0  # 오른쪽
-        elif min_dist == dist_top:
-            danger_angle = -np.pi / 2  # 위
-        else:
-            danger_angle = np.pi / 2  # 아래
+        # 가장 가까운 Pain Zone 중심 방향으로의 각도
+        danger_angle = math.atan2(closest_cy - self.agent_y, closest_cx - self.agent_x)
 
         # 에이전트 방향 기준 상대 각도
         rel_angle = danger_angle - self.agent_angle
@@ -985,11 +1082,11 @@ class ForagerGym:
     def _cast_pain_rays(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Pain Zone 방향 레이캐스트 (L/R 분리)
-        Pain Zone = 가장자리 띠 영역
+        Pain Zone = 내부 원형 영역
 
         Returns:
             (left_rays, right_rays): 각각 n_rays//2 크기
-            0=Pain Zone 멀리, 1=Pain Zone 가까이
+            0=Pain Zone 멀리, 1=Pain Zone 가까이/내부
         """
         n_half = self.config.n_rays // 2
         rays_left = np.zeros(n_half)
@@ -1008,60 +1105,55 @@ class ForagerGym:
 
     def _cast_single_pain_ray(self, angle: float) -> float:
         """
-        단일 레이로 Pain Zone까지 거리
-        Pain Zone = 가장자리 thickness 영역
+        단일 레이로 원형 Pain Zone까지 거리 (ray-circle intersection)
 
-        Returns:
-            0=Pain Zone 멀리/없음, 1=Pain Zone 매우 가까움
+        외부: 0=멀리, 1=가까이 (approach gradient)
+        내부: exit distance gradient (가까운 edge = 낮은 pain, 먼 edge = 높은 pain)
+              → pain_L ≠ pain_R → push-pull이 탈출 방향으로 회전
         """
-        cos_a = np.cos(angle)
-        sin_a = np.sin(angle)
-        t = self.config.pain_zone_thickness
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        r = self.config.pain_zone_radius
+        min_approach = float('inf')  # 외부에서 접근 시 최소 거리
+        max_inside_intensity = 0.0   # 내부일 때 최대 강도
 
-        # Pain Zone 경계까지 거리 계산
-        # Pain Zone은 0~t와 (width-t)~width 영역
-        distances = []
+        for cx, cy in self.pain_zones:
+            dx = self.agent_x - cx
+            dy = self.agent_y - cy
+            dist_sq = dx * dx + dy * dy
 
-        # 오른쪽 Pain Zone 경계 (x = width - t)
-        if cos_a > 0.001:
-            target_x = self.config.width - t
-            if self.agent_x < target_x:
-                d = (target_x - self.agent_x) / cos_a
-                if d > 0:
-                    distances.append(d)
+            # Ray-circle intersection: |origin + t*dir - center|² = r²
+            # a*t² + b*t + c = 0
+            b = 2 * (dx * cos_a + dy * sin_a)
+            c = dist_sq - r * r
 
-        # 왼쪽 Pain Zone 경계 (x = t)
-        if cos_a < -0.001:
-            target_x = t
-            if self.agent_x > target_x:
-                d = (target_x - self.agent_x) / cos_a
-                if d > 0:
-                    distances.append(d)
+            discriminant = b * b - 4 * c
+            if discriminant < 0:
+                continue  # 레이가 원을 빗나감
 
-        # 위쪽 Pain Zone 경계 (y = height - t)
-        if sin_a > 0.001:
-            target_y = self.config.height - t
-            if self.agent_y < target_y:
-                d = (target_y - self.agent_y) / sin_a
-                if d > 0:
-                    distances.append(d)
+            sqrt_disc = math.sqrt(discriminant)
+            t1 = (-b - sqrt_disc) / 2  # 첫 교점
+            t2 = (-b + sqrt_disc) / 2  # 두번째 교점
 
-        # 아래쪽 Pain Zone 경계 (y = t)
-        if sin_a < -0.001:
-            target_y = t
-            if self.agent_y > target_y:
-                d = (target_y - self.agent_y) / sin_a
-                if d > 0:
-                    distances.append(d)
+            if c > 0:
+                # 외부: t1 > 0이면 이 방향으로 원에 닿음
+                if t1 > 0:
+                    min_approach = min(min_approach, t1)
+            else:
+                # 내부: t2 = exit distance (이 방향으로 원 탈출까지 거리)
+                # 가까운 edge → 낮은 pain, 먼 edge → 높은 pain
+                if t2 > 0:
+                    intensity = min(1.0, t2 / (2 * r))
+                    max_inside_intensity = max(max_inside_intensity, intensity)
 
-        if not distances:
-            # 이미 Pain Zone 내부
-            return 1.0
+        # 내부 gradient가 있으면 우선
+        if max_inside_intensity > 0:
+            return max_inside_intensity
 
-        min_dist = min(distances)
-        if min_dist >= self.config.view_range:
-            return 0.0
-        return 1.0 - (min_dist / self.config.view_range)
+        # 외부 접근 gradient
+        if min_approach < self.config.view_range:
+            return 1.0 - (min_approach / self.config.view_range)
+        return 0.0
 
     def _check_food_collision(self) -> bool:
         """음식 충돌 확인"""
@@ -1090,9 +1182,8 @@ class ForagerGym:
         """
         cx, cy = self.config.width / 2, self.config.height / 2
         half = self.config.nest_size / 2
-        # Phase 7: Pain Zone 밖에 음식 생성 (pain_zone_thickness + margin)
-        pain_margin = self.config.pain_zone_thickness + self.config.food_radius * 2
-        margin = max(pain_margin, self.config.food_radius * 2)
+        margin = self.config.food_radius * 2
+        pain_r = self.config.pain_zone_radius + self.config.food_radius * 2  # pain zone 외부 마진
 
         for _ in range(n):
             # Food Patch 모드: 80% Patch 내, 20% 랜덤
@@ -1101,29 +1192,43 @@ class ForagerGym:
                     # Patch 내에 음식 생성
                     patch = self.patches[np.random.randint(len(self.patches))]
                     for _ in range(100):
-                        # Patch 중심 주변 랜덤 위치 (균등 분포)
                         angle = np.random.uniform(0, 2 * np.pi)
                         r = np.sqrt(np.random.uniform(0, 1)) * self.config.patch_radius
                         x = patch[0] + r * np.cos(angle)
                         y = patch[1] + r * np.sin(angle)
 
-                        # 경계 체크: Pain Zone, Nest 외부 확인
-                        if (margin <= x <= self.config.width - margin and
-                            margin <= y <= self.config.height - margin and
-                            not (cx - half <= x <= cx + half and
-                                 cy - half <= y <= cy + half)):
+                        # 경계 체크: 맵 내부, Nest 외부, Pain Zone 외부
+                        if not (margin <= x <= self.config.width - margin and
+                                margin <= y <= self.config.height - margin):
+                            continue
+                        if (cx - half <= x <= cx + half and cy - half <= y <= cy + half):
+                            continue
+                        # Pain Zone 내부 체크
+                        in_zone = False
+                        for pz_x, pz_y in self.pain_zones:
+                            if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
+                                in_zone = True
+                                break
+                        if not in_zone:
                             self.foods.append((x, y))
                             break
-                    continue  # 다음 음식으로
+                    continue
 
             # 기존 방식: 랜덤 위치 (Patch 모드 OFF 또는 20% 확률)
-            for _ in range(100):  # 최대 100번 시도
+            for _ in range(100):
                 x = np.random.uniform(margin, self.config.width - margin)
                 y = np.random.uniform(margin, self.config.height - margin)
 
                 # Nest 내부면 다시
-                if not (cx - half <= x <= cx + half and
-                       cy - half <= y <= cy + half):
+                if (cx - half <= x <= cx + half and cy - half <= y <= cy + half):
+                    continue
+                # Pain Zone 내부면 다시
+                in_zone = False
+                for pz_x, pz_y in self.pain_zones:
+                    if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
+                        in_zone = True
+                        break
+                if not in_zone:
                     self.foods.append((x, y))
                     break
 
@@ -1592,18 +1697,17 @@ class ForagerGym:
         env_surface = pygame.Surface((400, 400))
         env_surface.fill((30, 30, 30))
 
-        # === Phase 2b: Pain Zone (빨간색 가장자리) ===
-        if self.config.pain_zone_enabled:
-            t = int(self.config.pain_zone_thickness)
-            pain_color = (80, 30, 30)  # 어두운 빨강
-            # 상단
-            pygame.draw.rect(env_surface, pain_color, (0, 0, 400, t))
-            # 하단
-            pygame.draw.rect(env_surface, pain_color, (0, 400 - t, 400, t))
-            # 좌측
-            pygame.draw.rect(env_surface, pain_color, (0, 0, t, 400))
-            # 우측
-            pygame.draw.rect(env_surface, pain_color, (400 - t, 0, t, 400))
+        # === Phase 2b: Pain Zone (내부 원형 영역) ===
+        if self.config.pain_zone_enabled and self.pain_zones:
+            r = int(self.config.pain_zone_radius)
+            # 반투명 빨간 원
+            for pz_cx, pz_cy in self.pain_zones:
+                pain_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+                pygame.draw.circle(pain_surf, (120, 30, 30, 100), (r, r), r)
+                env_surface.blit(pain_surf, (int(pz_cx) - r, int(pz_cy) - r))
+                # 경계선
+                pygame.draw.circle(env_surface, (180, 50, 50),
+                                  (int(pz_cx), int(pz_cy)), r, 2)
 
         # === Food Patches (반투명 원) ===
         if self.config.food_patch_enabled and self.patches:
@@ -2264,7 +2368,7 @@ if __name__ == "__main__":
         config.pain_zone_enabled = False
         print("  [!] Pain Zone DISABLED (Phase 2a mode)")
     else:
-        print(f"  Pain Zone: thickness={config.pain_zone_thickness}, damage={config.pain_damage}")
+        print(f"  Pain Zone: {config.pain_zone_count}x interior circles, radius={config.pain_zone_radius}, damage={config.pain_damage}")
 
     if args.food_patch:
         config.food_patch_enabled = True

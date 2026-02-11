@@ -60,6 +60,9 @@ dream_*.png
 # Claude Code
 .claude/
 
+# Dashboard logs
+logs/
+
 # Misc
 nul
 agony

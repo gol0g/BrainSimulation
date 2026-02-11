@@ -31,6 +31,7 @@ from dataclasses import dataclass
 import os
 import time
 import argparse
+from data_logger import DataLogger
 
 # GeNN imports (WSL에서 실행)
 try:
@@ -7774,7 +7775,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_mirror: bool = False, no_tom: bool = False,
                 no_association: bool = False, no_language: bool = False,
                 no_wm_expansion: bool = False, no_metacognition: bool = False,
-                no_self_model: bool = False):
+                no_self_model: bool = False,
+                log_data: bool = False, log_dir: str = None,
+                log_sample_rate: int = 5):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -7842,6 +7845,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     env.render_fps = fps  # FPS 설정 (시각화 속도 조절)
     brain = ForagerBrain(brain_config)
 
+    # Data logging for dashboard
+    logger = None
+    if log_data:
+        logger = DataLogger(log_dir=log_dir, sample_rate=log_sample_rate)
+        logger.log_config(brain_config, env_config, episodes)
+        print(f"  [LOG] Data logging enabled → {logger.log_dir}")
+
     # 학습 비활성화 옵션
     if no_learning:
         brain.food_learning_enabled = False
@@ -7852,6 +7862,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     all_homeostasis = []
     all_pain_visits = []
     all_pain_steps = []
+    all_wall_bounces_in_pain = []
+    all_avg_dist_to_pain = []
+    all_max_pain_dwell = []
+    all_avg_pain_dwell = []
+    all_pain_approach_pct = []
     death_causes = {"starve": 0, "timeout": 0, "pain": 0}
 
     # Phase 3b: 학습 통계
@@ -7988,6 +8003,21 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     else:
                         print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}{da_str}")
 
+                # Hebbian logging (food context)
+                if logger:
+                    if learn_info:
+                        logger.log_hebbian(ep, env.steps, "hippo", learn_info.get('avg_weight', 0), "food")
+                    if brain_config.association_cortex_enabled and assoc_learn:
+                        logger.log_hebbian(ep, env.steps, "assoc_binding", assoc_learn.get('avg_w_edible', 0), "food")
+                    if brain_config.language_enabled and call_learn:
+                        logger.log_hebbian(ep, env.steps, "call_binding", call_learn.get('avg_w', call_learn.get('avg_weight', 0)), "food")
+                    if brain_config.wm_expansion_enabled and wm_ctx_learn:
+                        logger.log_hebbian(ep, env.steps, "wm_context", wm_ctx_learn.get('avg_w', 0), "food")
+                    if brain_config.metacognition_enabled and meta_learn:
+                        logger.log_hebbian(ep, env.steps, "meta_confidence", meta_learn.get('avg_w', 0), "food")
+                    if brain_config.self_model_enabled and sm_learn:
+                        logger.log_hebbian(ep, env.steps, "self_narrative", sm_learn.get('avg_w', 0), "food")
+
             # Phase 15b: NPC 먹기 관찰 → 사회적 학습
             if brain_config.social_brain_enabled and brain_config.mirror_enabled:
                 npc_events = env_info.get("npc_eating_events", [])
@@ -8036,12 +8066,22 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if brain_config.self_model_enabled and env.steps % 5 == 0:
                 brain.learn_self_narrative(reward_context=False)
 
+            # Data logging (sampled every N steps)
+            if logger:
+                logger.log_step(ep, env.steps, info, env_info)
+
         # 에피소드 종료
         all_steps.append(env.steps)
         all_food.append(env.total_food_eaten)
         all_homeostasis.append(env_info["homeostasis_ratio"])
         all_pain_visits.append(env_info.get("pain_visits", 0))
         all_pain_steps.append(env_info.get("pain_steps", 0))
+        all_wall_bounces_in_pain.append(env_info.get("wall_bounces_in_pain", 0))
+        all_avg_dist_to_pain.append(env_info.get("avg_dist_to_pain", 0))
+        all_max_pain_dwell.append(env_info.get("max_pain_dwell", 0))
+        all_avg_pain_dwell.append(env_info.get("avg_pain_dwell", 0))
+        _approach = env_info.get("pain_approach_steps", 0)
+        all_pain_approach_pct.append(_approach / max(1, env.steps) * 100)
         all_learn_events.append(ep_learn_events)  # Phase 3b
 
         # Food Patch 통계
@@ -8078,10 +8118,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         print(f"  Avg Satiety:  {avg_satiety:.3f}")
 
         if brain_config.amygdala_enabled:
-            print(f"  --- Phase 2b ---")
+            print(f"  --- Phase 2b: Pain ---")
             print(f"  Avg Fear:     {avg_fear:.3f}")
             print(f"  Pain Visits:  {env_info.get('pain_visits', 0)}")
             print(f"  Pain Time:    {env_info.get('pain_steps', 0)} steps")
+            print(f"  Wall Bounce(pain): {env_info.get('wall_bounces_in_pain', 0)}/{env_info.get('wall_bounces_total', 0)}")
+            print(f"  Avg Dist→Pain: {env_info.get('avg_dist_to_pain', 0):.1f}px")
+            print(f"  Max Dwell:    {env_info.get('max_pain_dwell', 0)} steps")
 
         # Food Patch 통계
         if env_config.food_patch_enabled:
@@ -8095,6 +8138,25 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
         print(f"{'='*60}\n")
 
+        # Episode data logging
+        if logger:
+            logger.log_episode(ep, {
+                "steps": env.steps,
+                "food_eaten": env.total_food_eaten,
+                "death_cause": env_info["death_cause"],
+                "homeostasis": env_info["homeostasis_ratio"],
+                "pain_visits": env_info.get("pain_visits", 0),
+                "pain_steps": env_info.get("pain_steps", 0),
+                "wall_bounces_in_pain": env_info.get("wall_bounces_in_pain", 0),
+                "avg_dist_to_pain": round(env_info.get("avg_dist_to_pain", 0), 1),
+                "max_pain_dwell": env_info.get("max_pain_dwell", 0),
+                "avg_pain_dwell": round(env_info.get("avg_pain_dwell", 0), 1),
+                "pain_approach_pct": round(env_info.get("pain_approach_steps", 0) / max(1, env.steps) * 100, 1),
+                "avg_hunger": round(avg_hunger, 4),
+                "avg_satiety": round(avg_satiety, 4),
+                "avg_fear": round(avg_fear, 4),
+            })
+
     # === 최종 요약 ===
     print("\n" + "=" * 70)
     print("TRAINING COMPLETE - Final Statistics")
@@ -8106,11 +8168,22 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     print(f"  Reward Freq:    {np.sum(all_food) / np.sum(all_steps) * 100:.2f}%")
 
     if env_config.pain_zone_enabled:
-        print(f"\n  === Phase 2b: Pain Zone ===")
-        print(f"  Avg Pain Visits: {np.mean(all_pain_visits):.1f}")
-        print(f"  Avg Pain Time:   {np.mean(all_pain_steps):.1f} steps")
         pain_pct = np.sum(all_pain_steps) / np.sum(all_steps) * 100
-        print(f"  Pain Time Ratio: {pain_pct:.1f}%")
+        pain_death_pct = death_causes.get("pain", 0) / episodes * 100
+        avg_visits = np.mean(all_pain_visits)
+        avg_dist = np.mean(all_avg_dist_to_pain) if all_avg_dist_to_pain else 0
+        avg_bounce_in_pain = np.mean(all_wall_bounces_in_pain) if all_wall_bounces_in_pain else 0
+        avg_max_dwell = np.mean(all_max_pain_dwell) if all_max_pain_dwell else 0
+        avg_approach = np.mean(all_pain_approach_pct) if all_pain_approach_pct else 0
+
+        print(f"\n  === Phase 2b: Pain Zone (Honest Metrics) ===")
+        print(f"  Pain Death Rate:    {pain_death_pct:.0f}% ({death_causes.get('pain', 0)}/{episodes})")
+        print(f"  Pain Time Ratio:    {pain_pct:.1f}%")
+        print(f"  Avg Pain Entries:   {avg_visits:.1f}/ep")
+        print(f"  Avg Dist to Pain:   {avg_dist:.1f}px (zone radius: {env_config.pain_zone_radius}px, map: {env_config.width}px)")
+        print(f"  Wall Bounce in Pain:{avg_bounce_in_pain:.1f}/ep (exit by wall, not by brain)")
+        print(f"  Avg Max Dwell:      {avg_max_dwell:.0f} steps (longest single pain visit)")
+        print(f"  Approach Ratio:     {avg_approach:.1f}% of steps moving toward pain")
 
     # Phase 3b: 학습 통계
     if brain_config.hippocampus_enabled and sum(all_learn_events) > 0:
@@ -8140,7 +8213,45 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
     if env_config.pain_zone_enabled:
         pain_pct = np.sum(all_pain_steps) / np.sum(all_steps) * 100
-        print(f"  Pain Avoidance:{100-pain_pct:.1f}% {'✓' if pain_pct < 15 else '✗'} (target: <15% pain time)")
+        pain_death_pct = death_causes.get("pain", 0) / episodes * 100
+        avg_visits = np.mean(all_pain_visits)
+
+        # Pain 종합 판정: 3개 지표 교차 검증
+        pain_time_ok = pain_pct < 15
+        pain_death_ok = pain_death_pct < 20
+        pain_entry_ok = avg_visits < 10
+        pain_pass = pain_time_ok and pain_death_ok and pain_entry_ok
+
+        print(f"  Pain Composite: {'✓ PASS' if pain_pass else '✗ FAIL'}")
+        print(f"    Time in Pain:  {pain_pct:.1f}% {'✓' if pain_time_ok else '✗'} (target: <15%)")
+        print(f"    Pain Deaths:   {pain_death_pct:.0f}% {'✓' if pain_death_ok else '✗'} (target: <20%)")
+        print(f"    Pain Entries:  {avg_visits:.1f}/ep {'✓' if pain_entry_ok else '✗'} (target: <10/ep)")
+
+        # === 모순 탐지 (Contradiction Alerts) ===
+        contradictions = []
+        if pain_time_ok and not pain_death_ok:
+            contradictions.append(
+                f"LOW PAIN TIME ({pain_pct:.1f}%) BUT HIGH PAIN DEATH ({pain_death_pct:.0f}%)"
+                f" → Agent enters pain zone briefly but repeatedly, accumulating lethal damage")
+        if pain_time_ok and avg_visits > 10:
+            contradictions.append(
+                f"LOW PAIN TIME ({pain_pct:.1f}%) BUT HIGH ENTRIES ({avg_visits:.0f}/ep)"
+                f" → Wall bounce hides repeated entries; brain is NOT avoiding")
+        if avg_bounce_in_pain > avg_visits * 0.5 and avg_visits > 3:
+            contradictions.append(
+                f"WALL BOUNCE EXITS ({avg_bounce_in_pain:.0f}) ≈ PAIN VISITS ({avg_visits:.0f})"
+                f" → Most 'escapes' are wall bounces, not learned avoidance")
+        if avg_dist < env_config.pain_zone_radius * 2 and pain_time_ok:
+            contradictions.append(
+                f"LOW DIST TO PAIN ({avg_dist:.0f}px) BUT LOW PAIN TIME"
+                f" → Agent hugs pain boundary, doesn't actively avoid")
+
+        if contradictions:
+            print(f"\n  *** CONTRADICTION ALERTS ({len(contradictions)}) ***")
+            for i, c in enumerate(contradictions, 1):
+                print(f"  [{i}] {c}")
+        else:
+            print(f"\n  No contradictions detected - metrics are consistent.")
 
     # Food Patch 학습 효과 검증
     if env_config.food_patch_enabled and len(all_patch_visits) > 0:
@@ -8182,6 +8293,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     print("=" * 70)
 
     env.close()
+    if logger:
+        logger.close()
     return all_steps, all_food, all_homeostasis
 
 
@@ -8228,6 +8341,13 @@ if __name__ == "__main__":
                        help="Disable Phase 19 (Metacognition)")
     parser.add_argument("--no-self-model", action="store_true",
                        help="Disable Phase 20 (Self-Model)")
+    # Data logging for dashboard
+    parser.add_argument("--log-data", action="store_true",
+                       help="Enable data logging for dashboard visualization")
+    parser.add_argument("--log-dir", type=str, default=None,
+                       help="Custom log directory (default: logs/run_TIMESTAMP)")
+    parser.add_argument("--log-sample-rate", type=int, default=5,
+                       help="Log every N steps (default: 5)")
     args = parser.parse_args()
 
     run_training(
@@ -8251,5 +8371,8 @@ if __name__ == "__main__":
         no_language=args.no_language,
         no_wm_expansion=args.no_wm_expansion,
         no_metacognition=args.no_metacognition,
-        no_self_model=args.no_self_model
+        no_self_model=args.no_self_model,
+        log_data=args.log_data,
+        log_dir=args.log_dir,
+        log_sample_rate=args.log_sample_rate,
     )
