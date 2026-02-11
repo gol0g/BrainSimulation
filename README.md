@@ -11,19 +11,20 @@ LLM이나 딥러닝이 아닌 실제 뇌의 생물학적 메커니즘(STDP, Push
 ## 현재 상태
 
 ```
-Phase 19 완료 | 18,800 뉴런 | 55% 생존율
+Phase 20 완료 | 19,240 뉴런 | 50% 생존율
 ```
 
 | 지표 | 결과 |
 |------|------|
-| Survival Rate | 55% |
-| Reward Freq | 2.96% |
-| Pain Avoidance | 91.0% |
+| Survival Rate | 50% |
+| Reward Freq | 3.17% |
+| Pain Avoidance | 90.8% |
 
-## 뇌 구조 (19 Phase)
+## 뇌 구조 (20 Phase)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│  Phase 20: Self-Model (자기 모델 - 내수용/행위주체/자기 서사)   │
 │  Phase 19: Metacognition (메타인지 - 확신/불확실성)            │
 │  Phase 18: Working Memory Expansion (작업 기억 확장)          │
 │  Phase 17: Language Circuit (언어 회로 - Broca/Wernicke)      │
@@ -87,7 +88,7 @@ python forager_brain.py --episodes 3 --render pygame
 
 ```
 backend/genesis/
-├── forager_brain.py   # 메인 뇌 (18,800 뉴런, Phase 1-19)
+├── forager_brain.py   # 메인 뇌 (19,240 뉴런, Phase 1-20)
 ├── forager_gym.py     # Forager 환경 (NPC + Pain Zone)
 └── checkpoints/       # 학습 체크포인트
 
@@ -111,7 +112,8 @@ docs/
 | Phase 15-16 | Forager | 16,800 | 사회적 뇌, 연합 피질 |
 | Phase 17 | Forager | 17,800 | 언어 회로 (Broca/Wernicke) |
 | Phase 18 | Forager | 18,420 | 작업 기억 확장 (시상-피질 루프) |
-| Phase 19 | Forager | **18,800** | 메타인지 (확신/불확실성/자기평가) |
+| Phase 19 | Forager | 18,800 | 메타인지 (확신/불확실성/자기평가) |
+| Phase 20 | Forager | **19,240** | 자기 모델 (내수용/행위주체/자기 서사) |
 
 ## 기술 스택
 

@@ -291,31 +291,32 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase 19 완료 - 메타인지 (18,800 뉴런)
+### 현재 상태: Phase 20 완료 - 자기 모델 (19,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 19: Metacognition ✓ (2026-02-11)                      ║
+║  Phase 20: Self-Model ✓ (2026-02-11)                          ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  신규 구조 (+380 뉴런):                                      ║
-║    - Meta_Confidence (80): 확신 누적기 (전방 섬엽)           ║
-║    - Meta_Uncertainty (80): 불확실성 누적기 (dACC)           ║
-║    - Meta_Evaluate (80): 자기평가 게이트 (mPFC, SensoryLIF) ║
-║    - Meta_Arousal_Mod (70): 불확실성→각성 (청반/NE)          ║
-║    - Meta_Inhibitory (70): 국소 억제 균형                    ║
+║  신규 구조 (+440 뉴런):                                      ║
+║    - Self_Body (80): 내수용감각 통합 (섬엽, SensoryLIF)      ║
+║    - Self_Efference (80): 운동 명령 복사 (소뇌)              ║
+║    - Self_Predict (70): 감각 결과 예측 (순행 모델, SensoryLIF)║
+║    - Self_Agency (70): 행위주체감 (각회/TPJ)                 ║
+║    - Self_Narrative (80): 자기 서사 (DMN/mPFC, Hebbian)      ║
+║    - Self_Inhibitory (60): 국소 억제 균형                    ║
 ║                                                               ║
 ║  핵심 메커니즘:                                              ║
-║    - Confidence vs Uncertainty WTA 경쟁 (-5.0)              ║
-║    - Evaluate gate: I_input = uncert*6 - confid*5 + DA*4    ║
-║    - Hebbian DENSE: avg_w 2.0 → 6.22 (20 에피소드)          ║
-║    - 모든 출력 ≤2.0, Motor 직접 = 0.0                       ║
+║    - Body(내수용) → Predict(예측) → Agency(행위주체) 계층    ║
+║    - Efference Copy + 감각 비교 = 행위주체감                 ║
+║    - Hebbian DENSE: body→narrative (eta=0.04, w_max=14.0)    ║
+║    - 모든 출력 ≤1.5, Motor 직접 = 0.0                       ║
 ║                                                               ║
 ║  검증 결과:                                                   ║
-║    - Survival Rate: 55% ✓ (+5% vs Phase 18)                  ║
-║    - Reward Freq: 2.96% ✓                                    ║
-║    - Pain Avoidance: 91.0% ✓                                 ║
+║    - Survival Rate: 50% ✓                                    ║
+║    - Reward Freq: 3.17% ✓                                    ║
+║    - Pain Avoidance: 90.8% ✓                                 ║
 ║                                                               ║
-║  뉴런 수:       18,800 (+380)                                 ║
+║  뉴런 수:       19,240 (+440)                                 ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -324,7 +325,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone)
-├── forager_brain.py   # Forager Brain (18,800 뉴런, Phase 1-19)
+├── forager_brain.py   # Forager Brain (19,240 뉴런, Phase 1-20)
 └── checkpoints/       # 체크포인트 저장
 ```
 

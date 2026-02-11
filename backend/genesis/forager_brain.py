@@ -932,6 +932,67 @@ class ForagerBrainConfig:
     # Motor direct = 0.0
     metacognition_to_motor_weight: float = 0.0
 
+    # ─── Phase 20: Self-Model ───
+    self_model_enabled: bool = True
+    n_self_body: int = 80
+    n_self_efference: int = 80
+    n_self_predict: int = 70
+    n_self_agency: int = 70
+    n_self_narrative: int = 80
+    n_self_inhibitory: int = 60
+
+    # 20a: Body inputs (interoception)
+    hunger_to_self_body_weight: float = 4.0
+    fear_to_self_body_weight: float = 4.0
+    meta_conf_to_self_body_weight: float = 3.0
+    meta_uncert_to_self_body_weight: float = 3.0
+    dopamine_to_self_body_weight: float = 3.0
+
+    # 20a-I: Body I_input scales
+    self_body_energy_scale: float = 8.0
+    self_body_hunger_scale: float = -6.0
+    self_body_satiety_scale: float = 5.0
+
+    # 20b: Efference inputs (motor copy)
+    motor_to_efference_weight: float = 4.0
+
+    # 20c: Predict I_input scales
+    self_predict_efference_scale: float = 6.0
+    self_predict_food_eye_scale: float = 5.0
+
+    # 20d: Agency inputs
+    efference_to_agency_weight: float = 4.0
+    predict_to_agency_weight: float = 3.0
+    food_memory_to_agency_weight: float = -3.0
+
+    # 20e: Narrative inputs
+    body_to_narrative_weight: float = 3.0
+    agency_to_narrative_weight: float = 3.0
+    wm_context_to_narrative_weight: float = 2.0
+    narrative_recurrent_weight: float = 4.0
+
+    # 20f: Outputs (ALL ≤1.5, NO Motor direct)
+    self_body_to_meta_conf_weight: float = 1.0
+    self_body_to_meta_uncert_weight: float = -1.0
+    self_agency_to_goal_food_weight: float = 1.0
+    self_agency_to_goal_switch_weight: float = -1.5
+    self_narrative_to_wm_weight: float = 1.0
+    self_predict_to_error_weight: float = 1.5
+
+    # 20g: Inhibitory balance
+    self_to_inhibitory_weight: float = 3.0
+    self_inhibitory_to_body_weight: float = -2.5
+    self_inhibitory_to_agency_weight: float = -2.5
+    self_inhibitory_to_narrative_weight: float = -2.0
+
+    # 20h: Hebbian learning (Body → Narrative)
+    self_narrative_binding_eta: float = 0.04
+    self_narrative_binding_w_max: float = 14.0
+    self_narrative_binding_init_weight: float = 2.0
+
+    # Motor direct = 0.0
+    self_model_to_motor_weight: float = 0.0
+
     dt: float = 1.0
 
     @property
@@ -1021,6 +1082,10 @@ class ForagerBrainConfig:
             base += (self.n_meta_confidence + self.n_meta_uncertainty +
                      self.n_meta_evaluate + self.n_meta_arousal_mod +
                      self.n_meta_inhibitory)
+        if self.self_model_enabled:
+            base += (self.n_self_body + self.n_self_efference +
+                     self.n_self_predict + self.n_self_agency +
+                     self.n_self_narrative + self.n_self_inhibitory)
         return base
 
 
@@ -1050,6 +1115,10 @@ class ForagerBrain:
 
         print(f"Building Forager Brain ({self.config.total_neurons:,} neurons)...")
         print(f"  Phase 2a: Hypothalamus Circuit")
+
+        # Base rate caching
+        self.last_hunger_rate = 0.0
+        self.last_satiety_rate = 0.0
 
         # Phase 15b: Mirror neuron state defaults
         self.mirror_self_eating_timer = 0
@@ -1092,6 +1161,14 @@ class ForagerBrain:
         self.last_meta_evaluate_rate = 0.0
         self.last_meta_arousal_mod_rate = 0.0
         self.last_meta_inhibitory_rate = 0.0
+
+        # Phase 20: Self-Model state defaults
+        self.last_self_body_rate = 0.0
+        self.last_self_efference_rate = 0.0
+        self.last_self_predict_rate = 0.0
+        self.last_self_agency_rate = 0.0
+        self.last_self_narrative_rate = 0.0
+        self.last_self_inhibitory_rate = 0.0
 
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
@@ -1334,6 +1411,10 @@ class ForagerBrain:
         # Phase 19: Metacognition
         if self.config.metacognition_enabled:
             self._build_metacognition_circuit()
+
+        # Phase 20: Self-Model
+        if self.config.self_model_enabled:
+            self._build_self_model_circuit()
 
         # Build and load
         print("Building model...")
@@ -5910,6 +5991,253 @@ class ForagerBrain:
             "learning_factor": learning_factor,
         }
 
+    def _build_self_model_circuit(self):
+        """
+        Phase 20: Self-Model (자기 모델)
+
+        생물학적 근거:
+        - 섬엽(Insula): 내수용감각 통합 → self_body
+        - 소뇌 순행 모델: Efference Copy → self_efference, self_predict
+        - 각회(Angular Gyrus)/TPJ: 행위주체감 → self_agency
+        - DMN(Default Mode Network): 자기 서사 → self_narrative
+
+        "나는 누구인가" - 메타인지의 자연스러운 확장
+        Phase 19: "내가 뭘 모르는지 안다" → Phase 20: "나는 존재한다"
+        """
+        print("  Phase 20: Self-Model (자기 모델)")
+
+        # SensoryLIF 파라미터 (I_input 필요한 인구)
+        s_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "TauRefrac": self.config.tau_refrac
+        }
+        s_init = {"V": self.config.v_rest, "RefracTime": 0.0, "I_input": 0.0}
+
+        # Standard LIF 파라미터
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        # ============================================================
+        # 20-1: Populations (6개, 440 neurons)
+        # ============================================================
+
+        # Self_Body (Insular Cortex) - SensoryLIF (I_input: energy/hunger/satiety)
+        self.self_body = self.model.add_neuron_population(
+            "self_body", self.config.n_self_body,
+            sensory_lif_model, s_params, s_init)
+
+        # Self_Efference (Cerebellum efference copy) - LIF
+        self.self_efference = self.model.add_neuron_population(
+            "self_efference", self.config.n_self_efference,
+            "LIF", lif_params, lif_init)
+
+        # Self_Predict (Cerebellar forward model) - SensoryLIF (I_input: efference + food_eye)
+        self.self_predict = self.model.add_neuron_population(
+            "self_predict", self.config.n_self_predict,
+            sensory_lif_model, s_params, s_init)
+
+        # Self_Agency (Angular Gyrus / IPL) - LIF
+        self.self_agency = self.model.add_neuron_population(
+            "self_agency", self.config.n_self_agency,
+            "LIF", lif_params, lif_init)
+
+        # Self_Narrative (DMN / mPFC) - LIF
+        self.self_narrative = self.model.add_neuron_population(
+            "self_narrative", self.config.n_self_narrative,
+            "LIF", lif_params, lif_init)
+
+        # Self_Inhibitory (Local interneurons) - LIF
+        self.self_inhibitory_sm = self.model.add_neuron_population(
+            "self_inhibitory_sm", self.config.n_self_inhibitory,
+            "LIF", lif_params, lif_init)
+
+        print(f"    20-1: Populations ({self.config.n_self_body}+{self.config.n_self_efference}+"
+              f"{self.config.n_self_predict}+{self.config.n_self_agency}+"
+              f"{self.config.n_self_narrative}+{self.config.n_self_inhibitory} = "
+              f"{self.config.n_self_body + self.config.n_self_efference + self.config.n_self_predict + self.config.n_self_agency + self.config.n_self_narrative + self.config.n_self_inhibitory} neurons)")
+
+        # ============================================================
+        # 20a: Self_Body inputs (5 synapses) - 내수용감각 통합
+        # ============================================================
+        self._create_static_synapse(
+            "hunger_to_self_body", self.hunger_drive, self.self_body,
+            self.config.hunger_to_self_body_weight, sparsity=0.05)
+        if self.config.amygdala_enabled:
+            self._create_static_synapse(
+                "fear_to_self_body", self.fear_response, self.self_body,
+                self.config.fear_to_self_body_weight, sparsity=0.05)
+        if self.config.metacognition_enabled:
+            self._create_static_synapse(
+                "meta_conf_to_self_body", self.meta_confidence, self.self_body,
+                self.config.meta_conf_to_self_body_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "meta_uncert_to_self_body", self.meta_uncertainty, self.self_body,
+                self.config.meta_uncert_to_self_body_weight, sparsity=0.05)
+        if self.config.basal_ganglia_enabled:
+            self._create_static_synapse(
+                "dopamine_to_self_body", self.dopamine_neurons, self.self_body,
+                self.config.dopamine_to_self_body_weight, sparsity=0.05)
+
+        print(f"    20a: Self_Body inputs (hunger/fear/meta_conf/meta_uncert/dopamine)")
+
+        # ============================================================
+        # 20b: Self_Efference inputs (2 synapses) - 운동 명령 복사
+        # ============================================================
+        self._create_static_synapse(
+            "motor_l_to_efference", self.motor_left, self.self_efference,
+            self.config.motor_to_efference_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "motor_r_to_efference", self.motor_right, self.self_efference,
+            self.config.motor_to_efference_weight, sparsity=0.05)
+
+        print(f"    20b: Self_Efference inputs (motor_left/motor_right)")
+
+        # ============================================================
+        # 20d: Self_Agency inputs (3 synapses) - 행위주체감
+        # ============================================================
+        self._create_static_synapse(
+            "efference_to_agency", self.self_efference, self.self_agency,
+            self.config.efference_to_agency_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "predict_to_agency", self.self_predict, self.self_agency,
+            self.config.predict_to_agency_weight, sparsity=0.05)
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "food_mem_to_agency", self.food_memory_left, self.self_agency,
+                self.config.food_memory_to_agency_weight, sparsity=0.05)
+
+        print(f"    20d: Self_Agency inputs (efference/predict/food_memory)")
+
+        # ============================================================
+        # 20e: Self_Narrative inputs (4 synapses) - 자기 서사
+        # ============================================================
+        self._create_static_synapse(
+            "body_to_narrative", self.self_body, self.self_narrative,
+            self.config.body_to_narrative_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "agency_to_narrative", self.self_agency, self.self_narrative,
+            self.config.agency_to_narrative_weight, sparsity=0.05)
+        if self.config.wm_expansion_enabled:
+            self._create_static_synapse(
+                "wm_ctx_to_narrative", self.wm_context_binding, self.self_narrative,
+                self.config.wm_context_to_narrative_weight, sparsity=0.05)
+        # Recurrent (self-referential maintenance)
+        self._create_static_synapse(
+            "narrative_recurrent", self.self_narrative, self.self_narrative,
+            self.config.narrative_recurrent_weight, sparsity=0.08)
+
+        print(f"    20e: Self_Narrative inputs (body/agency/wm_context/recurrent)")
+
+        # ============================================================
+        # 20f: Outputs (6 synapses, ALL ≤1.5)
+        # ============================================================
+        if self.config.metacognition_enabled:
+            self._create_static_synapse(
+                "self_body_to_meta_conf", self.self_body, self.meta_confidence,
+                self.config.self_body_to_meta_conf_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "self_body_to_meta_uncert", self.self_body, self.meta_uncertainty,
+                self.config.self_body_to_meta_uncert_weight, sparsity=0.05)
+
+        if self.config.prefrontal_enabled:
+            self._create_static_synapse(
+                "self_agency_to_goal_food", self.self_agency, self.goal_food,
+                self.config.self_agency_to_goal_food_weight, sparsity=0.05)
+        if self.config.wm_expansion_enabled:
+            self._create_static_synapse(
+                "self_agency_to_goal_switch", self.self_agency, self.goal_switch,
+                self.config.self_agency_to_goal_switch_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "self_narrative_to_wm", self.self_narrative, self.working_memory,
+                self.config.self_narrative_to_wm_weight, sparsity=0.05)
+        if self.config.cerebellum_enabled:
+            self._create_static_synapse(
+                "self_predict_to_error", self.self_predict, self.error_signal,
+                self.config.self_predict_to_error_weight, sparsity=0.05)
+
+        print(f"    20f: Outputs (body→meta, agency→goals, narrative→WM, predict→error) ALL ≤1.5")
+
+        # ============================================================
+        # 20g: Inhibitory balance (6 synapses)
+        # ============================================================
+        self._create_static_synapse(
+            "self_body_to_sm_inhib", self.self_body, self.self_inhibitory_sm,
+            self.config.self_to_inhibitory_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "self_eff_to_sm_inhib", self.self_efference, self.self_inhibitory_sm,
+            self.config.self_to_inhibitory_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "self_agency_to_sm_inhib", self.self_agency, self.self_inhibitory_sm,
+            self.config.self_to_inhibitory_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "sm_inhib_to_body", self.self_inhibitory_sm, self.self_body,
+            self.config.self_inhibitory_to_body_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "sm_inhib_to_agency", self.self_inhibitory_sm, self.self_agency,
+            self.config.self_inhibitory_to_agency_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "sm_inhib_to_narrative", self.self_inhibitory_sm, self.self_narrative,
+            self.config.self_inhibitory_to_narrative_weight, sparsity=0.05)
+
+        print(f"    20g: Inhibitory balance ({self.config.n_self_inhibitory} neurons)")
+
+        # ============================================================
+        # 20h: Hebbian DENSE (Body → Narrative)
+        # ============================================================
+        from pygenn import init_weight_update, init_postsynaptic
+        self.body_to_narrative_hebbian = self.model.add_synapse_population(
+            "body_to_narrative_hebb", "DENSE",
+            self.self_body, self.self_narrative,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.self_narrative_binding_init_weight}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        print(f"    20h: Hebbian DENSE (Body→Narrative, eta={self.config.self_narrative_binding_eta}, "
+              f"w_max={self.config.self_narrative_binding_w_max})")
+
+        print(f"    Motor direct: {self.config.self_model_to_motor_weight} (disabled)")
+        total_neurons = (self.config.n_self_body + self.config.n_self_efference +
+                        self.config.n_self_predict + self.config.n_self_agency +
+                        self.config.n_self_narrative + self.config.n_self_inhibitory)
+        print(f"    Phase 20 Self-Model: {total_neurons} neurons")
+
+    def learn_self_narrative(self, reward_context: bool):
+        """
+        Phase 20h: Body → Self_Narrative Hebbian 학습
+
+        보상 시(food eaten, pain) 강한 학습, 배경 시 약한 감쇠.
+        내 몸 상태와 자기 서사를 연합 학습.
+        """
+        if not self.config.self_model_enabled:
+            return None
+
+        eta = self.config.self_narrative_binding_eta
+        w_max = self.config.self_narrative_binding_w_max
+        learning_factor = 1.0 if reward_context else 0.15
+
+        narrative_scale = max(0.1, self.last_self_narrative_rate)
+
+        n_pre = self.config.n_self_body
+        n_post = self.config.n_self_narrative
+        self.body_to_narrative_hebbian.vars["g"].pull_from_device()
+        w = self.body_to_narrative_hebbian.vars["g"].view.copy()
+        w = w.reshape(n_pre, n_post)
+        w += eta * learning_factor * narrative_scale
+        w = np.clip(w, 0.0, w_max)
+        self.body_to_narrative_hebbian.vars["g"].view[:] = w.flatten()
+        self.body_to_narrative_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w": float(np.mean(w)),
+            "max_w": float(np.max(w)),
+            "learning_factor": learning_factor,
+        }
+
     def _compute_place_cell_input(self, pos_x: float, pos_y: float) -> np.ndarray:
         """
         위치를 Place Cell 입력 전류로 변환
@@ -6183,6 +6511,26 @@ class ForagerBrain:
             self.meta_evaluate.vars["I_input"].view[:] = meta_eval_signal
             self.meta_evaluate.vars["I_input"].push_to_device()
 
+        # === Phase 20: Self-Model I_input 주입 ===
+        if self.config.self_model_enabled:
+            # Self_Body: 내수용감각 (에너지/배고픔/포만)
+            self_body_signal = (
+                energy * self.config.self_body_energy_scale +
+                self.last_hunger_rate * self.config.self_body_hunger_scale +
+                self.last_satiety_rate * self.config.self_body_satiety_scale
+            )
+            self.self_body.vars["I_input"].view[:] = self_body_signal
+            self.self_body.vars["I_input"].push_to_device()
+
+            # Self_Predict: 순행 모델 (운동 명령 + 음식 시각)
+            food_eye_signal = (food_l + food_r) * 0.5  # 평균 음식 시각
+            self_predict_signal = (
+                self.last_self_efference_rate * self.config.self_predict_efference_scale +
+                food_eye_signal * self.config.self_predict_food_eye_scale
+            )
+            self.self_predict.vars["I_input"].view[:] = self_predict_signal
+            self.self_predict.vars["I_input"].push_to_device()
+
         # === 3. 시뮬레이션 (10ms) ===
         # 스파이크 카운트 초기화
         motor_left_spikes = 0
@@ -6334,6 +6682,14 @@ class ForagerBrain:
         meta_evaluate_spikes = 0
         meta_arousal_mod_spikes = 0
         meta_inhibitory_spikes = 0
+
+        # Phase 20 스파이크 카운트 (Self-Model)
+        self_body_spikes = 0
+        self_efference_spikes = 0
+        self_predict_spikes = 0
+        self_agency_spikes = 0
+        self_narrative_spikes = 0
+        self_inhibitory_sm_spikes = 0
 
         for _ in range(10):
             self.model.step_time()
@@ -6645,6 +7001,22 @@ class ForagerBrain:
                 meta_arousal_mod_spikes += np.sum(self.meta_arousal_mod.vars["RefracTime"].view > self.spike_threshold)
                 meta_inhibitory_spikes += np.sum(self.meta_inhibitory_pop.vars["RefracTime"].view > self.spike_threshold)
 
+            # Phase 20: Self-Model 스파이크 카운팅
+            if self.config.self_model_enabled:
+                self.self_body.vars["RefracTime"].pull_from_device()
+                self.self_efference.vars["RefracTime"].pull_from_device()
+                self.self_predict.vars["RefracTime"].pull_from_device()
+                self.self_agency.vars["RefracTime"].pull_from_device()
+                self.self_narrative.vars["RefracTime"].pull_from_device()
+                self.self_inhibitory_sm.vars["RefracTime"].pull_from_device()
+
+                self_body_spikes += np.sum(self.self_body.vars["RefracTime"].view > self.spike_threshold)
+                self_efference_spikes += np.sum(self.self_efference.vars["RefracTime"].view > self.spike_threshold)
+                self_predict_spikes += np.sum(self.self_predict.vars["RefracTime"].view > self.spike_threshold)
+                self_agency_spikes += np.sum(self.self_agency.vars["RefracTime"].view > self.spike_threshold)
+                self_narrative_spikes += np.sum(self.self_narrative.vars["RefracTime"].view > self.spike_threshold)
+                self_inhibitory_sm_spikes += np.sum(self.self_inhibitory_sm.vars["RefracTime"].view > self.spike_threshold)
+
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
         max_spikes_drive = self.config.n_hunger_drive * 5
@@ -6656,6 +7028,8 @@ class ForagerBrain:
         satiety_rate = satiety_spikes / max_spikes_drive
         low_energy_rate = low_energy_spikes / max_spikes_energy
         high_energy_rate = high_energy_spikes / max_spikes_energy
+        self.last_hunger_rate = hunger_rate
+        self.last_satiety_rate = satiety_rate
 
         # Phase 2b 스파이크율
         la_rate = 0.0
@@ -7022,6 +7396,28 @@ class ForagerBrain:
             self.last_meta_arousal_mod_rate = meta_arousal_mod_rate
             self.last_meta_inhibitory_rate = meta_inhibitory_rate
 
+        # Phase 20 스파이크율 (Self-Model)
+        self_body_rate = 0.0
+        self_efference_rate = 0.0
+        self_predict_rate = 0.0
+        self_agency_rate = 0.0
+        self_narrative_rate = 0.0
+        self_inhibitory_sm_rate = 0.0
+        if self.config.self_model_enabled:
+            self_body_rate = self_body_spikes / (self.config.n_self_body * 5)
+            self_efference_rate = self_efference_spikes / (self.config.n_self_efference * 5)
+            self_predict_rate = self_predict_spikes / (self.config.n_self_predict * 5)
+            self_agency_rate = self_agency_spikes / (self.config.n_self_agency * 5)
+            self_narrative_rate = self_narrative_spikes / (self.config.n_self_narrative * 5)
+            self_inhibitory_sm_rate = self_inhibitory_sm_spikes / (self.config.n_self_inhibitory * 5)
+
+            self.last_self_body_rate = self_body_rate
+            self.last_self_efference_rate = self_efference_rate
+            self.last_self_predict_rate = self_predict_rate
+            self.last_self_agency_rate = self_agency_rate
+            self.last_self_narrative_rate = self_narrative_rate
+            self.last_self_inhibitory_rate = self_inhibitory_sm_rate
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -7221,6 +7617,14 @@ class ForagerBrain:
             "meta_arousal_mod_rate": meta_arousal_mod_rate,
             "meta_inhibitory_rate": meta_inhibitory_rate,
 
+            # Phase 20: Self-Model
+            "self_body_rate": self_body_rate,
+            "self_efference_rate": self_efference_rate,
+            "self_predict_rate": self_predict_rate,
+            "self_agency_rate": self_agency_rate,
+            "self_narrative_rate": self_narrative_rate,
+            "self_inhibitory_sm_rate": self_inhibitory_sm_rate,
+
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
             "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
@@ -7369,7 +7773,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_premotor: bool = False, no_social: bool = False,
                 no_mirror: bool = False, no_tom: bool = False,
                 no_association: bool = False, no_language: bool = False,
-                no_wm_expansion: bool = False, no_metacognition: bool = False):
+                no_wm_expansion: bool = False, no_metacognition: bool = False,
+                no_self_model: bool = False):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -7425,6 +7830,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_metacognition:
         brain_config.metacognition_enabled = False
         print("  [!] Phase 19 (Metacognition) DISABLED")
+    if no_self_model:
+        brain_config.self_model_enabled = False
+        print("  [!] Phase 20 (Self-Model) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -7564,6 +7972,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                         print(f"  [META] Confidence learn (food): avg_w={meta_learn['avg_w']:.2f}, "
                               f"factor={meta_learn['learning_factor']:.1f}")
 
+                # Phase 20: Self-Narrative 학습 (음식 먹기 = 강한 학습)
+                if brain_config.self_model_enabled:
+                    sm_learn = brain.learn_self_narrative(reward_context=True)
+                    if sm_learn and log_level in ["debug", "verbose"]:
+                        print(f"  [SELF] Narrative learn (food): avg_w={sm_learn['avg_w']:.2f}, "
+                              f"factor={sm_learn['learning_factor']:.1f}")
+
                 if log_level in ["normal", "debug", "verbose"]:
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
@@ -7596,6 +8011,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if brain_config.metacognition_enabled and env_info.get('in_pain', False):
                 brain.learn_metacognitive_confidence(reward_context=True)
 
+            # Phase 20: Pain zone → Self-Narrative 강한 학습
+            if brain_config.self_model_enabled and env_info.get('in_pain', False):
+                brain.learn_self_narrative(reward_context=True)
+
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
                 if env_info.get('in_pain', False) and env.pain_zone_visits == 1 and env.pain_zone_steps == 1:
@@ -7612,6 +8031,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             # Phase 19: Metacognitive 배경 학습 (약한 학습 = 매 5스텝)
             if brain_config.metacognition_enabled and env.steps % 5 == 0:
                 brain.learn_metacognitive_confidence(reward_context=False)
+
+            # Phase 20: Self-Narrative 배경 학습 (약한 학습 = 매 5스텝)
+            if brain_config.self_model_enabled and env.steps % 5 == 0:
+                brain.learn_self_narrative(reward_context=False)
 
         # 에피소드 종료
         all_steps.append(env.steps)
@@ -7803,6 +8226,8 @@ if __name__ == "__main__":
                        help="Disable Phase 18 (WM Expansion)")
     parser.add_argument("--no-metacognition", action="store_true",
                        help="Disable Phase 19 (Metacognition)")
+    parser.add_argument("--no-self-model", action="store_true",
+                       help="Disable Phase 20 (Self-Model)")
     args = parser.parse_args()
 
     run_training(
@@ -7825,5 +8250,6 @@ if __name__ == "__main__":
         no_association=args.no_association,
         no_language=args.no_language,
         no_wm_expansion=args.no_wm_expansion,
-        no_metacognition=args.no_metacognition
+        no_metacognition=args.no_metacognition,
+        no_self_model=args.no_self_model
     )

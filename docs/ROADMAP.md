@@ -4,13 +4,13 @@
 
 ---
 
-## 현재 상태: Phase 19 검증 완료 (18,800 뉴런)
+## 현재 상태: Phase 20 검증 완료 (19,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 19 검증 통과 ✓ (2026-02-11)                            ║
-║  생존율 55%, Reward Freq 2.96%, Pain Avoidance 91.0%         ║
-║  Metacognition 380 뉴런 추가 (확신/불확실성/자기평가)         ║
+║  Phase 20 검증 통과 ✓ (2026-02-11)                            ║
+║  생존율 50%, Reward Freq 3.17%, Pain Avoidance 90.8%         ║
+║  Self-Model 440 뉴런 추가 (내수용/행위주체/자기 서사)          ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -40,7 +40,8 @@
 | 16 | 연합 피질 (Association Cortex) | +700 | ✓ 완료 | 50% |
 | 17 | 언어 회로 (Broca/Wernicke) | +1,000 | ✓ 완료 | 55% |
 | 18 | 작업 기억 확장 (WM Expansion) | +620 | ✓ 완료 | 50% |
-| 19 | 메타인지 (Metacognition) | +380 | ✓ 완료 | **55%** |
+| 19 | 메타인지 (Metacognition) | +380 | ✓ 완료 | 55% |
+| 20 | 자기 모델 (Self-Model) | +440 | ✓ 완료 | **50%** |
 
 ### Phase 12-14 수정 이력
 
@@ -217,16 +218,20 @@
 
 **Phase 19 완료**: 18,800 뉴런
 
----
+### Phase 20: 자기 모델 (Self-Model) ✓ 완료
+- **구조**: +440 뉴런
+  - Self_Body (80 SensoryLIF): 내수용감각 통합 (섬엽/Insular Cortex analog, I_input: energy×8 + hunger×-6 + satiety×5)
+  - Self_Efference (80 LIF): 운동 명령 복사 (소뇌 Efference Copy analog)
+  - Self_Predict (70 SensoryLIF): 감각 결과 예측 (소뇌 순행 모델, I_input: efference_rate×6 + food_eye×5)
+  - Self_Agency (70 LIF): 행위주체감 (각회/Angular Gyrus analog)
+  - Self_Narrative (80 LIF): 자기 서사 (DMN/mPFC analog, 자기 참조 유지 recurrent)
+  - Self_Inhibitory (60 LIF): 국소 억제 균형
+- **메커니즘**: Body(내수용) + Efference(운동복사) → Predict(예측) + Agency(행위주체) → Narrative(자기 서사) 계층적 통합
+- **학습**: self_body → self_narrative Hebbian DENSE (eta=0.04, w_max=14.0)
+- **연결 안전**: Motor 직접 연결 없음 (0.0), 모든 출력 ≤1.5 (whisper level modulator)
+- **검증 (2026-02-11)**: 생존율 50% ✓, Reward Freq 3.17% ✓, Pain Avoidance 90.8% ✓
 
-## 장기 계획 (Phase 20)
-
-### Phase 20: ???
-- 의식의 창발?
-- 자기 모델?
-- 열린 질문...
-
-**Phase 20 완료 시**: ~500,000+ 뉴런
+**Phase 20 완료**: 19,240 뉴런
 
 ---
 
