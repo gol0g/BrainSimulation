@@ -291,27 +291,30 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L2 완료 - D1/D2 MSN 분리 (19,240 뉴런)
+### 현재 상태: Phase L3 완료 - Homeostatic R-STDP (19,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L2: D1/D2 MSN Separation ✓ (2026-02-12)                ║
+║  Phase L3: Homeostatic R-STDP ✓ (2026-02-12)                  ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→L2):                            ║
+║  Learning Foundation (Phase L1→L2→L3):                         ║
 ║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
 ║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
+║    - L3: Homeostatic R-STDP (포화→점진적 학습)                ║
 ║                                                               ║
-║  D1/D2 구조 (Striatum 400 뉴런 재분할, 변동 없음):            ║
-║    - D1_L/R (100×2): Go pathway, R-STDP 학습                 ║
-║    - D2_L/R (100×2): NoGo pathway, Static (학습 안 함)       ║
-║    - DA→D1 (+15 excite), DA→D2 (-12 inhibit)                 ║
-║    - D1↔D2 lateral competition (-5.0)                        ║
+║  L3 변경 사항:                                                ║
+║    - 적격 추적 상한: trace_max=1.0 (무한 누적 방지)           ║
+║    - 학습률 감소: eta 0.001→0.0005                            ║
+║    - 항상성 감쇠: weight_decay=0.00003/step (시냅스 스케일링)  ║
 ║                                                               ║
-║  검증 결과 (20 episodes, food_weight=35):                     ║
-║    - Survival Rate: 95% ✓                                    ║
-║    - Reward Freq: 2.33% (L1: 1.81% → +28.7% 향상)           ║
+║  학습 곡선 (핵심 성과):                                       ║
+║    - w: 1.35(ep1) → 3.15(ep10) → 4.29(ep20)                 ║
+║    - Food: ep1-5 avg 48.4 → ep11-15 avg 65.8 (+36%)         ║
+║                                                               ║
+║  검증 결과 (20 episodes):                                     ║
+║    - Survival Rate: 90% ✓                                    ║
+║    - Reward Freq: 2.13% (점진적 학습으로 초반 약해 집계 하락)  ║
 ║    - Pain Avoidance: 100% ✓                                  ║
-║    - Avg Food: 66.5, Correct Turn: 60.4%                     ║
 ║                                                               ║
 ║  뉴런 수:       19,240 (변동 없음)                             ║
 ╚═══════════════════════════════════════════════════════════════╝

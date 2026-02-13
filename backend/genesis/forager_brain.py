@@ -198,10 +198,13 @@ class ForagerBrainConfig:
     dopamine_to_d1_weight: float = 15.0        # DA → D1 흥분 (D1 수용체)
     dopamine_to_d2_weight: float = -12.0       # DA → D2 억제 (D2 수용체)
 
-    # R-STDP 학습 파라미터 (Phase L1, D1 MSN만 적용)
-    rstdp_eta: float = 0.001                   # R-STDP 학습률
+    # R-STDP 학습 파라미터 (Phase L3: Homeostatic, D1 MSN만 적용)
+    rstdp_eta: float = 0.0005                  # R-STDP 학습률 (L3: 0.001→0.0005, 점진적 학습)
     rstdp_trace_decay: float = 0.95            # 적격 추적 감쇠 (τ≈20 steps)
+    rstdp_trace_max: float = 1.0               # L3: 추적 상한 (무한 누적 방지)
     rstdp_w_max: float = 5.0                   # R-STDP 최대 가중치
+    rstdp_weight_decay: float = 0.00003        # L3: 항상성 가중치 감쇠 (시냅스 스케일링)
+    rstdp_w_rest: float = 1.0                  # L3: 감쇠 평형점 (= 초기 가중치)
 
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
@@ -1373,6 +1376,7 @@ class ForagerBrain:
             # R-STDP 적격 추적 (Phase L1, D1만 사용)
             self.rstdp_trace_l = 0.0
             self.rstdp_trace_r = 0.0
+            self._rstdp_step = 0  # Phase L3: 항상성 감쇠 스텝 카운터
 
             print(f"  BasalGanglia (L2 D1/D2): "
                   f"D1({n_d1_half}L+{n_d1_half}R) + "
@@ -3986,26 +3990,44 @@ class ForagerBrain:
         self.dopamine_neurons.vars["I_input"].push_to_device()
 
     def _update_rstdp_weights(self):
-        """Phase L2: R-STDP - 도파민 신호에 비례하여 Food_Eye→D1 가중치 업데이트 (D1만 학습)"""
-        if self.dopamine_level < 0.01:
+        """Phase L3: R-STDP with homeostatic decay - 도파민 강화 + 항상성 감쇠 (D1만 학습)"""
+        has_dopamine = self.dopamine_level > 0.01
+        decay = self.config.rstdp_weight_decay
+        # 항상성 감쇠: 50 스텝마다 배치 적용 (GPU 전송 최소화)
+        apply_decay = decay > 0 and self._rstdp_step % 50 == 0
+
+        if not has_dopamine and not apply_decay:
             return None
 
         eta = self.config.rstdp_eta
         w_max = self.config.rstdp_w_max
+        w_rest = self.config.rstdp_w_rest
         results = {}
 
         for side, trace, syn in [
             ("left", self.rstdp_trace_l, self.food_to_d1_l),
             ("right", self.rstdp_trace_r, self.food_to_d1_r)
         ]:
-            if trace > 0.01:
-                syn.vars["g"].pull_from_device()
-                w = syn.vars["g"].values  # SPARSE → .values (not .view)
+            need_update = False
+            syn.vars["g"].pull_from_device()
+            w = syn.vars["g"].values  # SPARSE → .values (not .view)
+
+            # 항상성 감쇠: w → w_rest 방향으로 서서히 감쇠 (50 스텝분 배치)
+            if apply_decay:
+                w[:] -= (decay * 50) * (w - w_rest)
+                need_update = True
+
+            # R-STDP 강화: 도파민 + 적격 추적 기반 (3-factor rule)
+            if has_dopamine and trace > 0.01:
                 delta_w = eta * trace * self.dopamine_level
-                w[:] = np.clip(w + delta_w, 0.0, w_max)
+                w[:] += delta_w
+                need_update = True
+
+            if need_update:
+                w[:] = np.clip(w, 0.0, w_max)
                 syn.vars["g"].values = w  # write back
                 syn.vars["g"].push_to_device()
-                results[f"rstdp_avg_w_{side}"] = float(np.nanmean(w))
+            results[f"rstdp_avg_w_{side}"] = float(np.nanmean(w))
 
         return results if results else None
 
@@ -6495,6 +6517,10 @@ class ForagerBrain:
         Returns:
             angle_delta, debug_info
         """
+        # Phase L3: step counter for homeostatic decay batching
+        if self.config.basal_ganglia_enabled:
+            self._rstdp_step += 1
+
         # === 1. 외부 감각 입력 ===
         food_l = np.mean(observation["food_rays_left"])
         food_r = np.mean(observation["food_rays_right"])
@@ -7331,13 +7357,14 @@ class ForagerBrain:
             self.last_d1_l_rate = d1_l_rate
             self.last_d1_r_rate = d1_r_rate
 
-            # Phase L2: R-STDP 적격 추적 업데이트 (D1만 사용)
+            # Phase L3: R-STDP 적격 추적 업데이트 (D1만 사용, trace 상한 적용)
             food_l_active = 1.0 if food_l > 0.05 else 0.0
             food_r_active = 1.0 if food_r > 0.05 else 0.0
             d1_l_active = 1.0 if d1_l_rate > 0.05 else 0.0
             d1_r_active = 1.0 if d1_r_rate > 0.05 else 0.0
-            self.rstdp_trace_l = self.rstdp_trace_l * self.config.rstdp_trace_decay + food_l_active * d1_l_active
-            self.rstdp_trace_r = self.rstdp_trace_r * self.config.rstdp_trace_decay + food_r_active * d1_r_active
+            trace_max = self.config.rstdp_trace_max
+            self.rstdp_trace_l = min(self.rstdp_trace_l * self.config.rstdp_trace_decay + food_l_active * d1_l_active, trace_max)
+            self.rstdp_trace_r = min(self.rstdp_trace_r * self.config.rstdp_trace_decay + food_r_active * d1_r_active, trace_max)
 
         # Phase 5 스파이크율
         working_memory_rate = 0.0
