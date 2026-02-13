@@ -63,6 +63,9 @@ dream_*.png
 # Dashboard logs
 logs/
 
+# Bug reports
+bug/
+
 # Misc
 nul
 agony

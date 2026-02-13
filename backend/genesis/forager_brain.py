@@ -103,16 +103,18 @@ class ForagerBrainConfig:
     place_cell_grid_size: int = 20          # 격자 크기 (20x20)
     directional_food_memory: bool = True    # Phase 3c: 방향성 Food Memory
 
-    # === BASAL GANGLIA (Phase 4 신규) ===
+    # === BASAL GANGLIA (Phase 4 / Phase L1 측면화) ===
     basal_ganglia_enabled: bool = True      # 기저핵 활성화 여부
-    n_striatum: int = 400                   # Striatum (선조체): 행동 선택
-    n_direct_pathway: int = 200             # Direct pathway (D1): Go 신호
-    n_indirect_pathway: int = 200           # Indirect pathway (D2): NoGo 신호
+    n_striatum: int = 400                   # Striatum 총 (200L + 200R)
+    n_direct_pathway: int = 200             # Direct 총 (100L + 100R)
+    n_indirect_pathway: int = 200           # Indirect 총 (100L + 100R)
     n_dopamine: int = 100                   # Dopamine neurons (VTA/SNc)
+    striatum_capacitance: float = 30.0      # Striatum C (Phase L1: 입력에 비례한 발화율)
 
     # === MOTOR ===
     n_motor_left: int = 500
     n_motor_right: int = 500
+    motor_capacitance: float = 300.0  # Motor neuron C (BUG-001: 1→100→300, 단일입력 포화 방지)
 
     # Network parameters
     sparsity: float = 0.03      # 3% connectivity
@@ -141,7 +143,7 @@ class ForagerBrainConfig:
     # Phase 1 회로 (벽 회피, 음식 추적)
     wall_push_weight: float = 60.0           # 벽 회피 (Push)
     wall_pull_weight: float = -40.0          # 벽 회피 (Pull)
-    food_weight: float = 40.0                # 음식 추적 (동측) Phase 7: 25→40
+    food_weight: float = 25.0                # 음식 추적 (동측) Phase L1: BG Push-Pull로 학습, direct 25 유지
 
     # === Phase 2b 시냅스 가중치 (신규) ===
     # Pain → LA (무조건 반사, 고정)
@@ -174,25 +176,31 @@ class ForagerBrainConfig:
     # Hunger → Food Memory (배고플 때 기억 활성화)
     hunger_to_food_memory_weight: float = 10.0 # 기억 탐색 활성화 (20→10, 간섭 최소화)
 
-    # === Phase 4 시냅스 가중치 (신규) ===
-    # Sensory → Striatum (행동 컨텍스트)
-    sensory_to_striatum_weight: float = 15.0   # 감각 입력 통합
-    hunger_to_striatum_weight: float = 20.0    # 배고픔 상태 → 행동 촉진
+    # === Phase 4 시냅스 가중치 (Phase L1: 측면화 + R-STDP) ===
+    # Food_Eye → Striatum (R-STDP 학습 대상)
+    food_to_striatum_init_weight: float = 1.0  # R-STDP 초기 가중치 (0.5→1.0: Striatum이 발화해야 trace 생성)
+    hunger_to_striatum_weight: float = 0.0     # Phase L1: 20→0 (hunger는 food_eye 경유)
 
     # Striatum → Direct/Indirect pathways
-    striatum_to_direct_weight: float = 20.0    # Go 신호 (25→20)
-    striatum_to_indirect_weight: float = 15.0  # NoGo 신호 (20→15)
-    direct_indirect_competition: float = -10.0 # D1-D2 상호 억제 (15→10, 완화)
+    striatum_to_direct_weight: float = 20.0    # Go 신호
+    striatum_to_indirect_weight: float = 15.0  # NoGo 신호
+    direct_indirect_competition: float = -10.0 # D1-D2 상호 억제
 
-    # Direct/Indirect → Motor
-    direct_to_motor_weight: float = 15.0       # Go → Motor 촉진 (20→15, 균형)
-    indirect_to_motor_weight: float = -8.0     # NoGo → Motor 억제 (15→8, 과억제 완화)
+    # Direct/Indirect → Motor (Phase L1: 측면화로 재활성화)
+    direct_to_motor_weight: float = 25.0       # Phase L1: 0→15→25 (Go 강화, 학습 효과 가시화)
+    direct_to_motor_contra_weight: float = -8.0  # Phase L1: BG Push-Pull (교차 억제, 방향 차등 신호)
+    indirect_to_motor_weight: float = -10.0    # Phase L1: NoGo 복원 (bilateral tonic 상쇄, Push-Pull 방향성 유지)
 
     # Dopamine modulation (보상 학습)
     dopamine_to_direct_weight: float = 25.0    # DA → D1 강화 (Go 촉진)
     dopamine_to_indirect_weight: float = -20.0 # DA → D2 억제 (NoGo 감소)
 
-    # Dopamine 학습 파라미터
+    # R-STDP 학습 파라미터 (Phase L1)
+    rstdp_eta: float = 0.001                   # R-STDP 학습률 (food_weight=12이므로 ep10-12 포화 예상)
+    rstdp_trace_decay: float = 0.95            # 적격 추적 감쇠 (τ≈20 steps, was 100)
+    rstdp_w_max: float = 5.0                   # R-STDP 최대 가중치
+
+    # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
     dopamine_decay: float = 0.95               # Dopamine 감쇠율
 
@@ -226,10 +234,10 @@ class ForagerBrainConfig:
 
     # Inhibitory Control 출력
     inhibitory_to_direct_weight: float = -10.0     # 억제 → Direct pathway 억제 (15→10, 완화)
-    inhibitory_to_motor_weight: float = -2.0       # 억제 → Motor 억제 (5→2, MOTOR DEAD 완화)
+    inhibitory_to_motor_weight: float = 0.0         # 억제 → Motor (-2→0, 대칭이라 방향성 없음)
 
     # Goal → Motor (목표 지향 행동)
-    goal_food_to_motor_weight: float = 18.0        # 음식 목표 → Motor 활성화 Phase 7: 10→18
+    goal_food_to_motor_weight: float = 0.0          # 음식 목표 → Motor (18→0, 대칭이라 방향성 없음)
 
     # === CEREBELLUM (Phase 6a 신규) ===
     cerebellum_enabled: bool = True                # 소뇌 활성화 여부
@@ -271,14 +279,14 @@ class ForagerBrainConfig:
     goal_safety_to_danger_relay_weight: float = 12.0  # 안전 목표 → Danger Relay 증폭
 
     # Relay → 출력 (증폭된 감각)
-    food_relay_to_motor_weight: float = 8.0        # Food Relay → Motor (간접)
+    food_relay_to_motor_weight: float = 0.0        # Food Relay → Motor (8→0, 대칭이라 방향성 없음)
     danger_relay_to_amygdala_weight: float = 15.0  # Danger Relay → Amygdala 증폭
-    danger_relay_to_motor_weight: float = 10.0     # Danger Relay → Motor (회피)
+    danger_relay_to_motor_weight: float = 0.0      # Danger Relay → Motor (10→0, 대칭이라 방향성 없음)
 
     # 각성 조절
     low_energy_to_arousal_weight: float = 20.0     # 낮은 에너지 → 높은 각성
     high_energy_to_arousal_weight: float = -15.0   # 높은 에너지 → 낮은 각성
-    arousal_to_motor_weight: float = 6.0           # 각성 → Motor 활성화
+    arousal_to_motor_weight: float = 0.0           # 각성 → Motor (6→0, 대칭이라 방향성 없음)
     arousal_to_relay_weight: float = 5.0           # 각성 → 감각 민감도
 
     # === Phase 6a 시냅스 가중치 ===
@@ -297,7 +305,7 @@ class ForagerBrainConfig:
     purkinje_to_deep_weight: float = -15.0         # 억제성 출력
 
     # Deep Nuclei → Motor (조절)
-    deep_to_motor_weight: float = 8.0              # 운동 조절 출력
+    deep_to_motor_weight: float = 0.0              # 운동 조절 (8→0, 대칭이라 방향성 없음)
 
     # === Phase 8 시냅스 가중치 (V1) ===
     # 입력: Relay → V1
@@ -308,7 +316,7 @@ class ForagerBrainConfig:
     v1_lateral_inhibition: float = -8.0            # V1 좌우 상호 억제
 
     # 출력: V1 → 다른 영역
-    v1_to_motor_weight: float = 15.0               # V1 → Motor
+    v1_to_motor_weight: float = 0.0                # V1 → Motor (15→0, Food Ipsi 40.0/Pain Push 60.0과 중복)
     v1_to_hippocampus_weight: float = 10.0         # V1 Food → Place Cells
     v1_to_amygdala_weight: float = 12.0            # V1 Danger → Amygdala LA
 
@@ -364,7 +372,7 @@ class ForagerBrainConfig:
     amygdala_to_it_weight: float = 15.0            # Fear → IT_Danger
 
     # IT → Motor (행동 출력)
-    it_to_motor_weight: float = 12.0               # IT → Motor
+    it_to_motor_weight: float = 0.0                # IT → Motor (12→0, 양쪽 동일이라 방향성 없음)
 
     # IT → PFC (목표 설정)
     it_to_pfc_weight: float = 15.0                 # IT → Goal
@@ -398,7 +406,7 @@ class ForagerBrainConfig:
     a1_to_it_weight: float = 15.0                   # A1 → IT Category
 
     # A1 → Motor (청각 유도 행동)
-    a1_to_motor_weight: float = 12.0                # A1 → Motor
+    a1_to_motor_weight: float = 0.0                 # A1 → Motor (12→0, 포화 방지)
 
     # A2 Association
     a1_to_a2_weight: float = 10.0                   # A1 → A2
@@ -511,7 +519,7 @@ class ForagerBrainConfig:
     pmc_wta_inhibition: float = -10.0                  # PMC 내 WTA 경쟁
 
     # PMC → Motor (운동 출력) - 기존 반사 간섭 방지를 위해 약화
-    motor_prep_to_motor_weight: float = 2.0            # Motor_Prep → Motor (15→5→2 약화)
+    motor_prep_to_motor_weight: float = 0.0            # Motor_Prep → Motor (2→0, 대칭이라 방향성 없음)
     pmd_to_motor_weight: float = 0.0                   # PMd → Motor (비활성화)
     pmv_to_motor_weight: float = 0.0                   # PMv → Motor (비활성화)
 
@@ -1171,6 +1179,10 @@ class ForagerBrain:
         self.last_self_narrative_rate = 0.0
         self.last_self_inhibitory_rate = 0.0
 
+        # Phase L1: BG lateralized rate defaults
+        self.last_striatum_l_rate = 0.0
+        self.last_striatum_r_rate = 0.0
+
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
         self.model.dt = self.config.dt
@@ -1229,11 +1241,21 @@ class ForagerBrain:
               f"HighEnergy({self.config.n_high_energy_sensor}) + "
               f"Hunger({self.config.n_hunger_drive}) + Satiety({self.config.n_satiety_drive})")
 
-        # === 3. MOTOR POPULATIONS ===
+        # === 3. MOTOR POPULATIONS (높은 C로 포화 방지) ===
+        motor_lif_params = {
+            "C": self.config.motor_capacitance,
+            "TauM": self.config.tau_m,
+            "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset,
+            "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0,
+            "TauRefrac": self.config.tau_refrac
+        }
         self.motor_left = self.model.add_neuron_population(
-            "motor_left", self.config.n_motor_left, "LIF", lif_params, lif_init)
+            "motor_left", self.config.n_motor_left, "LIF", motor_lif_params, lif_init)
         self.motor_right = self.model.add_neuron_population(
-            "motor_right", self.config.n_motor_right, "LIF", lif_params, lif_init)
+            "motor_right", self.config.n_motor_right, "LIF", motor_lif_params, lif_init)
+        print(f"  Motor: C={self.config.motor_capacitance} (anti-saturation)")
 
         print(f"  Motor: Left({self.config.n_motor_left}) + Right({self.config.n_motor_right})")
 
@@ -1299,31 +1321,56 @@ class ForagerBrain:
             print(f"  Hippocampus: PlaceCells({self.config.n_place_cells}) + "
                   f"FoodMemory({self.config.n_food_memory})")
 
-        # === Phase 4: BASAL GANGLIA POPULATIONS ===
+        # === Phase 4: BASAL GANGLIA POPULATIONS (Phase L1: 측면화) ===
         if self.config.basal_ganglia_enabled:
-            # Striatum: 감각 입력 통합, 행동 선택
-            self.striatum = self.model.add_neuron_population(
-                "striatum", self.config.n_striatum, "LIF", lif_params, lif_init)
+            n_stri_half = self.config.n_striatum // 2      # 200
+            n_dir_half = self.config.n_direct_pathway // 2  # 100
+            n_ind_half = self.config.n_indirect_pathway // 2  # 100
 
-            # Direct pathway (D1): Go 신호 - 행동 촉진
-            self.direct_pathway = self.model.add_neuron_population(
-                "direct_pathway", self.config.n_direct_pathway, "LIF", lif_params, lif_init)
+            # Striatum LIF params with higher C for graded response
+            stri_lif_params = {
+                "C": self.config.striatum_capacitance,  # C=30 (graded, not binary)
+                "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+                "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+                "TauRefrac": self.config.tau_refrac, "Ioffset": 0.0
+            }
 
-            # Indirect pathway (D2): NoGo 신호 - 행동 억제
-            self.indirect_pathway = self.model.add_neuron_population(
-                "indirect_pathway", self.config.n_indirect_pathway, "LIF", lif_params, lif_init)
+            # Striatum L/R: 감각 입력 통합 (측면화)
+            self.striatum_left = self.model.add_neuron_population(
+                "striatum_left", n_stri_half, "LIF", stri_lif_params, lif_init)
+            self.striatum_right = self.model.add_neuron_population(
+                "striatum_right", n_stri_half, "LIF", stri_lif_params, lif_init)
 
-            # Dopamine neurons (VTA/SNc): 보상 신호
+            # Direct pathway L/R (D1): Go 신호
+            self.direct_left = self.model.add_neuron_population(
+                "direct_left", n_dir_half, "LIF", lif_params, lif_init)
+            self.direct_right = self.model.add_neuron_population(
+                "direct_right", n_dir_half, "LIF", lif_params, lif_init)
+
+            # Indirect pathway L/R (D2): NoGo 신호
+            self.indirect_left = self.model.add_neuron_population(
+                "indirect_left", n_ind_half, "LIF", lif_params, lif_init)
+            self.indirect_right = self.model.add_neuron_population(
+                "indirect_right", n_ind_half, "LIF", lif_params, lif_init)
+
+            # Dopamine neurons (VTA/SNc): 보상 신호 (비측면화)
             self.dopamine_neurons = self.model.add_neuron_population(
                 "dopamine_neurons", self.config.n_dopamine, sensory_lif_model, sensory_params, sensory_init)
 
             # Dopamine 레벨 추적
             self.dopamine_level = 0.0
 
-            print(f"  BasalGanglia: Striatum({self.config.n_striatum}) + "
-                  f"Direct({self.config.n_direct_pathway}) + "
-                  f"Indirect({self.config.n_indirect_pathway}) + "
+            # R-STDP 적격 추적 (Phase L1)
+            self.rstdp_trace_l = 0.0
+            self.rstdp_trace_r = 0.0
+
+            print(f"  BasalGanglia (L1 lateralized): "
+                  f"Striatum({n_stri_half}L+{n_stri_half}R) + "
+                  f"Direct({n_dir_half}L+{n_dir_half}R) + "
+                  f"Indirect({n_ind_half}L+{n_ind_half}R) + "
                   f"Dopamine({self.config.n_dopamine})")
+            print(f"  Motor: C={self.config.motor_capacitance} (anti-saturation)")
+            print(f"  Striatum: C={self.config.striatum_capacitance} (graded response)")
 
         # === SYNAPTIC CONNECTIONS ===
         self._build_hypothalamus_circuit()
@@ -1421,6 +1468,13 @@ class ForagerBrain:
         print("Building model...")
         self.model.build()
         self.model.load()
+
+        # SPARSE 시냅스는 connectivity를 먼저 pull해야 .values가 동작함 (CRITICAL)
+        # connectivity 패턴은 고정이므로 최초 1회만 pull
+        if self.config.basal_ganglia_enabled:
+            self.food_to_striatum_l.pull_connectivity_from_device()
+            self.food_to_striatum_r.pull_connectivity_from_device()
+
         print(f"Model ready! Total: {self.config.total_neurons:,} neurons")
 
         # 스파이크 카운팅용
@@ -1733,98 +1787,109 @@ class ForagerBrain:
 
     def _build_basal_ganglia_circuit(self):
         """
-        기저핵 회로: 행동 선택 및 습관 학습
+        Phase L1: 측면화된 기저핵 회로 + R-STDP 학습
 
-        구조:
-        - Sensory → Striatum: 감각 입력 통합
-        - Hunger → Striatum: 동기 상태 전달
-        - Striatum → Direct (D1): Go 신호
-        - Striatum → Indirect (D2): NoGo 신호
-        - D1 ↔ D2: 상호 억제 (경쟁)
-        - Direct → Motor: 행동 촉진
-        - Indirect → Motor: 행동 억제
-        - Dopamine → D1/D2: 보상 시 학습 조절
+        구조 (lateralized):
+        - Food_Eye_L → Striatum_L (R-STDP 학습 대상)
+        - Food_Eye_R → Striatum_R (R-STDP 학습 대상)
+        - Striatum_L → Direct_L → Motor_L (Go left)
+        - Striatum_R → Direct_R → Motor_R (Go right)
+        - Indirect_L → Motor_L (NoGo left)
+        - Indirect_R → Motor_R (NoGo right)
+        - Dopamine → Direct/Indirect (보상 조절)
         """
-        print("  Building Basal Ganglia circuit (Phase 4)...")
+        print("  Building Basal Ganglia circuit (Phase L1: lateralized + R-STDP)...")
 
-        # 1. Sensory → Striatum (감각 입력 통합)
-        # Food Eye → Striatum (음식 정보)
-        self._create_static_synapse(
-            "food_eye_left_to_striatum", self.food_eye_left, self.striatum,
-            self.config.sensory_to_striatum_weight, sparsity=0.08)
-        self._create_static_synapse(
-            "food_eye_right_to_striatum", self.food_eye_right, self.striatum,
-            self.config.sensory_to_striatum_weight, sparsity=0.08)
+        init_w = self.config.food_to_striatum_init_weight
 
-        print(f"    FoodEye→Striatum: {self.config.sensory_to_striatum_weight}")
+        # 1. Food_Eye → Striatum (R-STDP 학습 대상, SPARSE)
+        self.food_to_striatum_l = self._create_static_synapse(
+            "food_eye_left_to_striatum_l", self.food_eye_left, self.striatum_left,
+            init_w, sparsity=0.08)
+        self.food_to_striatum_r = self._create_static_synapse(
+            "food_eye_right_to_striatum_r", self.food_eye_right, self.striatum_right,
+            init_w, sparsity=0.08)
 
-        # 2. Hunger → Striatum (동기 상태)
-        self._create_static_synapse(
-            "hunger_to_striatum", self.hunger_drive, self.striatum,
-            self.config.hunger_to_striatum_weight, sparsity=0.1)
+        print(f"    FoodEye→Striatum (R-STDP): init_w={init_w}, w_max={self.config.rstdp_w_max}")
 
-        print(f"    Hunger→Striatum: {self.config.hunger_to_striatum_weight}")
-
-        # 3. Striatum → Direct/Indirect pathways
-        # Striatum → Direct (Go)
-        self.striatum_to_direct = self.model.add_synapse_population(
-            "striatum_to_direct", "DENSE",
-            self.striatum, self.direct_pathway,
+        # 2. Striatum → Direct (Go) - DENSE, lateralized
+        self.model.add_synapse_population(
+            "striatum_l_to_direct_l", "DENSE",
+            self.striatum_left, self.direct_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.striatum_to_direct_weight})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0})
-        )
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        self.model.add_synapse_population(
+            "striatum_r_to_direct_r", "DENSE",
+            self.striatum_right, self.direct_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.striatum_to_direct_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
 
-        # Striatum → Indirect (NoGo)
-        self.striatum_to_indirect = self.model.add_synapse_population(
-            "striatum_to_indirect", "DENSE",
-            self.striatum, self.indirect_pathway,
+        # 3. Striatum → Indirect (NoGo) - DENSE, lateralized
+        self.model.add_synapse_population(
+            "striatum_l_to_indirect_l", "DENSE",
+            self.striatum_left, self.indirect_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.striatum_to_indirect_weight})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0})
-        )
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        self.model.add_synapse_population(
+            "striatum_r_to_indirect_r", "DENSE",
+            self.striatum_right, self.indirect_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": self.config.striatum_to_indirect_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
 
         print(f"    Striatum→Direct: {self.config.striatum_to_direct_weight} (Go)")
         print(f"    Striatum→Indirect: {self.config.striatum_to_indirect_weight} (NoGo)")
 
-        # 4. Direct ↔ Indirect 상호 억제 (경쟁)
+        # 4. Direct ↔ Indirect 상호 억제 (측면 내부만)
         self._create_static_synapse(
-            "direct_to_indirect", self.direct_pathway, self.indirect_pathway,
+            "direct_l_to_indirect_l", self.direct_left, self.indirect_left,
             self.config.direct_indirect_competition, sparsity=0.1)
         self._create_static_synapse(
-            "indirect_to_direct", self.indirect_pathway, self.direct_pathway,
+            "indirect_l_to_direct_l", self.indirect_left, self.direct_left,
+            self.config.direct_indirect_competition, sparsity=0.1)
+        self._create_static_synapse(
+            "direct_r_to_indirect_r", self.direct_right, self.indirect_right,
+            self.config.direct_indirect_competition, sparsity=0.1)
+        self._create_static_synapse(
+            "indirect_r_to_direct_r", self.indirect_right, self.direct_right,
             self.config.direct_indirect_competition, sparsity=0.1)
 
-        print(f"    Direct↔Indirect: {self.config.direct_indirect_competition} (competition)")
+        # 5. Direct/Indirect → Motor (측면화: L→L, R→R)
+        self._create_static_synapse(
+            "direct_l_to_motor_l", self.direct_left, self.motor_left,
+            self.config.direct_to_motor_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "direct_r_to_motor_r", self.direct_right, self.motor_right,
+            self.config.direct_to_motor_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "indirect_l_to_motor_l", self.indirect_left, self.motor_left,
+            self.config.indirect_to_motor_weight, sparsity=0.15)
+        self._create_static_synapse(
+            "indirect_r_to_motor_r", self.indirect_right, self.motor_right,
+            self.config.indirect_to_motor_weight, sparsity=0.15)
 
-        # 5. Direct/Indirect → Motor
-        # Direct → Motor (양쪽 모두 촉진)
+        # 5b. Direct → Motor 교차 억제 (BG Push-Pull: 방향 차등 신호)
         self._create_static_synapse(
-            "direct_to_motor_left", self.direct_pathway, self.motor_left,
-            self.config.direct_to_motor_weight, sparsity=0.1)
+            "direct_l_to_motor_r", self.direct_left, self.motor_right,
+            self.config.direct_to_motor_contra_weight, sparsity=0.15)
         self._create_static_synapse(
-            "direct_to_motor_right", self.direct_pathway, self.motor_right,
-            self.config.direct_to_motor_weight, sparsity=0.1)
+            "direct_r_to_motor_l", self.direct_right, self.motor_left,
+            self.config.direct_to_motor_contra_weight, sparsity=0.15)
 
-        # Indirect → Motor (양쪽 모두 억제)
-        self._create_static_synapse(
-            "indirect_to_motor_left", self.indirect_pathway, self.motor_left,
-            self.config.indirect_to_motor_weight, sparsity=0.1)
-        self._create_static_synapse(
-            "indirect_to_motor_right", self.indirect_pathway, self.motor_right,
-            self.config.indirect_to_motor_weight, sparsity=0.1)
+        print(f"    Direct→Motor: {self.config.direct_to_motor_weight} (Go, ipsi)")
+        print(f"    Direct→Motor: {self.config.direct_to_motor_contra_weight} (Push-Pull, contra)")
+        print(f"    Indirect→Motor: {self.config.indirect_to_motor_weight} (NoGo, lateralized)")
 
-        print(f"    Direct→Motor: {self.config.direct_to_motor_weight} (Go)")
-        print(f"    Indirect→Motor: {self.config.indirect_to_motor_weight} (NoGo)")
-
-        # 6. Dopamine → Direct/Indirect (보상 조절)
-        # Dopamine → Direct (강화): 보상 시 Go 신호 증가
-        self._create_static_synapse(
-            "dopamine_to_direct", self.dopamine_neurons, self.direct_pathway,
-            self.config.dopamine_to_direct_weight, sparsity=0.15)
-
-        # Dopamine → Indirect (억제): 보상 시 NoGo 신호 감소
-        self._create_static_synapse(
-            "dopamine_to_indirect", self.dopamine_neurons, self.indirect_pathway,
-            self.config.dopamine_to_indirect_weight, sparsity=0.15)
+        # 6. Dopamine → Direct/Indirect (보상 조절, 양측 모두)
+        for side, direct, indirect in [
+            ("l", self.direct_left, self.indirect_left),
+            ("r", self.direct_right, self.indirect_right)
+        ]:
+            self._create_static_synapse(
+                f"dopamine_to_direct_{side}", self.dopamine_neurons, direct,
+                self.config.dopamine_to_direct_weight, sparsity=0.15)
+            self._create_static_synapse(
+                f"dopamine_to_indirect_{side}", self.dopamine_neurons, indirect,
+                self.config.dopamine_to_indirect_weight, sparsity=0.15)
 
         print(f"    Dopamine→Direct: {self.config.dopamine_to_direct_weight} (reward)")
         print(f"    Dopamine→Indirect: {self.config.dopamine_to_indirect_weight} (reward)")
@@ -1954,12 +2019,15 @@ class ForagerBrain:
             "goal_safety_to_inhibitory", self.goal_safety, self.inhibitory_control,
             self.config.goal_safety_to_inhibitory_weight, sparsity=0.15)
 
-        # === Inhibitory Control → Basal Ganglia Direct (억제) ===
+        # === Inhibitory Control → Basal Ganglia Direct (억제, 양측) ===
         if self.config.basal_ganglia_enabled:
             self._create_static_synapse(
-                "inhibitory_to_direct", self.inhibitory_control, self.direct_pathway,
+                "inhibitory_to_direct_l", self.inhibitory_control, self.direct_left,
                 self.config.inhibitory_to_direct_weight, sparsity=0.1)
-            print(f"    Inhibitory→Direct: {self.config.inhibitory_to_direct_weight} (suppress impulsive Go)")
+            self._create_static_synapse(
+                "inhibitory_to_direct_r", self.inhibitory_control, self.direct_right,
+                self.config.inhibitory_to_direct_weight, sparsity=0.1)
+            print(f"    Inhibitory→Direct(L/R): {self.config.inhibitory_to_direct_weight} (suppress impulsive Go)")
 
         # === Inhibitory Control → Motor (직접 억제) ===
         self._create_static_synapse(
@@ -3775,15 +3843,21 @@ class ForagerBrain:
 
             print(f"    PMC→Cerebellum: {self.config.motor_prep_to_cerebellum_weight}")
 
-        # === 8. Basal Ganglia → PMC (행동 선택) ===
+        # === 8. Basal Ganglia → PMC (행동 선택, 양측) ===
         if self.config.basal_ganglia_enabled:
-            # Direct → Motor_Preparation (Go 신호)
+            # Direct L/R → Motor_Preparation (Go 신호)
             self._create_static_synapse(
-                "direct_to_motor_prep", self.direct_pathway, self.motor_preparation,
+                "direct_l_to_motor_prep", self.direct_left, self.motor_preparation,
                 self.config.direct_to_motor_prep_weight, sparsity=0.1)
-            # Indirect → Motor_Preparation (NoGo 신호)
             self._create_static_synapse(
-                "indirect_to_motor_prep", self.indirect_pathway, self.motor_preparation,
+                "direct_r_to_motor_prep", self.direct_right, self.motor_preparation,
+                self.config.direct_to_motor_prep_weight, sparsity=0.1)
+            # Indirect L/R → Motor_Preparation (NoGo 신호)
+            self._create_static_synapse(
+                "indirect_l_to_motor_prep", self.indirect_left, self.motor_preparation,
+                self.config.indirect_to_motor_prep_weight, sparsity=0.1)
+            self._create_static_synapse(
+                "indirect_r_to_motor_prep", self.indirect_right, self.motor_preparation,
                 self.config.indirect_to_motor_prep_weight, sparsity=0.1)
             # Dopamine → SMA (보상 → 시퀀스 강화)
             self._create_static_synapse(
@@ -3863,9 +3937,12 @@ class ForagerBrain:
         return {"dopamine_level": self.dopamine_level}
 
     def decay_dopamine(self):
-        """Dopamine 레벨 감쇠"""
+        """Dopamine 레벨 감쇠 + R-STDP 가중치 업데이트"""
         if not self.config.basal_ganglia_enabled:
             return
+
+        # R-STDP 가중치 업데이트 (감쇠 전, dopamine_level이 높을 때)
+        self._update_rstdp_weights()
 
         self.dopamine_level *= self.config.dopamine_decay
 
@@ -3876,6 +3953,30 @@ class ForagerBrain:
         else:
             self.dopamine_neurons.vars["I_input"].view[:] = self.dopamine_level * 80.0
         self.dopamine_neurons.vars["I_input"].push_to_device()
+
+    def _update_rstdp_weights(self):
+        """Phase L1: R-STDP - 도파민 신호에 비례하여 Food_Eye→Striatum 가중치 업데이트"""
+        if self.dopamine_level < 0.01:
+            return None
+
+        eta = self.config.rstdp_eta
+        w_max = self.config.rstdp_w_max
+        results = {}
+
+        for side, trace, syn in [
+            ("left", self.rstdp_trace_l, self.food_to_striatum_l),
+            ("right", self.rstdp_trace_r, self.food_to_striatum_r)
+        ]:
+            if trace > 0.01:
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values  # SPARSE → .values (not .view)
+                delta_w = eta * trace * self.dopamine_level
+                w[:] = np.clip(w + delta_w, 0.0, w_max)
+                syn.vars["g"].values = w  # write back
+                syn.vars["g"].push_to_device()
+                results[f"rstdp_avg_w_{side}"] = float(np.nanmean(w))
+
+        return results if results else None
 
     def learn_food_location(self, food_position: tuple = None):
         """
@@ -4090,6 +4191,78 @@ class ForagerBrain:
                 "min_weight": float(np.min(weights)),
                 "n_strong_connections": int(n_strong)
             }
+
+    def save_all_weights(self, filepath: str) -> str:
+        """모든 Hebbian 시냅스 가중치를 한 파일에 저장"""
+        weights = {}
+
+        # Hippocampus (Phase 3c)
+        if self.config.hippocampus_enabled and self.food_learning_enabled:
+            if self.config.directional_food_memory:
+                self.place_to_food_memory_left.vars["g"].pull_from_device()
+                self.place_to_food_memory_right.vars["g"].pull_from_device()
+                weights["hippo_left"] = self.place_to_food_memory_left.vars["g"].view.copy()
+                weights["hippo_right"] = self.place_to_food_memory_right.vars["g"].view.copy()
+
+        # 나머지 Hebbian 시냅스들
+        hebbian_synapses = {
+            "vicarious_social": "vicarious_to_social_memory",
+            "tom_coop": "tom_intention_to_coop_hebbian",
+            "assoc_edible": "assoc_edible_to_binding_hebbian",
+            "assoc_context": "assoc_context_to_binding_hebbian",
+            "wernicke_food": "wernicke_food_to_binding_hebbian",
+            "wernicke_danger": "wernicke_danger_to_binding_hebbian",
+            "wm_temporal": "temporal_to_context_hebbian",
+            "meta_valence": "valence_to_confidence_hebbian",
+            "self_narrative": "body_to_narrative_hebbian",
+        }
+        for key, attr in hebbian_synapses.items():
+            if hasattr(self, attr):
+                syn = getattr(self, attr)
+                syn.vars["g"].pull_from_device()
+                weights[key] = syn.vars["g"].view.copy()
+
+        np.savez(filepath, **weights)
+        print(f"  [SAVE] All weights saved to {filepath} ({len(weights)} synapses)")
+        return filepath
+
+    def load_all_weights(self, filepath: str) -> bool:
+        """저장된 모든 Hebbian 가중치를 로드"""
+        if not os.path.exists(filepath):
+            print(f"  [LOAD] File not found: {filepath}")
+            return False
+
+        data = np.load(filepath)
+        loaded = 0
+
+        # Hippocampus
+        if "hippo_left" in data and hasattr(self, "place_to_food_memory_left"):
+            self.place_to_food_memory_left.vars["g"].view[:] = data["hippo_left"]
+            self.place_to_food_memory_left.vars["g"].push_to_device()
+            self.place_to_food_memory_right.vars["g"].view[:] = data["hippo_right"]
+            self.place_to_food_memory_right.vars["g"].push_to_device()
+            loaded += 2
+
+        hebbian_synapses = {
+            "vicarious_social": "vicarious_to_social_memory",
+            "tom_coop": "tom_intention_to_coop_hebbian",
+            "assoc_edible": "assoc_edible_to_binding_hebbian",
+            "assoc_context": "assoc_context_to_binding_hebbian",
+            "wernicke_food": "wernicke_food_to_binding_hebbian",
+            "wernicke_danger": "wernicke_danger_to_binding_hebbian",
+            "wm_temporal": "temporal_to_context_hebbian",
+            "meta_valence": "valence_to_confidence_hebbian",
+            "self_narrative": "body_to_narrative_hebbian",
+        }
+        for key, attr in hebbian_synapses.items():
+            if key in data and hasattr(self, attr):
+                syn = getattr(self, attr)
+                syn.vars["g"].view[:] = data[key]
+                syn.vars["g"].push_to_device()
+                loaded += 1
+
+        print(f"  [LOAD] Weights loaded from {filepath} ({loaded} synapses)")
+        return True
 
     def _build_social_brain_circuit(self):
         """
@@ -6550,10 +6723,16 @@ class ForagerBrain:
         place_cell_spikes = 0
         food_memory_spikes = 0
 
-        # Phase 4 스파이크 카운트
+        # Phase 4 스파이크 카운트 (Phase L1: lateralized)
         striatum_spikes = 0
+        striatum_l_spikes = 0
+        striatum_r_spikes = 0
         direct_spikes = 0
+        direct_l_spikes = 0
+        direct_r_spikes = 0
         indirect_spikes = 0
+        indirect_l_spikes = 0
+        indirect_r_spikes = 0
         dopamine_spikes = 0
 
         # Phase 5 스파이크 카운트
@@ -6734,16 +6913,25 @@ class ForagerBrain:
                     self.food_memory.vars["RefracTime"].pull_from_device()
                     food_memory_spikes += np.sum(self.food_memory.vars["RefracTime"].view > self.spike_threshold)
 
-            # Phase 4 스파이크 카운팅
+            # Phase 4 스파이크 카운팅 (Phase L1: lateralized)
             if self.config.basal_ganglia_enabled:
-                self.striatum.vars["RefracTime"].pull_from_device()
-                self.direct_pathway.vars["RefracTime"].pull_from_device()
-                self.indirect_pathway.vars["RefracTime"].pull_from_device()
+                self.striatum_left.vars["RefracTime"].pull_from_device()
+                self.striatum_right.vars["RefracTime"].pull_from_device()
+                self.direct_left.vars["RefracTime"].pull_from_device()
+                self.direct_right.vars["RefracTime"].pull_from_device()
+                self.indirect_left.vars["RefracTime"].pull_from_device()
+                self.indirect_right.vars["RefracTime"].pull_from_device()
                 self.dopamine_neurons.vars["RefracTime"].pull_from_device()
 
-                striatum_spikes += np.sum(self.striatum.vars["RefracTime"].view > self.spike_threshold)
-                direct_spikes += np.sum(self.direct_pathway.vars["RefracTime"].view > self.spike_threshold)
-                indirect_spikes += np.sum(self.indirect_pathway.vars["RefracTime"].view > self.spike_threshold)
+                striatum_l_spikes = np.sum(self.striatum_left.vars["RefracTime"].view > self.spike_threshold)
+                striatum_r_spikes = np.sum(self.striatum_right.vars["RefracTime"].view > self.spike_threshold)
+                striatum_spikes += striatum_l_spikes + striatum_r_spikes
+                direct_l_spikes = np.sum(self.direct_left.vars["RefracTime"].view > self.spike_threshold)
+                direct_r_spikes = np.sum(self.direct_right.vars["RefracTime"].view > self.spike_threshold)
+                direct_spikes += direct_l_spikes + direct_r_spikes
+                indirect_l_spikes = np.sum(self.indirect_left.vars["RefracTime"].view > self.spike_threshold)
+                indirect_r_spikes = np.sum(self.indirect_right.vars["RefracTime"].view > self.spike_threshold)
+                indirect_spikes += indirect_l_spikes + indirect_r_spikes
                 dopamine_spikes += np.sum(self.dopamine_neurons.vars["RefracTime"].view > self.spike_threshold)
 
             # Phase 5 스파이크 카운팅
@@ -7056,22 +7244,44 @@ class ForagerBrain:
             place_cell_rate = place_cell_spikes / max_spikes_place
             food_memory_rate = food_memory_spikes / max_spikes_food_memory
 
-        # Phase 4 스파이크율
+        # Phase 4 스파이크율 (Phase L1: lateralized)
         striatum_rate = 0.0
+        striatum_l_rate = 0.0
+        striatum_r_rate = 0.0
         direct_rate = 0.0
+        direct_l_rate = 0.0
+        direct_r_rate = 0.0
         indirect_rate = 0.0
         dopamine_rate = 0.0
         if self.config.basal_ganglia_enabled:
+            n_stri_half = self.config.n_striatum // 2
+            n_dir_half = self.config.n_direct_pathway // 2
+            n_ind_half = self.config.n_indirect_pathway // 2
             max_spikes_striatum = self.config.n_striatum * 5
             max_spikes_direct = self.config.n_direct_pathway * 5
             max_spikes_indirect = self.config.n_indirect_pathway * 5
             max_spikes_dopamine = self.config.n_dopamine * 5
 
             striatum_rate = striatum_spikes / max_spikes_striatum
+            striatum_l_rate = striatum_l_spikes / (n_stri_half * 5)
+            striatum_r_rate = striatum_r_spikes / (n_stri_half * 5)
             direct_rate = direct_spikes / max_spikes_direct
+            direct_l_rate = direct_l_spikes / (n_dir_half * 5)
+            direct_r_rate = direct_r_spikes / (n_dir_half * 5)
             indirect_rate = indirect_spikes / max_spikes_indirect
             dopamine_rate = dopamine_spikes / max_spikes_dopamine
             self.last_dopamine_rate = dopamine_rate
+            self.last_striatum_l_rate = striatum_l_rate
+            self.last_striatum_r_rate = striatum_r_rate
+
+            # Phase L1: R-STDP 적격 추적 업데이트
+            # food_l/food_r는 section 2에서 계산된 음식 레이 평균값 (0~1)
+            food_l_active = 1.0 if food_l > 0.05 else 0.0
+            food_r_active = 1.0 if food_r > 0.05 else 0.0
+            stri_l_active = 1.0 if striatum_l_rate > 0.05 else 0.0
+            stri_r_active = 1.0 if striatum_r_rate > 0.05 else 0.0
+            self.rstdp_trace_l = self.rstdp_trace_l * self.config.rstdp_trace_decay + food_l_active * stri_l_active
+            self.rstdp_trace_r = self.rstdp_trace_r * self.config.rstdp_trace_decay + food_r_active * stri_r_active
 
         # Phase 5 스파이크율
         working_memory_rate = 0.0
@@ -7455,9 +7665,15 @@ class ForagerBrain:
 
             # Phase 4 뉴런 활성화
             "striatum_rate": striatum_rate,
+            "striatum_l_rate": striatum_l_rate,
+            "striatum_r_rate": striatum_r_rate,
             "direct_rate": direct_rate,
+            "direct_l_rate": direct_l_rate,
+            "direct_r_rate": direct_r_rate,
             "indirect_rate": indirect_rate,
             "dopamine_rate": dopamine_rate,
+            "rstdp_trace_l": getattr(self, 'rstdp_trace_l', 0.0),
+            "rstdp_trace_r": getattr(self, 'rstdp_trace_r', 0.0),
             "dopamine_level": self.dopamine_level if self.config.basal_ganglia_enabled else 0.0,
 
             # Phase 5 뉴런 활성화
@@ -7734,9 +7950,11 @@ class ForagerBrain:
             elif self.food_memory is not None:
                 lif_pops.append(self.food_memory)
 
-        # Phase 4: Basal Ganglia 추가
+        # Phase 4: Basal Ganglia 추가 (Phase L1: lateralized)
         if self.config.basal_ganglia_enabled:
-            lif_pops.extend([self.striatum, self.direct_pathway, self.indirect_pathway])
+            lif_pops.extend([self.striatum_left, self.striatum_right,
+                           self.direct_left, self.direct_right,
+                           self.indirect_left, self.indirect_right])
 
         # Phase 5: Prefrontal Cortex 추가
         if self.config.prefrontal_enabled:
@@ -7777,7 +7995,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_wm_expansion: bool = False, no_metacognition: bool = False,
                 no_self_model: bool = False,
                 log_data: bool = False, log_dir: str = None,
-                log_sample_rate: int = 5):
+                log_sample_rate: int = 5,
+                save_weights: str = None, load_weights: str = None):
     """Phase 6b 훈련 실행"""
 
     print("=" * 70)
@@ -7852,6 +8071,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         logger.log_config(brain_config, env_config, episodes)
         print(f"  [LOG] Data logging enabled → {logger.log_dir}")
 
+    # 가중치 로드 (학습된 모델 시각화용)
+    if load_weights:
+        brain.load_all_weights(load_weights)
+
     # 학습 비활성화 옵션
     if no_learning:
         brain.food_learning_enabled = False
@@ -7876,6 +8099,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     all_patch_visits = []   # 에피소드별 [patch0_visits, patch1_visits, ...]
     all_patch_food = []     # 에피소드별 [patch0_food, patch1_food, ...]
 
+    # 행동 진단 집계
+    all_straight_pct = []           # 에피소드별 직진 비율
+    all_max_straight_streak = []    # 에피소드별 최대 연속 직진
+    all_food_correct_pct = []       # 에피소드별 음식 올바른 전환율
+    all_pain_escape_pct = []        # 에피소드별 pain 올바른 탈출율
+    all_angle_std = []              # 에피소드별 angle_delta 표준편차
+
     for ep in range(episodes):
         obs = env.reset()
         brain.reset()
@@ -7896,6 +8126,23 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         ep_fear_rates = []
         ep_learn_events = 0  # Phase 3b: 학습 이벤트 카운트
 
+        # === 행동 진단 (Behavior Diagnostics) ===
+        ep_angle_deltas = []          # 매 스텝 angle_delta 기록
+        ep_motor_left_rates = []      # Motor L 발화율
+        ep_motor_right_rates = []     # Motor R 발화율
+        ep_food_detect_count = 0      # 음식 감지 횟수 (food_l > 0.05 or food_r > 0.05)
+        ep_food_correct_turn = 0      # 음식 방향으로 올바른 전환 횟수
+        ep_food_wrong_turn = 0        # 음식 반대 방향 전환
+        ep_food_no_turn = 0           # 음식 감지했으나 전환 없음
+        ep_pain_in_steps = 0          # pain zone 내 총 스텝
+        ep_pain_correct_escape = 0    # pain zone에서 올바른 탈출 방향 전환
+        ep_pain_wrong_dir = 0         # pain zone에서 잘못된 방향 (더 깊이 진입)
+        ep_turn_left = 0              # 좌회전 횟수 (angle_delta < -0.02)
+        ep_turn_right = 0             # 우회전 횟수 (angle_delta > 0.02)
+        ep_straight = 0               # 직진 횟수 (|angle_delta| <= 0.02)
+        ep_max_consecutive_straight = 0  # 최대 연속 직진 스텝
+        ep_current_straight_streak = 0   # 현재 연속 직진 카운터
+
         while not done:
             # 뇌 처리
             action_delta, info = brain.process(obs, debug=debug)
@@ -7915,11 +8162,79 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             obs, reward, done, env_info = env.step(action)
             total_reward += reward
 
+            # Phase L1: 도파민 셰이핑 리워드 (음식 접근 시)
+            approach_signal = env_info.get("food_approach_signal", 0.0)
+            if approach_signal > 0.01 and brain_config.basal_ganglia_enabled:
+                brain.release_dopamine(reward_magnitude=0.1 * approach_signal)
+
             # 통계 수집
             ep_hunger_rates.append(info["hunger_rate"])
             ep_satiety_rates.append(info["satiety_rate"])
             if brain_config.amygdala_enabled:
                 ep_fear_rates.append(info["fear_rate"])
+
+            # === 행동 진단: 매 스텝 추적 ===
+            ml_rate = info["motor_left_rate"]
+            mr_rate = info["motor_right_rate"]
+            ad = action_delta  # angle_delta
+            ep_angle_deltas.append(ad)
+            ep_motor_left_rates.append(ml_rate)
+            ep_motor_right_rates.append(mr_rate)
+
+            # 방향 전환 분류 (threshold: 0.02)
+            if ad < -0.02:
+                ep_turn_left += 1
+                ep_current_straight_streak = 0
+            elif ad > 0.02:
+                ep_turn_right += 1
+                ep_current_straight_streak = 0
+            else:
+                ep_straight += 1
+                ep_current_straight_streak += 1
+                ep_max_consecutive_straight = max(ep_max_consecutive_straight, ep_current_straight_streak)
+
+            # 음식 감지 반응 분석
+            fl = info.get("food_l", 0)
+            fr = info.get("food_r", 0)
+            food_threshold = 0.05
+            if fl > food_threshold or fr > food_threshold:
+                ep_food_detect_count += 1
+                food_side = "LEFT" if fl > fr else "RIGHT"
+                # 올바른 반응: 음식이 왼쪽이면 좌회전(angle_delta < 0), 오른쪽이면 우회전(angle_delta > 0)
+                if food_side == "LEFT" and ad < -0.01:
+                    ep_food_correct_turn += 1
+                elif food_side == "RIGHT" and ad > 0.01:
+                    ep_food_correct_turn += 1
+                elif abs(ad) <= 0.01:
+                    ep_food_no_turn += 1
+                else:
+                    ep_food_wrong_turn += 1
+
+                # 음식 감지 이벤트 로그 (첫 50회만)
+                if ep_food_detect_count <= 50 and log_level in ["debug", "verbose"]:
+                    print(f"  [FOOD_DETECT] step={env.steps} food_L={fl:.3f} food_R={fr:.3f} "
+                          f"→ M_L={ml_rate:.3f} M_R={mr_rate:.3f} angle={ad:.4f} "
+                          f"({'CORRECT' if (food_side=='LEFT' and ad<-0.01) or (food_side=='RIGHT' and ad>0.01) else 'MISS'})")
+
+            # Pain zone 반응 분석
+            if env_info.get('in_pain', False):
+                ep_pain_in_steps += 1
+                pl = info.get("pain_l", 0)
+                pr = info.get("pain_r", 0)
+                # Pain Push-Pull: pain_L → Motor_R(push) + Motor_L(pull)
+                # 올바른 탈출: pain_L > pain_R이면 우회전(angle_delta > 0), 반대도 마찬가지
+                if pl > pr and ad > 0.01:
+                    ep_pain_correct_escape += 1
+                elif pr > pl and ad < -0.01:
+                    ep_pain_correct_escape += 1
+                elif (pl > pr and ad < -0.01) or (pr > pl and ad > 0.01):
+                    ep_pain_wrong_dir += 1
+
+                # Pain 반응 로그 (첫 진입 40스텝만)
+                if ep_pain_in_steps <= 40 and log_level in ["normal", "debug", "verbose"]:
+                    print(f"  [PAIN_RESPONSE] step={env.steps} pain_L={pl:.3f} pain_R={pr:.3f} "
+                          f"→ M_L={ml_rate:.3f} M_R={mr_rate:.3f} angle={ad:.4f} "
+                          f"({'ESCAPE' if (pl>pr and ad>0.01) or (pr>pl and ad<-0.01) else 'STUCK'})")
 
             # 스텝 로그 (debug 모드 또는 10스텝마다)
             if log_level == "verbose" or (log_level == "debug" and env.steps % 10 == 0):
@@ -7940,8 +8255,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 if learn_info:
                     ep_learn_events += 1
 
-                # Phase 4: Dopamine 방출 (보상)
-                dopamine_info = brain.release_dopamine(reward_magnitude=0.5)
+                # Phase 4: Dopamine 방출 (보상) - Phase L1: 0.5→1.0 증가
+                dopamine_info = brain.release_dopamine(reward_magnitude=1.0)
 
                 # Phase 15b: 자기 먹기 → Mirror 활성화
                 if brain_config.social_brain_enabled and brain_config.mirror_enabled:
@@ -8071,6 +8386,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 logger.log_step(ep, env.steps, info, env_info)
 
         # 에피소드 종료
+        total_steps_ep = max(1, env.steps)
+        std_ad = np.std(ep_angle_deltas) if ep_angle_deltas else 0
         all_steps.append(env.steps)
         all_food.append(env.total_food_eaten)
         all_homeostasis.append(env_info["homeostasis_ratio"])
@@ -8083,6 +8400,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         _approach = env_info.get("pain_approach_steps", 0)
         all_pain_approach_pct.append(_approach / max(1, env.steps) * 100)
         all_learn_events.append(ep_learn_events)  # Phase 3b
+
+        # 행동 진단 집계
+        all_straight_pct.append(100 * ep_straight / total_steps_ep)
+        all_max_straight_streak.append(ep_max_consecutive_straight)
+        all_food_correct_pct.append(100 * ep_food_correct_turn / max(1, ep_food_detect_count))
+        all_pain_escape_pct.append(100 * ep_pain_correct_escape / max(1, ep_pain_in_steps))
+        all_angle_std.append(std_ad)
 
         # Food Patch 통계
         if env_config.food_patch_enabled:
@@ -8125,6 +8449,46 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"  Wall Bounce(pain): {env_info.get('wall_bounces_in_pain', 0)}/{env_info.get('wall_bounces_total', 0)}")
             print(f"  Avg Dist→Pain: {env_info.get('avg_dist_to_pain', 0):.1f}px")
             print(f"  Max Dwell:    {env_info.get('max_pain_dwell', 0)} steps")
+
+        # === 행동 진단 요약 ===
+        print(f"  --- Behavior Diagnostics ---")
+        # 모터 출력 분석
+        avg_ml = np.mean(ep_motor_left_rates) if ep_motor_left_rates else 0
+        avg_mr = np.mean(ep_motor_right_rates) if ep_motor_right_rates else 0
+        avg_ad = np.mean(ep_angle_deltas) if ep_angle_deltas else 0
+        print(f"  Motor: avg_L={avg_ml:.4f} avg_R={avg_mr:.4f} diff={avg_mr-avg_ml:.4f}")
+        print(f"  Angle: avg={avg_ad:.4f} std={std_ad:.4f}")
+        print(f"  Turns: LEFT={ep_turn_left} ({100*ep_turn_left/total_steps_ep:.1f}%) "
+              f"RIGHT={ep_turn_right} ({100*ep_turn_right/total_steps_ep:.1f}%) "
+              f"STRAIGHT={ep_straight} ({100*ep_straight/total_steps_ep:.1f}%)")
+        print(f"  Max Consecutive Straight: {ep_max_consecutive_straight} steps")
+        # 음식 반응 분석
+        if ep_food_detect_count > 0:
+            print(f"  Food Detection: {ep_food_detect_count} events")
+            print(f"    Correct Turn: {ep_food_correct_turn} ({100*ep_food_correct_turn/ep_food_detect_count:.1f}%)")
+            print(f"    Wrong Turn:   {ep_food_wrong_turn} ({100*ep_food_wrong_turn/ep_food_detect_count:.1f}%)")
+            print(f"    No Turn:      {ep_food_no_turn} ({100*ep_food_no_turn/ep_food_detect_count:.1f}%)")
+        else:
+            print(f"  Food Detection: 0 events (NEVER SAW FOOD?)")
+        # Pain 반응 분석
+        if ep_pain_in_steps > 0:
+            print(f"  Pain Response: {ep_pain_in_steps} steps in pain zone")
+            print(f"    Correct Escape: {ep_pain_correct_escape} ({100*ep_pain_correct_escape/ep_pain_in_steps:.1f}%)")
+            print(f"    Wrong Direction: {ep_pain_wrong_dir} ({100*ep_pain_wrong_dir/ep_pain_in_steps:.1f}%)")
+            neutral_pain = ep_pain_in_steps - ep_pain_correct_escape - ep_pain_wrong_dir
+            print(f"    Neutral/Equal: {neutral_pain} ({100*neutral_pain/ep_pain_in_steps:.1f}%)")
+        else:
+            print(f"  Pain Response: 0 steps in pain zone")
+
+        # Phase L1: R-STDP 가중치 현황
+        if brain_config.basal_ganglia_enabled:
+            brain.food_to_striatum_l.vars["g"].pull_from_device()
+            brain.food_to_striatum_r.vars["g"].pull_from_device()
+            rstdp_w_l = float(np.nanmean(brain.food_to_striatum_l.vars["g"].values))
+            rstdp_w_r = float(np.nanmean(brain.food_to_striatum_r.vars["g"].values))
+            print(f"  R-STDP Weights: L={rstdp_w_l:.3f} R={rstdp_w_r:.3f} "
+                  f"(init={brain_config.food_to_striatum_init_weight}, "
+                  f"max={brain_config.rstdp_w_max})")
 
         # Food Patch 통계
         if env_config.food_patch_enabled:
@@ -8290,7 +8654,42 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 print(f"    Initial: {initial_weight:.2f} → Final: {stats['avg_weight']:.2f}")
                 print(f"    Change:  {weight_change:+.1f}% {'✓' if stats['avg_weight'] > 3.0 else '✗'} (target: avg > 3.0)")
 
+    # === 행동 진단 종합 ===
+    print(f"\n  === Behavior Diagnostics (Aggregate) ===")
+    print(f"  Straight Line: avg {np.mean(all_straight_pct):.1f}% of steps")
+    print(f"  Max Straight Streak: avg {np.mean(all_max_straight_streak):.0f} steps, "
+          f"worst {max(all_max_straight_streak):.0f} steps")
+    print(f"  Angle StdDev: avg {np.mean(all_angle_std):.4f} "
+          f"({'DIVERSE' if np.mean(all_angle_std) > 0.02 else 'MONOTONE - PROBLEM!'})")
+    if any(p > 0 for p in all_food_correct_pct):
+        print(f"  Food Response: avg {np.mean(all_food_correct_pct):.1f}% correct turns "
+              f"({'ACTIVE' if np.mean(all_food_correct_pct) > 40 else 'PASSIVE - PROBLEM!'})")
+    else:
+        print(f"  Food Response: NO food detections across all episodes!")
+    if any(p > 0 for p in all_pain_escape_pct):
+        print(f"  Pain Escape: avg {np.mean(all_pain_escape_pct):.1f}% correct escapes "
+              f"({'ACTIVE' if np.mean(all_pain_escape_pct) > 40 else 'PASSIVE - PROBLEM!'})")
+    else:
+        print(f"  Pain Escape: NO pain zone entries across all episodes!")
+
+    # 초반 vs 후반 행동 변화 (학습 효과)
+    if episodes >= 10:
+        n5 = min(5, episodes // 2)
+        early_straight = np.mean(all_straight_pct[:n5])
+        late_straight = np.mean(all_straight_pct[-n5:])
+        early_food = np.mean(all_food_correct_pct[:n5])
+        late_food = np.mean(all_food_correct_pct[-n5:])
+        print(f"\n  --- Learning Effect (Early vs Late) ---")
+        print(f"  Straight %: early {early_straight:.1f}% → late {late_straight:.1f}% "
+              f"({late_straight - early_straight:+.1f}pp)")
+        print(f"  Food Correct %: early {early_food:.1f}% → late {late_food:.1f}% "
+              f"({late_food - early_food:+.1f}pp)")
+
     print("=" * 70)
+
+    # 가중치 저장
+    if save_weights:
+        brain.save_all_weights(save_weights)
 
     env.close()
     if logger:
@@ -8312,10 +8711,16 @@ if __name__ == "__main__":
                        help="Disable Pain Zone (Phase 2a mode)")
     parser.add_argument("--persist-learning", action="store_true",
                        help="Save/load Hippocampus weights between episodes (cumulative learning)")
+    parser.add_argument("--save-weights", type=str, default=None,
+                       help="Save all Hebbian weights after training (e.g. brain_20ep.npz)")
+    parser.add_argument("--load-weights", type=str, default=None,
+                       help="Load Hebbian weights before running (for visualization)")
     parser.add_argument("--no-learning", action="store_true",
                        help="Disable Hebbian learning (for baseline comparison)")
     parser.add_argument("--fps", type=int, default=10,
                        help="Render FPS (default: 10, slower=easier to observe)")
+    parser.add_argument("--render-from", type=int, default=1,
+                       help="Start rendering from episode N (default: 1, use with --render pygame)")
     parser.add_argument("--food-patch", action="store_true",
                        help="Enable Food Patch mode for Hebbian learning validation")
     # Phase 비활성화 플래그 (검증용)
@@ -8375,4 +8780,6 @@ if __name__ == "__main__":
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
+        save_weights=args.save_weights,
+        load_weights=args.load_weights,
     )

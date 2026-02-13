@@ -34,10 +34,10 @@ class ForagerConfig:
     agent_speed: float = 3.0
     agent_radius: float = 10.0
 
-    # 음식 (Phase 7: Reward Freq 개선)
-    n_food: int = 35          # 25 → 35 (음식 추가 증가)
-    food_radius: float = 8.0  # 더 쉽게 찾기
-    food_value: float = 25.0  # 음식 가치 유지
+    # 음식 (난이도 조정 - 직선 이동만으론 생존 어려움)
+    n_food: int = 15           # 35 → 15 (적당히 희소)
+    food_radius: float = 8.0
+    food_value: float = 25.0
 
     # === Food Patch 설정 (Hebbian 학습 검증용) ===
     food_patch_enabled: bool = False           # Food Patch 모드 활성화
@@ -48,8 +48,8 @@ class ForagerConfig:
     # 에너지 (항상성)
     energy_start: float = 50.0  # 기본 시작 에너지
     energy_max: float = 100.0
-    energy_decay_field: float = 0.12   # Phase 7: 0.15 → 0.12 (약간 완화)
-    energy_decay_nest: float = 0.04    # Phase 7: 0.05 → 0.04
+    energy_decay_field: float = 0.15   # 0.12 → 0.15 (약간 빠른 소모)
+    energy_decay_nest: float = 0.05    # 0.04 → 0.05
 
     # 감각
     n_rays: int = 16  # 음식/벽 감지 레이 수
@@ -396,6 +396,9 @@ class ForagerGym:
         self.max_pain_dwell = 0
         self.pain_dwell_times = []
 
+        # Phase L1: Food approach tracking
+        self.prev_min_food_dist = self.config.view_range
+
         # Food Patch 통계 초기화
         self.patch_visits = [0] * self.config.n_patches
         self.patch_food_eaten = [0] * self.config.n_patches
@@ -580,6 +583,18 @@ class ForagerGym:
                     self.patch_visits[i] += 1
                 self.was_in_patch[i] = in_this_patch
 
+        # 4b. Food approach signal (Phase L1: dopamine shaping)
+        if self.foods:
+            min_food_dist = min(
+                math.hypot(f[0] - self.agent_x, f[1] - self.agent_y)
+                for f in self.foods
+            )
+        else:
+            min_food_dist = self.config.view_range
+        food_approach_signal = max(0.0, (self.prev_min_food_dist - min_food_dist) / self.config.view_range)
+        food_approach_signal = min(1.0, food_approach_signal)
+        self.prev_min_food_dist = min_food_dist
+
         # 5. 통계 업데이트
         self.min_energy = min(self.min_energy, self.energy)
         self.max_energy = max(self.max_energy, self.energy)
@@ -636,6 +651,8 @@ class ForagerGym:
             "npc_eating_events": npc_eating_events,
             # Phase 17: Agent vocalization
             "agent_call_type": getattr(self, '_agent_call_type', 0),
+            # Phase L1: Food approach signal (dopamine shaping)
+            "food_approach_signal": food_approach_signal,
         }
 
         # 렌더링
@@ -1681,14 +1698,41 @@ class ForagerGym:
             self.font = pygame.font.Font(None, 24)
             self.small_font = pygame.font.Font(None, 18)
             self.brain_info = {}  # 뇌 활성화 정보
+            # 속도 단계: (렌더 간격, fps캡) - 렌더 간격이 핵심 (GPU 연산이 병목)
+            self._render_every = [1, 1, 3, 10, 100]
+            self._speed_names = ["SLOW", "x1", "x3", "x10", "MAX"]
+            self._speed_idx = 1  # 기본: x1
+            self._paused = False
 
         import pygame
 
-        # 이벤트 처리
+        # 이벤트 처리 (매 스텝 체크 - 키 입력 누락 방지)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RIGHT or event.key == pygame.K_UP:
+                    self._speed_idx = min(self._speed_idx + 1, len(self._render_every) - 1)
+                elif event.key == pygame.K_LEFT or event.key == pygame.K_DOWN:
+                    self._speed_idx = max(self._speed_idx - 1, 0)
+                elif event.key == pygame.K_SPACE:
+                    self._paused = not self._paused
+
+        # 일시정지
+        while self._paused:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                    self._paused = False
+            self.clock.tick(10)
+
+        # 렌더링 건너뛰기 (x3=매 3스텝, x10=매 10스텝, MAX=매 100스텝마다만 그림)
+        skip = self._render_every[self._speed_idx]
+        if skip > 1 and self.steps % skip != 0:
+            return
 
         # 배경
         self.screen.fill((40, 40, 40))
@@ -1832,13 +1876,20 @@ class ForagerGym:
                 text = self.font.render(danger_text, True, (255, 50, 50))
                 self.screen.blit(text, (10, status_y + 25))
 
+        # === 속도 조절 표시 ===
+        speed_name = self._speed_names[self._speed_idx]
+        speed_text = f"Speed: {speed_name}  [←/→] speed  [SPACE] pause"
+        speed_color = (100, 200, 255) if speed_name == "MAX" else (150, 150, 150)
+        text = self.small_font.render(speed_text, True, speed_color)
+        self.screen.blit(text, (10, 635))
+
         # === 뇌 활성화 패널 (공간 배치형) ===
         self._render_brain_schematic(600, 0)
 
         pygame.display.flip()
-        # 속도 조절: 기본 15 FPS (느리게), --fast 옵션 시 60 FPS
-        target_fps = getattr(self, 'render_fps', 15)
-        self.clock.tick(target_fps)
+        # SLOW 모드만 FPS 캡 (10fps), 나머지는 제한 없음
+        if self._speed_idx == 0:
+            self.clock.tick(10)
 
     def _render_brain_schematic(self, x: int, y: int):
         """뇌 영역을 공간 배치하고 활성화 시 밝게 표시"""
