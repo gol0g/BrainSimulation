@@ -291,32 +291,29 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase 20 완료 - 자기 모델 (19,240 뉴런)
+### 현재 상태: Phase L2 완료 - D1/D2 MSN 분리 (19,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase 20: Self-Model ✓ (2026-02-11)                          ║
+║  Phase L2: D1/D2 MSN Separation ✓ (2026-02-12)                ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  신규 구조 (+440 뉴런):                                      ║
-║    - Self_Body (80): 내수용감각 통합 (섬엽, SensoryLIF)      ║
-║    - Self_Efference (80): 운동 명령 복사 (소뇌)              ║
-║    - Self_Predict (70): 감각 결과 예측 (순행 모델, SensoryLIF)║
-║    - Self_Agency (70): 행위주체감 (각회/TPJ)                 ║
-║    - Self_Narrative (80): 자기 서사 (DMN/mPFC, Hebbian)      ║
-║    - Self_Inhibitory (60): 국소 억제 균형                    ║
+║  Learning Foundation (Phase L1→L2):                            ║
+║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
+║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
 ║                                                               ║
-║  핵심 메커니즘:                                              ║
-║    - Body(내수용) → Predict(예측) → Agency(행위주체) 계층    ║
-║    - Efference Copy + 감각 비교 = 행위주체감                 ║
-║    - Hebbian DENSE: body→narrative (eta=0.04, w_max=14.0)    ║
-║    - 모든 출력 ≤1.5, Motor 직접 = 0.0                       ║
+║  D1/D2 구조 (Striatum 400 뉴런 재분할, 변동 없음):            ║
+║    - D1_L/R (100×2): Go pathway, R-STDP 학습                 ║
+║    - D2_L/R (100×2): NoGo pathway, Static (학습 안 함)       ║
+║    - DA→D1 (+15 excite), DA→D2 (-12 inhibit)                 ║
+║    - D1↔D2 lateral competition (-5.0)                        ║
 ║                                                               ║
-║  검증 결과:                                                   ║
-║    - Survival Rate: 50% ✓                                    ║
-║    - Reward Freq: 3.17% ✓                                    ║
-║    - Pain Avoidance: 90.8% ✓                                 ║
+║  검증 결과 (20 episodes, food_weight=35):                     ║
+║    - Survival Rate: 95% ✓                                    ║
+║    - Reward Freq: 2.33% (L1: 1.81% → +28.7% 향상)           ║
+║    - Pain Avoidance: 100% ✓                                  ║
+║    - Avg Food: 66.5, Correct Turn: 60.4%                     ║
 ║                                                               ║
-║  뉴런 수:       19,240 (+440)                                 ║
+║  뉴런 수:       19,240 (변동 없음)                             ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -325,7 +322,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone)
-├── forager_brain.py   # Forager Brain (19,240 뉴런, Phase 1-20)
+├── forager_brain.py   # Forager Brain (19,240 뉴런, Phase 1-20 + L1-L2)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -335,6 +332,8 @@ backend/genesis/
 2. **새 회로의 Motor 간섭 방지**: 직접 0.0 + 간접 경로도 확인 필수
 3. **R-STDP는 빈번하고 즉각적인 보상 필요**: 보상 빈도 >1% 필수
 4. **Hebbian 학습은 안정적**: 보상 연관 학습 avg_w 2.0→7.12 (20 ep)
+5. **D1/D2 MSN 분리 필수**: 단일 Striatum은 Go+NoGo 동시 강화 → 학습 상쇄
+6. **R-STDP 빠른 포화**: w_max=5.0에 ep 1-2에서 도달, 점진적 개선 제한적
 
 ---
 

@@ -68,8 +68,9 @@ POPULATIONS = [
     ("food_memory_left", "Food Mem L",    100, "3",  "food_memory_rate"),
     ("food_memory_right","Food Mem R",    100, "3",  "food_memory_rate"),
 
-    # Phase 4: Basal Ganglia
-    ("striatum",         "Striatum",      400, "4",  "striatum_rate"),
+    # Phase 4: Basal Ganglia (Phase L2: D1/D2 MSN)
+    ("d1_msn",           "D1 MSN (Go)",   200, "4",  "d1_rate"),
+    ("d2_msn",           "D2 MSN (NoGo)", 200, "4",  "d2_rate"),
     ("direct_pathway",   "Direct (Go)",   200, "4",  "direct_rate"),
     ("indirect_pathway", "Indirect (NoGo)", 200, "4", "indirect_rate"),
     ("dopamine",         "Dopamine",      100, "4",  "dopamine_rate"),
@@ -217,7 +218,7 @@ RATE_KEYS_BY_PHASE = {
     "2a":  ["low_energy_rate", "high_energy_rate", "hunger_rate", "satiety_rate"],
     "2b":  ["la_rate", "cea_rate", "fear_rate"],
     "3":   ["place_cell_rate", "food_memory_rate"],
-    "4":   ["striatum_rate", "direct_rate", "indirect_rate", "dopamine_rate"],
+    "4":   ["d1_rate", "d2_rate", "direct_rate", "indirect_rate", "dopamine_rate"],
     "5":   ["working_memory_rate", "goal_food_rate", "goal_safety_rate", "inhibitory_rate"],
     "6a":  ["granule_rate", "purkinje_rate", "deep_nuclei_rate", "error_rate"],
     "6b":  ["food_relay_rate", "danger_relay_rate", "trn_rate", "arousal_rate"],
@@ -280,13 +281,13 @@ CONNECTIONS = [
     ("place_cells",      "food_memory_left",  2.0, "Place → FoodMem (Hebbian)"),
     ("food_memory_left", "motor_left",       12.0, "FoodMem → Motor"),
 
-    # Phase 4: Basal Ganglia
-    ("striatum",         "direct_pathway",   20.0, "Striatum → Go"),
-    ("striatum",         "indirect_pathway", 15.0, "Striatum → NoGo"),
-    ("direct_pathway",   "motor_left",       15.0, "Go → Motor"),
-    ("indirect_pathway", "motor_left",       -8.0, "NoGo → Motor"),
-    ("dopamine",         "direct_pathway",   25.0, "DA → Go"),
-    ("dopamine",         "indirect_pathway",-20.0, "DA → NoGo"),
+    # Phase 4: Basal Ganglia (Phase L2: D1/D2 MSN)
+    ("d1_msn",           "direct_pathway",   20.0, "D1 → Go"),
+    ("d2_msn",           "indirect_pathway", 15.0, "D2 → NoGo"),
+    ("direct_pathway",   "motor_left",       25.0, "Go → Motor"),
+    ("indirect_pathway", "motor_left",      -10.0, "NoGo → Motor"),
+    ("dopamine",         "d1_msn",           15.0, "DA → D1 (excite)"),
+    ("dopamine",         "d2_msn",          -12.0, "DA → D2 (inhibit)"),
 
     # Phase 5: PFC
     ("working_memory",   "goal_food",         8.0, "WM → Goal"),
