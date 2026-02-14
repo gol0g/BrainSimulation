@@ -227,6 +227,21 @@ class ForagerBrainConfig:
     cortical_anti_hebbian_ratio: float = 0.6   # Anti-Hebbian 약화 비율 (R-STDP 대비)
     taste_aversion_magnitude: float = 15.0     # 맛 혐오 → Lateral Amygdala I_input
 
+    # Phase L6: Prediction Error Circuit (예측 오차)
+    prediction_error_enabled: bool = True
+    n_pe_food: int = 100               # 50L + 50R (음식 예측 오차)
+    n_pe_danger: int = 100             # 50L + 50R (위험 예측 오차)
+    pe_v1_to_pe_weight: float = 10.0   # V1 → PE (excitatory, bottom-up actual)
+    pe_it_to_pe_weight: float = -7.0   # IT → PE (inhibitory, top-down prediction)
+    pe_to_it_init_w: float = 1.0       # PE → IT 초기 가중치 (gentle modulator)
+    pe_to_it_w_max: float = 3.0        # PE → IT 최대 가중치
+    pe_to_it_w_min: float = 0.1        # PE → IT 최소 가중치
+    pe_rstdp_eta: float = 0.0005       # PE R-STDP 학습률
+    pe_trace_decay: float = 0.92       # PE 적격 추적 감쇠
+    pe_trace_max: float = 1.0          # PE 적격 추적 최대값
+    pe_weight_decay: float = 0.00002   # PE 가중치 항상성 감쇠
+    pe_w_rest: float = 1.0             # PE 가중치 평형점 (init_w와 동일)
+
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
     dopamine_decay: float = 0.95               # Dopamine 감쇠율
@@ -1124,6 +1139,8 @@ class ForagerBrainConfig:
                      self.n_self_narrative + self.n_self_inhibitory)
         if self.perceptual_learning_enabled:
             base += self.n_good_food_eye + self.n_bad_food_eye
+        if self.prediction_error_enabled:
+            base += self.n_pe_food + self.n_pe_danger
         return base
 
 
@@ -1426,6 +1443,14 @@ class ForagerBrain:
             self._cortical_step = 0
             self._taste_aversion_active = False
 
+        # Phase L6: Prediction Error 적격 추적
+        if self.config.prediction_error_enabled:
+            self.pe_trace_food_l = 0.0
+            self.pe_trace_food_r = 0.0
+            self.pe_trace_danger_l = 0.0
+            self.pe_trace_danger_r = 0.0
+            self._pe_step = 0
+
         if self.config.basal_ganglia_enabled:
             print(f"  BasalGanglia (L2 D1/D2): "
                   f"D1({n_d1_half}L+{n_d1_half}R) + "
@@ -1532,6 +1557,10 @@ class ForagerBrain:
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             self._build_perceptual_learning_circuit()
 
+        # Phase L6: Prediction Error Circuit (예측 오차)
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            self._build_prediction_error_circuit()
+
         # Build and load
         print("Building model...")
         self.model.build()
@@ -1551,6 +1580,12 @@ class ForagerBrain:
                         self.good_food_to_it_danger_l, self.good_food_to_it_danger_r,
                         self.bad_food_to_it_danger_l, self.bad_food_to_it_danger_r,
                         self.bad_food_to_it_food_l, self.bad_food_to_it_food_r]:
+                syn.pull_connectivity_from_device()
+
+        # Phase L6: PE→IT 시냅스 connectivity pull
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            for syn in [self.pe_food_to_it_food_l, self.pe_food_to_it_food_r,
+                        self.pe_danger_to_it_danger_l, self.pe_danger_to_it_danger_r]:
                 syn.pull_connectivity_from_device()
 
         print(f"Model ready! Total: {self.config.total_neurons:,} neurons")
@@ -4395,6 +4430,18 @@ class ForagerBrain:
                 syn.vars["g"].pull_from_device()
                 weights[key] = syn.vars["g"].values.copy()
 
+        # Phase L6: PE→IT 시냅스 (SPARSE)
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            pe_synapses = {
+                "pe_food_l": self.pe_food_to_it_food_l,
+                "pe_food_r": self.pe_food_to_it_food_r,
+                "pe_danger_l": self.pe_danger_to_it_danger_l,
+                "pe_danger_r": self.pe_danger_to_it_danger_r,
+            }
+            for key, syn in pe_synapses.items():
+                syn.vars["g"].pull_from_device()
+                weights[key] = syn.vars["g"].values.copy()
+
         np.savez(filepath, **weights)
         print(f"  [SAVE] All weights saved to {filepath} ({len(weights)} synapses)")
         return filepath
@@ -4467,6 +4514,21 @@ class ForagerBrain:
                 "cortical_bad_food_r": self.bad_food_to_it_food_r,
             }
             for key, syn in cortical_synapses.items():
+                if key in data:
+                    syn.pull_connectivity_from_device()
+                    syn.vars["g"].values = data[key]
+                    syn.vars["g"].push_to_device()
+                    loaded += 1
+
+        # Phase L6: PE→IT (SPARSE - connectivity pull 필수)
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            pe_synapses = {
+                "pe_food_l": self.pe_food_to_it_food_l,
+                "pe_food_r": self.pe_food_to_it_food_r,
+                "pe_danger_l": self.pe_danger_to_it_danger_l,
+                "pe_danger_r": self.pe_danger_to_it_danger_r,
+            }
+            for key, syn in pe_synapses.items():
                 if key in data:
                     syn.pull_connectivity_from_device()
                     syn.vars["g"].values = data[key]
@@ -6704,6 +6766,145 @@ class ForagerBrain:
         print(f"    Init weight: {init_w}, Sparsity: 0.08")
         print(f"    Total: 8 learning synapses")
 
+    def _build_prediction_error_circuit(self):
+        """Phase L6: 예측 오차 회로 — 계층적 예측 코딩
+
+        생물학적 근거:
+        - 예측 코딩 (Predictive Coding): 뇌는 감각 입력을 예측하고 오차만 전파
+        - IT→V1 하향 예측이 V1 상향 신호를 억제 → 오차만 남음
+        - 예측 오차 뉴런이 IT 표상을 정교화 → 내부 모델 형성
+
+        회로:
+        - PE_Food_L/R: V1_Food(+10) - IT_Food(-7) = 예측 오차
+        - PE_Danger_L/R: V1_Danger(+10) - IT_Danger(-7) = 예측 오차
+        - PE → IT (R-STDP): 오차가 IT 범주 표상을 정교화
+        """
+        print("\n  === Phase L6: Prediction Error Circuit ===")
+
+        # LIF 파라미터 (PE는 standard LIF, I_input 불필요)
+        lif_params = {
+            "C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+            "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+            "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac
+        }
+        lif_init = {"V": self.config.v_rest, "RefracTime": 0.0}
+
+        n_pe_food_half = self.config.n_pe_food // 2
+        n_pe_danger_half = self.config.n_pe_danger // 2
+
+        # === 1. Prediction Error Populations ===
+        self.pe_food_left = self.model.add_neuron_population(
+            "pe_food_left", n_pe_food_half, "LIF", lif_params, lif_init)
+        self.pe_food_right = self.model.add_neuron_population(
+            "pe_food_right", n_pe_food_half, "LIF", lif_params, lif_init)
+        self.pe_danger_left = self.model.add_neuron_population(
+            "pe_danger_left", n_pe_danger_half, "LIF", lif_params, lif_init)
+        self.pe_danger_right = self.model.add_neuron_population(
+            "pe_danger_right", n_pe_danger_half, "LIF", lif_params, lif_init)
+
+        print(f"    PE_Food: L({n_pe_food_half}) + R({n_pe_food_half})")
+        print(f"    PE_Danger: L({n_pe_danger_half}) + R({n_pe_danger_half})")
+
+        # === 2. Bottom-up: V1 → PE (excitatory, 실제 감각 신호) ===
+        v1_pe_w = self.config.pe_v1_to_pe_weight
+        self._create_static_synapse(
+            "v1_food_l_to_pe_food_l", self.v1_food_left, self.pe_food_left,
+            v1_pe_w, sparsity=0.15)
+        self._create_static_synapse(
+            "v1_food_r_to_pe_food_r", self.v1_food_right, self.pe_food_right,
+            v1_pe_w, sparsity=0.15)
+        self._create_static_synapse(
+            "v1_danger_l_to_pe_danger_l", self.v1_danger_left, self.pe_danger_left,
+            v1_pe_w, sparsity=0.15)
+        self._create_static_synapse(
+            "v1_danger_r_to_pe_danger_r", self.v1_danger_right, self.pe_danger_right,
+            v1_pe_w, sparsity=0.15)
+
+        print(f"    V1→PE (bottom-up excitatory): {v1_pe_w}")
+
+        # === 3. Top-down: IT → PE (inhibitory, 예측이 오차를 억제) ===
+        it_pe_w = self.config.pe_it_to_pe_weight  # negative = inhibitory
+        self._create_static_synapse(
+            "it_food_to_pe_food_l", self.it_food_category, self.pe_food_left,
+            it_pe_w, sparsity=0.10)
+        self._create_static_synapse(
+            "it_food_to_pe_food_r", self.it_food_category, self.pe_food_right,
+            it_pe_w, sparsity=0.10)
+        self._create_static_synapse(
+            "it_danger_to_pe_danger_l", self.it_danger_category, self.pe_danger_left,
+            it_pe_w, sparsity=0.10)
+        self._create_static_synapse(
+            "it_danger_to_pe_danger_r", self.it_danger_category, self.pe_danger_right,
+            it_pe_w, sparsity=0.10)
+
+        print(f"    IT→PE (top-down inhibitory): {it_pe_w}")
+
+        # === 4. Error → IT (learning synapses, R-STDP: 오차가 IT 정교화) ===
+        init_w = self.config.pe_to_it_init_w
+        self.pe_food_to_it_food_l = self._create_static_synapse(
+            "pe_food_l_to_it_food", self.pe_food_left, self.it_food_category,
+            init_w, sparsity=0.10)
+        self.pe_food_to_it_food_r = self._create_static_synapse(
+            "pe_food_r_to_it_food", self.pe_food_right, self.it_food_category,
+            init_w, sparsity=0.10)
+        self.pe_danger_to_it_danger_l = self._create_static_synapse(
+            "pe_danger_l_to_it_danger", self.pe_danger_left, self.it_danger_category,
+            init_w, sparsity=0.10)
+        self.pe_danger_to_it_danger_r = self._create_static_synapse(
+            "pe_danger_r_to_it_danger", self.pe_danger_right, self.it_danger_category,
+            init_w, sparsity=0.10)
+
+        print(f"    PE→IT (R-STDP learning): init_w={init_w}, eta={self.config.pe_rstdp_eta}")
+
+        total_pe = self.config.n_pe_food + self.config.n_pe_danger
+        print(f"  Prediction Error circuit complete: {total_pe} neurons, 4 learning synapses")
+
+    def update_prediction_error_rstdp(self, reward_type: str):
+        """Phase L6: 예측 오차 R-STDP 가중치 업데이트
+
+        Args:
+            reward_type: "food" (음식 섭취 시) 또는 "danger" (고통 경험 시)
+        """
+        if not self.config.prediction_error_enabled:
+            return None
+        if not (self.config.v1_enabled and self.config.it_enabled):
+            return None
+
+        eta = self.config.pe_rstdp_eta
+        w_max = self.config.pe_to_it_w_max
+        w_min = self.config.pe_to_it_w_min
+        results = {}
+
+        if reward_type == "food":
+            for side, trace, syn in [
+                ("left", self.pe_trace_food_l, self.pe_food_to_it_food_l),
+                ("right", self.pe_trace_food_r, self.pe_food_to_it_food_r),
+            ]:
+                if trace > 0.01:
+                    syn.vars["g"].pull_from_device()
+                    w = syn.vars["g"].values
+                    w[:] += eta * trace
+                    w[:] = np.clip(w, w_min, w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                    results[f"pe_food_it_{side}"] = float(np.nanmean(w))
+
+        elif reward_type == "danger":
+            for side, trace, syn in [
+                ("left", self.pe_trace_danger_l, self.pe_danger_to_it_danger_l),
+                ("right", self.pe_trace_danger_r, self.pe_danger_to_it_danger_r),
+            ]:
+                if trace > 0.01:
+                    syn.vars["g"].pull_from_device()
+                    w = syn.vars["g"].values
+                    w[:] += eta * trace
+                    w[:] = np.clip(w, w_min, w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                    results[f"pe_danger_it_{side}"] = float(np.nanmean(w))
+
+        return results if results else None
+
     def update_cortical_rstdp(self, reward_type: str):
         """Phase L5: 피질 R-STDP 가중치 업데이트
 
@@ -7265,6 +7466,12 @@ class ForagerBrain:
         self_narrative_spikes = 0
         self_inhibitory_sm_spikes = 0
 
+        # Phase L6 스파이크 카운트 (Prediction Error)
+        pe_food_l_spikes = 0
+        pe_food_r_spikes = 0
+        pe_danger_l_spikes = 0
+        pe_danger_r_spikes = 0
+
         for _ in range(10):
             self.model.step_time()
 
@@ -7604,6 +7811,18 @@ class ForagerBrain:
                 self_narrative_spikes += np.sum(self.self_narrative.vars["RefracTime"].view > self.spike_threshold)
                 self_inhibitory_sm_spikes += np.sum(self.self_inhibitory_sm.vars["RefracTime"].view > self.spike_threshold)
 
+            # Phase L6 스파이크 카운팅 (Prediction Error)
+            if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+                self.pe_food_left.vars["RefracTime"].pull_from_device()
+                self.pe_food_right.vars["RefracTime"].pull_from_device()
+                self.pe_danger_left.vars["RefracTime"].pull_from_device()
+                self.pe_danger_right.vars["RefracTime"].pull_from_device()
+
+                pe_food_l_spikes += np.sum(self.pe_food_left.vars["RefracTime"].view > self.spike_threshold)
+                pe_food_r_spikes += np.sum(self.pe_food_right.vars["RefracTime"].view > self.spike_threshold)
+                pe_danger_l_spikes += np.sum(self.pe_danger_left.vars["RefracTime"].view > self.spike_threshold)
+                pe_danger_r_spikes += np.sum(self.pe_danger_right.vars["RefracTime"].view > self.spike_threshold)
+
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
         max_spikes_drive = self.config.n_hunger_drive * 5
@@ -7719,6 +7938,48 @@ class ForagerBrain:
                     w = syn.vars["g"].values
                     w[:] -= (c_decay * 50) * (w - c_rest)
                     w[:] = np.clip(w, c_w_min, c_w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+
+        # Phase L6: 예측 오차 스파이크율 + 적격 추적
+        pe_food_l_rate = 0.0
+        pe_food_r_rate = 0.0
+        pe_danger_l_rate = 0.0
+        pe_danger_r_rate = 0.0
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            n_pe_food_half = self.config.n_pe_food // 2
+            n_pe_danger_half = self.config.n_pe_danger // 2
+            pe_food_l_rate = pe_food_l_spikes / (n_pe_food_half * 5)
+            pe_food_r_rate = pe_food_r_spikes / (n_pe_food_half * 5)
+            pe_danger_l_rate = pe_danger_l_spikes / (n_pe_danger_half * 5)
+            pe_danger_r_rate = pe_danger_r_spikes / (n_pe_danger_half * 5)
+
+            self._pe_step += 1
+
+            # PE 적격 추적: PE가 발화하면 trace 누적
+            pe_food_l_active = 1.0 if pe_food_l_rate > 0.05 else 0.0
+            pe_food_r_active = 1.0 if pe_food_r_rate > 0.05 else 0.0
+            pe_danger_l_active = 1.0 if pe_danger_l_rate > 0.05 else 0.0
+            pe_danger_r_active = 1.0 if pe_danger_r_rate > 0.05 else 0.0
+            pe_td = self.config.pe_trace_decay
+            pe_tm = self.config.pe_trace_max
+            self.pe_trace_food_l = min(self.pe_trace_food_l * pe_td + pe_food_l_active, pe_tm)
+            self.pe_trace_food_r = min(self.pe_trace_food_r * pe_td + pe_food_r_active, pe_tm)
+            self.pe_trace_danger_l = min(self.pe_trace_danger_l * pe_td + pe_danger_l_active, pe_tm)
+            self.pe_trace_danger_r = min(self.pe_trace_danger_r * pe_td + pe_danger_r_active, pe_tm)
+
+            # 항상성 감쇠: 50 스텝마다
+            if self.config.pe_weight_decay > 0 and self._pe_step % 50 == 0:
+                pe_decay = self.config.pe_weight_decay
+                pe_rest = self.config.pe_w_rest
+                pe_wmax = self.config.pe_to_it_w_max
+                pe_wmin = self.config.pe_to_it_w_min
+                for syn in [self.pe_food_to_it_food_l, self.pe_food_to_it_food_r,
+                            self.pe_danger_to_it_danger_l, self.pe_danger_to_it_danger_r]:
+                    syn.vars["g"].pull_from_device()
+                    w = syn.vars["g"].values
+                    w[:] -= (pe_decay * 50) * (w - pe_rest)
+                    w[:] = np.clip(w, pe_wmin, pe_wmax)
                     syn.vars["g"].values = w
                     syn.vars["g"].push_to_device()
 
@@ -8287,6 +8548,12 @@ class ForagerBrain:
             "self_narrative_rate": self_narrative_rate,
             "self_inhibitory_sm_rate": self_inhibitory_sm_rate,
 
+            # Phase L6: Prediction Error
+            "pe_food_l_rate": pe_food_l_rate,
+            "pe_food_r_rate": pe_food_r_rate,
+            "pe_danger_l_rate": pe_danger_l_rate,
+            "pe_danger_r_rate": pe_danger_r_rate,
+
             # 에이전트 위치 (Place Cell 시각화용)
             "agent_grid_x": int(observation.get("position_x", 0.5) * 10),  # 0~10 그리드
             "agent_grid_y": int(observation.get("position_y", 0.5) * 10),
@@ -8717,6 +8984,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
                         cortical_learn = brain.update_cortical_rstdp("good_food")
 
+                    # Phase L6: PE R-STDP (음식 예측 오차 → IT 정교화)
+                    if brain_config.prediction_error_enabled:
+                        brain.update_prediction_error_rstdp("food")
+
                     # Phase 15b: 자기 먹기 → Mirror 활성화
                     if brain_config.social_brain_enabled and brain_config.mirror_enabled:
                         brain.mirror_self_eating_timer = env_config.npc_eating_signal_duration
@@ -8803,6 +9074,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if social_learn and log_level in ["debug", "verbose"]:
                         print(f"  [SOCIAL] NPC ate at ({npc_x:.0f},{npc_y:.0f}), "
                               f"avg_w={social_learn['avg_weight']:.2f}, surprise={social_learn['surprise']:.2f}")
+
+            # Phase L6: Pain zone → PE danger 학습 (위험 예측 오차 → IT_Danger 정교화)
+            if brain_config.prediction_error_enabled and env_info.get('in_pain', False):
+                brain.update_prediction_error_rstdp("danger")
 
             # Phase 17: Pain zone + danger call → 강한 학습
             if brain_config.language_enabled and env_info.get('in_pain', False):
@@ -8970,6 +9245,19 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 ("Bad→IT_Danger_R", brain.bad_food_to_it_danger_r),
                 ("Bad→IT_Food_L", brain.bad_food_to_it_food_l),
                 ("Bad→IT_Food_R", brain.bad_food_to_it_food_r),
+            ]:
+                syn.vars["g"].pull_from_device()
+                avg_w = float(np.nanmean(syn.vars["g"].values))
+                print(f"    {label}: {avg_w:.3f}")
+
+        # Phase L6: PE→IT 가중치 현황
+        if brain_config.prediction_error_enabled and brain_config.v1_enabled and brain_config.it_enabled:
+            print(f"  --- Phase L6: Prediction Error R-STDP ---")
+            for label, syn in [
+                ("PE_Food→IT_Food_L", brain.pe_food_to_it_food_l),
+                ("PE_Food→IT_Food_R", brain.pe_food_to_it_food_r),
+                ("PE_Danger→IT_Danger_L", brain.pe_danger_to_it_danger_l),
+                ("PE_Danger→IT_Danger_R", brain.pe_danger_to_it_danger_r),
             ]:
                 syn.vars["g"].pull_from_device()
                 avg_w = float(np.nanmean(syn.vars["g"].values))

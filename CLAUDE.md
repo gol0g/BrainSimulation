@@ -291,39 +291,39 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L5 완료 - 지각 학습 (20,040 뉴런)
+### 현재 상태: Phase L6 완료 - 예측 오차 회로 (20,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L5: 지각 학습 ✓ (2026-02-14)                            ║
+║  Phase L6: 예측 오차 회로 ✓ (2026-02-14)                       ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→L2→L3→L4→L5):                   ║
+║  Learning Foundation (Phase L1→L2→L3→L4→L5→L6):               ║
 ║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
 ║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
 ║    - L3: Homeostatic R-STDP (포화→점진적 학습)                ║
 ║    - L4: Anti-Hebbian D2 (Go/NoGo 경쟁적 학습)               ║
 ║    - L5: 피질 R-STDP + 다중 음식 (좋은/나쁜 음식 구별 학습)  ║
+║    - L6: 예측 오차 회로 (V1→PE←IT 계층적 예측 코딩)          ║
 ║                                                               ║
-║  L5 변경 사항:                                                ║
-║    - 환경: 좋은 음식(초록, +25) / 나쁜 음식(보라, -5) 2종    ║
-║    - 감각: good/bad_food_eye (200×2 = 800 뉴런 추가)         ║
-║    - 학습: 피질 R-STDP 8시냅스 (good→IT_Food↑, bad→IT_Danger↑)║
-║    - 맛 혐오: Garcia Effect - bad food→danger_sensor I_input  ║
+║  L6 변경 사항:                                                ║
+║    - 환경: 음식 클러스터 리스폰 (60% 확률, 80px 반경)        ║
+║    - PE 뉴런: pe_food/danger (50×2 = 200 뉴런 추가)          ║
+║    - 예측: V1→PE (+10.0 bottom-up), IT→PE (-7.0 top-down)    ║
+║    - 학습: PE→IT R-STDP 4시냅스 (예측 오차→IT 정제)          ║
 ║                                                               ║
 ║  학습 곡선 (20ep):                                            ║
-║    - Good→IT_Food: 2.0→2.30 (강화)                           ║
-║    - Good→IT_Danger: 2.0→1.82 (약화)                         ║
-║    - Bad→IT_Danger: 2.0→2.18 (강화)                          ║
-║    - Bad→IT_Food: 2.0→1.90 (약화)                            ║
-║    - D1 R-STDP: 1.0→3.26 (점진적, 비포화)                    ║
+║    - PE_Food→IT_Food: 1.0→1.18 (점진적 상승)                 ║
+║    - PE_Danger→IT_Danger: 1.0→1.22 (점진적 상승)             ║
+║    - D1 R-STDP: 1.0→2.90 (건강한 학습)                       ║
+║    - Food Correct: early 47.9% → late 52.5% (+4.6pp)         ║
 ║                                                               ║
 ║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 60% ✓                                    ║
+║    - Survival Rate: 45% ✓                                    ║
 ║    - Pain Death: 0% ✓                                        ║
-║    - Avg Food: 51.1                                          ║
-║    - 학습 가능 시냅스: 11→19 (+8)                             ║
+║    - Avg Food: 42.0                                          ║
+║    - 학습 가능 시냅스: 19→23 (+4)                             ║
 ║                                                               ║
-║  뉴런 수:       20,040 (+800)                                  ║
+║  뉴런 수:       20,240 (+200)                                  ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 

@@ -115,6 +115,11 @@ class ForagerConfig:
     food_type_ratio: float = 0.6           # 좋은 음식 비율 (60%)
     bad_food_energy: float = -5.0          # 나쁜 음식 에너지 (부정적)
 
+    # === Phase L6: Food Cluster Respawn (예측 학습 환경) ===
+    food_cluster_respawn: bool = True         # 클러스터 리스폰 활성화
+    food_cluster_prob: float = 0.6            # 먹은 위치 근처 리스폰 확률 (60%)
+    food_cluster_radius: float = 80.0         # 클러스터 반경 (px)
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -333,6 +338,9 @@ class ForagerGym:
         # === Phase L5: Food Type 통계 ===
         self.good_food_eaten: int = 0
         self.bad_food_eaten: int = 0
+
+        # === Phase L6: Last eaten food position (for cluster respawn) ===
+        self._last_eaten_pos: Optional[Tuple[float, float]] = None
 
         # === Phase 2b: Pain Zone (내부 원형 영역) ===
         self.pain_zones: List[Tuple[float, float]] = []  # [(cx, cy), ...] 원형 pain zone 중심 좌표
@@ -1271,6 +1279,8 @@ class ForagerGym:
                     patch_idx = self._in_patch(food_x, food_y)
                     if patch_idx >= 0:
                         self.patch_food_eaten[patch_idx] += 1
+                # Phase L6: 먹은 위치 저장 (클러스터 리스폰용)
+                self._last_eaten_pos = (food_x, food_y)
                 self.foods.pop(i)
                 self._spawn_foods(1)  # 새 음식 생성
                 return True, food_type
@@ -1327,7 +1337,38 @@ class ForagerGym:
                             break
                     continue
 
-            # 기존 방식: 랜덤 위치 (Patch 모드 OFF 또는 20% 확률)
+            # Phase L6: 클러스터 리스폰 (먹은 위치 근처에 60% 확률로 생성)
+            if (self.config.food_cluster_respawn and self._last_eaten_pos is not None
+                    and np.random.random() < self.config.food_cluster_prob):
+                ex, ey = self._last_eaten_pos
+                cr = self.config.food_cluster_radius
+                for _ in range(50):
+                    angle = np.random.uniform(0, 2 * np.pi)
+                    r = np.sqrt(np.random.uniform(0, 1)) * cr
+                    x = ex + r * np.cos(angle)
+                    y = ey + r * np.sin(angle)
+                    if not (margin <= x <= self.config.width - margin and
+                            margin <= y <= self.config.height - margin):
+                        continue
+                    if (cx - half <= x <= cx + half and cy - half <= y <= cy + half):
+                        continue
+                    in_zone = False
+                    for pz_x, pz_y in self.pain_zones:
+                        if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
+                            in_zone = True
+                            break
+                    if not in_zone:
+                        self.foods.append((x, y, food_type))
+                        self._last_eaten_pos = None
+                        break
+                else:
+                    self._last_eaten_pos = None  # 클러스터 실패 → 랜덤 폴백
+                    # fall through to random spawn below
+
+                if len(self.foods) >= self.config.n_food:
+                    continue  # 클러스터로 이미 생성됨
+
+            # 기존 방식: 랜덤 위치 (Patch 모드 OFF 또는 클러스터 실패 시)
             for _ in range(100):
                 x = np.random.uniform(margin, self.config.width - margin)
                 y = np.random.uniform(margin, self.config.height - margin)
