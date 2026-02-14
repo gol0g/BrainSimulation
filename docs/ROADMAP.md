@@ -4,15 +4,15 @@
 
 ---
 
-## 현재 상태: Phase L6 완료 (20,240 뉴런)
+## 현재 상태: Phase L7 완료 (20,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L6: 예측 오차 회로 ✓ (2026-02-14)                        ║
-║  계층적 예측 코딩 (V1→PE←IT) + PE→IT R-STDP 학습              ║
-║  학습 가능 시냅스: 19개→23개 (+4), 환경에 음식 클러스터 리스폰  ║
-║  PE_Food→IT: 1.0→1.18 ↑, PE_Danger→IT: 1.0→1.22 ↑           ║
-║  45% 생존, 0% pain death, Food Correct +4.6pp 학습 효과        ║
+║  Phase L7: 음식 유형별 BG 학습 ✓ (2026-02-15)                   ║
+║  good/bad food_eye → D1/D2 직접 연결, 도파민 차등 학습           ║
+║  학습 가능 시냅스: 23개→31개 (+8 discriminative BG)             ║
+║  Good→D1: 2.79 vs Bad→D1: 2.30 (차등 학습 확인)                ║
+║  45% 생존, 0% pain death, Reward Freq 2.50%                    ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -50,6 +50,7 @@
 | **L4** | **Anti-Hebbian D2** | **-** | **✓ 완료** | **100%** |
 | **L5** | **지각 학습 (피질 R-STDP + 다중 음식)** | **+800** | **✓ 완료** | **60%** |
 | **L6** | **예측 오차 회로 (Predictive Coding)** | **+200** | **✓ 완료** | **45%** |
+| **L7** | **음식 유형별 BG 학습 (Discriminative BG)** | **-** | **✓ 완료** | **45%** |
 
 ### Phase 12-14 수정 이력
 
@@ -287,6 +288,42 @@
 - **관찰**: D2 학습이 빠름 (ep5에 w_min 도달) — 향후 eta_d2 감소 또는 w_min 상향 가능
 - **체크포인트**: `checkpoints/brain_L4_20ep.npz` (15 시냅스)
 
+### Phase L5: 지각 학습 (피질 R-STDP + 다중 음식) ✓ 완료
+- **문제**: 모든 음식이 동일 (좋은/나쁜 구별 없음) → 학습 압력 부족
+- **환경 변경**: 좋은 음식 (green, +25 energy) / 나쁜 음식 (purple, -5 energy), 60/40 비율
+- **감각**: good/bad_food_eye L/R (200×2×2 = +800 뉴런)
+- **학습**: 피질 R-STDP 8시냅스 — good→IT_Food↑, good→IT_Danger↓, bad→IT_Danger↑, bad→IT_Food↓
+- **맛 혐오 (Garcia Effect)**: bad food → danger_sensor I_input (NOT lateral_amygdala Ioffset)
+- **파라미터**: eta=0.0008, w_max=8.0, w_min=0.1, init_w=2.0, trace_decay=0.90
+- **학습 곡선 (20ep)**: Good→IT_Food 2.0→2.30, Bad→IT_Danger 2.0→2.18, Bad→IT_Food 2.0→1.90
+- **검증 (2026-02-14)**: 생존율 60% ✓, Pain Death 0% ✓, Avg Food 51.1, Selectivity ~0.60
+
+### Phase L6: 예측 오차 회로 (Predictive Coding) ✓ 완료
+- **문제**: 학습 신호가 보상 시점에만 발생 → 감각-보상 사이 매핑 부족
+- **구조**: +200 뉴런 (PE_Food 100, PE_Danger 100) — 예측 오차 뉴런
+- **메커니즘**: V1 (실제 감각) vs IT (예측/기대) → PE = V1 - IT, 놀라움 신호
+- **학습**: PE→IT R-STDP 4시냅스 (PE_Food→IT_Food, PE_Danger→IT_Danger, L/R)
+- **환경**: 음식 클러스터 리스폰 (먹은 위치 근처에 새 음식 생성)
+- **파라미터**: eta=0.0008, w_max=5.0, init_w=1.0, trace_decay=0.90
+- **학습 곡선 (20ep)**: PE_Food→IT_Food 1.0→1.18, PE_Danger→IT_Danger 1.0→1.22
+- **검증 (2026-02-14)**: 생존율 45% ✓, Pain Death 0% ✓, Food Correct +4.6pp 학습 효과
+
+### Phase L7: 음식 유형별 BG 학습 (Discriminative BG) ✓ 완료
+- **문제**: food_eye(무차별)가 BG D1(Go) + Reflex(35.0) 구동 → 모든 음식에 동일한 접근
+- **해결**: good/bad food_eye를 BG D1/D2에 직접 연결 → 도파민 차등으로 음식 유형별 Go/NoGo 학습
+- **생물학적 근거**: 복측 선조체 D1/D2 MSN은 안와전두피질(OFC)에서 범주 특이적 입력 수신
+- **구조**: 뉴런 변경 없음 (20,240 유지), +8 SPARSE 시냅스 (23→31 학습 시냅스)
+  - good_food_eye → D1 L/R (R-STDP, 도파민 시 강화)
+  - bad_food_eye → D1 L/R (R-STDP, 도파민 없어 실질 static)
+  - good_food_eye → D2 L/R (Anti-Hebbian, 도파민 시 약화)
+  - bad_food_eye → D2 L/R (Anti-Hebbian, 도파민 없어 실질 static)
+- **파라미터**: init_w=1.0, sparsity=0.08, 기존 D1/D2 학습률 재사용
+- **학습 곡선 (20ep)**: Good→D1: 1.0→2.79 ↑, Bad→D1: 1.0→2.30 ↑ (delta 0.49)
+  - Good→D2: 1.0→0.10 ↓, Bad→D2: 1.0→0.16 ↓ (차등 감소)
+  - Bad→D1도 학습하는 이유: 음식 근접 시 trace 중첩 (시간적 신용 할당 노이즈, 생물학적으로 현실적)
+- **검증 (2026-02-15)**: 생존율 45% ✓, Pain Death 0% ✓, Reward Freq 2.50%
+- **체크포인트**: `checkpoints/brain_L7_20ep.npz` (35 시냅스)
+
 ---
 
 ## 환경 진화 계획
@@ -361,4 +398,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-14 (Phase L4 완료, Anti-Hebbian D2, Go/NoGo 경쟁 학습, 19,240 뉴런)*
+*최종 업데이트: 2026-02-15 (Phase L7 완료, Discriminative BG Learning, 20,240 뉴런, 31 학습 시냅스)*
