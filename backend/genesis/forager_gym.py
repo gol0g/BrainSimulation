@@ -110,6 +110,11 @@ class ForagerConfig:
     agent_call_cooldown: int = 10              # 에이전트 발성 쿨다운 (steps)
     npc_call_response_speed: float = 0.15      # NPC가 에이전트 call에 반응하는 강도
 
+    # === Phase L5: Multi-Food Types (지각 학습) ===
+    n_food_types: int = 2                  # 음식 종류 수 (1=기존, 2=좋은/나쁜)
+    food_type_ratio: float = 0.6           # 좋은 음식 비율 (60%)
+    bad_food_energy: float = -5.0          # 나쁜 음식 에너지 (부정적)
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -157,7 +162,7 @@ class NPCAgent:
         # 가장 가까운 음식 찾기
         best_dist = float('inf')
         best_food = None
-        for fx, fy in foods:
+        for fx, fy, *_ in foods:
             dist = math.sqrt((self.x - fx)**2 + (self.y - fy)**2)
             if dist < config.view_range and dist < best_dist:
                 best_dist = dist
@@ -257,7 +262,7 @@ class NPCAgent:
             return False
 
         collision_dist = self.radius + config.food_radius
-        for i, (fx, fy) in enumerate(foods):
+        for i, (fx, fy, *_) in enumerate(foods):
             dist = math.sqrt((self.x - fx)**2 + (self.y - fy)**2)
             if dist < collision_dist:
                 foods.pop(i)
@@ -314,7 +319,7 @@ class ForagerGym:
         self.agent_y: float = 0
         self.agent_angle: float = 0
         self.energy: float = 0
-        self.foods: List[Tuple[float, float]] = []
+        self.foods: List[Tuple[float, float, int]] = []  # (x, y, food_type) 0=good, 1=bad
         self.steps: int = 0
 
         # 통계
@@ -324,6 +329,10 @@ class ForagerGym:
         self.homeostasis_steps: int = 0  # 30-70 범위 유지 시간
         self.energy_history: List[float] = []
         self.position_history: List[Tuple[float, float]] = []
+
+        # === Phase L5: Food Type 통계 ===
+        self.good_food_eaten: int = 0
+        self.bad_food_eaten: int = 0
 
         # === Phase 2b: Pain Zone (내부 원형 영역) ===
         self.pain_zones: List[Tuple[float, float]] = []  # [(cx, cy), ...] 원형 pain zone 중심 좌표
@@ -376,6 +385,8 @@ class ForagerGym:
         # 통계 초기화
         self.steps = 0
         self.total_food_eaten = 0
+        self.good_food_eaten = 0
+        self.bad_food_eaten = 0
         self.min_energy = self.config.energy_start
         self.max_energy = self.config.energy_start
         self.homeostasis_steps = 0
@@ -488,12 +499,17 @@ class ForagerGym:
 
         # 3. 음식 섭취
         reward = 0.0
-        food_eaten = self._check_food_collision()
+        food_eaten, food_type = self._check_food_collision()
         if food_eaten:
-            self.energy = min(self.config.energy_max,
-                            self.energy + self.config.food_value)
-            reward += self.config.reward_food
             self.total_food_eaten += 1
+            if food_type == 0:  # 좋은 음식
+                self.energy = min(self.config.energy_max,
+                                self.energy + self.config.food_value)
+                reward += self.config.reward_food
+                self.good_food_eaten += 1
+            elif food_type == 1:  # 나쁜 음식
+                self.energy = max(0, self.energy + self.config.bad_food_energy)
+                self.bad_food_eaten += 1
 
         # 4. 항상성 보상 (30-70 범위 유지)
         if 30 <= self.energy <= 70:
@@ -622,7 +638,10 @@ class ForagerGym:
             "energy": self.energy,
             "in_nest": self._in_nest(),
             "food_eaten": food_eaten,
+            "food_type": food_type if food_eaten else -1,
             "total_food": self.total_food_eaten,
+            "good_food_eaten": self.good_food_eaten,
+            "bad_food_eaten": self.bad_food_eaten,
             "death_cause": death_cause,
             "homeostasis_ratio": self.homeostasis_steps / max(1, self.steps),
             "min_energy": self.min_energy,
@@ -844,7 +863,7 @@ class ForagerGym:
         right_total = 0.0
         food_count_nearby = 0
 
-        for food_x, food_y in self.foods:
+        for food_x, food_y, *_ in self.foods:
             dx = food_x - self.agent_x
             dy = food_y - self.agent_y
             dist = np.sqrt(dx * dx + dy * dy)
@@ -883,6 +902,17 @@ class ForagerGym:
         """관찰 반환"""
         food_rays_l, food_rays_r = self._cast_food_rays()
         wall_rays_l, wall_rays_r = self._cast_wall_rays()
+
+        # Phase L5: 타입별 음식 레이캐스트
+        if self.config.n_food_types >= 2:
+            good_food_rays_l, good_food_rays_r = self._cast_typed_food_rays(0)
+            bad_food_rays_l, bad_food_rays_r = self._cast_typed_food_rays(1)
+        else:
+            n_half = self.config.n_rays // 2
+            good_food_rays_l = np.zeros(n_half)
+            good_food_rays_r = np.zeros(n_half)
+            bad_food_rays_l = np.zeros(n_half)
+            bad_food_rays_r = np.zeros(n_half)
 
         # Phase 2b: Pain 관련 관찰
         if self.config.pain_zone_enabled:
@@ -985,6 +1015,12 @@ class ForagerGym:
             "npc_call_food_right": npc_call_food_r,
             "npc_call_danger_left": npc_call_danger_l,
             "npc_call_danger_right": npc_call_danger_r,
+
+            # Phase L5: 타입별 음식 감각 (지각 학습)
+            "good_food_rays_left": good_food_rays_l,
+            "good_food_rays_right": good_food_rays_r,
+            "bad_food_rays_left": bad_food_rays_l,
+            "bad_food_rays_right": bad_food_rays_r,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1015,7 +1051,7 @@ class ForagerGym:
         """단일 레이로 가장 가까운 음식 감지 (0=없음, 1=매우가까움)"""
         best_dist = self.config.view_range
 
-        for food_x, food_y in self.foods:
+        for food_x, food_y, *_ in self.foods:
             # 음식까지 벡터
             dx = food_x - self.agent_x
             dy = food_y - self.agent_y
@@ -1030,6 +1066,52 @@ class ForagerGym:
 
             # 레이 폭 (~15도)
             if angle_diff < 0.26:  # ~15 degrees
+                if dist < best_dist:
+                    best_dist = dist
+
+        if best_dist >= self.config.view_range:
+            return 0.0
+        return 1.0 - (best_dist / self.config.view_range)
+
+    # === Phase L5: 타입별 음식 레이캐스트 ===
+
+    def _cast_typed_food_rays(self, target_type: int) -> Tuple[np.ndarray, np.ndarray]:
+        """특정 타입의 음식만 감지하는 레이캐스트 (L/R 분리)
+
+        Args:
+            target_type: 감지할 음식 타입 (0=좋은, 1=나쁜)
+        """
+        n_half = self.config.n_rays // 2
+        rays_left = np.zeros(n_half)
+        rays_right = np.zeros(n_half)
+
+        for i in range(n_half):
+            angle_l = self.agent_angle - np.pi/2 + (i / n_half) * np.pi/2
+            rays_left[i] = self._cast_single_typed_food_ray(angle_l, target_type)
+            angle_r = self.agent_angle + (i / n_half) * np.pi/2
+            rays_right[i] = self._cast_single_typed_food_ray(angle_r, target_type)
+
+        return rays_left, rays_right
+
+    def _cast_single_typed_food_ray(self, angle: float, target_type: int) -> float:
+        """단일 레이로 특정 타입의 가장 가까운 음식 감지"""
+        best_dist = self.config.view_range
+
+        for food_x, food_y, food_type in self.foods:
+            if food_type != target_type:
+                continue
+
+            dx = food_x - self.agent_x
+            dy = food_y - self.agent_y
+            dist = np.sqrt(dx*dx + dy*dy)
+
+            if dist > self.config.view_range:
+                continue
+
+            food_angle = np.arctan2(dy, dx)
+            angle_diff = abs((food_angle - angle + np.pi) % (2*np.pi) - np.pi)
+
+            if angle_diff < 0.26:
                 if dist < best_dist:
                     best_dist = dist
 
@@ -1172,11 +1254,15 @@ class ForagerGym:
             return 1.0 - (min_approach / self.config.view_range)
         return 0.0
 
-    def _check_food_collision(self) -> bool:
-        """음식 충돌 확인"""
+    def _check_food_collision(self) -> Tuple[bool, int]:
+        """음식 충돌 확인
+
+        Returns:
+            (eaten, food_type): eaten=True면 음식 먹음, food_type=0(좋은)/1(나쁜)
+        """
         collision_dist = self.config.agent_radius + self.config.food_radius
 
-        for i, (food_x, food_y) in enumerate(self.foods):
+        for i, (food_x, food_y, food_type) in enumerate(self.foods):
             dist = np.sqrt((self.agent_x - food_x)**2 +
                           (self.agent_y - food_y)**2)
             if dist < collision_dist:
@@ -1187,8 +1273,14 @@ class ForagerGym:
                         self.patch_food_eaten[patch_idx] += 1
                 self.foods.pop(i)
                 self._spawn_foods(1)  # 새 음식 생성
-                return True
-        return False
+                return True, food_type
+        return False, -1
+
+    def _assign_food_type(self) -> int:
+        """Phase L5: 음식 타입 결정 (0=좋은, 1=나쁜)"""
+        if self.config.n_food_types <= 1:
+            return 0
+        return 0 if np.random.random() < self.config.food_type_ratio else 1
 
     def _spawn_foods(self, n: int):
         """Field에 음식 생성 (Nest 외부, Pain Zone 외부)
@@ -1196,6 +1288,8 @@ class ForagerGym:
         Food Patch 모드 활성화 시:
         - 80%의 음식이 Patch 내에 생성
         - 20%는 랜덤 위치에 생성
+
+        Phase L5: 각 음식에 food_type 부여 (0=좋은, 1=나쁜)
         """
         cx, cy = self.config.width / 2, self.config.height / 2
         half = self.config.nest_size / 2
@@ -1203,6 +1297,8 @@ class ForagerGym:
         pain_r = self.config.pain_zone_radius + self.config.food_radius * 2  # pain zone 외부 마진
 
         for _ in range(n):
+            food_type = self._assign_food_type()
+
             # Food Patch 모드: 80% Patch 내, 20% 랜덤
             if self.config.food_patch_enabled and self.patches:
                 if np.random.random() < self.config.food_spawn_in_patch_prob:
@@ -1227,7 +1323,7 @@ class ForagerGym:
                                 in_zone = True
                                 break
                         if not in_zone:
-                            self.foods.append((x, y))
+                            self.foods.append((x, y, food_type))
                             break
                     continue
 
@@ -1246,7 +1342,7 @@ class ForagerGym:
                         in_zone = True
                         break
                 if not in_zone:
-                    self.foods.append((x, y))
+                    self.foods.append((x, y, food_type))
                     break
 
     # === Phase 15: Agent Sensing Methods ===
@@ -1470,7 +1566,7 @@ class ForagerGym:
                 continue
 
             # NPC와 가장 가까운 음식 거리
-            for fx, fy in self.foods:
+            for fx, fy, *_ in self.foods:
                 food_dist = math.sqrt((npc.x - fx)**2 + (npc.y - fy)**2)
                 if food_dist < 30.0:  # 30px 이내면 "가까움"
                     signal = 1.0 - (food_dist / 30.0)
@@ -1778,9 +1874,13 @@ class ForagerGym:
         pygame.draw.rect(env_surface, (70, 80, 70),
                         (cx - half, cy - half, self.config.nest_size, self.config.nest_size), 2)
 
-        # 음식
-        for food_x, food_y in self.foods:
-            pygame.draw.circle(env_surface, (255, 220, 50),
+        # 음식 (Phase L5: 타입별 색상 - 좋은=초록, 나쁜=보라)
+        for food_x, food_y, food_type in self.foods:
+            if food_type == 1:  # 나쁜 음식
+                food_color = (180, 80, 200)  # 보라
+            else:  # 좋은 음식 (기본)
+                food_color = (100, 220, 80)  # 초록
+            pygame.draw.circle(env_surface, food_color,
                              (int(food_x), int(food_y)), int(self.config.food_radius))
 
         # Phase 15: NPC 에이전트

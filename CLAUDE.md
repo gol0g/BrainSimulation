@@ -291,34 +291,39 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L4 완료 - Anti-Hebbian D2 (19,240 뉴런)
+### 현재 상태: Phase L5 완료 - 지각 학습 (20,040 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L4: Anti-Hebbian D2 ✓ (2026-02-14)                     ║
+║  Phase L5: 지각 학습 ✓ (2026-02-14)                            ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→L2→L3→L4):                      ║
+║  Learning Foundation (Phase L1→L2→L3→L4→L5):                   ║
 ║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
 ║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
 ║    - L3: Homeostatic R-STDP (포화→점진적 학습)                ║
 ║    - L4: Anti-Hebbian D2 (Go/NoGo 경쟁적 학습)               ║
+║    - L5: 피질 R-STDP + 다중 음식 (좋은/나쁜 음식 구별 학습)  ║
 ║                                                               ║
-║  L4 변경 사항:                                                ║
-║    - D2 Anti-Hebbian: 도파민 시 D2 시냅스 약화 (NoGo 감소)   ║
-║    - D2 trace: pre-synaptic (food_eye) 기반 (D2 발화 불필요)  ║
-║    - eta_d2=0.0003, w_min=0.1 (완전 소멸 방지)               ║
+║  L5 변경 사항:                                                ║
+║    - 환경: 좋은 음식(초록, +25) / 나쁜 음식(보라, -5) 2종    ║
+║    - 감각: good/bad_food_eye (200×2 = 800 뉴런 추가)         ║
+║    - 학습: 피질 R-STDP 8시냅스 (good→IT_Food↑, bad→IT_Danger↑)║
+║    - 맛 혐오: Garcia Effect - bad food→danger_sensor I_input  ║
 ║                                                               ║
-║  학습 곡선 (핵심 성과):                                       ║
-║    - D1: 1.37(ep1) → 3.05(ep7) → 4.53(ep20) (점진적 강화)   ║
-║    - D2: 1.00(ep1) → 0.10(ep5) (빠른 NoGo 약화)             ║
+║  학습 곡선 (20ep):                                            ║
+║    - Good→IT_Food: 2.0→2.30 (강화)                           ║
+║    - Good→IT_Danger: 2.0→1.82 (약화)                         ║
+║    - Bad→IT_Danger: 2.0→2.18 (강화)                          ║
+║    - Bad→IT_Food: 2.0→1.90 (약화)                            ║
+║    - D1 R-STDP: 1.0→3.26 (점진적, 비포화)                    ║
 ║                                                               ║
 ║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 100% ✓                                   ║
-║    - Reward Freq: 2.23%                                      ║
-║    - Pain Avoidance: 100% ✓                                  ║
-║    - Avg Food: 67.0                                          ║
+║    - Survival Rate: 60% ✓                                    ║
+║    - Pain Death: 0% ✓                                        ║
+║    - Avg Food: 51.1                                          ║
+║    - 학습 가능 시냅스: 11→19 (+8)                             ║
 ║                                                               ║
-║  뉴런 수:       19,240 (변동 없음)                             ║
+║  뉴런 수:       20,040 (+800)                                  ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -326,8 +331,8 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ```
 backend/genesis/
-├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone)
-├── forager_brain.py   # Forager Brain (19,240 뉴런, Phase 1-20 + L1-L4)
+├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식)
+├── forager_brain.py   # Forager Brain (20,040 뉴런, Phase 1-20 + L1-L5)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -340,6 +345,8 @@ backend/genesis/
 5. **D1/D2 MSN 분리 필수**: 단일 Striatum은 Go+NoGo 동시 강화 → 학습 상쇄
 6. **R-STDP 빠른 포화**: w_max=5.0에 ep 1-2에서 도달, 점진적 개선 제한적
 7. **Anti-Hebbian D2 trace는 pre-synaptic**: D1↔D2 경쟁이 D2 발화를 억제하므로 food_eye 기반 trace 사용
+8. **환경 공진화**: 학습 압력(나쁜 음식)과 학습 능력(피질 STDP)을 동시 도입해야 함
+9. **SensoryLIF I_input vs LIF Ioffset**: 표준 LIF의 Ioffset은 VAR가 아님, SensoryLIF I_input 사용
 
 ---
 

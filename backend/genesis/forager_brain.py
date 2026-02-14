@@ -210,6 +210,23 @@ class ForagerBrainConfig:
     rstdp_d2_eta: float = 0.0003              # D2 Anti-Hebbian 학습률 (D1보다 약하게)
     rstdp_d2_w_min: float = 0.1               # D2 최소 가중치 (완전 소멸 방지)
 
+    # Phase L5: Perceptual Learning (지각 학습)
+    perceptual_learning_enabled: bool = True
+    n_good_food_eye: int = 400                 # 200L + 200R
+    n_bad_food_eye: int = 400                  # 200L + 200R
+    good_food_eye_sensitivity: float = 50.0
+    bad_food_eye_sensitivity: float = 50.0
+    cortical_rstdp_eta: float = 0.0008
+    cortical_rstdp_w_max: float = 8.0
+    cortical_rstdp_w_min: float = 0.1
+    cortical_rstdp_init_w: float = 2.0
+    cortical_rstdp_trace_decay: float = 0.90
+    cortical_rstdp_trace_max: float = 1.0
+    cortical_rstdp_weight_decay: float = 0.00002
+    cortical_rstdp_w_rest: float = 2.0
+    cortical_anti_hebbian_ratio: float = 0.6   # Anti-Hebbian 약화 비율 (R-STDP 대비)
+    taste_aversion_magnitude: float = 15.0     # 맛 혐오 → Lateral Amygdala I_input
+
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
     dopamine_decay: float = 0.95               # Dopamine 감쇠율
@@ -1105,6 +1122,8 @@ class ForagerBrainConfig:
             base += (self.n_self_body + self.n_self_efference +
                      self.n_self_predict + self.n_self_agency +
                      self.n_self_narrative + self.n_self_inhibitory)
+        if self.perceptual_learning_enabled:
+            base += self.n_good_food_eye + self.n_bad_food_eye
         return base
 
 
@@ -1233,6 +1252,20 @@ class ForagerBrain:
             "wall_eye_right", n_wall_half, sensory_lif_model, sensory_params, sensory_init)
 
         print(f"  Sensory: Food_L/R({n_food_half}x2) + Wall_L/R({n_wall_half}x2)")
+
+        # === Phase L5: Good/Bad Food Eye (지각 학습용) ===
+        if self.config.perceptual_learning_enabled:
+            n_good_half = self.config.n_good_food_eye // 2
+            n_bad_half = self.config.n_bad_food_eye // 2
+            self.good_food_eye_left = self.model.add_neuron_population(
+                "good_food_eye_left", n_good_half, sensory_lif_model, sensory_params, sensory_init)
+            self.good_food_eye_right = self.model.add_neuron_population(
+                "good_food_eye_right", n_good_half, sensory_lif_model, sensory_params, sensory_init)
+            self.bad_food_eye_left = self.model.add_neuron_population(
+                "bad_food_eye_left", n_bad_half, sensory_lif_model, sensory_params, sensory_init)
+            self.bad_food_eye_right = self.model.add_neuron_population(
+                "bad_food_eye_right", n_bad_half, sensory_lif_model, sensory_params, sensory_init)
+            print(f"  Phase L5: Good_Food_L/R({n_good_half}x2) + Bad_Food_L/R({n_bad_half}x2)")
 
         # === 2. HYPOTHALAMUS (Phase 2a 신규!) ===
         # 이중 센서: Low Energy (배고픔 신호), High Energy (포만 신호)
@@ -1384,6 +1417,16 @@ class ForagerBrain:
             self.rstdp_d2_trace_r = 0.0
             self._rstdp_step = 0  # Phase L3: 항상성 감쇠 스텝 카운터
 
+        # Phase L5: 피질 R-STDP 적격 추적 (좋은/나쁜 음식 × L/R)
+        if self.config.perceptual_learning_enabled:
+            self.cortical_trace_good_l = 0.0
+            self.cortical_trace_good_r = 0.0
+            self.cortical_trace_bad_l = 0.0
+            self.cortical_trace_bad_r = 0.0
+            self._cortical_step = 0
+            self._taste_aversion_active = False
+
+        if self.config.basal_ganglia_enabled:
             print(f"  BasalGanglia (L2 D1/D2): "
                   f"D1({n_d1_half}L+{n_d1_half}R) + "
                   f"D2({n_d2_half}L+{n_d2_half}R) + "
@@ -1485,6 +1528,10 @@ class ForagerBrain:
         if self.config.self_model_enabled:
             self._build_self_model_circuit()
 
+        # Phase L5: Perceptual Learning (좋은/나쁜 음식 → IT 피질)
+        if self.config.perceptual_learning_enabled and self.config.it_enabled:
+            self._build_perceptual_learning_circuit()
+
         # Build and load
         print("Building model...")
         self.model.build()
@@ -1497,6 +1544,14 @@ class ForagerBrain:
             self.food_to_d1_r.pull_connectivity_from_device()
             self.food_to_d2_l.pull_connectivity_from_device()  # Phase L4: Anti-Hebbian D2
             self.food_to_d2_r.pull_connectivity_from_device()
+
+        # Phase L5: 피질 R-STDP 시냅스 connectivity pull
+        if self.config.perceptual_learning_enabled and self.config.it_enabled:
+            for syn in [self.good_food_to_it_food_l, self.good_food_to_it_food_r,
+                        self.good_food_to_it_danger_l, self.good_food_to_it_danger_r,
+                        self.bad_food_to_it_danger_l, self.bad_food_to_it_danger_r,
+                        self.bad_food_to_it_food_l, self.bad_food_to_it_food_r]:
+                syn.pull_connectivity_from_device()
 
         print(f"Model ready! Total: {self.config.total_neurons:,} neurons")
 
@@ -4324,6 +4379,22 @@ class ForagerBrain:
             weights["rstdp_d2_left"] = self.food_to_d2_l.vars["g"].values.copy()
             weights["rstdp_d2_right"] = self.food_to_d2_r.vars["g"].values.copy()
 
+        # Phase L5: 피질 R-STDP (8 SPARSE synapses)
+        if self.config.perceptual_learning_enabled and self.config.it_enabled:
+            cortical_synapses = {
+                "cortical_good_food_l": self.good_food_to_it_food_l,
+                "cortical_good_food_r": self.good_food_to_it_food_r,
+                "cortical_good_danger_l": self.good_food_to_it_danger_l,
+                "cortical_good_danger_r": self.good_food_to_it_danger_r,
+                "cortical_bad_danger_l": self.bad_food_to_it_danger_l,
+                "cortical_bad_danger_r": self.bad_food_to_it_danger_r,
+                "cortical_bad_food_l": self.bad_food_to_it_food_l,
+                "cortical_bad_food_r": self.bad_food_to_it_food_r,
+            }
+            for key, syn in cortical_synapses.items():
+                syn.vars["g"].pull_from_device()
+                weights[key] = syn.vars["g"].values.copy()
+
         np.savez(filepath, **weights)
         print(f"  [SAVE] All weights saved to {filepath} ({len(weights)} synapses)")
         return filepath
@@ -4382,6 +4453,25 @@ class ForagerBrain:
             self.food_to_d2_r.vars["g"].values = data["rstdp_d2_right"]
             self.food_to_d2_r.vars["g"].push_to_device()
             loaded += 2
+
+        # Phase L5: 피질 R-STDP (SPARSE - connectivity pull 필수)
+        if self.config.perceptual_learning_enabled and self.config.it_enabled:
+            cortical_synapses = {
+                "cortical_good_food_l": self.good_food_to_it_food_l,
+                "cortical_good_food_r": self.good_food_to_it_food_r,
+                "cortical_good_danger_l": self.good_food_to_it_danger_l,
+                "cortical_good_danger_r": self.good_food_to_it_danger_r,
+                "cortical_bad_danger_l": self.bad_food_to_it_danger_l,
+                "cortical_bad_danger_r": self.bad_food_to_it_danger_r,
+                "cortical_bad_food_l": self.bad_food_to_it_food_l,
+                "cortical_bad_food_r": self.bad_food_to_it_food_r,
+            }
+            for key, syn in cortical_synapses.items():
+                if key in data:
+                    syn.pull_connectivity_from_device()
+                    syn.vars["g"].values = data[key]
+                    syn.vars["g"].push_to_device()
+                    loaded += 1
 
         print(f"  [LOAD] Weights loaded from {filepath} ({loaded} synapses)")
         return True
@@ -6560,6 +6650,155 @@ class ForagerBrain:
 
         return currents
 
+    def _build_perceptual_learning_circuit(self):
+        """Phase L5: 지각 학습 회로 — 좋은/나쁜 음식 → IT_Food/IT_Danger (R-STDP)
+
+        생물학적 근거:
+        - 맛 혐오 학습 (Garcia Effect): 나쁜 음식 → Amygdala → 회피
+        - 피질 STDP: 보상 조절 시냅스 가소성으로 범주 학습
+        - 음식 타입별 시각 경로가 IT 피질에서 범주별로 분화
+
+        학습 시냅스 (8개, SPARSE 0.08):
+        - good_food→IT_Food: R-STDP 강화 (좋은 음식 = 먹을 것)
+        - good_food→IT_Danger: Anti-Hebbian 약화 (좋은 음식 ≠ 위험)
+        - bad_food→IT_Danger: R-STDP 강화 (나쁜 음식 = 위험)
+        - bad_food→IT_Food: Anti-Hebbian 약화 (나쁜 음식 ≠ 먹을 것)
+        """
+        print("\n  === Phase L5: Perceptual Learning Circuit ===")
+        init_w = self.config.cortical_rstdp_init_w
+
+        # 좋은 음식 → IT_Food (R-STDP 강화: 좋은 음식이면 "먹을 것" 학습)
+        self.good_food_to_it_food_l = self._create_static_synapse(
+            "good_food_l_to_it_food", self.good_food_eye_left, self.it_food_category,
+            init_w, sparsity=0.08)
+        self.good_food_to_it_food_r = self._create_static_synapse(
+            "good_food_r_to_it_food", self.good_food_eye_right, self.it_food_category,
+            init_w, sparsity=0.08)
+
+        # 좋은 음식 → IT_Danger (Anti-Hebbian 약화: 좋은 음식 ≠ 위험)
+        self.good_food_to_it_danger_l = self._create_static_synapse(
+            "good_food_l_to_it_danger", self.good_food_eye_left, self.it_danger_category,
+            init_w, sparsity=0.08)
+        self.good_food_to_it_danger_r = self._create_static_synapse(
+            "good_food_r_to_it_danger", self.good_food_eye_right, self.it_danger_category,
+            init_w, sparsity=0.08)
+
+        # 나쁜 음식 → IT_Danger (R-STDP 강화: 나쁜 음식 = 위험)
+        self.bad_food_to_it_danger_l = self._create_static_synapse(
+            "bad_food_l_to_it_danger", self.bad_food_eye_left, self.it_danger_category,
+            init_w, sparsity=0.08)
+        self.bad_food_to_it_danger_r = self._create_static_synapse(
+            "bad_food_r_to_it_danger", self.bad_food_eye_right, self.it_danger_category,
+            init_w, sparsity=0.08)
+
+        # 나쁜 음식 → IT_Food (Anti-Hebbian 약화: 나쁜 음식 ≠ 먹을 것)
+        self.bad_food_to_it_food_l = self._create_static_synapse(
+            "bad_food_l_to_it_food", self.bad_food_eye_left, self.it_food_category,
+            init_w, sparsity=0.08)
+        self.bad_food_to_it_food_r = self._create_static_synapse(
+            "bad_food_r_to_it_food", self.bad_food_eye_right, self.it_food_category,
+            init_w, sparsity=0.08)
+
+        print(f"    Good→IT_Food (R-STDP), Good→IT_Danger (Anti-Hebbian)")
+        print(f"    Bad→IT_Danger (R-STDP), Bad→IT_Food (Anti-Hebbian)")
+        print(f"    Init weight: {init_w}, Sparsity: 0.08")
+        print(f"    Total: 8 learning synapses")
+
+    def update_cortical_rstdp(self, reward_type: str):
+        """Phase L5: 피질 R-STDP 가중치 업데이트
+
+        Args:
+            reward_type: "good_food" (좋은 음식 섭취) 또는 "bad_food" (나쁜 음식 섭취)
+        """
+        if not self.config.perceptual_learning_enabled or not self.config.it_enabled:
+            return None
+
+        eta = self.config.cortical_rstdp_eta
+        anti_ratio = self.config.cortical_anti_hebbian_ratio
+        w_max = self.config.cortical_rstdp_w_max
+        w_min = self.config.cortical_rstdp_w_min
+        results = {}
+
+        if reward_type == "good_food":
+            # 좋은 음식: good→IT_Food 강화, good→IT_Danger 약화
+            for side, trace, syn_strengthen, syn_weaken in [
+                ("left", self.cortical_trace_good_l,
+                 self.good_food_to_it_food_l, self.good_food_to_it_danger_l),
+                ("right", self.cortical_trace_good_r,
+                 self.good_food_to_it_food_r, self.good_food_to_it_danger_r),
+            ]:
+                if trace > 0.01:
+                    # R-STDP 강화
+                    syn_strengthen.vars["g"].pull_from_device()
+                    w = syn_strengthen.vars["g"].values
+                    w[:] += eta * trace
+                    w[:] = np.clip(w, w_min, w_max)
+                    syn_strengthen.vars["g"].values = w
+                    syn_strengthen.vars["g"].push_to_device()
+                    results[f"good_it_food_{side}"] = float(np.nanmean(w))
+
+                    # Anti-Hebbian 약화
+                    syn_weaken.vars["g"].pull_from_device()
+                    w2 = syn_weaken.vars["g"].values
+                    w2[:] -= eta * anti_ratio * trace
+                    w2[:] = np.clip(w2, w_min, w_max)
+                    syn_weaken.vars["g"].values = w2
+                    syn_weaken.vars["g"].push_to_device()
+                    results[f"good_it_danger_{side}"] = float(np.nanmean(w2))
+
+        elif reward_type == "bad_food":
+            # 나쁜 음식: bad→IT_Danger 강화, bad→IT_Food 약화
+            for side, trace, syn_strengthen, syn_weaken in [
+                ("left", self.cortical_trace_bad_l,
+                 self.bad_food_to_it_danger_l, self.bad_food_to_it_food_l),
+                ("right", self.cortical_trace_bad_r,
+                 self.bad_food_to_it_danger_r, self.bad_food_to_it_food_r),
+            ]:
+                if trace > 0.01:
+                    # R-STDP 강화
+                    syn_strengthen.vars["g"].pull_from_device()
+                    w = syn_strengthen.vars["g"].values
+                    w[:] += eta * trace
+                    w[:] = np.clip(w, w_min, w_max)
+                    syn_strengthen.vars["g"].values = w
+                    syn_strengthen.vars["g"].push_to_device()
+                    results[f"bad_it_danger_{side}"] = float(np.nanmean(w))
+
+                    # Anti-Hebbian 약화
+                    syn_weaken.vars["g"].pull_from_device()
+                    w2 = syn_weaken.vars["g"].values
+                    w2[:] -= eta * anti_ratio * trace
+                    w2[:] = np.clip(w2, w_min, w_max)
+                    syn_weaken.vars["g"].values = w2
+                    syn_weaken.vars["g"].push_to_device()
+                    results[f"bad_it_food_{side}"] = float(np.nanmean(w2))
+
+        return results if results else None
+
+    def trigger_taste_aversion(self, magnitude: float = 0.5):
+        """Phase L5: 맛 혐오 — 나쁜 음식 섭취 시 danger_sensor 활성화
+
+        Garcia Effect: 나쁜 음식 → 내장 불쾌 → 편도체 공포 반응
+        danger_sensor(SensoryLIF)의 I_input으로 공포 경로 활성화
+        기존 Pain→Fear→Motor 회피 경로를 재사용하여 맛 혐오 회피 학습
+        """
+        if not self.config.amygdala_enabled:
+            return
+        aversion_current = magnitude * self.config.taste_aversion_magnitude
+        self.danger_sensor.vars["I_input"].view[:] = aversion_current
+        self.danger_sensor.vars["I_input"].push_to_device()
+        self._taste_aversion_active = True
+
+    def _clear_taste_aversion(self):
+        """맛 혐오 I_input 초기화 (다음 스텝에서 호출)"""
+        if not self.config.amygdala_enabled:
+            return
+        if not getattr(self, '_taste_aversion_active', False):
+            return
+        self.danger_sensor.vars["I_input"].view[:] = 0.0
+        self.danger_sensor.vars["I_input"].push_to_device()
+        self._taste_aversion_active = False
+
     def process(self, observation: Dict, debug: bool = False) -> Tuple[float, Dict]:
         """
         관찰을 받아 행동 출력
@@ -6594,6 +6833,33 @@ class ForagerBrain:
         self.wall_eye_right.vars["I_input"].view[:] = wall_r * wall_sensitivity
         self.wall_eye_left.vars["I_input"].push_to_device()
         self.wall_eye_right.vars["I_input"].push_to_device()
+
+        # === Phase L5: Good/Bad Food Eye 입력 ===
+        good_food_l = 0.0
+        good_food_r = 0.0
+        bad_food_l = 0.0
+        bad_food_r = 0.0
+        if self.config.perceptual_learning_enabled:
+            good_food_l = np.mean(observation.get("good_food_rays_left", np.zeros(8)))
+            good_food_r = np.mean(observation.get("good_food_rays_right", np.zeros(8)))
+            bad_food_l = np.mean(observation.get("bad_food_rays_left", np.zeros(8)))
+            bad_food_r = np.mean(observation.get("bad_food_rays_right", np.zeros(8)))
+
+            gs = self.config.good_food_eye_sensitivity
+            self.good_food_eye_left.vars["I_input"].view[:] = good_food_l * gs
+            self.good_food_eye_right.vars["I_input"].view[:] = good_food_r * gs
+            self.good_food_eye_left.vars["I_input"].push_to_device()
+            self.good_food_eye_right.vars["I_input"].push_to_device()
+
+            bs = self.config.bad_food_eye_sensitivity
+            self.bad_food_eye_left.vars["I_input"].view[:] = bad_food_l * bs
+            self.bad_food_eye_right.vars["I_input"].view[:] = bad_food_r * bs
+            self.bad_food_eye_left.vars["I_input"].push_to_device()
+            self.bad_food_eye_right.vars["I_input"].push_to_device()
+
+            self._cortical_step += 1
+            # 맛 혐오 Ioffset 클리어 (이전 스텝에서 설정된 경우)
+            self._clear_taste_aversion()
 
         # === 2. 내부 감각 입력 (Phase 2a 핵심!) ===
         energy = observation["energy"]  # 0~1 정규화됨
@@ -7425,6 +7691,36 @@ class ForagerBrain:
             # D1↔D2 경쟁으로 D2가 억제되어도, food_eye가 활성이면 trace 누적
             self.rstdp_d2_trace_l = min(self.rstdp_d2_trace_l * self.config.rstdp_trace_decay + food_l_active, trace_max)
             self.rstdp_d2_trace_r = min(self.rstdp_d2_trace_r * self.config.rstdp_trace_decay + food_r_active, trace_max)
+
+        # Phase L5: 피질 R-STDP 적격 추적 (좋은/나쁜 음식 활성도 기반)
+        if self.config.perceptual_learning_enabled:
+            good_food_l_active = 1.0 if good_food_l > 0.05 else 0.0
+            good_food_r_active = 1.0 if good_food_r > 0.05 else 0.0
+            bad_food_l_active = 1.0 if bad_food_l > 0.05 else 0.0
+            bad_food_r_active = 1.0 if bad_food_r > 0.05 else 0.0
+            ct_decay = self.config.cortical_rstdp_trace_decay
+            ct_max = self.config.cortical_rstdp_trace_max
+            self.cortical_trace_good_l = min(self.cortical_trace_good_l * ct_decay + good_food_l_active, ct_max)
+            self.cortical_trace_good_r = min(self.cortical_trace_good_r * ct_decay + good_food_r_active, ct_max)
+            self.cortical_trace_bad_l = min(self.cortical_trace_bad_l * ct_decay + bad_food_l_active, ct_max)
+            self.cortical_trace_bad_r = min(self.cortical_trace_bad_r * ct_decay + bad_food_r_active, ct_max)
+
+            # 항상성 감쇠: 50 스텝마다 (BG R-STDP와 동일 패턴)
+            if self.config.cortical_rstdp_weight_decay > 0 and self._cortical_step % 50 == 0:
+                c_decay = self.config.cortical_rstdp_weight_decay
+                c_rest = self.config.cortical_rstdp_w_rest
+                c_w_max = self.config.cortical_rstdp_w_max
+                c_w_min = self.config.cortical_rstdp_w_min
+                for syn in [self.good_food_to_it_food_l, self.good_food_to_it_food_r,
+                            self.good_food_to_it_danger_l, self.good_food_to_it_danger_r,
+                            self.bad_food_to_it_danger_l, self.bad_food_to_it_danger_r,
+                            self.bad_food_to_it_food_l, self.bad_food_to_it_food_r]:
+                    syn.vars["g"].pull_from_device()
+                    w = syn.vars["g"].values
+                    w[:] -= (c_decay * 50) * (w - c_rest)
+                    w[:] = np.clip(w, c_w_min, c_w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
 
         # Phase 5 스파이크율
         working_memory_rate = 0.0
@@ -8398,75 +8694,90 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
             # 음식 섭취 이벤트 (normal 이상) + Phase 3b/3c 학습 + Phase 4 Dopamine
             if env_info["food_eaten"]:
-                # Phase 3b/3c: Hebbian 학습 실행
-                # food_position을 전달하여 방향성 학습 지원
-                food_pos = (obs["position_x"], obs["position_y"])
-                learn_info = brain.learn_food_location(food_position=food_pos)
-                if learn_info:
-                    ep_learn_events += 1
+                eaten_food_type = env_info.get("food_type", 0)
+                learn_info = None
+                dopamine_info = None
+                assoc_learn = None
+                call_learn = None
+                wm_ctx_learn = None
+                meta_learn = None
+                sm_learn = None
 
-                # Phase 4: Dopamine 방출 (보상) - Phase L1: 0.5→1.0 증가
-                dopamine_info = brain.release_dopamine(reward_magnitude=1.0)
+                if eaten_food_type == 0:  # === 좋은 음식: 도파민 + 기존 학습 ===
+                    # Phase 3b/3c: Hebbian 학습 실행
+                    food_pos = (obs["position_x"], obs["position_y"])
+                    learn_info = brain.learn_food_location(food_position=food_pos)
+                    if learn_info:
+                        ep_learn_events += 1
 
-                # Phase 15b: 자기 먹기 → Mirror 활성화
-                if brain_config.social_brain_enabled and brain_config.mirror_enabled:
-                    brain.mirror_self_eating_timer = env_config.npc_eating_signal_duration
+                    # Phase 4: Dopamine 방출 (보상) - Phase L1: 0.5→1.0 증가
+                    dopamine_info = brain.release_dopamine(reward_magnitude=1.0)
 
-                # Phase 15c: 협력 가치 학습 (음식 먹기 시)
-                if brain_config.social_brain_enabled and brain_config.tom_enabled:
-                    food_near_npc = False
-                    for npc in env.npc_agents:
-                        if npc.target_food is not None:
-                            tfx, tfy = npc.target_food
-                            dist_to_npc_target = np.sqrt(
-                                (obs["position_x"] * env_config.width - tfx)**2 +
-                                (obs["position_y"] * env_config.height - tfy)**2)
-                            if dist_to_npc_target < 50.0:
-                                food_near_npc = True
-                                break
-                    coop_learn = brain.learn_cooperation_value(food_near_npc)
-                    if coop_learn and log_level in ["debug", "verbose"]:
-                        print(f"  [TOM] Coop learning: avg_w={coop_learn['avg_weight']:.2f}, "
-                              f"factor={coop_learn['learning_factor']:.1f}")
+                    # Phase L5: 피질 R-STDP (좋은 음식 학습)
+                    if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
+                        cortical_learn = brain.update_cortical_rstdp("good_food")
 
-                # Phase 16: 연합 바인딩 학습 (음식 먹기 = 강한 학습)
-                if brain_config.association_cortex_enabled:
-                    assoc_learn = brain.learn_association_binding(reward_context=True)
+                    # Phase 15b: 자기 먹기 → Mirror 활성화
+                    if brain_config.social_brain_enabled and brain_config.mirror_enabled:
+                        brain.mirror_self_eating_timer = env_config.npc_eating_signal_duration
 
-                # Phase 17: Call Binding 학습 (food call 듣고 음식 찾기 = 강한 학습)
-                if brain_config.language_enabled:
-                    heard_food_call = info.get("npc_call_food_l", 0) > 0.01 or info.get("npc_call_food_r", 0) > 0.01
-                    call_learn = brain.learn_call_binding(reward_context=heard_food_call)
+                    # Phase 15c: 협력 가치 학습 (음식 먹기 시)
+                    if brain_config.social_brain_enabled and brain_config.tom_enabled:
+                        food_near_npc = False
+                        for npc in env.npc_agents:
+                            if npc.target_food is not None:
+                                tfx, tfy = npc.target_food
+                                dist_to_npc_target = np.sqrt(
+                                    (obs["position_x"] * env_config.width - tfx)**2 +
+                                    (obs["position_y"] * env_config.height - tfy)**2)
+                                if dist_to_npc_target < 50.0:
+                                    food_near_npc = True
+                                    break
+                        coop_learn = brain.learn_cooperation_value(food_near_npc)
+                        if coop_learn and log_level in ["debug", "verbose"]:
+                            print(f"  [TOM] Coop learning: avg_w={coop_learn['avg_weight']:.2f}, "
+                                  f"factor={coop_learn['learning_factor']:.1f}")
 
-                # Phase 18: WM Context 학습 (음식 먹기 = 강한 학습)
-                if brain_config.wm_expansion_enabled:
-                    wm_ctx_learn = brain.learn_wm_context(reward_context=True)
-                    if wm_ctx_learn and log_level in ["debug", "verbose"]:
-                        print(f"  [WM] Context learn (food): avg_w={wm_ctx_learn['avg_w']:.2f}, "
-                              f"factor={wm_ctx_learn['learning_factor']:.1f}")
+                    # Phase 16: 연합 바인딩 학습 (음식 먹기 = 강한 학습)
+                    if brain_config.association_cortex_enabled:
+                        assoc_learn = brain.learn_association_binding(reward_context=True)
 
-                # Phase 19: Metacognitive Confidence 학습 (음식 먹기 = 강한 학습)
-                if brain_config.metacognition_enabled:
-                    meta_learn = brain.learn_metacognitive_confidence(reward_context=True)
-                    if meta_learn and log_level in ["debug", "verbose"]:
-                        print(f"  [META] Confidence learn (food): avg_w={meta_learn['avg_w']:.2f}, "
-                              f"factor={meta_learn['learning_factor']:.1f}")
+                    # Phase 17: Call Binding 학습 (food call 듣고 음식 찾기 = 강한 학습)
+                    if brain_config.language_enabled:
+                        heard_food_call = info.get("npc_call_food_l", 0) > 0.01 or info.get("npc_call_food_r", 0) > 0.01
+                        call_learn = brain.learn_call_binding(reward_context=heard_food_call)
 
-                # Phase 20: Self-Narrative 학습 (음식 먹기 = 강한 학습)
-                if brain_config.self_model_enabled:
-                    sm_learn = brain.learn_self_narrative(reward_context=True)
-                    if sm_learn and log_level in ["debug", "verbose"]:
-                        print(f"  [SELF] Narrative learn (food): avg_w={sm_learn['avg_w']:.2f}, "
-                              f"factor={sm_learn['learning_factor']:.1f}")
+                    # Phase 18: WM Context 학습 (음식 먹기 = 강한 학습)
+                    if brain_config.wm_expansion_enabled:
+                        wm_ctx_learn = brain.learn_wm_context(reward_context=True)
 
+                    # Phase 19: Metacognitive Confidence 학습 (음식 먹기 = 강한 학습)
+                    if brain_config.metacognition_enabled:
+                        meta_learn = brain.learn_metacognitive_confidence(reward_context=True)
+
+                    # Phase 20: Self-Narrative 학습 (음식 먹기 = 강한 학습)
+                    if brain_config.self_model_enabled:
+                        sm_learn = brain.learn_self_narrative(reward_context=True)
+
+                elif eaten_food_type == 1:  # === 나쁜 음식: 맛 혐오 + 피질 약화 ===
+                    # 도파민 없음! BG D1/D2 강화 안됨
+                    # Phase L5: 피질 R-STDP (나쁜 음식 학습)
+                    if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
+                        cortical_learn = brain.update_cortical_rstdp("bad_food")
+
+                    # Phase L5: 맛 혐오 → Amygdala 활성화 (Garcia Effect)
+                    brain.trigger_taste_aversion(0.5)
+
+                # 공통 로그
                 if log_level in ["normal", "debug", "verbose"]:
+                    type_str = "GOOD" if eaten_food_type == 0 else "BAD"
                     da_str = f", DA={dopamine_info['dopamine_level']:.2f}" if dopamine_info else ""
                     if learn_info:
                         side_str = f", side={learn_info.get('side', 'N/A')}" if 'side' in learn_info else ""
-                        print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f} "
+                        print(f"  [!] {type_str} FOOD at step {env.steps}, Energy: {env_info['energy']:.1f} "
                               f"[LEARN: {learn_info['n_strengthened']} cells, avg_w={learn_info['avg_weight']:.2f}{side_str}{da_str}]")
                     else:
-                        print(f"  [!] FOOD EATEN at step {env.steps}, Energy: {env_info['energy']:.1f}{da_str}")
+                        print(f"  [!] {type_str} FOOD at step {env.steps}, Energy: {env_info['energy']:.1f}{da_str}")
 
                 # Hebbian logging (food context)
                 if logger:
@@ -8584,7 +8895,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         print(f"{'='*60}")
         print(f"  Steps:        {env.steps}")
         print(f"  Final Energy: {env_info['energy']:.1f}")
-        print(f"  Food Eaten:   {env.total_food_eaten}")
+        print(f"  Food Eaten:   {env.total_food_eaten} (Good: {env.good_food_eaten}, Bad: {env.bad_food_eaten})")
+        _selectivity = env.good_food_eaten / max(1, env.total_food_eaten)
+        print(f"  Selectivity:  {_selectivity:.2f} (good/total)")
         print(f"  Death Cause:  {env_info['death_cause']}")
         print(f"  Reward:       {total_reward:.2f}")
         print(f"  Homeostasis:  {env_info['homeostasis_ratio']*100:.1f}%")
@@ -8645,6 +8958,23 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"  D2 Anti-H: L={d2_w_l:.3f} R={d2_w_r:.3f} "
                   f"(init={brain_config.food_to_d2_weight}, min={brain_config.rstdp_d2_w_min})")
 
+        # Phase L5: 피질 R-STDP 가중치 현황
+        if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
+            print(f"  --- Phase L5: Cortical R-STDP ---")
+            for label, syn in [
+                ("Good→IT_Food_L", brain.good_food_to_it_food_l),
+                ("Good→IT_Food_R", brain.good_food_to_it_food_r),
+                ("Good→IT_Danger_L", brain.good_food_to_it_danger_l),
+                ("Good→IT_Danger_R", brain.good_food_to_it_danger_r),
+                ("Bad→IT_Danger_L", brain.bad_food_to_it_danger_l),
+                ("Bad→IT_Danger_R", brain.bad_food_to_it_danger_r),
+                ("Bad→IT_Food_L", brain.bad_food_to_it_food_l),
+                ("Bad→IT_Food_R", brain.bad_food_to_it_food_r),
+            ]:
+                syn.vars["g"].pull_from_device()
+                avg_w = float(np.nanmean(syn.vars["g"].values))
+                print(f"    {label}: {avg_w:.3f}")
+
         # Food Patch 통계
         if env_config.food_patch_enabled:
             pv = env_info.get("patch_visits", [])
@@ -8685,6 +9015,18 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     print(f"  Avg Food:       {np.mean(all_food):.1f}")
     print(f"  Avg Homeostasis:{np.mean(all_homeostasis)*100:.1f}%")
     print(f"  Reward Freq:    {np.sum(all_food) / np.sum(all_steps) * 100:.2f}%")
+
+    # Phase L5: Food Selectivity
+    if env_config.n_food_types >= 2:
+        total_good = sum(1 for _ in [])  # 에피소드 단위가 아니라 최종 env 기준
+        # 최종 에피소드의 good/bad는 env에 남아있음, 전체는 에피소드별 누적 필요
+        # 간단히 최종 에피소드 selectivity만 출력
+        final_good = env.good_food_eaten
+        final_bad = env.bad_food_eaten
+        final_total = final_good + final_bad
+        final_selectivity = final_good / max(1, final_total)
+        print(f"  (Last ep) Food Selectivity: {final_selectivity:.2f} "
+              f"(good={final_good}, bad={final_bad})")
 
     if env_config.pain_zone_enabled:
         pain_pct = np.sum(all_pain_steps) / np.sum(all_steps) * 100
