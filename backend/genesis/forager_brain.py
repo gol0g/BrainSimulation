@@ -4321,8 +4321,10 @@ class ForagerBrain:
                 syn.vars["g"].push_to_device()
                 loaded += 1
 
-        # R-STDP (Phase L2: Food_Eye→D1, SPARSE)
+        # R-STDP (Phase L2: Food_Eye→D1, SPARSE - connectivity pull 필수)
         if "rstdp_left" in data and self.config.basal_ganglia_enabled:
+            self.food_to_d1_l.pull_connectivity_from_device()
+            self.food_to_d1_r.pull_connectivity_from_device()
             self.food_to_d1_l.vars["g"].values = data["rstdp_left"]
             self.food_to_d1_l.vars["g"].push_to_device()
             self.food_to_d1_r.vars["g"].values = data["rstdp_right"]
