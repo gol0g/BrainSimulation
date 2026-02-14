@@ -291,30 +291,32 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L3 완료 - Homeostatic R-STDP (19,240 뉴런)
+### 현재 상태: Phase L4 완료 - Anti-Hebbian D2 (19,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L3: Homeostatic R-STDP ✓ (2026-02-12)                  ║
+║  Phase L4: Anti-Hebbian D2 ✓ (2026-02-14)                     ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→L2→L3):                         ║
+║  Learning Foundation (Phase L1→L2→L3→L4):                      ║
 ║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
 ║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
 ║    - L3: Homeostatic R-STDP (포화→점진적 학습)                ║
+║    - L4: Anti-Hebbian D2 (Go/NoGo 경쟁적 학습)               ║
 ║                                                               ║
-║  L3 변경 사항:                                                ║
-║    - 적격 추적 상한: trace_max=1.0 (무한 누적 방지)           ║
-║    - 학습률 감소: eta 0.001→0.0005                            ║
-║    - 항상성 감쇠: weight_decay=0.00003/step (시냅스 스케일링)  ║
+║  L4 변경 사항:                                                ║
+║    - D2 Anti-Hebbian: 도파민 시 D2 시냅스 약화 (NoGo 감소)   ║
+║    - D2 trace: pre-synaptic (food_eye) 기반 (D2 발화 불필요)  ║
+║    - eta_d2=0.0003, w_min=0.1 (완전 소멸 방지)               ║
 ║                                                               ║
 ║  학습 곡선 (핵심 성과):                                       ║
-║    - w: 1.35(ep1) → 3.15(ep10) → 4.29(ep20)                 ║
-║    - Food: ep1-5 avg 48.4 → ep11-15 avg 65.8 (+36%)         ║
+║    - D1: 1.37(ep1) → 3.05(ep7) → 4.53(ep20) (점진적 강화)   ║
+║    - D2: 1.00(ep1) → 0.10(ep5) (빠른 NoGo 약화)             ║
 ║                                                               ║
 ║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 90% ✓                                    ║
-║    - Reward Freq: 2.13% (점진적 학습으로 초반 약해 집계 하락)  ║
+║    - Survival Rate: 100% ✓                                   ║
+║    - Reward Freq: 2.23%                                      ║
 ║    - Pain Avoidance: 100% ✓                                  ║
+║    - Avg Food: 67.0                                          ║
 ║                                                               ║
 ║  뉴런 수:       19,240 (변동 없음)                             ║
 ╚═══════════════════════════════════════════════════════════════╝
@@ -325,7 +327,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone)
-├── forager_brain.py   # Forager Brain (19,240 뉴런, Phase 1-20 + L1-L2)
+├── forager_brain.py   # Forager Brain (19,240 뉴런, Phase 1-20 + L1-L4)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -337,6 +339,7 @@ backend/genesis/
 4. **Hebbian 학습은 안정적**: 보상 연관 학습 avg_w 2.0→7.12 (20 ep)
 5. **D1/D2 MSN 분리 필수**: 단일 Striatum은 Go+NoGo 동시 강화 → 학습 상쇄
 6. **R-STDP 빠른 포화**: w_max=5.0에 ep 1-2에서 도달, 점진적 개선 제한적
+7. **Anti-Hebbian D2 trace는 pre-synaptic**: D1↔D2 경쟁이 D2 발화를 억제하므로 food_eye 기반 trace 사용
 
 ---
 

@@ -198,13 +198,17 @@ class ForagerBrainConfig:
     dopamine_to_d1_weight: float = 15.0        # DA → D1 흥분 (D1 수용체)
     dopamine_to_d2_weight: float = -12.0       # DA → D2 억제 (D2 수용체)
 
-    # R-STDP 학습 파라미터 (Phase L3: Homeostatic, D1 MSN만 적용)
+    # R-STDP 학습 파라미터 (Phase L3: Homeostatic, D1 MSN)
     rstdp_eta: float = 0.0005                  # R-STDP 학습률 (L3: 0.001→0.0005, 점진적 학습)
     rstdp_trace_decay: float = 0.95            # 적격 추적 감쇠 (τ≈20 steps)
     rstdp_trace_max: float = 1.0               # L3: 추적 상한 (무한 누적 방지)
     rstdp_w_max: float = 5.0                   # R-STDP 최대 가중치
     rstdp_weight_decay: float = 0.00003        # L3: 항상성 가중치 감쇠 (시냅스 스케일링)
     rstdp_w_rest: float = 1.0                  # L3: 감쇠 평형점 (= 초기 가중치)
+
+    # Phase L4: Anti-Hebbian D2 학습 파라미터
+    rstdp_d2_eta: float = 0.0003              # D2 Anti-Hebbian 학습률 (D1보다 약하게)
+    rstdp_d2_w_min: float = 0.1               # D2 최소 가중치 (완전 소멸 방지)
 
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
@@ -1373,9 +1377,11 @@ class ForagerBrain:
             # Dopamine 레벨 추적
             self.dopamine_level = 0.0
 
-            # R-STDP 적격 추적 (Phase L1, D1만 사용)
+            # R-STDP 적격 추적 (Phase L1: D1, Phase L4: D2)
             self.rstdp_trace_l = 0.0
             self.rstdp_trace_r = 0.0
+            self.rstdp_d2_trace_l = 0.0  # Phase L4: D2 Anti-Hebbian 추적
+            self.rstdp_d2_trace_r = 0.0
             self._rstdp_step = 0  # Phase L3: 항상성 감쇠 스텝 카운터
 
             print(f"  BasalGanglia (L2 D1/D2): "
@@ -1489,6 +1495,8 @@ class ForagerBrain:
         if self.config.basal_ganglia_enabled:
             self.food_to_d1_l.pull_connectivity_from_device()
             self.food_to_d1_r.pull_connectivity_from_device()
+            self.food_to_d2_l.pull_connectivity_from_device()  # Phase L4: Anti-Hebbian D2
+            self.food_to_d2_r.pull_connectivity_from_device()
 
         print(f"Model ready! Total: {self.config.total_neurons:,} neurons")
 
@@ -1825,15 +1833,15 @@ class ForagerBrain:
 
         print(f"    FoodEye→D1 (R-STDP): init_w={d1_init_w}, w_max={self.config.rstdp_w_max}")
 
-        # 2. Food_Eye → D2 MSN (Static, 학습 안 함)
-        self._create_static_synapse(
+        # 2. Food_Eye → D2 MSN (Phase L4: Anti-Hebbian 학습 대상)
+        self.food_to_d2_l = self._create_static_synapse(
             "food_eye_left_to_d2_l", self.food_eye_left, self.d2_left,
             self.config.food_to_d2_weight, sparsity=0.08)
-        self._create_static_synapse(
+        self.food_to_d2_r = self._create_static_synapse(
             "food_eye_right_to_d2_r", self.food_eye_right, self.d2_right,
             self.config.food_to_d2_weight, sparsity=0.08)
 
-        print(f"    FoodEye→D2 (Static): w={self.config.food_to_d2_weight}")
+        print(f"    FoodEye→D2 (Anti-Hebbian): init_w={self.config.food_to_d2_weight}, w_min={self.config.rstdp_d2_w_min}")
 
         # 3. D1 → Direct (Go) - DENSE, lateralized
         self.model.add_synapse_population(
@@ -3990,7 +3998,7 @@ class ForagerBrain:
         self.dopamine_neurons.vars["I_input"].push_to_device()
 
     def _update_rstdp_weights(self):
-        """Phase L3: R-STDP with homeostatic decay - 도파민 강화 + 항상성 감쇠 (D1만 학습)"""
+        """Phase L4: R-STDP D1 강화 + D2 Anti-Hebbian 약화 + 항상성 감쇠"""
         has_dopamine = self.dopamine_level > 0.01
         decay = self.config.rstdp_weight_decay
         # 항상성 감쇠: 50 스텝마다 배치 적용 (GPU 전송 최소화)
@@ -4004,6 +4012,7 @@ class ForagerBrain:
         w_rest = self.config.rstdp_w_rest
         results = {}
 
+        # === D1: R-STDP 강화 (보상 시 가중치 증가) ===
         for side, trace, syn in [
             ("left", self.rstdp_trace_l, self.food_to_d1_l),
             ("right", self.rstdp_trace_r, self.food_to_d1_r)
@@ -4028,6 +4037,34 @@ class ForagerBrain:
                 syn.vars["g"].values = w  # write back
                 syn.vars["g"].push_to_device()
             results[f"rstdp_avg_w_{side}"] = float(np.nanmean(w))
+
+        # === D2: Anti-Hebbian 약화 (보상 시 가중치 감소) ===
+        eta_d2 = self.config.rstdp_d2_eta
+        w_min_d2 = self.config.rstdp_d2_w_min
+        for side, trace, syn in [
+            ("left", self.rstdp_d2_trace_l, self.food_to_d2_l),
+            ("right", self.rstdp_d2_trace_r, self.food_to_d2_r)
+        ]:
+            need_update = False
+            syn.vars["g"].pull_from_device()
+            w = syn.vars["g"].values  # SPARSE → .values
+
+            # 항상성 감쇠: D2도 w_rest 방향으로 감쇠 (D1과 동일)
+            if apply_decay:
+                w[:] -= (decay * 50) * (w - w_rest)
+                need_update = True
+
+            # Anti-Hebbian: 도파민 + 적격 추적 → 가중치 감소 (부호 반전)
+            if has_dopamine and trace > 0.01:
+                delta_w = eta_d2 * trace * self.dopamine_level
+                w[:] -= delta_w  # 감소 (Anti-Hebbian)
+                need_update = True
+
+            if need_update:
+                w[:] = np.clip(w, w_min_d2, w_max)
+                syn.vars["g"].values = w  # write back
+                syn.vars["g"].push_to_device()
+            results[f"rstdp_d2_avg_w_{side}"] = float(np.nanmean(w))
 
         return results if results else None
 
@@ -4281,6 +4318,11 @@ class ForagerBrain:
             self.food_to_d1_r.vars["g"].pull_from_device()
             weights["rstdp_left"] = self.food_to_d1_l.vars["g"].values.copy()
             weights["rstdp_right"] = self.food_to_d1_r.vars["g"].values.copy()
+            # Phase L4: Anti-Hebbian D2
+            self.food_to_d2_l.vars["g"].pull_from_device()
+            self.food_to_d2_r.vars["g"].pull_from_device()
+            weights["rstdp_d2_left"] = self.food_to_d2_l.vars["g"].values.copy()
+            weights["rstdp_d2_right"] = self.food_to_d2_r.vars["g"].values.copy()
 
         np.savez(filepath, **weights)
         print(f"  [SAVE] All weights saved to {filepath} ({len(weights)} synapses)")
@@ -4329,6 +4371,16 @@ class ForagerBrain:
             self.food_to_d1_l.vars["g"].push_to_device()
             self.food_to_d1_r.vars["g"].values = data["rstdp_right"]
             self.food_to_d1_r.vars["g"].push_to_device()
+            loaded += 2
+
+        # Phase L4: Anti-Hebbian D2 (SPARSE - connectivity pull 필수)
+        if "rstdp_d2_left" in data and self.config.basal_ganglia_enabled:
+            self.food_to_d2_l.pull_connectivity_from_device()
+            self.food_to_d2_r.pull_connectivity_from_device()
+            self.food_to_d2_l.vars["g"].values = data["rstdp_d2_left"]
+            self.food_to_d2_l.vars["g"].push_to_device()
+            self.food_to_d2_r.vars["g"].values = data["rstdp_d2_right"]
+            self.food_to_d2_r.vars["g"].push_to_device()
             loaded += 2
 
         print(f"  [LOAD] Weights loaded from {filepath} ({loaded} synapses)")
@@ -7359,7 +7411,7 @@ class ForagerBrain:
             self.last_d1_l_rate = d1_l_rate
             self.last_d1_r_rate = d1_r_rate
 
-            # Phase L3: R-STDP 적격 추적 업데이트 (D1만 사용, trace 상한 적용)
+            # Phase L3: R-STDP 적격 추적 업데이트 (D1: 강화, D2: 약화)
             food_l_active = 1.0 if food_l > 0.05 else 0.0
             food_r_active = 1.0 if food_r > 0.05 else 0.0
             d1_l_active = 1.0 if d1_l_rate > 0.05 else 0.0
@@ -7367,6 +7419,12 @@ class ForagerBrain:
             trace_max = self.config.rstdp_trace_max
             self.rstdp_trace_l = min(self.rstdp_trace_l * self.config.rstdp_trace_decay + food_l_active * d1_l_active, trace_max)
             self.rstdp_trace_r = min(self.rstdp_trace_r * self.config.rstdp_trace_decay + food_r_active * d1_r_active, trace_max)
+
+            # Phase L4: D2 Anti-Hebbian 적격 추적
+            # 생물학적 근거: D2 LTD는 pre-synaptic(food_eye) 활동 + 도파민으로 발생
+            # D1↔D2 경쟁으로 D2가 억제되어도, food_eye가 활성이면 trace 누적
+            self.rstdp_d2_trace_l = min(self.rstdp_d2_trace_l * self.config.rstdp_trace_decay + food_l_active, trace_max)
+            self.rstdp_d2_trace_r = min(self.rstdp_d2_trace_r * self.config.rstdp_trace_decay + food_r_active, trace_max)
 
         # Phase 5 스파이크율
         working_memory_rate = 0.0
@@ -7763,6 +7821,8 @@ class ForagerBrain:
             "dopamine_rate": dopamine_rate,
             "rstdp_trace_l": getattr(self, 'rstdp_trace_l', 0.0),
             "rstdp_trace_r": getattr(self, 'rstdp_trace_r', 0.0),
+            "rstdp_d2_trace_l": getattr(self, 'rstdp_d2_trace_l', 0.0),
+            "rstdp_d2_trace_r": getattr(self, 'rstdp_d2_trace_r', 0.0),
             "dopamine_level": self.dopamine_level if self.config.basal_ganglia_enabled else 0.0,
 
             # Phase 5 뉴런 활성화
@@ -8570,15 +8630,20 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         else:
             print(f"  Pain Response: 0 steps in pain zone")
 
-        # Phase L2: R-STDP 가중치 현황 (D1만 학습)
+        # Phase L4: R-STDP D1/D2 가중치 현황
         if brain_config.basal_ganglia_enabled:
             brain.food_to_d1_l.vars["g"].pull_from_device()
             brain.food_to_d1_r.vars["g"].pull_from_device()
             rstdp_w_l = float(np.nanmean(brain.food_to_d1_l.vars["g"].values))
             rstdp_w_r = float(np.nanmean(brain.food_to_d1_r.vars["g"].values))
-            print(f"  R-STDP Weights: L={rstdp_w_l:.3f} R={rstdp_w_r:.3f} "
-                  f"(init={brain_config.food_to_d1_init_weight}, "
-                  f"max={brain_config.rstdp_w_max})")
+            brain.food_to_d2_l.vars["g"].pull_from_device()
+            brain.food_to_d2_r.vars["g"].pull_from_device()
+            d2_w_l = float(np.nanmean(brain.food_to_d2_l.vars["g"].values))
+            d2_w_r = float(np.nanmean(brain.food_to_d2_r.vars["g"].values))
+            print(f"  D1 R-STDP: L={rstdp_w_l:.3f} R={rstdp_w_r:.3f} "
+                  f"(init={brain_config.food_to_d1_init_weight}, max={brain_config.rstdp_w_max})")
+            print(f"  D2 Anti-H: L={d2_w_l:.3f} R={d2_w_r:.3f} "
+                  f"(init={brain_config.food_to_d2_weight}, min={brain_config.rstdp_d2_w_min})")
 
         # Food Patch 통계
         if env_config.food_patch_enabled:
