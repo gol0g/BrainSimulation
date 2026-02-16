@@ -291,13 +291,13 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L7 완료 - 음식 유형별 BG 학습 (20,240 뉴런)
+### 현재 상태: Phase L8 완료 - 혐오 도파민 딥 (20,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L7: 음식 유형별 BG 학습 ✓ (2026-02-15)                   ║
+║  Phase L8: 혐오 도파민 딥 ✓ (2026-02-16)                        ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→L2→L3→L4→L5→L6→L7):             ║
+║  Learning Foundation (Phase L1→L2→L3→L4→L5→L6→L7→L8):          ║
 ║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
 ║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
 ║    - L3: Homeostatic R-STDP (포화→점진적 학습)                ║
@@ -305,24 +305,25 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║    - L5: 피질 R-STDP + 다중 음식 (좋은/나쁜 음식 구별 학습)  ║
 ║    - L6: 예측 오차 회로 (V1→PE←IT 계층적 예측 코딩)          ║
 ║    - L7: 음식 유형별 BG 학습 (good/bad→D1/D2 도파민 차등)    ║
+║    - L8: 혐오 도파민 딥 (나쁜 음식 → DA 딥 → D1↓ D2↑)       ║
 ║                                                               ║
-║  L7 변경 사항:                                                ║
-║    - good/bad food_eye → D1/D2 직접 SPARSE 연결 (8시냅스)    ║
-║    - 도파민 차등: good food→DA→D1↑D2↓, bad food→no DA→유지  ║
-║    - 뉴런 변경 없음 (기존 population 간 새 연결만)            ║
+║  L8 변경 사항:                                                ║
+║    - dopamine_level: [0,1] → [-1,1] (음수 = 혐오 딥)        ║
+║    - 나쁜 음식 → DA=-0.5 → D1 LTD + D2 LTP (자동 반전)      ║
+║    - 뉴런/시냅스 변경 없음 (신호 극성만 변경)                 ║
 ║                                                               ║
 ║  학습 곡선 (20ep):                                            ║
-║    - Good→D1: 1.0→2.79 (강한 Go 학습)                        ║
-║    - Bad→D1:  1.0→2.30 (약한 Go, 시간적 노이즈)              ║
-║    - Good→D2: 1.0→0.10 (NoGo 약화)                           ║
-║    - Bad→D2:  1.0→0.16 (차등 NoGo 유지)                      ║
-║    - D1 R-STDP: 1.0→3.00 (건강한 학습)                       ║
+║    - Good→D1: 1.0→2.42 (Go 강화)                             ║
+║    - Bad→D1:  1.0→1.96 (L7의 2.30보다 0.34 억제됨)           ║
+║    - Good→D2: 1.0→0.10 (w_min)                               ║
+║    - Bad→D2:  1.0→0.38 (L7의 0.16보다 훨씬 높음!)            ║
+║    - D2 차등: delta 0.06(L7) → 0.28(L8) = 4.7x 향상          ║
 ║                                                               ║
 ║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 45% ✓                                    ║
+║    - Survival Rate: 60% ✓ (+15pp vs L7)                      ║
 ║    - Pain Death: 0% ✓                                        ║
-║    - Avg Food: 43.0                                          ║
-║    - 학습 가능 시냅스: 23→31 (+8)                             ║
+║    - Avg Food: 53.8                                          ║
+║    - Reward Freq: 2.54% ✓                                    ║
 ║                                                               ║
 ║  뉴런 수:       20,240 (변동 없음)                              ║
 ╚═══════════════════════════════════════════════════════════════╝
@@ -333,7 +334,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식)
-├── forager_brain.py   # Forager Brain (20,240 뉴런, Phase 1-20 + L1-L7)
+├── forager_brain.py   # Forager Brain (20,240 뉴런, Phase 1-20 + L1-L8)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -349,6 +350,7 @@ backend/genesis/
 8. **환경 공진화**: 학습 압력(나쁜 음식)과 학습 능력(피질 STDP)을 동시 도입해야 함
 9. **SensoryLIF I_input vs LIF Ioffset**: 표준 LIF의 Ioffset은 VAR가 아님, SensoryLIF I_input 사용
 10. **시간적 신용 할당 노이즈**: 음식 근접 시 trace 중첩 → bad food D1도 학습 (도파민 시간적 겹침)
+11. **도파민 딥이 생존율을 높임**: 음수 도파민(-0.5)이 기존 수식을 자동 반전 → 코드 변경 최소, 효과 극대 (+15pp 생존율)
 
 ---
 

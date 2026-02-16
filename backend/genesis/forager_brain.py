@@ -248,6 +248,10 @@ class ForagerBrainConfig:
     typed_food_d2_init_w: float = 1.0     # good/bad food → D2 초기 가중치
     typed_food_bg_sparsity: float = 0.08  # BG 연결 희소도
 
+    # Phase L8: Aversive Dopamine Dip (나쁜 음식 → 도파민 감소)
+    dopamine_dip_enabled: bool = True
+    dopamine_dip_magnitude: float = 0.5   # burst(1.0) 대비 50% (생물학적 비대칭)
+
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
     dopamine_decay: float = 0.95               # Dopamine 감쇠율
@@ -4123,16 +4127,16 @@ class ForagerBrain:
         Dopamine 뉴런을 활성화하고 학습을 촉진합니다.
 
         Args:
-            reward_magnitude: 보상 크기 (0~1)
+            reward_magnitude: 보상 크기 (-1~1, 음수 = dip)
         """
         if not self.config.basal_ganglia_enabled:
             return
 
-        # Dopamine 레벨 업데이트
-        self.dopamine_level = min(1.0, self.dopamine_level + reward_magnitude)
+        # Dopamine 레벨 업데이트 (L8: 음수 허용, -1.0 ~ 1.0)
+        self.dopamine_level = float(np.clip(self.dopamine_level + reward_magnitude, -1.0, 1.0))
 
-        # Dopamine 뉴런에 입력 전류 주입
-        dopamine_current = self.dopamine_level * 80.0  # 강한 활성화
+        # Dopamine 뉴런에 입력 전류 주입 (L8: dip 시 뉴런 정지, 음수 전류 방지)
+        dopamine_current = max(0.0, self.dopamine_level) * 80.0  # dip: neurons stop firing
         self.dopamine_neurons.vars["I_input"].view[:] = dopamine_current
         self.dopamine_neurons.vars["I_input"].push_to_device()
 
@@ -4148,17 +4152,17 @@ class ForagerBrain:
 
         self.dopamine_level *= self.config.dopamine_decay
 
-        # 감쇠된 레벨 반영
-        if self.dopamine_level < 0.01:
+        # 감쇠된 레벨 반영 (L8: 음수도 0 방향으로 감쇠)
+        if abs(self.dopamine_level) < 0.01:
             self.dopamine_level = 0.0
             self.dopamine_neurons.vars["I_input"].view[:] = 0.0
         else:
-            self.dopamine_neurons.vars["I_input"].view[:] = self.dopamine_level * 80.0
+            self.dopamine_neurons.vars["I_input"].view[:] = max(0.0, self.dopamine_level) * 80.0
         self.dopamine_neurons.vars["I_input"].push_to_device()
 
     def _update_rstdp_weights(self):
         """Phase L4: R-STDP D1 강화 + D2 Anti-Hebbian 약화 + 항상성 감쇠"""
-        has_dopamine = self.dopamine_level > 0.01
+        has_dopamine = abs(self.dopamine_level) > 0.01  # L8: 음수 dip도 학습 트리거
         decay = self.config.rstdp_weight_decay
         # 항상성 감쇠: 50 스텝마다 배치 적용 (GPU 전송 최소화)
         apply_decay = decay > 0 and self._rstdp_step % 50 == 0
@@ -9207,13 +9211,17 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if brain_config.self_model_enabled:
                         sm_learn = brain.learn_self_narrative(reward_context=True)
 
-                elif eaten_food_type == 1:  # === 나쁜 음식: 맛 혐오 + 피질 약화 ===
-                    # 도파민 없음! BG D1/D2 강화 안됨
-                    # Phase L5: 피질 R-STDP (나쁜 음식 학습)
+                elif eaten_food_type == 1:  # === 나쁜 음식: 도파민 딥 + 맛 혐오 + 피질 약화 ===
+                    # Phase L8: 도파민 딥 → D1 약화 (LTD) + D2 강화 (LTP)
+                    if brain_config.dopamine_dip_enabled and brain_config.basal_ganglia_enabled:
+                        dopamine_info = brain.release_dopamine(
+                            reward_magnitude=-brain_config.dopamine_dip_magnitude)
+
+                    # Phase L5: 피질 R-STDP (나쁜 음식 학습) — 도파민 비의존, 유지
                     if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
                         cortical_learn = brain.update_cortical_rstdp("bad_food")
 
-                    # Phase L5: 맛 혐오 → Amygdala 활성화 (Garcia Effect)
+                    # Phase L5: 맛 혐오 → Amygdala (Garcia Effect) — 편도체 경로, 유지
                     brain.trigger_taste_aversion(0.5)
 
                 # 공통 로그
