@@ -291,41 +291,36 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L8 완료 - 혐오 도파민 딥 (20,240 뉴런)
+### 현재 상태: Phase L9 완료 - 피질→BG 하향 연결 (20,240 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L8: 혐오 도파민 딥 ✓ (2026-02-16)                        ║
+║  Phase L9: 피질→BG 하향 연결 ✓ (2026-02-16)                     ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→L2→L3→L4→L5→L6→L7→L8):          ║
-║    - L1: R-STDP + BG Push-Pull (Go-NoGo 상쇄 문제 발견)      ║
-║    - L2: D1/D2 MSN 분리 (Go-NoGo 상쇄 해결)                  ║
-║    - L3: Homeostatic R-STDP (포화→점진적 학습)                ║
-║    - L4: Anti-Hebbian D2 (Go/NoGo 경쟁적 학습)               ║
-║    - L5: 피질 R-STDP + 다중 음식 (좋은/나쁜 음식 구별 학습)  ║
-║    - L6: 예측 오차 회로 (V1→PE←IT 계층적 예측 코딩)          ║
-║    - L7: 음식 유형별 BG 학습 (good/bad→D1/D2 도파민 차등)    ║
-║    - L8: 혐오 도파민 딥 (나쁜 음식 → DA 딥 → D1↓ D2↑)       ║
+║  Learning Foundation (Phase L1→...→L8→L9):                       ║
+║    - L1-L4: BG 기반 학습 (D1/D2, R-STDP, Anti-Hebbian)       ║
+║    - L5-L6: 피질 학습 (perceptual R-STDP, PE)                ║
+║    - L7-L8: 음식 유형별 차등 학습 (도파민 딥)                 ║
+║    - L9: 피질 표상→BG 의사결정 연결 (학습이 행동으로!)        ║
 ║                                                               ║
-║  L8 변경 사항:                                                ║
-║    - dopamine_level: [0,1] → [-1,1] (음수 = 혐오 딥)        ║
-║    - 나쁜 음식 → DA=-0.5 → D1 LTD + D2 LTP (자동 반전)      ║
-║    - 뉴런/시냅스 변경 없음 (신호 극성만 변경)                 ║
+║  L9 변경 사항:                                                ║
+║    - IT_Food → D1_L/R (R-STDP, 4 SPARSE synapses)            ║
+║    - IT_Food → D2_L/R (Anti-Hebbian, 4 SPARSE synapses)      ║
+║    - init_w=0.5, w_max=3.0, sparsity=0.05                    ║
+║    - 빌드 순서: IT 빌드 후 별도 메서드 (_build_it_bg_circuit) ║
 ║                                                               ║
 ║  학습 곡선 (20ep):                                            ║
-║    - Good→D1: 1.0→2.42 (Go 강화)                             ║
-║    - Bad→D1:  1.0→1.96 (L7의 2.30보다 0.34 억제됨)           ║
-║    - Good→D2: 1.0→0.10 (w_min)                               ║
-║    - Bad→D2:  1.0→0.38 (L7의 0.16보다 훨씬 높음!)            ║
-║    - D2 차등: delta 0.06(L7) → 0.28(L8) = 4.7x 향상          ║
+║    - IT→D1: 0.5→2.47 (점진적 R-STDP, 포화 없음)             ║
+║    - IT→D2: 0.5→0.11 (Anti-Hebbian, w_min 근처 수렴)        ║
 ║                                                               ║
 ║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 60% ✓ (+15pp vs L7)                      ║
+║    - Survival Rate: 70% ✓ (+10pp vs L8, 최고 기록!)          ║
 ║    - Pain Death: 0% ✓                                        ║
-║    - Avg Food: 53.8                                          ║
-║    - Reward Freq: 2.54% ✓                                    ║
+║    - Avg Food: 59.4                                          ║
+║    - Reward Freq: 2.44% (기준 근처)                           ║
 ║                                                               ║
 ║  뉴런 수:       20,240 (변동 없음)                              ║
+║  학습 시냅스:   35 (+4, IT→D1/D2)                              ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -334,7 +329,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식)
-├── forager_brain.py   # Forager Brain (20,240 뉴런, Phase 1-20 + L1-L8)
+├── forager_brain.py   # Forager Brain (20,240 뉴런, Phase 1-20 + L1-L9)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -351,6 +346,8 @@ backend/genesis/
 9. **SensoryLIF I_input vs LIF Ioffset**: 표준 LIF의 Ioffset은 VAR가 아님, SensoryLIF I_input 사용
 10. **시간적 신용 할당 노이즈**: 음식 근접 시 trace 중첩 → bad food D1도 학습 (도파민 시간적 겹침)
 11. **도파민 딥이 생존율을 높임**: 음수 도파민(-0.5)이 기존 수식을 자동 반전 → 코드 변경 최소, 효과 극대 (+15pp 생존율)
+12. **피질→BG 빌드 순서**: IT population은 BG보다 늦게 빌드됨 → 별도 _build_it_bg_circuit() 메서드 필요
+13. **IT→D2 빠른 수렴**: pre-synaptic only trace + 비측화 IT → ep5에 w_min 도달 (L4 패턴 재현)
 
 ---
 

@@ -252,6 +252,12 @@ class ForagerBrainConfig:
     dopamine_dip_enabled: bool = True
     dopamine_dip_magnitude: float = 0.5   # burst(1.0) 대비 50% (생물학적 비대칭)
 
+    # Phase L9: IT Cortex → BG Learning (피질 하향 연결)
+    it_bg_enabled: bool = True
+    it_to_d1_init_w: float = 0.5      # IT→D1 초기 가중치 (food_eye의 절반, 모듈레이터)
+    it_to_d2_init_w: float = 0.5      # IT→D2 초기 가중치
+    it_to_bg_sparsity: float = 0.05   # IT는 비측화, 과잉 연결 방지
+
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
     dopamine_decay: float = 0.95               # Dopamine 감쇠율
@@ -1464,6 +1470,13 @@ class ForagerBrain:
             self.typed_d2_trace_bad_l = 0.0
             self.typed_d2_trace_bad_r = 0.0
 
+        # Phase L9: IT → BG 적격 추적
+        if self.config.it_bg_enabled and self.config.it_enabled:
+            self.it_food_d1_trace_l = 0.0
+            self.it_food_d1_trace_r = 0.0
+            self.it_food_d2_trace_l = 0.0  # pre-synaptic only (D2 패턴)
+            self.it_food_d2_trace_r = 0.0
+
         # Phase L6: Prediction Error 적격 추적
         if self.config.prediction_error_enabled:
             self.pe_trace_food_l = 0.0
@@ -1582,6 +1595,11 @@ class ForagerBrain:
         if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
             self._build_prediction_error_circuit()
 
+        # Phase L9: IT Cortex → BG (피질 하향 연결)
+        if (self.config.it_bg_enabled and self.config.it_enabled
+                and self.config.basal_ganglia_enabled):
+            self._build_it_bg_circuit()
+
         # Build and load
         print("Building model...")
         self.model.build()
@@ -1601,6 +1619,12 @@ class ForagerBrain:
                         self.bad_food_to_d1_l, self.bad_food_to_d1_r,
                         self.good_food_to_d2_l, self.good_food_to_d2_r,
                         self.bad_food_to_d2_l, self.bad_food_to_d2_r]:
+                syn.pull_connectivity_from_device()
+
+        # Phase L9: IT→BG SPARSE connectivity pull
+        if self.config.it_bg_enabled and self.config.it_enabled:
+            for syn in [self.it_food_to_d1_l, self.it_food_to_d1_r,
+                        self.it_food_to_d2_l, self.it_food_to_d2_r]:
                 syn.pull_connectivity_from_device()
 
         # Phase L5: 피질 R-STDP 시냅스 connectivity pull
@@ -4275,6 +4299,50 @@ class ForagerBrain:
                     syn.vars["g"].push_to_device()
                 results[f"typed_d2_{label}"] = float(np.nanmean(w))
 
+        # === Phase L9: IT_Food → D1/D2 (피질 하향 연결) ===
+        if self.config.it_bg_enabled and self.config.it_enabled:
+            it_w_max = 3.0  # 피질은 모듈레이터 → food_eye(5.0)보다 낮게
+
+            # IT_Food → D1 (R-STDP)
+            for label, trace, syn in [
+                ("l", self.it_food_d1_trace_l, self.it_food_to_d1_l),
+                ("r", self.it_food_d1_trace_r, self.it_food_to_d1_r),
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values
+                if apply_decay:
+                    w[:] -= (decay * 50) * (w - w_rest)
+                    need_update = True
+                if has_dopamine and trace > 0.01:
+                    w[:] += eta * trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    w[:] = np.clip(w, 0.0, it_w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                results[f"it_food_d1_{label}"] = float(np.nanmean(w))
+
+            # IT_Food → D2 (Anti-Hebbian)
+            for label, trace, syn in [
+                ("l", self.it_food_d2_trace_l, self.it_food_to_d2_l),
+                ("r", self.it_food_d2_trace_r, self.it_food_to_d2_r),
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values
+                if apply_decay:
+                    w[:] -= (decay * 50) * (w - w_rest)
+                    need_update = True
+                if has_dopamine and trace > 0.01:
+                    w[:] -= eta_d2 * trace * self.dopamine_level  # Anti-Hebbian
+                    need_update = True
+                if need_update:
+                    w[:] = np.clip(w, w_min_d2, it_w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                results[f"it_food_d2_{label}"] = float(np.nanmean(w))
+
         return results if results else None
 
     def learn_food_location(self, food_position: tuple = None):
@@ -4549,6 +4617,18 @@ class ForagerBrain:
                 syn.vars["g"].pull_from_device()
                 weights[key] = syn.vars["g"].values.copy()
 
+        # Phase L9: IT→BG (4 SPARSE synapses)
+        if self.config.it_bg_enabled and self.config.it_enabled:
+            it_bg_synapses = {
+                "it_food_d1_left": self.it_food_to_d1_l,
+                "it_food_d1_right": self.it_food_to_d1_r,
+                "it_food_d2_left": self.it_food_to_d2_l,
+                "it_food_d2_right": self.it_food_to_d2_r,
+            }
+            for key, syn in it_bg_synapses.items():
+                syn.vars["g"].pull_from_device()
+                weights[key] = syn.vars["g"].values.copy()
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -4655,6 +4735,19 @@ class ForagerBrain:
                 "bad_food_d2_right": self.bad_food_to_d2_r,
             }
             for key, syn in typed_bg_synapses.items():
+                if key in data:
+                    self._load_sparse_weights(syn, data[key])
+                    loaded += 1
+
+        # Phase L9: IT→BG (SPARSE)
+        if self.config.it_bg_enabled and self.config.it_enabled:
+            it_bg_synapses = {
+                "it_food_d1_left": self.it_food_to_d1_l,
+                "it_food_d1_right": self.it_food_to_d1_r,
+                "it_food_d2_left": self.it_food_to_d2_l,
+                "it_food_d2_right": self.it_food_to_d2_r,
+            }
+            for key, syn in it_bg_synapses.items():
                 if key in data:
                     self._load_sparse_weights(syn, data[key])
                     loaded += 1
@@ -7013,6 +7106,35 @@ class ForagerBrain:
         total_pe = self.config.n_pe_food + self.config.n_pe_danger
         print(f"  Prediction Error circuit complete: {total_pe} neurons, 4 learning synapses")
 
+    def _build_it_bg_circuit(self):
+        """Phase L9: IT Cortex → BG (피질 하향 연결)
+
+        학습된 피질 표상(IT_Food)을 BG 의사결정에 연결.
+        생물학적 근거: IT cortex → caudate tail (Hikosaka 2013)
+        """
+        it_d1_w = self.config.it_to_d1_init_w
+        it_d2_w = self.config.it_to_d2_init_w
+        it_sp = self.config.it_to_bg_sparsity
+
+        # IT_Food → D1 (R-STDP: 학습된 음식 카테고리 → Go 강화)
+        self.it_food_to_d1_l = self._create_static_synapse(
+            "it_food_to_d1_l", self.it_food_category, self.d1_left,
+            it_d1_w, sparsity=it_sp)
+        self.it_food_to_d1_r = self._create_static_synapse(
+            "it_food_to_d1_r", self.it_food_category, self.d1_right,
+            it_d1_w, sparsity=it_sp)
+
+        # IT_Food → D2 (Anti-Hebbian: 학습된 음식 → NoGo 약화)
+        self.it_food_to_d2_l = self._create_static_synapse(
+            "it_food_to_d2_l", self.it_food_category, self.d2_left,
+            it_d2_w, sparsity=it_sp)
+        self.it_food_to_d2_r = self._create_static_synapse(
+            "it_food_to_d2_r", self.it_food_category, self.d2_right,
+            it_d2_w, sparsity=it_sp)
+
+        print(f"    Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, "
+              f"init_w(D1)={it_d1_w} init_w(D2)={it_d2_w} sparsity={it_sp}")
+
     def update_prediction_error_rstdp(self, reward_type: str):
         """Phase L6: 예측 오차 R-STDP 가중치 업데이트
 
@@ -7764,6 +7886,12 @@ class ForagerBrain:
                 self.it_memory_buffer.vars["RefracTime"].pull_from_device()
 
                 it_food_category_spikes += np.sum(self.it_food_category.vars["RefracTime"].view > self.spike_threshold)
+
+                # Phase L9: IT_Food 활성도 캐싱 (trace 누적용)
+                if self.config.it_bg_enabled:
+                    n_it_f = self.config.n_it_food_category
+                    self._it_food_active = 1.0 if (it_food_category_spikes / max(n_it_f, 1)) > 0.05 else 0.0
+
                 it_danger_category_spikes += np.sum(self.it_danger_category.vars["RefracTime"].view > self.spike_threshold)
                 it_neutral_category_spikes += np.sum(self.it_neutral_category.vars["RefracTime"].view > self.spike_threshold)
                 it_association_spikes += np.sum(self.it_association.vars["RefracTime"].view > self.spike_threshold)
@@ -8121,6 +8249,23 @@ class ForagerBrain:
             self.typed_d2_trace_good_r = min(self.typed_d2_trace_good_r * td + _gfr, tm)
             self.typed_d2_trace_bad_l = min(self.typed_d2_trace_bad_l * td + _bfl, tm)
             self.typed_d2_trace_bad_r = min(self.typed_d2_trace_bad_r * td + _bfr, tm)
+
+        # Phase L9: IT→D1/D2 적격 추적
+        if (self.config.it_bg_enabled and self.config.it_enabled
+                and self.config.basal_ganglia_enabled):
+            td = self.config.rstdp_trace_decay
+            tm = self.config.rstdp_trace_max
+            _d1_l = getattr(self, '_d1_l_active', 0.0)
+            _d1_r = getattr(self, '_d1_r_active', 0.0)
+            _it_f = getattr(self, '_it_food_active', 0.0)
+
+            # D1: pre(IT_Food) × post(D1) → 방향성 있는 trace
+            self.it_food_d1_trace_l = min(self.it_food_d1_trace_l * td + _it_f * _d1_l, tm)
+            self.it_food_d1_trace_r = min(self.it_food_d1_trace_r * td + _it_f * _d1_r, tm)
+
+            # D2: pre-synaptic only (L4 Anti-Hebbian 패턴)
+            self.it_food_d2_trace_l = min(self.it_food_d2_trace_l * td + _it_f, tm)
+            self.it_food_d2_trace_r = min(self.it_food_d2_trace_r * td + _it_f, tm)
 
         # Phase L6: 예측 오차 스파이크율 + 적격 추적
         pe_food_l_rate = 0.0
@@ -9430,6 +9575,19 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 ("Good→D2_R", brain.good_food_to_d2_r),
                 ("Bad→D2_L", brain.bad_food_to_d2_l),
                 ("Bad→D2_R", brain.bad_food_to_d2_r),
+            ]:
+                syn.vars["g"].pull_from_device()
+                avg_w = float(np.nanmean(syn.vars["g"].values))
+                print(f"    {label}: {avg_w:.3f}")
+
+        # Phase L9: IT→BG 가중치 현황
+        if brain_config.it_bg_enabled and brain_config.it_enabled:
+            print(f"  --- Phase L9: IT_Food→BG ---")
+            for label, syn in [
+                ("IT_Food→D1_L", brain.it_food_to_d1_l),
+                ("IT_Food→D1_R", brain.it_food_to_d1_r),
+                ("IT_Food→D2_L", brain.it_food_to_d2_l),
+                ("IT_Food→D2_R", brain.it_food_to_d2_r),
             ]:
                 syn.vars["g"].pull_from_device()
                 avg_w = float(np.nanmean(syn.vars["g"].values))
