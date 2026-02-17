@@ -120,6 +120,11 @@ class ForagerConfig:
     food_cluster_prob: float = 0.6            # 먹은 위치 근처 리스폰 확률 (60%)
     food_cluster_radius: float = 80.0         # 클러스터 반경 (px)
 
+    # === Phase L12: Danger-Adjacent Food (위험 근접 고보상 음식) ===
+    danger_food_enabled: bool = True          # 위험 근접 음식 활성화
+    danger_food_ratio: float = 0.3            # 30% 음식이 pain zone 가장자리에 생성
+    danger_food_bonus: float = 0.5            # 위험 근접 음식 에너지 +50% 보너스
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -333,7 +338,7 @@ class ForagerGym:
         self.max_energy: float = 0
         self.homeostasis_steps: int = 0  # 30-70 범위 유지 시간
         self.energy_history: List[float] = []
-        self.position_history: List[Tuple[float, float]] = []
+        self.position_history: List[Tuple[float, float, str]] = []  # (x, y, gw_state)
 
         # === Phase L5: Food Type 통계 ===
         self.good_food_eaten: int = 0
@@ -399,7 +404,7 @@ class ForagerGym:
         self.max_energy = self.config.energy_start
         self.homeostasis_steps = 0
         self.energy_history = [self.energy]
-        self.position_history = [(self.agent_x, self.agent_y)]
+        self.position_history = [(self.agent_x, self.agent_y, "neutral")]
 
         # Phase 2b: Pain Zone 통계 초기화
         self.pain_damage_accumulated = 0.0
@@ -510,9 +515,17 @@ class ForagerGym:
         food_eaten, food_type = self._check_food_collision()
         if food_eaten:
             self.total_food_eaten += 1
+            # Phase L12: 위험 근접 보너스 (pain zone 근처에서 먹으면 +50%)
+            danger_bonus = 1.0
+            if self.config.danger_food_enabled:
+                for pz_x, pz_y in self.pain_zones:
+                    dist = math.sqrt((self.agent_x - pz_x)**2 + (self.agent_y - pz_y)**2)
+                    if dist < self.config.pain_zone_radius + self.config.danger_range:
+                        danger_bonus = 1.0 + self.config.danger_food_bonus
+                        break
             if food_type == 0:  # 좋은 음식
                 self.energy = min(self.config.energy_max,
-                                self.energy + self.config.food_value)
+                                self.energy + self.config.food_value * danger_bonus)
                 reward += self.config.reward_food
                 self.good_food_eaten += 1
             elif food_type == 1:  # 나쁜 음식
@@ -623,7 +636,8 @@ class ForagerGym:
         self.min_energy = min(self.min_energy, self.energy)
         self.max_energy = max(self.max_energy, self.energy)
         self.energy_history.append(self.energy)
-        self.position_history.append((self.agent_x, self.agent_y))
+        gw_state = self.brain_info.get("gw_broadcast", "neutral") if hasattr(self, 'brain_info') and self.brain_info else "neutral"
+        self.position_history.append((self.agent_x, self.agent_y, gw_state))
 
         # 6. 종료 조건
         self.steps += 1
@@ -1300,6 +1314,7 @@ class ForagerGym:
         - 20%는 랜덤 위치에 생성
 
         Phase L5: 각 음식에 food_type 부여 (0=좋은, 1=나쁜)
+        Phase L12: 30% 음식이 Pain Zone 가장자리에 생성 (위험 근접 고보상)
         """
         cx, cy = self.config.width / 2, self.config.height / 2
         half = self.config.nest_size / 2
@@ -1308,6 +1323,37 @@ class ForagerGym:
 
         for _ in range(n):
             food_type = self._assign_food_type()
+
+            # Phase L12: 위험 근접 음식 (pain zone 바로 바깥 도넛 영역에 생성)
+            if (self.config.danger_food_enabled and self.pain_zones
+                    and np.random.random() < self.config.danger_food_ratio):
+                pz_x, pz_y = self.pain_zones[np.random.randint(len(self.pain_zones))]
+                pz_r = self.config.pain_zone_radius
+                dr = self.config.danger_range  # danger_range 내 도넛 영역
+                for _ in range(50):
+                    angle = np.random.uniform(0, 2 * np.pi)
+                    # pain zone 경계 + 5px ~ danger_range 사이 도넛
+                    r_dist = pz_r + 5 + np.random.uniform(0, dr - 5)
+                    x = pz_x + r_dist * np.cos(angle)
+                    y = pz_y + r_dist * np.sin(angle)
+                    if not (margin <= x <= self.config.width - margin and
+                            margin <= y <= self.config.height - margin):
+                        continue
+                    if (cx - half <= x <= cx + half and cy - half <= y <= cy + half):
+                        continue
+                    # pain zone 안에 들어가면 안 됨
+                    in_zone = False
+                    for oz_x, oz_y in self.pain_zones:
+                        if (x - oz_x)**2 + (y - oz_y)**2 < (pz_r + margin)**2:
+                            in_zone = True
+                            break
+                    if not in_zone:
+                        self.foods.append((x, y, food_type))
+                        break
+                else:
+                    pass  # fall through to other spawn methods
+                if len(self.foods) >= self.config.n_food + n:
+                    continue
 
             # Food Patch 모드: 80% Patch 내, 20% 랜덤
             if self.config.food_patch_enabled and self.patches:
@@ -1876,19 +1922,46 @@ class ForagerGym:
 
         # === 환경 영역 (400x400) ===
         env_surface = pygame.Surface((400, 400))
-        env_surface.fill((30, 30, 30))
+        env_surface.fill((25, 28, 25))
 
-        # === Phase 2b: Pain Zone (내부 원형 영역) ===
+        # Phase L12: 배경 그리드 (미세한 공간 참조)
+        for gx in range(0, 401, 50):
+            pygame.draw.line(env_surface, (35, 38, 35), (gx, 0), (gx, 400), 1)
+        for gy in range(0, 401, 50):
+            pygame.draw.line(env_surface, (35, 38, 35), (0, gy), (400, gy), 1)
+
+        # === Phase 2b+L12: Pain Zone (그래디언트 위험 필드) ===
         if self.config.pain_zone_enabled and self.pain_zones:
             r = int(self.config.pain_zone_radius)
-            # 반투명 빨간 원
+            dr = int(self.config.danger_range)
+            total_r = r + dr
             for pz_cx, pz_cy in self.pain_zones:
+                # 위험 필드 그래디언트 (danger_range 영역 — 바깥→안쪽 fade-in)
+                n_rings = 5
+                for ring_i in range(n_rings):
+                    ring_r = total_r - ring_i * (dr // n_rings)
+                    ring_alpha = 15 + ring_i * 12  # 15→75 (바깥→안쪽)
+                    ring_surf = pygame.Surface((ring_r * 2, ring_r * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(ring_surf, (180, 40, 20, ring_alpha),
+                                       (ring_r, ring_r), ring_r)
+                    env_surface.blit(ring_surf, (int(pz_cx) - ring_r, int(pz_cy) - ring_r))
+                # 실제 Pain Zone (불투명 코어)
                 pain_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-                pygame.draw.circle(pain_surf, (120, 30, 30, 100), (r, r), r)
+                pygame.draw.circle(pain_surf, (140, 25, 25, 130), (r, r), r)
                 env_surface.blit(pain_surf, (int(pz_cx) - r, int(pz_cy) - r))
-                # 경계선
-                pygame.draw.circle(env_surface, (180, 50, 50),
+                # 경계선 (밝은 빨강)
+                pygame.draw.circle(env_surface, (220, 60, 60),
                                   (int(pz_cx), int(pz_cy)), r, 2)
+                # 위험 필드 경계 (점선 효과 — 대시 원)
+                dash_r = total_r
+                for deg in range(0, 360, 10):
+                    if deg % 20 < 10:  # 10도 그리고 10도 건너뛰기
+                        rad = math.radians(deg)
+                        dx = int(pz_cx + dash_r * math.cos(rad))
+                        dy = int(pz_cy + dash_r * math.sin(rad))
+                        dx2 = int(pz_cx + dash_r * math.cos(rad + math.radians(8)))
+                        dy2 = int(pz_cy + dash_r * math.sin(rad + math.radians(8)))
+                        pygame.draw.line(env_surface, (120, 40, 40), (dx, dy), (dx2, dy2), 1)
 
         # === Food Patches (반투명 원) ===
         if self.config.food_patch_enabled and self.patches:
@@ -1915,14 +1988,33 @@ class ForagerGym:
         pygame.draw.rect(env_surface, (70, 80, 70),
                         (cx - half, cy - half, self.config.nest_size, self.config.nest_size), 2)
 
-        # 음식 (Phase L5: 타입별 색상 - 좋은=초록, 나쁜=보라)
+        # 음식 (Phase L5+L12: 타입별 색상 + 글로우 + 위험 근접 표시)
         for food_x, food_y, food_type in self.foods:
+            fx, fy = int(food_x), int(food_y)
+            fr = int(self.config.food_radius)
             if food_type == 1:  # 나쁜 음식
                 food_color = (180, 80, 200)  # 보라
             else:  # 좋은 음식 (기본)
                 food_color = (100, 220, 80)  # 초록
-            pygame.draw.circle(env_surface, food_color,
-                             (int(food_x), int(food_y)), int(self.config.food_radius))
+
+            # Phase L12: 음식 글로우 (반투명 큰 원)
+            glow_r = fr + 4
+            glow_surf = pygame.Surface((glow_r * 2, glow_r * 2), pygame.SRCALPHA)
+            glow_color = (food_color[0], food_color[1], food_color[2], 40)
+            pygame.draw.circle(glow_surf, glow_color, (glow_r, glow_r), glow_r)
+            env_surface.blit(glow_surf, (fx - glow_r, fy - glow_r))
+
+            # 본체
+            pygame.draw.circle(env_surface, food_color, (fx, fy), fr)
+
+            # Phase L12: 위험 근접 음식 표시 (주황 테두리)
+            if self.config.danger_food_enabled:
+                for pz_x, pz_y in self.pain_zones:
+                    dist_sq = (food_x - pz_x)**2 + (food_y - pz_y)**2
+                    threshold = self.config.pain_zone_radius + self.config.danger_range
+                    if dist_sq < threshold**2:
+                        pygame.draw.circle(env_surface, (255, 180, 50), (fx, fy), fr + 2, 2)
+                        break
 
         # Phase 15: NPC 에이전트
         if self.config.social_enabled:
@@ -1938,6 +2030,41 @@ class ForagerGym:
                                  (int(npc.x), int(npc.y)),
                                  (int(npc_ax), int(npc_ay)), 1)
 
+        # Phase L12: 궤적 트레일 (GW 상태별 색상 — 선분 + 모드 전환 마커)
+        if len(self.position_history) > 2:
+            trail_len = min(len(self.position_history), 400)
+            trail_start = max(0, len(self.position_history) - trail_len)
+            prev_gw = None
+            for i in range(trail_start, len(self.position_history) - 1):
+                pos = self.position_history[i]
+                next_pos = self.position_history[i + 1]
+                px, py = int(pos[0]), int(pos[1])
+                nx, ny = int(next_pos[0]), int(next_pos[1])
+                gw = pos[2] if len(pos) > 2 else "neutral"
+
+                # 알파 (오래될수록 투명)
+                age_ratio = (i - trail_start) / trail_len
+                alpha = int(40 + 140 * age_ratio)
+                thickness = 1 if age_ratio < 0.5 else 2
+
+                # 색상 (GW 상태)
+                if gw == "food":
+                    color = (50, min(255, 140 + alpha), 50)   # 초록 (음식 탐색)
+                elif gw == "safety":
+                    color = (min(255, 140 + alpha), 50, 50)   # 빨강 (안전 모드)
+                else:
+                    color = (80, 80, min(255, 80 + alpha))    # 파랑 (탐색)
+
+                # 선분으로 연결
+                pygame.draw.line(env_surface, color, (px, py), (nx, ny), thickness)
+
+                # 모드 전환 마커 (다이아몬드)
+                if prev_gw is not None and gw != prev_gw:
+                    marker_color = (255, 255, 100)  # 노란 다이아몬드
+                    pts = [(px, py - 4), (px + 3, py), (px, py + 4), (px - 3, py)]
+                    pygame.draw.polygon(env_surface, marker_color, pts)
+                prev_gw = gw
+
         # 에이전트
         agent_color = self._get_agent_color()
         pygame.draw.circle(env_surface, agent_color,
@@ -1951,6 +2078,45 @@ class ForagerGym:
         pygame.draw.line(env_surface, (255, 255, 255),
                         (int(self.agent_x), int(self.agent_y)),
                         (int(arrow_x), int(arrow_y)), 2)
+
+        # Phase L12: 목표 상태 헤일로
+        if hasattr(self, 'brain_info') and self.brain_info:
+            gw = self.brain_info.get("gw_broadcast", "neutral")
+            if gw == "food":
+                halo_color = (80, 255, 80)    # 초록 헤일로
+            elif gw == "safety":
+                halo_color = (255, 80, 80)    # 빨강 헤일로
+            else:
+                halo_color = (120, 120, 200)  # 파란 헤일로
+            pygame.draw.circle(env_surface, halo_color,
+                               (int(self.agent_x), int(self.agent_y)),
+                               int(self.config.agent_radius + 6), 2)
+
+        # Phase L12: GW 모드 오버레이 (환경 좌상단)
+        if hasattr(self, 'brain_info') and self.brain_info:
+            gw = self.brain_info.get("gw_broadcast", "neutral")
+            if gw == "food":
+                mode_text = "SEEKING FOOD"
+                mode_color = (80, 255, 80)
+            elif gw == "safety":
+                mode_text = "AVOIDING DANGER"
+                mode_color = (255, 80, 80)
+            else:
+                mode_text = "EXPLORING"
+                mode_color = (120, 160, 255)
+            # 반투명 배경 박스
+            mode_bg = pygame.Surface((140, 20), pygame.SRCALPHA)
+            mode_bg.fill((0, 0, 0, 120))
+            env_surface.blit(mode_bg, (5, 5))
+            mode_surf = self.small_font.render(mode_text, True, mode_color)
+            env_surface.blit(mode_surf, (10, 7))
+
+        # Phase L12: 에피소드 진행 바 (환경 하단)
+        progress = self.steps / self.config.max_steps
+        bar_w = int(396 * progress)
+        pygame.draw.rect(env_surface, (40, 45, 40), (2, 394, 396, 4))
+        bar_color = (80, 200, 80) if self.energy > 30 else (200, 80, 80)
+        pygame.draw.rect(env_surface, bar_color, (2, 394, bar_w, 4))
 
         self.screen.blit(env_surface, (0, 0))
 
@@ -2082,8 +2248,39 @@ class ForagerGym:
         def draw_connection(x1, y1, x2, y2, color=(60, 60, 80)):
             pygame.draw.line(self.screen, color, (x1, y1), (x2, y2), 1)
 
-        # === 1. PREFRONTAL CORTEX (최상단) ===
-        pfc_y = y + 50
+        # === 0. GLOBAL WORKSPACE (최상단 — Phase L12) ===
+        gw_y = y + 30
+        gw_food = info.get("gw_food_l_rate", 0) + info.get("gw_food_r_rate", 0)
+        gw_safety = info.get("gw_safety_rate", 0)
+        gw_bc = info.get("gw_broadcast", "neutral")
+
+        # 배경 박스
+        pygame.draw.rect(self.screen, (20, 25, 20), (x + 5, gw_y - 5, panel_width - 10, 50))
+        pygame.draw.rect(self.screen, (80, 80, 100), (x + 5, gw_y - 5, panel_width - 10, 50), 1)
+
+        # 타이틀
+        gw_title = self.small_font.render("GLOBAL WORKSPACE", True, (220, 220, 255))
+        self.screen.blit(gw_title, (x + 10, gw_y - 3))
+
+        # Food Goal 바
+        bar_y = gw_y + 14
+        bar_w = panel_width - 80
+        food_w = int(bar_w * min(1.0, gw_food))
+        pygame.draw.rect(self.screen, (30, 50, 30), (x + 15, bar_y, bar_w, 10))
+        pygame.draw.rect(self.screen, (80, 220, 80), (x + 15, bar_y, food_w, 10))
+        food_lbl = self.small_font.render(f"Food {gw_food*100:.0f}%", True, (180, 255, 180))
+        self.screen.blit(food_lbl, (x + 15 + bar_w + 2, bar_y - 1))
+
+        # Safety Goal 바
+        bar_y2 = gw_y + 28
+        safety_w = int(bar_w * min(1.0, gw_safety))
+        pygame.draw.rect(self.screen, (50, 30, 30), (x + 15, bar_y2, bar_w, 10))
+        pygame.draw.rect(self.screen, (220, 80, 80), (x + 15, bar_y2, safety_w, 10))
+        safety_lbl = self.small_font.render(f"Safe {gw_safety*100:.0f}%", True, (255, 180, 180))
+        self.screen.blit(safety_lbl, (x + 15 + bar_w + 2, bar_y2 - 1))
+
+        # === 1. PREFRONTAL CORTEX ===
+        pfc_y = y + 85
         wm = info.get("working_memory_rate", 0)
         gf = info.get("goal_food_rate", 0)
         gs = info.get("goal_safety_rate", 0)
@@ -2098,7 +2295,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + 5, pfc_y - 15))
 
         # === 2. BASAL GANGLIA ===
-        bg_y = y + 110
+        bg_y = y + 145
         striatum = info.get("striatum_rate", 0)
         direct = info.get("direct_rate", 0)
         indirect = info.get("indirect_rate", 0)
@@ -2117,7 +2314,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + 5, bg_y - 15))
 
         # === 3. LIMBIC (Hypothalamus + Amygdala) ===
-        limbic_y = y + 200
+        limbic_y = y + 235
         hunger = info.get("hunger_rate", 0)
         satiety = info.get("satiety_rate", 0)
         fear = info.get("fear_rate", 0)
@@ -2145,7 +2342,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + panel_width - 45, limbic_y - 10))
 
         # === 4. HIPPOCAMPUS (Place Cells 그리드) ===
-        hippo_y = y + 290
+        hippo_y = y + 325
         place_rate = info.get("place_cell_rate", 0)
         food_mem = info.get("food_memory_rate", 0)
 
@@ -2179,7 +2376,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + 5, hippo_y - 15))
 
         # === 5. CEREBELLUM (소뇌) ===
-        cerebellum_y = y + 380
+        cerebellum_y = y + 415
         granule = info.get("granule_rate", 0)
         purkinje = info.get("purkinje_rate", 0)
         deep_nuc = info.get("deep_nuclei_rate", 0)
@@ -2198,7 +2395,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + 5, cerebellum_y - 15))
 
         # === 6. THALAMUS (시상 - 감각 게이팅) ===
-        thalamus_y = y + 430
+        thalamus_y = y + 465
         food_relay = info.get("food_relay_rate", 0)
         danger_relay = info.get("danger_relay_rate", 0)
         trn = info.get("trn_rate", 0)
@@ -2223,7 +2420,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + 5, thalamus_y - 15))
 
         # === 7. MOTOR OUTPUT (하단) ===
-        motor_y = y + 510
+        motor_y = y + 545
         motor_l = info.get("motor_left_rate", 0)
         motor_r = info.get("motor_right_rate", 0)
 
@@ -2254,7 +2451,7 @@ class ForagerGym:
         self.screen.blit(lbl, (x + 5, motor_y - 15))
 
         # === 8. 상태 요약 (최하단) ===
-        summary_y = y + 590
+        summary_y = y + 625
         energy = info.get("energy_input", 0.5)
 
         # Energy bar

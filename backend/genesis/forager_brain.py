@@ -171,8 +171,8 @@ class ForagerBrainConfig:
     place_to_food_memory_eta: float = 0.15     # Hebbian 학습률 (Phase 3c: 0.1→0.15)
     place_to_food_memory_w_max: float = 30.0   # 최대 가중치
 
-    # Food Memory → Motor (약한 편향)
-    food_memory_to_motor_weight: float = 12.0  # 음식 방향 편향 (Phase 7: 8→12, 추적 강화)
+    # Food Memory → Motor (약한 편향 — L12: GW 경유 라우팅으로 약화)
+    food_memory_to_motor_weight: float = 5.0  # L12: 12→5 (GW가 +4.0 조건부 보상)
 
     # Hunger → Food Memory (배고플 때 기억 활성화)
     hunger_to_food_memory_weight: float = 10.0 # 기억 탐색 활성화 (20→10, 간섭 최소화)
@@ -257,6 +257,48 @@ class ForagerBrainConfig:
     it_to_d1_init_w: float = 0.5      # IT→D1 초기 가중치 (food_eye의 절반, 모듈레이터)
     it_to_d2_init_w: float = 0.5      # IT→D2 초기 가중치
     it_to_bg_sparsity: float = 0.05   # IT는 비측화, 과잉 연결 방지
+
+    # Phase L10: TD Learning (NAc Critic → RPE Dopamine)
+    td_learning_enabled: bool = True
+    n_nac_value: int = 80                    # NAc shell value neurons (MSN-like)
+    n_nac_inhibitory: int = 30               # NAc local inhibition
+    nac_food_eye_init_w: float = 1.0         # food_eye → NAc 초기 가중치
+    nac_food_eye_sparsity: float = 0.08      # food_eye → NAc SPARSE
+    nac_it_food_weight: float = 0.5          # IT_Food → NAc (static)
+    nac_place_weight: float = 0.3            # Place_Cells → NAc (static)
+    nac_rstdp_eta: float = 0.0005            # NAc R-STDP 학습률 (D1과 동일)
+    nac_w_max: float = 5.0                   # NAc max weight
+    rpe_discount: float = 0.5                # RPE discount (0=no RPE, 1=full)
+    rpe_prediction_threshold: float = 0.3    # NAc rate 30% = 완전 예측
+    rpe_floor: float = 0.1                   # 최소 DA 10% (학습 완전 차단 방지)
+
+    # Phase L11: SWR Replay (Hippocampal Sequence)
+    swr_replay_enabled: bool = True
+    n_ca3_sequence: int = 100                # CA3 시퀀스 뉴런
+    n_swr_gate: int = 50                     # SWR 게이트 (I_input 전용)
+    n_replay_inhibitory: int = 50            # 리플레이 중 Motor 억제
+    swr_replay_count: int = 5               # 에피소드당 리플레이 횟수
+    swr_replay_steps: int = 10              # 리플레이 1회당 시뮬레이션 스텝
+    swr_experience_max: int = 50            # 경험 버퍼 최대 크기
+    swr_place_current_scale: float = 0.3    # 리플레이 시 Place Cell 전류 스케일 (온라인의 30%)
+    swr_motor_inhibit_weight: float = -15.0 # replay_inh → Motor 억제 가중치
+    swr_gate_to_inh_weight: float = 8.0     # SWR gate → replay_inh 가중치
+    place_to_ca3_weight: float = 3.0        # Place → CA3 (static)
+    place_to_ca3_sparsity: float = 0.05     # Place → CA3 연결 확률
+    ca3_to_food_memory_weight: float = 2.0  # CA3 → Food Memory (static, 약함)
+
+    # Phase L12: Global Workspace (Attention — Dehaene & Changeux 2011)
+    gw_enabled: bool = True
+    n_gw_food: int = 50                        # per side (L/R)
+    n_gw_safety: int = 60
+    gw_food_memory_weight: float = 6.0         # food_memory → GW_Food
+    gw_hunger_weight: float = 5.0              # hunger_drive → GW_Food (허용 게이트)
+    gw_good_food_eye_weight: float = 3.0       # 직접 감각 부스트
+    gw_fear_weight: float = 12.0               # fear → GW_Safety
+    gw_la_weight: float = 8.0                  # lateral_amygdala → GW_Safety
+    gw_safety_inhibit_weight: float = -12.0    # GW_Safety → GW_Food 억제
+    gw_food_to_motor_weight: float = 4.0       # GW_Food → Motor (약!)
+    gw_food_to_motor_sparsity: float = 0.05
 
     # Dopamine 파라미터
     dopamine_eta: float = 0.1                  # Dopamine 학습률
@@ -1157,6 +1199,12 @@ class ForagerBrainConfig:
             base += self.n_good_food_eye + self.n_bad_food_eye
         if self.prediction_error_enabled:
             base += self.n_pe_food + self.n_pe_danger
+        if self.td_learning_enabled and self.basal_ganglia_enabled:
+            base += self.n_nac_value + self.n_nac_inhibitory
+        if self.swr_replay_enabled and self.hippocampus_enabled:
+            base += self.n_ca3_sequence + self.n_swr_gate + self.n_replay_inhibitory
+        if self.gw_enabled:
+            base += self.n_gw_food * 2 + self.n_gw_safety  # 50+50+60 = 160
         return base
 
 
@@ -1477,6 +1525,59 @@ class ForagerBrain:
             self.it_food_d2_trace_l = 0.0  # pre-synaptic only (D2 패턴)
             self.it_food_d2_trace_r = 0.0
 
+        # Phase L10: NAc Critic (TD Learning)
+        if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
+            nac_msn_params = {
+                "C": 30.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+                "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+                "TauRefrac": self.config.tau_refrac, "Ioffset": 0.0
+            }
+            self.nac_value = self.model.add_neuron_population(
+                "nac_value", self.config.n_nac_value, "LIF", nac_msn_params, lif_init)
+            self.nac_inhibitory = self.model.add_neuron_population(
+                "nac_inhibitory", self.config.n_nac_inhibitory, "LIF", lif_params, lif_init)
+
+            # NAc R-STDP traces
+            self.nac_trace_l = 0.0
+            self.nac_trace_r = 0.0
+            self._nac_value_rate = 0.0
+
+        # Phase L11: SWR Replay (Hippocampal Sequence)
+        if self.config.swr_replay_enabled and self.config.hippocampus_enabled:
+            ca3_params = {
+                "C": 30.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+                "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+                "TauRefrac": self.config.tau_refrac, "Ioffset": 0.0
+            }
+            self.ca3_sequence = self.model.add_neuron_population(
+                "ca3_sequence", self.config.n_ca3_sequence, "LIF", ca3_params, lif_init)
+
+            self.swr_gate = self.model.add_neuron_population(
+                "swr_gate", self.config.n_swr_gate, sensory_lif_model, sensory_params, sensory_init)
+
+            self.replay_inhibitory = self.model.add_neuron_population(
+                "replay_inhibitory", self.config.n_replay_inhibitory, "LIF", lif_params, lif_init)
+
+            self.experience_buffer = []
+
+        # Phase L12: Global Workspace (Attention)
+        if self.config.gw_enabled:
+            gw_params = {
+                "C": 30.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+                "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+                "TauRefrac": self.config.tau_refrac, "Ioffset": 0.0
+            }
+            self.gw_food_left = self.model.add_neuron_population(
+                "gw_food_left", self.config.n_gw_food, "LIF", gw_params, lif_init)
+            self.gw_food_right = self.model.add_neuron_population(
+                "gw_food_right", self.config.n_gw_food, "LIF", gw_params, lif_init)
+            self.gw_safety = self.model.add_neuron_population(
+                "gw_safety", self.config.n_gw_safety, "LIF", gw_params, lif_init)
+            # Rate caching
+            self.last_gw_food_rate = 0.0
+            self.last_gw_safety_rate = 0.0
+            self.last_gw_broadcast = "neutral"
+
         # Phase L6: Prediction Error 적격 추적
         if self.config.prediction_error_enabled:
             self.pe_trace_food_l = 0.0
@@ -1600,6 +1701,18 @@ class ForagerBrain:
                 and self.config.basal_ganglia_enabled):
             self._build_it_bg_circuit()
 
+        # Phase L10: NAc Critic (TD Learning)
+        if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
+            self._build_nac_circuit()
+
+        # Phase L11: SWR Replay
+        if self.config.swr_replay_enabled and self.config.hippocampus_enabled:
+            self._build_swr_circuit()
+
+        # Phase L12: Global Workspace (Attention)
+        if self.config.gw_enabled:
+            self._build_gw_circuit()
+
         # Build and load
         print("Building model...")
         self.model.build()
@@ -1626,6 +1739,11 @@ class ForagerBrain:
             for syn in [self.it_food_to_d1_l, self.it_food_to_d1_r,
                         self.it_food_to_d2_l, self.it_food_to_d2_r]:
                 syn.pull_connectivity_from_device()
+
+        # Phase L10: NAc R-STDP SPARSE connectivity pull
+        if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
+            self.food_to_nac_l.pull_connectivity_from_device()
+            self.food_to_nac_r.pull_connectivity_from_device()
 
         # Phase L5: 피질 R-STDP 시냅스 connectivity pull
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
@@ -4143,28 +4261,43 @@ class ForagerBrain:
 
         return {"error_type": error_type, "intensity": intensity}
 
-    def release_dopamine(self, reward_magnitude: float = 1.0):
+    def release_dopamine(self, reward_magnitude: float = 1.0, primary_reward: bool = False):
         """
         Phase 4: 보상 시 Dopamine 방출
-
-        음식 섭취 등 보상 이벤트 발생 시 호출하여
-        Dopamine 뉴런을 활성화하고 학습을 촉진합니다.
+        Phase L10: primary_reward=True + 양수 보상일 때 NAc 기반 RPE 적용
 
         Args:
             reward_magnitude: 보상 크기 (-1~1, 음수 = dip)
+            primary_reward: True이면 RPE 모듈레이션 적용 (L10)
         """
         if not self.config.basal_ganglia_enabled:
             return
 
+        # Phase L10: RPE modulation (양수 primary rewards만)
+        effective_magnitude = reward_magnitude
+        rpe_prediction = 0.0
+        if (primary_reward and self.config.td_learning_enabled
+                and reward_magnitude > 0):
+            nac_rate = getattr(self, '_nac_value_rate', 0.0)
+            rpe_prediction = min(nac_rate / self.config.rpe_prediction_threshold, 1.0)
+            effective_magnitude = reward_magnitude * (
+                1.0 - self.config.rpe_discount * rpe_prediction)
+            effective_magnitude = max(effective_magnitude, self.config.rpe_floor)
+
         # Dopamine 레벨 업데이트 (L8: 음수 허용, -1.0 ~ 1.0)
-        self.dopamine_level = float(np.clip(self.dopamine_level + reward_magnitude, -1.0, 1.0))
+        self.dopamine_level = float(np.clip(
+            self.dopamine_level + effective_magnitude, -1.0, 1.0))
 
         # Dopamine 뉴런에 입력 전류 주입 (L8: dip 시 뉴런 정지, 음수 전류 방지)
-        dopamine_current = max(0.0, self.dopamine_level) * 80.0  # dip: neurons stop firing
+        dopamine_current = max(0.0, self.dopamine_level) * 80.0
         self.dopamine_neurons.vars["I_input"].view[:] = dopamine_current
         self.dopamine_neurons.vars["I_input"].push_to_device()
 
-        return {"dopamine_level": self.dopamine_level}
+        return {
+            "dopamine_level": self.dopamine_level,
+            "effective_magnitude": effective_magnitude,
+            "rpe_prediction": rpe_prediction,
+        }
 
     def decay_dopamine(self):
         """Dopamine 레벨 감쇠 + R-STDP 가중치 업데이트"""
@@ -4342,6 +4475,29 @@ class ForagerBrain:
                     syn.vars["g"].values = w
                     syn.vars["g"].push_to_device()
                 results[f"it_food_d2_{label}"] = float(np.nanmean(w))
+
+        # === Phase L10: NAc R-STDP (food_eye → nac_value) ===
+        if self.config.td_learning_enabled:
+            nac_eta = self.config.nac_rstdp_eta
+            nac_w_max = self.config.nac_w_max
+            for side, trace, syn in [
+                ("l", self.nac_trace_l, self.food_to_nac_l),
+                ("r", self.nac_trace_r, self.food_to_nac_r),
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values
+                if apply_decay:
+                    w[:] -= (decay * 50) * (w - w_rest)
+                    need_update = True
+                if has_dopamine and trace > 0.01:
+                    w[:] += nac_eta * trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    w[:] = np.clip(w, 0.0, nac_w_max)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                results[f"nac_avg_w_{side}"] = float(np.nanmean(w))
 
         return results if results else None
 
@@ -4629,6 +4785,21 @@ class ForagerBrain:
                 syn.vars["g"].pull_from_device()
                 weights[key] = syn.vars["g"].values.copy()
 
+        # Phase L10: NAc R-STDP (2 SPARSE synapses)
+        if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
+            nac_synapses = {
+                "nac_food_left": self.food_to_nac_l,
+                "nac_food_right": self.food_to_nac_r,
+            }
+            for key, syn in nac_synapses.items():
+                syn.vars["g"].pull_from_device()
+                weights[key] = syn.vars["g"].values.copy()
+
+        # Phase L11: Experience buffer
+        if self.config.swr_replay_enabled and self.config.hippocampus_enabled:
+            weights["swr_experience_buffer"] = np.array(
+                self.experience_buffer, dtype=np.float32) if self.experience_buffer else np.array([])
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -4750,6 +4921,25 @@ class ForagerBrain:
             for key, syn in it_bg_synapses.items():
                 if key in data:
                     self._load_sparse_weights(syn, data[key])
+                    loaded += 1
+
+        # Phase L10: NAc R-STDP (SPARSE)
+        if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
+            nac_synapses = {
+                "nac_food_left": self.food_to_nac_l,
+                "nac_food_right": self.food_to_nac_r,
+            }
+            for key, syn in nac_synapses.items():
+                if key in data:
+                    self._load_sparse_weights(syn, data[key])
+                    loaded += 1
+
+        # Phase L11: Experience buffer
+        if self.config.swr_replay_enabled and self.config.hippocampus_enabled:
+            if "swr_experience_buffer" in data:
+                buf = data["swr_experience_buffer"]
+                if buf.size > 0:
+                    self.experience_buffer = [tuple(row) for row in buf.reshape(-1, 5)]
                     loaded += 1
 
         # Phase L5: 피질 R-STDP (SPARSE)
@@ -7135,6 +7325,147 @@ class ForagerBrain:
         print(f"    Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, "
               f"init_w(D1)={it_d1_w} init_w(D2)={it_d2_w} sparsity={it_sp}")
 
+    def _build_nac_circuit(self):
+        """Phase L10: NAc Critic — TD Learning (RPE Dopamine)
+
+        NAc shell이 상태→보상 가치를 학습.
+        생물학적 근거: NAc shell → VP → VTA (Schultz 1997)
+        """
+        nac_sp = self.config.nac_food_eye_sparsity
+        nac_w = self.config.nac_food_eye_init_w
+
+        # Learning: food_eye → nac_value (R-STDP, DA 조절)
+        self.food_to_nac_l = self._create_static_synapse(
+            "food_to_nac_l", self.food_eye_left, self.nac_value,
+            nac_w, sparsity=nac_sp)
+        self.food_to_nac_r = self._create_static_synapse(
+            "food_to_nac_r", self.food_eye_right, self.nac_value,
+            nac_w, sparsity=nac_sp)
+
+        # Static context: IT_Food → nac_value
+        if self.config.it_enabled:
+            self._create_static_synapse(
+                "it_food_to_nac", self.it_food_category, self.nac_value,
+                self.config.nac_it_food_weight, sparsity=0.05)
+
+        # Static context: Place_Cells → nac_value
+        if self.config.hippocampus_enabled:
+            self._create_static_synapse(
+                "place_to_nac", self.place_cells, self.nac_value,
+                self.config.nac_place_weight, sparsity=0.05)
+
+        # Local inhibition
+        self._create_static_synapse(
+            "nac_value_to_inh", self.nac_value, self.nac_inhibitory,
+            3.0, sparsity=0.2)
+        self._create_static_synapse(
+            "nac_inh_to_value", self.nac_inhibitory, self.nac_value,
+            -5.0, sparsity=0.2)
+
+        print(f"    Phase L10: NAc({self.config.n_nac_value}+{self.config.n_nac_inhibitory}), "
+              f"2 R-STDP + 4 static, RPE discount={self.config.rpe_discount}")
+
+    def _build_swr_circuit(self):
+        """Phase L11: SWR Replay Circuit — 오프라인 기억 재생
+
+        생물학적 근거: Buzsáki 2015 — SWR이 해마 시퀀스를 압축 재생
+        Static synapses only (7개): place→ca3, ca3→food_mem L/R,
+        swr_gate→replay_inh, replay_inh→motor L/R
+        """
+        # Place → CA3 (리플레이 시 시퀀스 인코딩)
+        self._create_static_synapse(
+            "place_to_ca3", self.place_cells, self.ca3_sequence,
+            self.config.place_to_ca3_weight, sparsity=self.config.place_to_ca3_sparsity)
+
+        # CA3 → Food Memory (리플레이 시 맥락 전달)
+        if self.config.directional_food_memory:
+            self._create_static_synapse(
+                "ca3_to_food_mem_l", self.ca3_sequence, self.food_memory_left,
+                self.config.ca3_to_food_memory_weight, sparsity=0.05)
+            self._create_static_synapse(
+                "ca3_to_food_mem_r", self.ca3_sequence, self.food_memory_right,
+                self.config.ca3_to_food_memory_weight, sparsity=0.05)
+
+        # SWR Gate → Replay Inhibitory (게이트 ON → Motor 억제)
+        self._create_static_synapse(
+            "swr_to_replay_inh", self.swr_gate, self.replay_inhibitory,
+            self.config.swr_gate_to_inh_weight, sparsity=0.3)
+
+        # Replay Inhibitory → Motor (DENSE, 리플레이 중 움직임 차단)
+        self._create_static_synapse(
+            "replay_inh_to_motor_l", self.replay_inhibitory, self.motor_left,
+            self.config.swr_motor_inhibit_weight)
+        self._create_static_synapse(
+            "replay_inh_to_motor_r", self.replay_inhibitory, self.motor_right,
+            self.config.swr_motor_inhibit_weight)
+
+        print(f"    Phase L11: SWR({self.config.n_ca3_sequence}+{self.config.n_swr_gate}+{self.config.n_replay_inhibitory}), "
+              f"7 static, replay_count={self.config.swr_replay_count}")
+
+    def _build_gw_circuit(self):
+        """Phase L12: Global Workspace — 주의 기반 경쟁적 브로드캐스트
+
+        생물학적 근거: Dehaene & Changeux (2011) — Global Neuronal Workspace
+        음식 탐색 vs 안전이 경쟁, 승자가 motor에 브로드캐스트
+
+        Static synapses only (12개):
+        - Input to GW_Food: food_memory(2), hunger(2), good_food_eye(2)
+        - Input to GW_Safety: fear(1), lateral_amygdala(1)
+        - Competition: GW_Safety → GW_Food 억제(2)
+        - Motor output: GW_Food → Motor(2)
+        """
+        # --- GW_Food 입력 (음식 탐색 채널) ---
+        # food_memory → GW_Food (기억 기반 방향)
+        self._create_static_synapse(
+            "food_mem_l_to_gw_food_l", self.food_memory_left, self.gw_food_left,
+            self.config.gw_food_memory_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "food_mem_r_to_gw_food_r", self.food_memory_right, self.gw_food_right,
+            self.config.gw_food_memory_weight, sparsity=0.1)
+
+        # hunger → GW_Food (허기 게이팅 — 배고플 때만 활성)
+        self._create_static_synapse(
+            "hunger_to_gw_food_l", self.hunger_drive, self.gw_food_left,
+            self.config.gw_hunger_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "hunger_to_gw_food_r", self.hunger_drive, self.gw_food_right,
+            self.config.gw_hunger_weight, sparsity=0.05)
+
+        # good_food_eye → GW_Food (직접 감각 부스트)
+        self._create_static_synapse(
+            "good_eye_l_to_gw_food_l", self.good_food_eye_left, self.gw_food_left,
+            self.config.gw_good_food_eye_weight, sparsity=0.08)
+        self._create_static_synapse(
+            "good_eye_r_to_gw_food_r", self.good_food_eye_right, self.gw_food_right,
+            self.config.gw_good_food_eye_weight, sparsity=0.08)
+
+        # --- GW_Safety 입력 (안전 채널) ---
+        self._create_static_synapse(
+            "fear_to_gw_safety", self.fear_response, self.gw_safety,
+            self.config.gw_fear_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "la_to_gw_safety", self.lateral_amygdala, self.gw_safety,
+            self.config.gw_la_weight, sparsity=0.05)
+
+        # --- WTA Competition (안전이 음식 억제) ---
+        self._create_static_synapse(
+            "gw_safety_to_gw_food_l", self.gw_safety, self.gw_food_left,
+            self.config.gw_safety_inhibit_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "gw_safety_to_gw_food_r", self.gw_safety, self.gw_food_right,
+            self.config.gw_safety_inhibit_weight, sparsity=0.1)
+
+        # --- Motor Output (약한 방향 편향) ---
+        self._create_static_synapse(
+            "gw_food_l_to_motor_l", self.gw_food_left, self.motor_left,
+            self.config.gw_food_to_motor_weight, sparsity=self.config.gw_food_to_motor_sparsity)
+        self._create_static_synapse(
+            "gw_food_r_to_motor_r", self.gw_food_right, self.motor_right,
+            self.config.gw_food_to_motor_weight, sparsity=self.config.gw_food_to_motor_sparsity)
+
+        print(f"    Phase L12: GW({self.config.n_gw_food}x2+{self.config.n_gw_safety}), "
+              f"12 static, food_mem->motor reduced to {self.config.food_memory_to_motor_weight}")
+
     def update_prediction_error_rstdp(self, reward_type: str):
         """Phase L6: 예측 오차 R-STDP 가중치 업데이트
 
@@ -7275,6 +7606,83 @@ class ForagerBrain:
         self.danger_sensor.vars["I_input"].view[:] = 0.0
         self.danger_sensor.vars["I_input"].push_to_device()
         self._taste_aversion_active = False
+
+    def add_experience(self, pos_x: float, pos_y: float, food_type: int,
+                       step: int, reward: float):
+        """Phase L11: 경험 버퍼에 음식 이벤트 저장"""
+        if not self.config.swr_replay_enabled:
+            return
+        self.experience_buffer.append((pos_x, pos_y, food_type, step, reward))
+        if len(self.experience_buffer) > self.config.swr_experience_max:
+            self.experience_buffer = self.experience_buffer[-self.config.swr_experience_max:]
+
+    def replay_swr(self):
+        """Phase L11: SWR Replay — 에피소드 간 오프라인 기억 재생
+
+        experience_buffer에서 좋은 음식 경험을 샘플링하여
+        Place Cell 전류 주입 → learn_food_location() Hebbian 학습 강화.
+        생물학적 근거: Buzsáki 2015, Foster & Wilson 2006
+        """
+        if not self.config.swr_replay_enabled or not self.config.hippocampus_enabled:
+            return None
+        if len(self.experience_buffer) == 0:
+            return {"replayed_count": 0}
+
+        good_experiences = [e for e in self.experience_buffer if e[2] == 0]
+        if len(good_experiences) == 0:
+            good_experiences = self.experience_buffer
+
+        stats_before = self.get_hippocampus_stats()
+        avg_w_before = stats_before.get("avg_weight", 0.0) if stats_before else 0.0
+
+        n_replay = min(self.config.swr_replay_count, len(good_experiences))
+        replay_indices = np.random.choice(
+            len(good_experiences), size=n_replay, replace=False)
+
+        replayed = 0
+        for idx in replay_indices:
+            exp = good_experiences[idx]
+            pos_x, pos_y, food_type, step, reward = exp
+
+            # 1. SWR Gate ON → replay_inhibitory → Motor 억제
+            self.swr_gate.vars["I_input"].view[:] = 30.0
+            self.swr_gate.vars["I_input"].push_to_device()
+
+            # 2. Place Cell 전류 주입 (스케일 다운)
+            place_currents = self._compute_place_cell_input(pos_x, pos_y)
+            place_currents *= self.config.swr_place_current_scale
+            self.place_cells.vars["I_input"].view[:] = place_currents
+            self.place_cells.vars["I_input"].push_to_device()
+
+            # 3. 다른 감각 입력 제로화
+            for pop in [self.food_eye_left, self.food_eye_right,
+                        self.wall_eye_left, self.wall_eye_right]:
+                pop.vars["I_input"].view[:] = 0.0
+                pop.vars["I_input"].push_to_device()
+
+            # 4. 시뮬레이션 스텝 (뉴런 활성화 전파)
+            for _ in range(self.config.swr_replay_steps):
+                self.model.step_time()
+
+            # 5. Hebbian 학습 (기존 함수 재사용)
+            self.learn_food_location(food_position=(pos_x, pos_y))
+            replayed += 1
+
+        # 리플레이 후 정리
+        self.swr_gate.vars["I_input"].view[:] = 0.0
+        self.swr_gate.vars["I_input"].push_to_device()
+        self.place_cells.vars["I_input"].view[:] = 0.0
+        self.place_cells.vars["I_input"].push_to_device()
+
+        stats_after = self.get_hippocampus_stats()
+        avg_w_after = stats_after.get("avg_weight", 0.0) if stats_after else 0.0
+
+        return {
+            "replayed_count": replayed,
+            "buffer_size": len(self.experience_buffer),
+            "avg_w_before": avg_w_before,
+            "avg_w_after": avg_w_after,
+        }
 
     def process(self, observation: Dict, debug: bool = False) -> Tuple[float, Dict]:
         """
@@ -7748,6 +8156,14 @@ class ForagerBrain:
         pe_danger_l_spikes = 0
         pe_danger_r_spikes = 0
 
+        # Phase L10 스파이크 카운트
+        nac_value_spikes = 0
+
+        # Phase L12: GW 스파이크 카운트
+        gw_food_l_spikes = 0
+        gw_food_r_spikes = 0
+        gw_safety_spikes = 0
+
         for _ in range(10):
             self.model.step_time()
 
@@ -7814,6 +8230,20 @@ class ForagerBrain:
                 indirect_r_spikes = np.sum(self.indirect_right.vars["RefracTime"].view > self.spike_threshold)
                 indirect_spikes += indirect_l_spikes + indirect_r_spikes
                 dopamine_spikes += np.sum(self.dopamine_neurons.vars["RefracTime"].view > self.spike_threshold)
+
+                # Phase L10: NAc spike counting
+                if self.config.td_learning_enabled:
+                    self.nac_value.vars["RefracTime"].pull_from_device()
+                    nac_value_spikes += np.sum(self.nac_value.vars["RefracTime"].view > self.spike_threshold)
+
+                # Phase L12: GW spike counting
+                if self.config.gw_enabled:
+                    self.gw_food_left.vars["RefracTime"].pull_from_device()
+                    self.gw_food_right.vars["RefracTime"].pull_from_device()
+                    self.gw_safety.vars["RefracTime"].pull_from_device()
+                    gw_food_l_spikes += np.sum(self.gw_food_left.vars["RefracTime"].view > self.spike_threshold)
+                    gw_food_r_spikes += np.sum(self.gw_food_right.vars["RefracTime"].view > self.spike_threshold)
+                    gw_safety_spikes += np.sum(self.gw_safety.vars["RefracTime"].view > self.spike_threshold)
 
             # Phase 5 스파이크 카운팅
             if self.config.prefrontal_enabled:
@@ -8196,6 +8626,33 @@ class ForagerBrain:
             # Phase L7: d1_active 캐싱 (L7 trace에서 BG 블록 밖에서 사용)
             self._d1_l_active = d1_l_active
             self._d1_r_active = d1_r_active
+
+            # Phase L10: NAc rate 계산 + trace 업데이트
+            if self.config.td_learning_enabled:
+                nac_value_rate = nac_value_spikes / max(self.config.n_nac_value * 5, 1)
+                self._nac_value_rate = nac_value_rate
+
+                nac_active = 1.0 if nac_value_rate > 0.05 else 0.0
+                td = self.config.rstdp_trace_decay
+                tm = self.config.rstdp_trace_max
+                self.nac_trace_l = min(self.nac_trace_l * td + food_l_active * nac_active, tm)
+                self.nac_trace_r = min(self.nac_trace_r * td + food_r_active * nac_active, tm)
+
+        # Phase L12: GW rate + broadcast
+        gw_food_l_rate = gw_food_r_rate = gw_safety_rate = 0.0
+        gw_broadcast = "neutral"
+        if self.config.gw_enabled:
+            gw_food_l_rate = gw_food_l_spikes / (self.config.n_gw_food * 10)
+            gw_food_r_rate = gw_food_r_spikes / (self.config.n_gw_food * 10)
+            gw_safety_rate = gw_safety_spikes / (self.config.n_gw_safety * 10)
+            gw_food_rate = (gw_food_l_rate + gw_food_r_rate) / 2
+            if gw_safety_rate > 0.15 and gw_safety_rate > gw_food_rate:
+                gw_broadcast = "safety"
+            elif gw_food_rate > 0.08:
+                gw_broadcast = "food"
+            self.last_gw_food_rate = gw_food_rate
+            self.last_gw_safety_rate = gw_safety_rate
+            self.last_gw_broadcast = gw_broadcast
 
         # Phase L5: 피질 R-STDP 적격 추적 (좋은/나쁜 음식 활성도 기반)
         if self.config.perceptual_learning_enabled:
@@ -8874,6 +9331,12 @@ class ForagerBrain:
             "self_narrative_rate": self_narrative_rate,
             "self_inhibitory_sm_rate": self_inhibitory_sm_rate,
 
+            # Phase L12: Global Workspace
+            "gw_food_l_rate": gw_food_l_rate,
+            "gw_food_r_rate": gw_food_r_rate,
+            "gw_safety_rate": gw_safety_rate,
+            "gw_broadcast": gw_broadcast,
+
             # Phase L6: Prediction Error
             "pe_food_l_rate": pe_food_l_rate,
             "pe_food_r_rate": pe_food_r_rate,
@@ -8939,9 +9402,7 @@ class ForagerBrain:
                 print(f"  WARNING: HIGH DANGER ({danger:.2f}) but FEAR LOW ({fear:.2f})!")
                 print(f"{'!'*50}\n")
 
-            # Hunger와 Fear 모두 높음 (경쟁 테스트!)
-            if hunger > 0.5 and fear > 0.5:
-                print(f"  [COMPETITION] Hunger={hunger:.2f} vs Fear={fear:.2f}")
+            # Hunger와 Fear 모두 높음 (경쟁 — 로그 비활성, 불필요한 스팸 방지)
 
     def reset(self):
         """뇌 상태 초기화"""
@@ -8958,6 +9419,10 @@ class ForagerBrain:
         # Phase 3: Place Cells 추가 (I_input 있음)
         if self.config.hippocampus_enabled:
             sensory_pops.append(self.place_cells)
+
+        # Phase L11: SWR Gate (SensoryLIF — I_input 있음)
+        if self.config.swr_replay_enabled and self.config.hippocampus_enabled:
+            sensory_pops.append(self.swr_gate)
 
         # Phase 6b: Thalamus 추가 (I_input 있음)
         if self.config.thalamus_enabled:
@@ -8987,6 +9452,14 @@ class ForagerBrain:
                 lif_pops.extend([self.food_memory_left, self.food_memory_right])
             elif self.food_memory is not None:
                 lif_pops.append(self.food_memory)
+
+        # Phase L11: CA3 + Replay Inhibitory
+        if self.config.swr_replay_enabled and self.config.hippocampus_enabled:
+            lif_pops.extend([self.ca3_sequence, self.replay_inhibitory])
+
+        # Phase L12: GW populations
+        if self.config.gw_enabled:
+            lif_pops.extend([self.gw_food_left, self.gw_food_right, self.gw_safety])
 
         # Phase 4: Basal Ganglia 추가 (Phase L2: D1/D2 MSN)
         if self.config.basal_ganglia_enabled:
@@ -9303,8 +9776,8 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if learn_info:
                         ep_learn_events += 1
 
-                    # Phase 4: Dopamine 방출 (보상) - Phase L1: 0.5→1.0 증가
-                    dopamine_info = brain.release_dopamine(reward_magnitude=1.0)
+                    # Phase 4: Dopamine 방출 (보상) - Phase L1: 0.5→1.0, Phase L10: RPE 모듈레이션
+                    dopamine_info = brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
 
                     # Phase L5: 피질 R-STDP (좋은 음식 학습)
                     if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
@@ -9356,6 +9829,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if brain_config.self_model_enabled:
                         sm_learn = brain.learn_self_narrative(reward_context=True)
 
+                    # Phase L11: SWR 경험 버퍼에 좋은 음식 저장
+                    if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
+                        brain.add_experience(food_pos[0], food_pos[1], 0, env.steps, 25.0)
+
                 elif eaten_food_type == 1:  # === 나쁜 음식: 도파민 딥 + 맛 혐오 + 피질 약화 ===
                     # Phase L8: 도파민 딥 → D1 약화 (LTD) + D2 강화 (LTP)
                     if brain_config.dopamine_dip_enabled and brain_config.basal_ganglia_enabled:
@@ -9368,6 +9845,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
                     # Phase L5: 맛 혐오 → Amygdala (Garcia Effect) — 편도체 경로, 유지
                     brain.trigger_taste_aversion(0.5)
+
+                    # Phase L11: SWR 경험 버퍼에 나쁜 음식 저장
+                    if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
+                        bad_food_pos = (obs["position_x"], obs["position_y"])
+                        brain.add_experience(bad_food_pos[0], bad_food_pos[1], 1, env.steps, -5.0)
 
                 # 공통 로그
                 if log_level in ["normal", "debug", "verbose"]:
@@ -9490,6 +9972,15 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 print(f"  [SAVE] Weights saved: avg={stats['avg_weight']:.2f}, "
                       f"max={stats['max_weight']:.2f}, strong={stats['n_strong_connections']}")
 
+        # Phase L11: SWR Replay (에피소드 간 오프라인 기억 재생)
+        if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
+            replay_info = brain.replay_swr()
+            if replay_info and replay_info["replayed_count"] > 0:
+                print(f"  [SWR] Replayed {replay_info['replayed_count']} experiences "
+                      f"(buffer: {replay_info['buffer_size']})")
+                print(f"  [SWR] Hebbian w: {replay_info['avg_w_before']:.3f} → "
+                      f"{replay_info['avg_w_after']:.3f}")
+
         # 에피소드 요약
         avg_hunger = np.mean(ep_hunger_rates) if ep_hunger_rates else 0
         avg_satiety = np.mean(ep_satiety_rates) if ep_satiety_rates else 0
@@ -9592,6 +10083,34 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 syn.vars["g"].pull_from_device()
                 avg_w = float(np.nanmean(syn.vars["g"].values))
                 print(f"    {label}: {avg_w:.3f}")
+
+        # Phase L10: NAc Critic 가중치 + RPE 현황
+        if brain_config.td_learning_enabled and brain_config.basal_ganglia_enabled:
+            print(f"  --- Phase L10: NAc Critic (TD Learning) ---")
+            for label, syn in [
+                ("Food_Eye→NAc_L", brain.food_to_nac_l),
+                ("Food_Eye→NAc_R", brain.food_to_nac_r),
+            ]:
+                syn.vars["g"].pull_from_device()
+                avg_w = float(np.nanmean(syn.vars["g"].values))
+                print(f"    {label}: {avg_w:.3f}")
+            print(f"    NAc rate: {brain._nac_value_rate:.3f}")
+
+        # Phase L12: Global Workspace 현황
+        if brain_config.gw_enabled:
+            print(f"  --- Phase L12: Global Workspace ---")
+            print(f"    GW Food rate: {brain.last_gw_food_rate:.3f}")
+            print(f"    GW Safety rate: {brain.last_gw_safety_rate:.3f}")
+            print(f"    Broadcast: {brain.last_gw_broadcast}")
+
+        # Phase L11: SWR Replay 현황
+        if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
+            print(f"  --- Phase L11: SWR Replay ---")
+            print(f"    Experience buffer: {len(brain.experience_buffer)} events")
+            stats = brain.get_hippocampus_stats()
+            if stats:
+                print(f"    Hippocampal avg_w: {stats['avg_weight']:.3f}")
+                print(f"    Strong connections: {stats['n_strong_connections']}")
 
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:

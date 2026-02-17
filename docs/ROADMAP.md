@@ -4,15 +4,15 @@
 
 ---
 
-## 현재 상태: Phase L9 완료 (20,240 뉴런)
+## 현재 상태: Phase L12 완료 (20,710 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L9: 피질→BG 하향 연결 ✓ (2026-02-16)                     ║
-║  IT_Food 학습 표상 → D1/D2 의사결정 연결 (4 SPARSE 시냅스)      ║
-║  IT→D1: 0.5→2.47 (R-STDP, 포화 없이 점진적 학습)              ║
-║  IT→D2: 0.5→0.11 (Anti-Hebbian, w_min 근처 수렴)              ║
-║  생존율 60%→70% (+10pp), 0% pain death, Reward Freq 2.44%      ║
+║  Phase L12: Global Workspace (주의 기반 경쟁) ✓ (2026-02-17)   ║
+║  GW_Food vs GW_Safety 경쟁 → 상태 의존적 행동 (Dehaene 2011) ║
+║  food_memory→motor 12→5, GW_Food→motor +4.0 (hunger 게이팅)  ║
+║  시각 강화: 궤적 트레일, 에이전트 헤일로, GW 뇌 패널          ║
+║  생존율 50%, 0% pain death, Reward Freq 2.49%                  ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -53,6 +53,9 @@
 | **L7** | **음식 유형별 BG 학습 (Discriminative BG)** | **-** | **✓ 완료** | **45%** |
 | **L8** | **혐오 도파민 딥 (Aversive Dopamine Dip)** | **-** | **✓ 완료** | **60%** |
 | **L9** | **피질→BG 하향 연결 (Cortical→BG Top-Down)** | **-** | **✓ 완료** | **70%** |
+| **L10** | **TD Learning (NAc Critic → RPE 도파민)** | **+110** | **✓ 완료** | **65%** |
+| **L11** | **SWR Replay (해마 기억 재생)** | **+200** | **✓ 완료** | **45%** |
+| **L12** | **Global Workspace (주의 기반 경쟁)** | **+160** | **✓ 완료** | **50%** |
 
 ### Phase 12-14 수정 이력
 
@@ -366,15 +369,29 @@
 - L10: 도파민을 "보상 신호"→"보상 예측 오차"로 전환 (Schultz 1997). Campbell et al. (2025): TD 회로는 하드와이어드, 가치 표상만 학습. Alpha-blending으로 안전 도입.
 - L11: "영원한 현재" 탈출. 세타 위상 전이 + STDP ≈ TD-lambda on Successor Representation (George et al. 2023). 시간적 인지의 시작.
 
-### 자기 참조 학습 단계 (L12+ 전망)
+### 자기 참조 학습 단계 (L12+)
 
-| Phase | 이름 | 핵심 메커니즘 | 의식 이론 |
-|-------|------|--------------|-----------|
-| L12 | 주의 선택 (Attention) | Global Workspace 게이팅 | Dehaene/Baars |
-| L13 | 에이전시 감지 | 예측-결과 비교 → "내가 했다" | Frith |
-| L14 | 내러티브 자기 | 시간적 자기 모델 업데이트 | Damasio |
+| Phase | 이름 | 핵심 메커니즘 | 의식 이론 | 상태 |
+|-------|------|--------------|-----------|------|
+| **L12** | **주의 선택 (Attention)** | **Global Workspace 게이팅** | **Dehaene/Baars** | **✓ 완료** |
+| L13 | 에이전시 감지 | 예측-결과 비교 → "내가 했다" | Frith | 계획 |
+| L14 | 내러티브 자기 | 시간적 자기 모델 업데이트 | Damasio | 계획 |
 
-*L12+ 구체적 설계는 L11 완료 후 결정*
+### Phase L12: Global Workspace (주의 기반 경쟁) ✓ 완료
+- **문제**: food_memory→motor 12.0이 항상 동일 강도 → 위험해도 음식 추적 (상태 의존적 행동 없음)
+- **해결**: Global Workspace Theory (Dehaene & Changeux 2011) — GW_Food vs GW_Safety 경쟁, 승자가 motor에 브로드캐스트
+- **구조**: +160 뉴런 (GW_Food L/R 50×2 + GW_Safety 60), C=30 LIF
+- **메커니즘**:
+  - food_memory→motor 직접 경로 12.0→5.0 약화
+  - GW_Food→motor +4.0 (hunger 게이팅): 안전+배고픔=9.0, 위험=5.0, 배부름=6.0
+  - GW_Safety→GW_Food 억제 (-12.0): fear+LA 활성 시 음식 탐색 차단
+- **입력**: food_memory(6.0) + hunger(5.0) + good_food_eye(3.0) → GW_Food; fear(12.0) + LA(8.0) → GW_Safety
+- **시각 강화**: 궤적 트레일 (초록/빨강/파랑), 에이전트 헤일로, 뇌 패널 GW 섹션
+- **시냅스**: 12 static (학습 없음), 기존 37 학습 시냅스 유지
+- **검증 (2026-02-17)**: 생존율 50% ✓ (+5pp), Pain 0% ✓, Reward 2.49%, GW Food 0.022~0.216, Safety 0.300
+- **체크포인트**: `checkpoints/brain_L12_20ep.npz` (42 시냅스)
+
+**Phase L12 완료**: 20,710 뉴런, 37 학습 시냅스, 12 new static
 
 ---
 
@@ -450,4 +467,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-16 (Phase L9 완료, 20,240 뉴런, 35 학습 시냅스, 70% 생존율)*
+*최종 업데이트: 2026-02-17 (Phase L12 완료, 20,710 뉴런, 37 학습 시냅스, 50% 생존율)*

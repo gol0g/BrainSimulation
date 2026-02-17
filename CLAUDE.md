@@ -291,36 +291,43 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L9 완료 - 피질→BG 하향 연결 (20,240 뉴런)
+### 현재 상태: Phase L12 완료 - Global Workspace (20,710 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L9: 피질→BG 하향 연결 ✓ (2026-02-16)                     ║
+║  Phase L12: Global Workspace (주의 기반 경쟁) ✓ (2026-02-17)   ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→...→L8→L9):                       ║
+║  Learning Foundation (Phase L1→...→L11→L12):                     ║
 ║    - L1-L4: BG 기반 학습 (D1/D2, R-STDP, Anti-Hebbian)       ║
 ║    - L5-L6: 피질 학습 (perceptual R-STDP, PE)                ║
 ║    - L7-L8: 음식 유형별 차등 학습 (도파민 딥)                 ║
-║    - L9: 피질 표상→BG 의사결정 연결 (학습이 행동으로!)        ║
+║    - L9: 피질 표상→BG 의사결정 연결                           ║
+║    - L10: NAc Critic → RPE 도파민 (Schultz 1997)              ║
+║    - L11: SWR Replay → 오프라인 기억 강화 (Buzsáki 2015)     ║
+║    - L12: Global Workspace → 주의 기반 경쟁 (Dehaene 2011)   ║
 ║                                                               ║
-║  L9 변경 사항:                                                ║
-║    - IT_Food → D1_L/R (R-STDP, 4 SPARSE synapses)            ║
-║    - IT_Food → D2_L/R (Anti-Hebbian, 4 SPARSE synapses)      ║
-║    - init_w=0.5, w_max=3.0, sparsity=0.05                    ║
-║    - 빌드 순서: IT 빌드 후 별도 메서드 (_build_it_bg_circuit) ║
+║  L12 변경 사항:                                               ║
+║    - GW_Food L/R(50×2) + GW_Safety(60) = +160 뉴런           ║
+║    - 12 static synapses, 0 new learning                       ║
+║    - food_memory→motor 12.0→5.0 (GW 경유 라우팅)             ║
+║    - GW_Food→motor +4.0 (hunger 게이팅)                       ║
+║    - GW_Safety→GW_Food 억제 (-12.0, 위험 시 음식 탐색 차단)  ║
+║    - 상태 의존 행동: 안전+배고픔 9.0, 위험 5.0                ║
 ║                                                               ║
-║  학습 곡선 (20ep):                                            ║
-║    - IT→D1: 0.5→2.47 (점진적 R-STDP, 포화 없음)             ║
-║    - IT→D2: 0.5→0.11 (Anti-Hebbian, w_min 근처 수렴)        ║
+║  시각 강화:                                                    ║
+║    - 궤적 트레일 (GW 상태별 색상: 초록/빨강/파랑)            ║
+║    - 에이전트 헤일로 (목표 상태 링)                           ║
+║    - 뇌 패널 GW 섹션 (Food/Safety 경쟁 바)                   ║
 ║                                                               ║
 ║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 70% ✓ (+10pp vs L8, 최고 기록!)          ║
+║    - Survival Rate: 50% ✓ (+5pp vs L11)                      ║
 ║    - Pain Death: 0% ✓                                        ║
-║    - Avg Food: 59.4                                          ║
-║    - Reward Freq: 2.44% (기준 근처)                           ║
+║    - Reward Freq: 2.49% (borderline, 노이즈 범위)            ║
+║    - GW Food: 0.022~0.216, Safety: 0.300                     ║
+║    - Hippocampal avg_w: 3.810 (L11: 3.756, 개선)             ║
 ║                                                               ║
-║  뉴런 수:       20,240 (변동 없음)                              ║
-║  학습 시냅스:   35 (+4, IT→D1/D2)                              ║
+║  뉴런 수:       20,710 (+160)                                   ║
+║  학습 시냅스:   37 (변동 없음), Static: +12                      ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -328,8 +335,8 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ```
 backend/genesis/
-├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식)
-├── forager_brain.py   # Forager Brain (20,240 뉴런, Phase 1-20 + L1-L9)
+├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식 + GW 시각화)
+├── forager_brain.py   # Forager Brain (20,710 뉴런, Phase 1-20 + L1-L12)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -347,7 +354,11 @@ backend/genesis/
 10. **시간적 신용 할당 노이즈**: 음식 근접 시 trace 중첩 → bad food D1도 학습 (도파민 시간적 겹침)
 11. **도파민 딥이 생존율을 높임**: 음수 도파민(-0.5)이 기존 수식을 자동 반전 → 코드 변경 최소, 효과 극대 (+15pp 생존율)
 12. **피질→BG 빌드 순서**: IT population은 BG보다 늦게 빌드됨 → 별도 _build_it_bg_circuit() 메서드 필요
-13. **IT→D2 빠른 수렴**: pre-synaptic only trace + 비측화 IT → ep5에 w_min 도달 (L4 패턴 재현)
+13. **RPE는 scalar 모듈레이션**: NAc→Motor 직접 연결 없음, NAc rate로 DA magnitude만 조절 → Motor 간섭 0
+14. **primary_reward 파라미터**: approach signal/bad food dip은 RPE 적용 안 함 (기존 행동 보존)
+15. **IT→D2 빠른 수렴**: pre-synaptic only trace + 비측화 IT → ep5에 w_min 도달 (L4 패턴 재현)
+16. **SWR Replay로 기존 Hebbian 재사용**: 새 학습 시냅스 0개, learn_food_location() 재활용 → Hebbian avg_w +76% 강화
+17. **SWR Gate는 SensoryLIF I_input 전용**: 시냅스 입력 없음 → 온라인 중 절대 발화 안 함 (Motor 간섭 완벽 차단)
 
 ---
 
