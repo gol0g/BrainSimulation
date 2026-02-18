@@ -9506,6 +9506,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_association: bool = False, no_language: bool = False,
                 no_wm_expansion: bool = False, no_metacognition: bool = False,
                 no_self_model: bool = False,
+                no_predator: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -9567,6 +9568,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_self_model:
         brain_config.self_model_enabled = False
         print("  [!] Phase 20 (Self-Model) DISABLED")
+    if no_predator:
+        env_config.predator_enabled = False
+        print("  [!] Predators DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -9602,7 +9606,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     all_max_pain_dwell = []
     all_avg_pain_dwell = []
     all_pain_approach_pct = []
-    death_causes = {"starve": 0, "timeout": 0, "pain": 0}
+    death_causes = {"starve": 0, "timeout": 0, "pain": 0, "predator": 0}
 
     # Phase 3b: 학습 통계
     all_learn_events = []  # 총 학습 이벤트 수
@@ -10009,6 +10013,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"  Avg Dist→Pain: {env_info.get('avg_dist_to_pain', 0):.1f}px")
             print(f"  Max Dwell:    {env_info.get('max_pain_dwell', 0)} steps")
 
+        if env_config.predator_enabled:
+            print(f"  --- Predator ---")
+            print(f"  Contact: {env_info.get('predator_contact_steps', 0)} steps")
+            print(f"  Damage:  {env_info.get('predator_damage_total', 0):.1f}")
+
         # === 행동 진단 요약 ===
         print(f"  --- Behavior Diagnostics ---")
         # 모터 출력 분석
@@ -10213,6 +10222,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         print(f"  Avg Max Dwell:      {avg_max_dwell:.0f} steps (longest single pain visit)")
         print(f"  Approach Ratio:     {avg_approach:.1f}% of steps moving toward pain")
 
+        if env_config.predator_enabled:
+            pred_deaths = death_causes.get("predator", 0)
+            print(f"\n  === Predator ===")
+            print(f"  Predator Death Rate: {pred_deaths/episodes*100:.0f}% ({pred_deaths}/{episodes})")
+
     # Phase 3b: 학습 통계
     if brain_config.hippocampus_enabled and sum(all_learn_events) > 0:
         print(f"\n  === Phase 3b: Hippocampus Learning ===")
@@ -10410,6 +10424,8 @@ if __name__ == "__main__":
                        help="Disable Phase 19 (Metacognition)")
     parser.add_argument("--no-self-model", action="store_true",
                        help="Disable Phase 20 (Self-Model)")
+    parser.add_argument("--no-predator", action="store_true",
+                       help="Disable predators in environment")
     # Data logging for dashboard
     parser.add_argument("--log-data", action="store_true",
                        help="Enable data logging for dashboard visualization")
@@ -10441,6 +10457,7 @@ if __name__ == "__main__":
         no_wm_expansion=args.no_wm_expansion,
         no_metacognition=args.no_metacognition,
         no_self_model=args.no_self_model,
+        no_predator=args.no_predator,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,

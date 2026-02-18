@@ -125,8 +125,104 @@ class ForagerConfig:
     danger_food_ratio: float = 0.3            # 30% 음식이 pain zone 가장자리에 생성
     danger_food_bonus: float = 0.5            # 위험 근접 음식 에너지 +50% 보너스
 
+    # === Predator Config ===
+    predator_enabled: bool = True
+    n_predators: int = 1                      # 1마리로 시작 (점진적 난이도)
+    predator_speed: float = 2.0              # agent 3.0보다 느림 → 탈출 가능
+    predator_radius: float = 12.0            # agent 10보다 약간 큼
+    predator_turn_rate: float = 0.15         # rad/step (agent 0.3보다 느림)
+    predator_chase_range: float = 120.0      # 추적 시작 거리
+    predator_catch_radius: float = 15.0      # 접촉 판정 (agent_r + predator_r 근사)
+    predator_damage: float = 0.3             # 접촉 시 매 스텝 에너지 감소
+    predator_nest_safe: bool = True          # 둥지 = 안전지대
+    predator_view_range: float = 120.0       # 에이전트의 포식자 감지 거리
+    predator_pain_intensity: float = 0.8     # pain signal 강도 (zone 1.0보다 약간 약함)
+    predator_danger_intensity: float = 0.9   # danger signal 강도
+    predator_wander_speed: float = 1.5       # 배회 시 속도
+
     # 시뮬레이션
     max_steps: int = 3000
+
+
+class PredatorAgent:
+    """포식자 - 에이전트를 추적, 둥지 회피"""
+
+    def __init__(self, x: float, y: float, config: 'ForagerConfig'):
+        self.x, self.y = x, y
+        self.angle = np.random.uniform(0, 2 * np.pi)
+        self.radius = config.predator_radius
+        self.state = "wander"  # "wander" | "chase"
+        self.speed = config.predator_wander_speed
+        self._wander_timer = 0
+        self.chase_steps = 0
+        self.contact_steps = 0
+
+    def step(self, player_pos, map_w: float, map_h: float, config: 'ForagerConfig'):
+        px, py = player_pos
+        dist = math.sqrt((self.x - px)**2 + (self.y - py)**2)
+        player_in_nest = self._is_in_nest(px, py, config)
+
+        # 상태 전환 (히스테리시스: 시작 chase_range, 해제 1.5x)
+        if self.state == "wander":
+            if dist < config.predator_chase_range and not player_in_nest:
+                self.state = "chase"
+                self.speed = config.predator_speed
+        else:  # chase
+            if dist > config.predator_chase_range * 1.5 or player_in_nest:
+                self.state = "wander"
+                self.speed = config.predator_wander_speed
+                self.chase_steps = 0
+
+        if self.state == "chase":
+            self._chase(px, py, config)
+            self.chase_steps += 1
+        else:
+            self._wander(map_w, map_h, config)
+
+        # 벽 충돌 — 반사 (구석 박힘 방지)
+        old_x, old_y = self.x, self.y
+        self.x = np.clip(self.x, self.radius, map_w - self.radius)
+        self.y = np.clip(self.y, self.radius, map_h - self.radius)
+        if self.x != old_x:  # 좌우 벽
+            self.angle = math.pi - self.angle
+            self._wander_timer = 0
+        if self.y != old_y:  # 상하 벽
+            self.angle = -self.angle
+            self._wander_timer = 0
+
+    def _chase(self, px: float, py: float, config: 'ForagerConfig'):
+        target = math.atan2(py - self.y, px - self.x)
+        diff = (target - self.angle + math.pi) % (2 * math.pi) - math.pi
+        self.angle += np.clip(diff, -config.predator_turn_rate, config.predator_turn_rate)
+        # 둥지 접근 시 회피
+        if config.predator_nest_safe:
+            nx = self.x + math.cos(self.angle) * self.speed
+            ny = self.y + math.sin(self.angle) * self.speed
+            if self._is_in_nest(nx, ny, config):
+                self.angle += math.pi * 0.5
+                return
+        self.x += math.cos(self.angle) * self.speed
+        self.y += math.sin(self.angle) * self.speed
+
+    def _wander(self, map_w: float, map_h: float, config: 'ForagerConfig'):
+        self._wander_timer -= 1
+        if self._wander_timer <= 0:
+            self.angle += np.random.uniform(-0.5, 0.5)
+            self._wander_timer = np.random.randint(30, 80)
+        # 둥지 회피
+        if config.predator_nest_safe:
+            nx = self.x + math.cos(self.angle) * self.speed
+            ny = self.y + math.sin(self.angle) * self.speed
+            if self._is_in_nest(nx, ny, config):
+                cx, cy = map_w / 2, map_h / 2
+                self.angle = math.atan2(self.y - cy, self.x - cx)
+        self.x += math.cos(self.angle) * self.speed
+        self.y += math.sin(self.angle) * self.speed
+
+    def _is_in_nest(self, x: float, y: float, config: 'ForagerConfig') -> bool:
+        cx, cy = config.width / 2, config.height / 2
+        half = config.nest_size / 2 + 10  # 10px 마진
+        return cx - half <= x <= cx + half and cy - half <= y <= cy + half
 
 
 class NPCAgent:
@@ -446,6 +542,25 @@ class ForagerGym:
                 sx, sy = spawn_positions[i % len(spawn_positions)]
                 self.npc_agents.append(NPCAgent(sx, sy, self.config))
 
+        # === Predator Initialization ===
+        self.predators = []
+        self.predator_damage_total = 0.0
+        self.predator_contact_steps = 0
+        self._predator_contact = False
+        if self.config.predator_enabled:
+            for _ in range(self.config.n_predators):
+                side = np.random.randint(4)
+                margin = 30
+                if side == 0:
+                    sx, sy = np.random.uniform(margin, self.config.width - margin), float(margin)
+                elif side == 1:
+                    sx, sy = np.random.uniform(margin, self.config.width - margin), float(self.config.height - margin)
+                elif side == 2:
+                    sx, sy = float(margin), np.random.uniform(margin, self.config.height - margin)
+                else:
+                    sx, sy = float(self.config.width - margin), np.random.uniform(margin, self.config.height - margin)
+                self.predators.append(PredatorAgent(sx, sy, self.config))
+
         return self._get_observation()
 
     def step(self, action: Tuple[float, ...]) -> Tuple[Dict, float, bool, Dict]:
@@ -610,6 +725,21 @@ class ForagerGym:
         if hasattr(self, '_agent_call_cooldown'):
             self._agent_call_cooldown = max(0, self._agent_call_cooldown - 1)
 
+        # === Predator Update ===
+        self._predator_contact = False
+        if self.config.predator_enabled and self.predators:
+            for pred in self.predators:
+                pred.step((self.agent_x, self.agent_y),
+                          self.config.width, self.config.height, self.config)
+                dist = math.sqrt((self.agent_x - pred.x)**2 + (self.agent_y - pred.y)**2)
+                if dist < self.config.predator_catch_radius:
+                    self._predator_contact = True
+                    pred.contact_steps += 1
+                    self.predator_contact_steps += 1
+                    self.energy -= self.config.predator_damage
+                    self.energy = max(0, self.energy)
+                    self.predator_damage_total += self.config.predator_damage
+
         # === Food Patch 방문 추적 ===
         if self.config.food_patch_enabled:
             current_patch = self._get_current_patch()
@@ -647,6 +777,10 @@ class ForagerGym:
         if self.energy <= 0:
             done = True
             death_cause = "starve"
+            # 포식자 사망 판별: 포식자 피해가 30% 이상이면 predator 사인
+            if self.config.predator_enabled and self.predator_damage_total > 0:
+                if self.predator_damage_total >= self.config.energy_start * 0.3:
+                    death_cause = "predator"
             reward += self.config.reward_starve
         elif self.config.pain_zone_enabled and self.pain_damage_accumulated >= self.config.pain_max_damage:
             done = True
@@ -694,6 +828,10 @@ class ForagerGym:
             "agent_call_type": getattr(self, '_agent_call_type', 0),
             # Phase L1: Food approach signal (dopamine shaping)
             "food_approach_signal": food_approach_signal,
+            # Predator info
+            "predator_contact": self._predator_contact if self.config.predator_enabled else False,
+            "predator_damage_total": self.predator_damage_total if self.config.predator_enabled else 0,
+            "predator_contact_steps": self.predator_contact_steps if self.config.predator_enabled else 0,
         }
 
         # 렌더링
@@ -817,6 +955,47 @@ class ForagerGym:
             return 1.0 - (dist / self.config.danger_range)
         else:
             return 0.0
+
+    # === Predator Detection Methods ===
+
+    def _cast_predator_rays(self) -> Tuple[np.ndarray, np.ndarray]:
+        """포식자 방향 레이캐스트 (food ray와 동일 패턴, L/R 분리)"""
+        n_half = self.config.n_rays // 2
+        rays_l, rays_r = np.zeros(n_half), np.zeros(n_half)
+        for i in range(n_half):
+            angle_l = self.agent_angle - math.pi / 2 + (i / n_half) * math.pi / 2
+            angle_r = self.agent_angle + (i / n_half) * math.pi / 2
+            rays_l[i] = self._cast_single_predator_ray(angle_l)
+            rays_r[i] = self._cast_single_predator_ray(angle_r)
+        return rays_l, rays_r
+
+    def _cast_single_predator_ray(self, angle: float) -> float:
+        """단일 레이로 최근접 포식자 감지 (0=없음, 1=매우 근접)"""
+        best_dist = self.config.predator_view_range
+        for pred in self.predators:
+            dx, dy = pred.x - self.agent_x, pred.y - self.agent_y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist > self.config.predator_view_range:
+                continue
+            pred_angle = math.atan2(dy, dx)
+            diff = abs((pred_angle - angle + math.pi) % (2 * math.pi) - math.pi)
+            if diff < 0.26 and dist < best_dist:  # 15° cone
+                best_dist = dist
+        if best_dist >= self.config.predator_view_range:
+            return 0.0
+        return 1.0 - (best_dist / self.config.predator_view_range)
+
+    def _get_predator_danger(self) -> float:
+        """최근접 포식자 위험 신호 (0=안전, 1=접촉)"""
+        min_dist = float('inf')
+        for pred in self.predators:
+            d = math.sqrt((self.agent_x - pred.x) ** 2 + (self.agent_y - pred.y) ** 2)
+            min_dist = min(min_dist, d)
+        if min_dist < self.config.predator_catch_radius:
+            return 1.0
+        if min_dist < self.config.predator_chase_range:
+            return 1.0 - (min_dist / self.config.predator_chase_range)
+        return 0.0
 
     def _compute_danger_sound(self) -> Tuple[float, float]:
         """
@@ -945,6 +1124,18 @@ class ForagerGym:
             pain_rays_r = np.zeros(self.config.n_rays // 2)
             danger_signal = 0.0
 
+        # === Predator sensory injection (이동형 pain source) ===
+        predator_rays_l = np.zeros(self.config.n_rays // 2)
+        predator_rays_r = np.zeros(self.config.n_rays // 2)
+        predator_danger = 0.0
+        if self.config.predator_enabled and hasattr(self, 'predators') and self.predators:
+            predator_rays_l, predator_rays_r = self._cast_predator_rays()
+            predator_danger = self._get_predator_danger()
+            # 기존 pain/danger 채널에 주입 (np.maximum: 강한 쪽만)
+            pain_rays_l = np.maximum(pain_rays_l, predator_rays_l * self.config.predator_pain_intensity)
+            pain_rays_r = np.maximum(pain_rays_r, predator_rays_r * self.config.predator_pain_intensity)
+            danger_signal = max(danger_signal, predator_danger * self.config.predator_danger_intensity)
+
         # Phase 11: Sound 관련 관찰
         if self.config.sound_enabled:
             sound_danger_l, sound_danger_r = self._compute_danger_sound()
@@ -1043,6 +1234,12 @@ class ForagerGym:
             "good_food_rays_right": good_food_rays_r,
             "bad_food_rays_left": bad_food_rays_l,
             "bad_food_rays_right": bad_food_rays_r,
+
+            # Predator (raw, 미래 뇌 확장용)
+            "predator_rays_left": predator_rays_l,
+            "predator_rays_right": predator_rays_r,
+            "predator_danger": predator_danger,
+            "predator_contact": float(getattr(self, '_predator_contact', False)),
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -2029,6 +2226,26 @@ class ForagerGym:
                 pygame.draw.line(env_surface, (180, 180, 180),
                                  (int(npc.x), int(npc.y)),
                                  (int(npc_ax), int(npc_ay)), 1)
+
+        # === Predators ===
+        if self.config.predator_enabled and hasattr(self, 'predators'):
+            for pred in self.predators:
+                color = (220, 40, 40) if pred.state == "chase" else (160, 60, 60)
+                pygame.draw.circle(env_surface, color,
+                                   (int(pred.x), int(pred.y)), int(pred.radius))
+                pygame.draw.circle(env_surface, (255, 80, 80),
+                                   (int(pred.x), int(pred.y)), int(pred.radius), 2)
+                # 방향 화살표
+                arr_len = pred.radius * 1.5
+                ax = pred.x + math.cos(pred.angle) * arr_len
+                ay = pred.y + math.sin(pred.angle) * arr_len
+                pygame.draw.line(env_surface, (255, 150, 150),
+                                 (int(pred.x), int(pred.y)), (int(ax), int(ay)), 2)
+                # 추적선 (추적 중일 때만)
+                if pred.state == "chase":
+                    pygame.draw.line(env_surface, (255, 80, 80),
+                                     (int(pred.x), int(pred.y)),
+                                     (int(self.agent_x), int(self.agent_y)), 1)
 
         # Phase L12: 궤적 트레일 (GW 상태별 색상 — 선분 + 모드 전환 마커)
         if len(self.position_history) > 2:
