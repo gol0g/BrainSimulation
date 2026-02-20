@@ -227,6 +227,12 @@ class ForagerBrainConfig:
     cortical_anti_hebbian_ratio: float = 0.6   # Anti-Hebbian 약화 비율 (R-STDP 대비)
     taste_aversion_magnitude: float = 15.0     # 맛 혐오 → Lateral Amygdala I_input
 
+    # Phase L13: Conditioned Taste Aversion (bad_food_eye → LA Hebbian)
+    taste_aversion_learning_enabled: bool = True
+    taste_aversion_hebbian_eta: float = 0.003     # 학습률 (Garcia Effect: 빠른 one-trial 학습)
+    taste_aversion_hebbian_w_max: float = 5.0     # 최대 가중치 (danger_to_la 25.0보다 낮게)
+    taste_aversion_hebbian_init_w: float = 0.1    # 초기 가중치 (LA 초기 간섭 방지)
+
     # Phase L6: Prediction Error Circuit (예측 오차)
     prediction_error_enabled: bool = True
     n_pe_food: int = 100               # 50L + 50R (음식 예측 오차)
@@ -1506,6 +1512,10 @@ class ForagerBrain:
             self.cortical_trace_bad_r = 0.0
             self._cortical_step = 0
             self._taste_aversion_active = False
+            self.last_bad_food_activity_left = 0.0
+            self.last_bad_food_activity_right = 0.0
+            self.prev_bad_food_activity_left = 0.0
+            self.prev_bad_food_activity_right = 0.0
 
         # Phase L7: Discriminative BG 적격 추적
         if self.config.discriminative_bg_enabled and self.config.perceptual_learning_enabled:
@@ -1903,6 +1913,25 @@ class ForagerBrain:
             self.config.danger_to_la_weight, sparsity=0.15)
 
         print(f"    Danger→LA: {self.config.danger_to_la_weight} (CS, conditioned)")
+
+        # 2b. Phase L13: Bad Food Eye → LA (조건화된 맛 혐오, Hebbian 학습)
+        # Garcia Effect: 나쁜 음식의 시각 정보가 LA를 활성화하도록 학습
+        # DENSE 시냅스 (수동 Hebbian 업데이트용)
+        if self.config.taste_aversion_learning_enabled and self.config.perceptual_learning_enabled:
+            ta_init_w = self.config.taste_aversion_hebbian_init_w
+            self.bad_food_to_la_left = self.model.add_synapse_population(
+                "bad_food_to_la_left", "DENSE",
+                self.bad_food_eye_left, self.lateral_amygdala,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": ta_init_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0})
+            )
+            self.bad_food_to_la_right = self.model.add_synapse_population(
+                "bad_food_to_la_right", "DENSE",
+                self.bad_food_eye_right, self.lateral_amygdala,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": ta_init_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0})
+            )
+            print(f"    Phase L13: BadFoodEye→LA: init_w={ta_init_w}, w_max={self.config.taste_aversion_hebbian_w_max} (DENSE, Hebbian)")
 
         # 3. LA → CEA (내부 연결)
         self._create_static_synapse(
@@ -4800,6 +4829,13 @@ class ForagerBrain:
             weights["swr_experience_buffer"] = np.array(
                 self.experience_buffer, dtype=np.float32) if self.experience_buffer else np.array([])
 
+        # Phase L13: Taste Aversion Hebbian (2 DENSE synapses)
+        if self.config.taste_aversion_learning_enabled and hasattr(self, 'bad_food_to_la_left'):
+            self.bad_food_to_la_left.vars["g"].pull_from_device()
+            self.bad_food_to_la_right.vars["g"].pull_from_device()
+            weights["bad_food_la_left"] = self.bad_food_to_la_left.vars["g"].view.copy()
+            weights["bad_food_la_right"] = self.bad_food_to_la_right.vars["g"].view.copy()
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -4941,6 +4977,17 @@ class ForagerBrain:
                 if buf.size > 0:
                     self.experience_buffer = [tuple(row) for row in buf.reshape(-1, 5)]
                     loaded += 1
+
+        # Phase L13: Taste Aversion Hebbian (DENSE)
+        if self.config.taste_aversion_learning_enabled and hasattr(self, 'bad_food_to_la_left'):
+            if "bad_food_la_left" in data:
+                self.bad_food_to_la_left.vars["g"].view[:] = data["bad_food_la_left"]
+                self.bad_food_to_la_left.vars["g"].push_to_device()
+                loaded += 1
+            if "bad_food_la_right" in data:
+                self.bad_food_to_la_right.vars["g"].view[:] = data["bad_food_la_right"]
+                self.bad_food_to_la_right.vars["g"].push_to_device()
+                loaded += 1
 
         # Phase L5: 피질 R-STDP (SPARSE)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
@@ -7607,6 +7654,57 @@ class ForagerBrain:
         self.danger_sensor.vars["I_input"].push_to_device()
         self._taste_aversion_active = False
 
+    def learn_taste_aversion(self):
+        """Phase L13: 조건화된 맛 혐오 Hebbian 학습 — bad_food_eye → LA 연결 강화
+
+        Garcia Effect: 나쁜 음식 섭취 시 bad_food_eye의 활성화 패턴 기반으로
+        시각-공포 연합 학습. 학습 후 나쁜 음식을 보기만 해도 LA 활성화 →
+        CEA → Fear → Pain Push-Pull 회피 반응.
+
+        Δw = η × pre_activity (활성화된 bad_food_eye 뉴런의 가중치 강화)
+        """
+        if not self.config.taste_aversion_learning_enabled:
+            return None
+        if not self.config.amygdala_enabled or not self.config.perceptual_learning_enabled:
+            return None
+        if not hasattr(self, 'bad_food_to_la_left'):
+            return None
+
+        eta = self.config.taste_aversion_hebbian_eta
+        w_max = self.config.taste_aversion_hebbian_w_max
+        n_pre = self.config.n_bad_food_eye // 2
+        n_post = self.config.n_lateral_amygdala
+
+        results = {}
+        # 이전 스텝의 활성도 사용 (음식 섭취 시 현재 obs에서 음식이 이미 사라짐)
+        sides = [
+            ("left", self.bad_food_to_la_left, getattr(self, 'prev_bad_food_activity_left', 0.0)),
+            ("right", self.bad_food_to_la_right, getattr(self, 'prev_bad_food_activity_right', 0.0)),
+        ]
+
+        for side, syn, activity in sides:
+            syn.vars["g"].pull_from_device()
+            weights = syn.vars["g"].view.copy().reshape(n_pre, n_post)
+
+            # activity is scalar (mean of rays) — broadcast to all pre neurons
+            # 나쁜 음식이 보이는 방향의 뉴런만 강화
+            if activity > 0.05:  # 최소 활성도 임계값
+                delta_w = eta * activity
+                weights += delta_w
+                weights = np.clip(weights, 0.0, w_max)
+                n_strengthened = n_pre
+            else:
+                n_strengthened = 0
+
+            syn.vars["g"].view[:] = weights.flatten()
+            syn.vars["g"].push_to_device()
+
+            results[f"n_strengthened_{side}"] = n_strengthened
+            results[f"avg_w_{side}"] = float(np.mean(weights))
+            results[f"max_w_{side}"] = float(np.max(weights))
+
+        return results
+
     def add_experience(self, pos_x: float, pos_y: float, food_type: int,
                        step: int, reward: float):
         """Phase L11: 경험 버퍼에 음식 이벤트 저장"""
@@ -7741,6 +7839,13 @@ class ForagerBrain:
             self.bad_food_eye_right.vars["I_input"].view[:] = bad_food_r * bs
             self.bad_food_eye_left.vars["I_input"].push_to_device()
             self.bad_food_eye_right.vars["I_input"].push_to_device()
+
+            # Phase L13: 맛 혐오 학습용 활성도 저장
+            # 이전 스텝의 활성도 보존 (음식 섭취 시 현재 obs에서 음식이 사라지므로)
+            self.prev_bad_food_activity_left = getattr(self, 'last_bad_food_activity_left', 0.0)
+            self.prev_bad_food_activity_right = getattr(self, 'last_bad_food_activity_right', 0.0)
+            self.last_bad_food_activity_left = bad_food_l
+            self.last_bad_food_activity_right = bad_food_r
 
             self._cortical_step += 1
             # 맛 혐오 Ioffset 클리어 (이전 스텝에서 설정된 경우)
@@ -9850,6 +9955,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     # Phase L5: 맛 혐오 → Amygdala (Garcia Effect) — 편도체 경로, 유지
                     brain.trigger_taste_aversion(0.5)
 
+                    # Phase L13: 조건화된 맛 혐오 Hebbian 학습
+                    if brain_config.taste_aversion_learning_enabled:
+                        ta_learn = brain.learn_taste_aversion()
+                        if ta_learn and log_level in ["debug", "verbose"]:
+                            print(f"    [L13] Taste Aversion: L avg_w={ta_learn['avg_w_left']:.3f}, "
+                                  f"R avg_w={ta_learn['avg_w_right']:.3f}")
+
                     # Phase L11: SWR 경험 버퍼에 나쁜 음식 저장
                     if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
                         bad_food_pos = (obs["position_x"], obs["position_y"])
@@ -10121,6 +10233,18 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 print(f"    Hippocampal avg_w: {stats['avg_weight']:.3f}")
                 print(f"    Strong connections: {stats['n_strong_connections']}")
 
+        # Phase L13: Taste Aversion Hebbian 가중치 현황
+        if brain_config.taste_aversion_learning_enabled and hasattr(brain, 'bad_food_to_la_left'):
+            print(f"  --- Phase L13: Taste Aversion (BadFood→LA) ---")
+            brain.bad_food_to_la_left.vars["g"].pull_from_device()
+            brain.bad_food_to_la_right.vars["g"].pull_from_device()
+            ta_l_avg = float(np.mean(brain.bad_food_to_la_left.vars["g"].view))
+            ta_r_avg = float(np.mean(brain.bad_food_to_la_right.vars["g"].view))
+            ta_l_max = float(np.max(brain.bad_food_to_la_left.vars["g"].view))
+            ta_r_max = float(np.max(brain.bad_food_to_la_right.vars["g"].view))
+            print(f"    BadFood→LA Left:  avg_w={ta_l_avg:.3f}, max_w={ta_l_max:.3f}")
+            print(f"    BadFood→LA Right: avg_w={ta_r_avg:.3f}, max_w={ta_r_max:.3f}")
+
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
             print(f"  --- Phase L5: Cortical R-STDP ---")
@@ -10162,6 +10286,13 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 print(f"    Patch {i}: {v} visits, {f} food")
 
         print(f"{'='*60}\n")
+
+        # 중간 체크포인트 저장 (50ep마다 + 강제 종료 대비)
+        if save_weights and (ep + 1) % 50 == 0:
+            base, ext = os.path.splitext(save_weights)
+            checkpoint_name = f"{base}_ep{ep+1}{ext}"
+            brain.save_all_weights(checkpoint_name)
+            print(f"  [CHECKPOINT] Saved at episode {ep+1}: {checkpoint_name}")
 
         # Episode data logging
         if logger:
