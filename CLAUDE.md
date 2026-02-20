@@ -291,13 +291,13 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L12 완료 - Global Workspace (20,710 뉴런)
+### 현재 상태: Phase L14 완료 - Agency Detection (20,710 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L12: Global Workspace (주의 기반 경쟁) ✓ (2026-02-17)   ║
+║  Phase L14: Agency Detection ✓ (2026-02-21)                    ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→...→L11→L12):                     ║
+║  Learning Foundation (Phase L1→...→L13→L14):                     ║
 ║    - L1-L4: BG 기반 학습 (D1/D2, R-STDP, Anti-Hebbian)       ║
 ║    - L5-L6: 피질 학습 (perceptual R-STDP, PE)                ║
 ║    - L7-L8: 음식 유형별 차등 학습 (도파민 딥)                 ║
@@ -305,29 +305,24 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║    - L10: NAc Critic → RPE 도파민 (Schultz 1997)              ║
 ║    - L11: SWR Replay → 오프라인 기억 강화 (Buzsáki 2015)     ║
 ║    - L12: Global Workspace → 주의 기반 경쟁 (Dehaene 2011)   ║
+║    - L13: Taste Aversion → 시각-내장 연합 학습 (Garcia 1966)  ║
+║    - L14: Agency Detection → 전방 모델 (Frith 2005)           ║
 ║                                                               ║
-║  L12 변경 사항:                                               ║
-║    - GW_Food L/R(50×2) + GW_Safety(60) = +160 뉴런           ║
-║    - 12 static synapses, 0 new learning                       ║
-║    - food_memory→motor 12.0→5.0 (GW 경유 라우팅)             ║
-║    - GW_Food→motor +4.0 (hunger 게이팅)                       ║
-║    - GW_Safety→GW_Food 억제 (-12.0, 위험 시 음식 탐색 차단)  ║
-║    - 상태 의존 행동: 안전+배고픔 9.0, 위험 5.0                ║
+║  L14 변경 사항:                                               ║
+║    - +50 neurons (Agency_PE), +1 DENSE Hebbian (Forward Model)║
+║    - Forward Model: self_efference→self_predict (eta=0.005)   ║
+║    - Agency_PE = V1_Food(+8.0) + Self_Predict(-6.0) → PE     ║
+║    - 환경: motor_noise(σ=0.05) + sensor_jitter(σ=0.03)       ║
+║    - pain_rays 지터 제외 (Push-Pull 정밀도 보호)              ║
 ║                                                               ║
-║  시각 강화:                                                    ║
-║    - 궤적 트레일 (GW 상태별 색상: 초록/빨강/파랑)            ║
-║    - 에이전트 헤일로 (목표 상태 링)                           ║
-║    - 뇌 패널 GW 섹션 (Food/Safety 경쟁 바)                   ║
-║                                                               ║
-║  검증 결과 (20 episodes):                                     ║
-║    - Survival Rate: 50% ✓ (+5pp vs L11)                      ║
+║  검증 결과:                                                   ║
+║    - Survival Rate: ~65% ✓                                   ║
 ║    - Pain Death: 0% ✓                                        ║
-║    - Reward Freq: 2.49% (borderline, 노이즈 범위)            ║
-║    - GW Food: 0.022~0.216, Safety: 0.300                     ║
-║    - Hippocampal avg_w: 3.810 (L11: 3.756, 개선)             ║
+║    - Reward Freq: ~2.7% ✓                                    ║
+║    - FM: 1.0→~7.6, Agency_PE ~0.600                          ║
 ║                                                               ║
-║  뉴런 수:       20,710 (+160)                                   ║
-║  학습 시냅스:   37 (변동 없음), Static: +12                      ║
+║  뉴런 수:       20,710 (+50 Agency_PE)                          ║
+║  학습 시냅스:   40 (+1 DENSE Hebbian)                            ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -336,7 +331,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식 + GW 시각화)
-├── forager_brain.py   # Forager Brain (20,710 뉴런, Phase 1-20 + L1-L12)
+├── forager_brain.py   # Forager Brain (20,710 뉴런, Phase 1-20 + L1-L14)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -359,6 +354,11 @@ backend/genesis/
 15. **IT→D2 빠른 수렴**: pre-synaptic only trace + 비측화 IT → ep5에 w_min 도달 (L4 패턴 재현)
 16. **SWR Replay로 기존 Hebbian 재사용**: 새 학습 시냅스 0개, learn_food_location() 재활용 → Hebbian avg_w +76% 강화
 17. **SWR Gate는 SensoryLIF I_input 전용**: 시냅스 입력 없음 → 온라인 중 절대 발화 안 함 (Motor 간섭 완벽 차단)
+18. **Garcia Effect는 one-trial 학습**: eta 높게 (0.02), DENSE Hebbian으로 빠른 연합. 기존 경로(LA→CEA→Fear→Motor) 재사용
+19. **음식 섭취 시 timing bug**: env.step()에서 먹으면 food 제거됨 → 다음 obs에 food_rays=0 → prev_activity 패턴 필수
+20. **포식자 = 이동형 pain source**: 뇌 변경 0으로 새로운 환경 위협 추가 가능 (기존 회로 재사용)
+21. **sensor_jitter는 pain_rays 제외 필수**: Push-Pull(60/-40)은 정밀한 L/R 차이에 의존 → 노이즈 적용 시 회피 기능 파괴
+22. **Forward Model eta 점진적**: DENSE Hebbian uniform update는 빠르게 포화 → eta=0.005 (0.04에서 8x 감소)
 
 ---
 

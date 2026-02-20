@@ -1108,6 +1108,26 @@ class ForagerBrainConfig:
     # Motor direct = 0.0
     self_model_to_motor_weight: float = 0.0
 
+    # ─── Phase L14: Agency Detection (Forward Model Learning) ───
+    agency_detection_enabled: bool = True
+    n_agency_pe: int = 50                          # Agency Prediction Error neurons
+
+    # Forward model learning (self_efference → self_predict)
+    agency_forward_model_eta: float = 0.005        # Hebbian learning rate (0.04→0.005: 포화 방지)
+    agency_forward_model_w_max: float = 10.0       # Max weight
+    agency_forward_model_init_w: float = 1.0       # Initial weight
+
+    # Agency PE synaptic weights
+    v1_food_to_agency_pe_weight: float = 8.0       # Actual sensory → PE (excitatory)
+    predict_to_agency_pe_weight: float = -6.0      # Predicted → PE (inhibitory, cancels)
+    agency_pe_to_agency_weight: float = -2.0       # High PE suppresses agency
+    agency_pe_to_uncertainty_weight: float = 1.5   # High PE → uncertain
+    agency_to_confidence_weight: float = 1.0       # High agency → confident
+
+    # Agency PE inhibitory balance
+    agency_pe_to_inhibitory_weight: float = 2.0
+    agency_inhibitory_to_pe_weight: float = -1.5
+
     dt: float = 1.0
 
     @property
@@ -4836,6 +4856,11 @@ class ForagerBrain:
             weights["bad_food_la_left"] = self.bad_food_to_la_left.vars["g"].view.copy()
             weights["bad_food_la_right"] = self.bad_food_to_la_right.vars["g"].view.copy()
 
+        # Phase L14: Forward Model Hebbian (DENSE)
+        if self.config.agency_detection_enabled and hasattr(self, 'efference_to_predict_hebbian'):
+            self.efference_to_predict_hebbian.vars["g"].pull_from_device()
+            weights["forward_model"] = self.efference_to_predict_hebbian.vars["g"].view.copy()
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -4987,6 +5012,13 @@ class ForagerBrain:
             if "bad_food_la_right" in data:
                 self.bad_food_to_la_right.vars["g"].view[:] = data["bad_food_la_right"]
                 self.bad_food_to_la_right.vars["g"].push_to_device()
+                loaded += 1
+
+        # Phase L14: Forward Model Hebbian (DENSE)
+        if self.config.agency_detection_enabled and hasattr(self, 'efference_to_predict_hebbian'):
+            if "forward_model" in data:
+                self.efference_to_predict_hebbian.vars["g"].view[:] = data["forward_model"]
+                self.efference_to_predict_hebbian.vars["g"].push_to_device()
                 loaded += 1
 
         # Phase L5: 피질 R-STDP (SPARSE)
@@ -7138,6 +7170,120 @@ class ForagerBrain:
                         self.config.n_self_narrative + self.config.n_self_inhibitory)
         print(f"    Phase 20 Self-Model: {total_neurons} neurons")
 
+        # ============================================================
+        # Phase L14: Agency Detection (Forward Model + Agency PE)
+        # ============================================================
+        if self.config.agency_detection_enabled:
+            self._build_agency_detection_circuit()
+
+    def _build_agency_detection_circuit(self):
+        """Phase L14: Agency Detection — Forward Model Learning + Agency PE"""
+        from pygenn import init_weight_update, init_postsynaptic
+
+        lif_params = {"C": 1.0, "TauM": 20.0, "Vrest": -60.0,
+                      "Vreset": -60.0, "Vthresh": -50.0, "Ioffset": 0.0,
+                      "TauRefrac": 2.0}
+        lif_init = {"V": -60.0, "RefracTime": 0.0}
+
+        # --- Agency_PE population (50 LIF) ---
+        self.agency_pe = self.model.add_neuron_population(
+            "agency_pe", self.config.n_agency_pe,
+            "LIF", lif_params, lif_init)
+
+        # --- Forward Model Hebbian: self_efference → self_predict (DENSE) ---
+        self.efference_to_predict_hebbian = self.model.add_synapse_population(
+            "efference_to_predict_hebb", "DENSE",
+            self.self_efference, self.self_predict,
+            init_weight_update("StaticPulse", {},
+                               {"g": self.config.agency_forward_model_init_w}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        # --- Agency PE inputs ---
+        # V1_Food → Agency_PE (excitatory: actual sensory)
+        if hasattr(self, 'v1_food_left'):
+            self._create_static_synapse(
+                "v1_food_l_to_ape", self.v1_food_left, self.agency_pe,
+                self.config.v1_food_to_agency_pe_weight, sparsity=0.08)
+            self._create_static_synapse(
+                "v1_food_r_to_ape", self.v1_food_right, self.agency_pe,
+                self.config.v1_food_to_agency_pe_weight, sparsity=0.08)
+
+        # Self_Predict → Agency_PE (inhibitory: predicted sensory cancels)
+        self._create_static_synapse(
+            "predict_to_ape", self.self_predict, self.agency_pe,
+            self.config.predict_to_agency_pe_weight, sparsity=0.1)
+
+        # --- Agency PE outputs ---
+        # Agency_PE → Self_Agency (inhibitory: high PE = low agency)
+        self._create_static_synapse(
+            "ape_to_agency", self.agency_pe, self.self_agency,
+            self.config.agency_pe_to_agency_weight, sparsity=0.1)
+
+        # Agency_PE → Meta_Uncertainty (excitatory: high PE = uncertain)
+        if hasattr(self, 'meta_uncertainty'):
+            self._create_static_synapse(
+                "ape_to_uncert", self.agency_pe, self.meta_uncertainty,
+                self.config.agency_pe_to_uncertainty_weight, sparsity=0.05)
+
+        # Self_Agency → Meta_Confidence (excitatory: high agency = confident)
+        if hasattr(self, 'meta_confidence'):
+            self._create_static_synapse(
+                "agency_to_conf", self.self_agency, self.meta_confidence,
+                self.config.agency_to_confidence_weight, sparsity=0.05)
+
+        # --- Inhibitory balance for Agency_PE ---
+        self._create_static_synapse(
+            "ape_to_sm_inhib", self.agency_pe, self.self_inhibitory_sm,
+            self.config.agency_pe_to_inhibitory_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "sm_inhib_to_ape", self.self_inhibitory_sm, self.agency_pe,
+            self.config.agency_inhibitory_to_pe_weight, sparsity=0.05)
+
+        # Init cached rates
+        self.last_agency_pe_rate = 0.0
+
+        n_syn_static = 7 if hasattr(self, 'v1_food_left') else 5
+        n_syn_static += 2  # meta synapses
+        print(f"\n  === Phase L14: Agency Detection ===")
+        print(f"    Agency_PE: {self.config.n_agency_pe} neurons (LIF)")
+        print(f"    Forward Model: self_efference→self_predict DENSE Hebbian "
+              f"(eta={self.config.agency_forward_model_eta}, w_max={self.config.agency_forward_model_w_max})")
+        print(f"    V1_Food→Agency_PE: {self.config.v1_food_to_agency_pe_weight} (actual sensory)")
+        print(f"    Self_Predict→Agency_PE: {self.config.predict_to_agency_pe_weight} (predicted, cancels)")
+        print(f"    Agency_PE→Self_Agency: {self.config.agency_pe_to_agency_weight} (high PE = low agency)")
+        print(f"    Motor direct: 0.0 (disabled)")
+
+    def learn_forward_model(self, reward_context: bool):
+        """
+        Phase L14: Forward Model Hebbian 학습 (self_efference → self_predict)
+
+        운동 명령→감각 예측 매핑 학습. 보상 시 강한 학습, 배경 시 약한 학습.
+        """
+        if not self.config.agency_detection_enabled or not self.config.self_model_enabled:
+            return None
+
+        eta = self.config.agency_forward_model_eta
+        w_max = self.config.agency_forward_model_w_max
+        learning_factor = 1.0 if reward_context else 0.1
+
+        predict_scale = max(0.1, self.last_self_predict_rate)
+
+        n_pre = self.config.n_self_efference
+        n_post = self.config.n_self_predict
+        self.efference_to_predict_hebbian.vars["g"].pull_from_device()
+        w = self.efference_to_predict_hebbian.vars["g"].view.copy()
+        w = w.reshape(n_pre, n_post)
+        w += eta * learning_factor * predict_scale
+        w = np.clip(w, 0.0, w_max)
+        self.efference_to_predict_hebbian.vars["g"].view[:] = w.flatten()
+        self.efference_to_predict_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w": float(np.mean(w)),
+            "max_w": float(np.max(w)),
+            "learning_factor": learning_factor,
+        }
+
     def learn_self_narrative(self, reward_context: bool):
         """
         Phase 20h: Body → Self_Narrative Hebbian 학습
@@ -8078,12 +8224,18 @@ class ForagerBrain:
             self.self_body.vars["I_input"].view[:] = self_body_signal
             self.self_body.vars["I_input"].push_to_device()
 
-            # Self_Predict: 순행 모델 (운동 명령 + 음식 시각)
-            food_eye_signal = (food_l + food_r) * 0.5  # 평균 음식 시각
-            self_predict_signal = (
-                self.last_self_efference_rate * self.config.self_predict_efference_scale +
-                food_eye_signal * self.config.self_predict_food_eye_scale
-            )
+            # Self_Predict: 순행 모델
+            # L14: 순수 efference 예측 (food_eye 제거 → Agency PE가 prediction error 계산)
+            if self.config.agency_detection_enabled:
+                self_predict_signal = (
+                    self.last_self_efference_rate * self.config.self_predict_efference_scale
+                )
+            else:
+                food_eye_signal = (food_l + food_r) * 0.5
+                self_predict_signal = (
+                    self.last_self_efference_rate * self.config.self_predict_efference_scale +
+                    food_eye_signal * self.config.self_predict_food_eye_scale
+                )
             self.self_predict.vars["I_input"].view[:] = self_predict_signal
             self.self_predict.vars["I_input"].push_to_device()
 
@@ -8254,6 +8406,9 @@ class ForagerBrain:
         self_agency_spikes = 0
         self_narrative_spikes = 0
         self_inhibitory_sm_spikes = 0
+
+        # Phase L14 스파이크 카운트 (Agency PE)
+        agency_pe_spikes = 0
 
         # Phase L6 스파이크 카운트 (Prediction Error)
         pe_food_l_spikes = 0
@@ -8627,6 +8782,11 @@ class ForagerBrain:
                 self_agency_spikes += np.sum(self.self_agency.vars["RefracTime"].view > self.spike_threshold)
                 self_narrative_spikes += np.sum(self.self_narrative.vars["RefracTime"].view > self.spike_threshold)
                 self_inhibitory_sm_spikes += np.sum(self.self_inhibitory_sm.vars["RefracTime"].view > self.spike_threshold)
+
+            # Phase L14 스파이크 카운팅 (Agency PE)
+            if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
+                self.agency_pe.vars["RefracTime"].pull_from_device()
+                agency_pe_spikes += np.sum(self.agency_pe.vars["RefracTime"].view > self.spike_threshold)
 
             # Phase L6 스파이크 카운팅 (Prediction Error)
             if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
@@ -9217,6 +9377,12 @@ class ForagerBrain:
             self.last_self_narrative_rate = self_narrative_rate
             self.last_self_inhibitory_rate = self_inhibitory_sm_rate
 
+        # Phase L14 Agency PE rate
+        agency_pe_rate = 0.0
+        if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
+            agency_pe_rate = agency_pe_spikes / (self.config.n_agency_pe * 5)
+            self.last_agency_pe_rate = agency_pe_rate
+
         # === 5. 행동 출력 ===
         angle_delta = (motor_right_rate - motor_left_rate) * 0.5
 
@@ -9436,6 +9602,9 @@ class ForagerBrain:
             "self_narrative_rate": self_narrative_rate,
             "self_inhibitory_sm_rate": self_inhibitory_sm_rate,
 
+            # Phase L14: Agency Detection
+            "agency_pe_rate": agency_pe_rate,
+
             # Phase L12: Global Workspace
             "gw_food_l_rate": gw_food_l_rate,
             "gw_food_r_rate": gw_food_r_rate,
@@ -9612,6 +9781,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_wm_expansion: bool = False, no_metacognition: bool = False,
                 no_self_model: bool = False,
                 no_predator: bool = False,
+                no_agency: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -9676,6 +9846,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_predator:
         env_config.predator_enabled = False
         print("  [!] Predators DISABLED")
+    if no_agency:
+        brain_config.agency_detection_enabled = False
+        env_config.motor_noise_enabled = False
+        env_config.sensor_jitter_enabled = False
+        print("  [!] Phase L14 (Agency Detection) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -9938,6 +10113,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if brain_config.self_model_enabled:
                         sm_learn = brain.learn_self_narrative(reward_context=True)
 
+                    # Phase L14: Forward Model 학습 (음식 먹기 = 강한 학습)
+                    if brain_config.agency_detection_enabled:
+                        brain.learn_forward_model(reward_context=True)
+
                     # Phase L11: SWR 경험 버퍼에 좋은 음식 저장
                     if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
                         brain.add_experience(food_pos[0], food_pos[1], 0, env.steps, 25.0)
@@ -9961,6 +10140,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                         if ta_learn and log_level in ["debug", "verbose"]:
                             print(f"    [L13] Taste Aversion: L avg_w={ta_learn['avg_w_left']:.3f}, "
                                   f"R avg_w={ta_learn['avg_w_right']:.3f}")
+
+                    # Phase L14: Forward Model 학습 (나쁜 음식 = 강한 학습)
+                    if brain_config.agency_detection_enabled:
+                        brain.learn_forward_model(reward_context=True)
 
                     # Phase L11: SWR 경험 버퍼에 나쁜 음식 저장
                     if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
@@ -10024,6 +10207,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if brain_config.self_model_enabled and env_info.get('in_pain', False):
                 brain.learn_self_narrative(reward_context=True)
 
+            # Phase L14: Pain zone → Forward Model 강한 학습
+            if brain_config.agency_detection_enabled and env_info.get('in_pain', False):
+                brain.learn_forward_model(reward_context=True)
+
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
                 if env_info.get('in_pain', False) and env.pain_zone_visits == 1 and env.pain_zone_steps == 1:
@@ -10044,6 +10231,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             # Phase 20: Self-Narrative 배경 학습 (약한 학습 = 매 5스텝)
             if brain_config.self_model_enabled and env.steps % 5 == 0:
                 brain.learn_self_narrative(reward_context=False)
+
+            # Phase L14: Forward Model 배경 학습 (약한 학습 = 매 5스텝)
+            if brain_config.agency_detection_enabled and env.steps % 5 == 0:
+                brain.learn_forward_model(reward_context=False)
 
             # Data logging (sampled every N steps)
             if logger:
@@ -10244,6 +10435,17 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             ta_r_max = float(np.max(brain.bad_food_to_la_right.vars["g"].view))
             print(f"    BadFood→LA Left:  avg_w={ta_l_avg:.3f}, max_w={ta_l_max:.3f}")
             print(f"    BadFood→LA Right: avg_w={ta_r_avg:.3f}, max_w={ta_r_max:.3f}")
+
+        # Phase L14: Agency Detection 현황
+        if brain_config.agency_detection_enabled and hasattr(brain, 'efference_to_predict_hebbian'):
+            print(f"  --- Phase L14: Agency Detection (Forward Model) ---")
+            brain.efference_to_predict_hebbian.vars["g"].pull_from_device()
+            fm_avg = float(np.mean(brain.efference_to_predict_hebbian.vars["g"].view))
+            fm_max = float(np.max(brain.efference_to_predict_hebbian.vars["g"].view))
+            print(f"    Forward Model avg_w: {fm_avg:.3f}, max_w: {fm_max:.3f}")
+            print(f"    Agency_PE rate: {brain.last_agency_pe_rate:.3f}")
+            print(f"    Self_Agency rate: {brain.last_self_agency_rate:.3f}")
+            print(f"    Self_Predict rate: {brain.last_self_predict_rate:.3f}")
 
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
@@ -10557,6 +10759,8 @@ if __name__ == "__main__":
                        help="Disable Phase 20 (Self-Model)")
     parser.add_argument("--no-predator", action="store_true",
                        help="Disable predators in environment")
+    parser.add_argument("--no-agency", action="store_true",
+                       help="Disable Phase L14 (Agency Detection)")
     # Data logging for dashboard
     parser.add_argument("--log-data", action="store_true",
                        help="Enable data logging for dashboard visualization")
@@ -10589,6 +10793,7 @@ if __name__ == "__main__":
         no_metacognition=args.no_metacognition,
         no_self_model=args.no_self_model,
         no_predator=args.no_predator,
+        no_agency=args.no_agency,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,

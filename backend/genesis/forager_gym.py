@@ -140,6 +140,12 @@ class ForagerConfig:
     predator_danger_intensity: float = 0.9   # danger signal 강도
     predator_wander_speed: float = 1.5       # 배회 시 속도
 
+    # === Phase L14: Motor Noise + Sensor Jitter ===
+    motor_noise_enabled: bool = True
+    motor_noise_std: float = 0.05            # σ for angle_delta noise (±~3° at 1σ)
+    sensor_jitter_enabled: bool = True
+    sensor_jitter_std: float = 0.03          # σ for multiplicative ray noise (±3%)
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -574,6 +580,10 @@ class ForagerGym:
             observation, reward, done, info
         """
         angle_delta = np.clip(action[0], -1, 1) * 0.3  # 최대 회전각 ~17도
+
+        # Phase L14: Motor noise injection
+        if self.config.motor_noise_enabled:
+            angle_delta += np.random.normal(0, self.config.motor_noise_std)
 
         # 1. 이동
         self.agent_angle += angle_delta
@@ -1177,6 +1187,16 @@ class ForagerGym:
         else:
             npc_call_food_l, npc_call_food_r = 0.0, 0.0
             npc_call_danger_l, npc_call_danger_r = 0.0, 0.0
+
+        # Phase L14: Sensor jitter (multiplicative noise on ray values)
+        if self.config.sensor_jitter_enabled:
+            jitter_std = self.config.sensor_jitter_std
+            n_half = self.config.n_rays // 2
+            # pain_rays 제외: Push-Pull(60/-40)은 정밀한 L/R 차이에 의존
+            for rays in [food_rays_l, food_rays_r, wall_rays_l, wall_rays_r,
+                         good_food_rays_l, good_food_rays_r, bad_food_rays_l, bad_food_rays_r]:
+                rays *= (1.0 + np.random.normal(0, jitter_std, rays.shape))
+                np.clip(rays, 0.0, 1.0, out=rays)
 
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)

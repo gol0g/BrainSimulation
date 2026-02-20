@@ -4,15 +4,15 @@
 
 ---
 
-## 현재 상태: Phase L12 완료 (20,710 뉴런)
+## 현재 상태: Phase L14 완료 (20,710 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L12: Global Workspace (주의 기반 경쟁) ✓ (2026-02-17)   ║
-║  GW_Food vs GW_Safety 경쟁 → 상태 의존적 행동 (Dehaene 2011) ║
-║  food_memory→motor 12→5, GW_Food→motor +4.0 (hunger 게이팅)  ║
-║  시각 강화: 궤적 트레일, 에이전트 헤일로, GW 뇌 패널          ║
-║  생존율 50%, 0% pain death, Reward Freq 2.49%                  ║
+║  Phase L14: Agency Detection ✓ (2026-02-21)                    ║
+║  Forward Model: self_efference→self_predict DENSE Hebbian      ║
+║  Agency_PE: V1_Food(actual) - Self_Predict(predicted) = PE     ║
+║  FM: 1.0→7.6 (13ep), Agency_PE ~0.6, Self_Agency ~0.17        ║
+║  생존율 62%, 0% pain death, motor_noise + sensor_jitter 추가    ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -56,6 +56,8 @@
 | **L10** | **TD Learning (NAc Critic → RPE 도파민)** | **+110** | **✓ 완료** | **65%** |
 | **L11** | **SWR Replay (해마 기억 재생)** | **+200** | **✓ 완료** | **45%** |
 | **L12** | **Global Workspace (주의 기반 경쟁)** | **+160** | **✓ 완료** | **50%** |
+| **L13** | **조건 맛 혐오 (Garcia Effect)** | **0** | **✓ 완료** | **55%** |
+| **L14** | **에이전시 감지 (Agency Detection)** | **+50** | **✓ 완료** | **~65%** |
 
 ### Phase 12-14 수정 이력
 
@@ -353,8 +355,9 @@
 ## 학습 시리즈 로드맵: 의식을 향한 경로
 
 > L1-L8: 감각운동 학습 완성 ✓
-> L9-L11: 인지적 학습 (개념→행동, 예측, 시간)
-> L12+: 자기 참조 학습 (에이전시, 내러티브, 의식)
+> L9-L11: 인지적 학습 (개념→행동, 예측, 시간) ✓
+> L12-L13: 주의 + 조건화 학습 ✓
+> L14+: 자기 참조 학습 (에이전시, 내러티브, 의식)
 
 ### 인지적 학습 단계 (L9-L11 계획)
 
@@ -369,13 +372,19 @@
 - L10: 도파민을 "보상 신호"→"보상 예측 오차"로 전환 (Schultz 1997). Campbell et al. (2025): TD 회로는 하드와이어드, 가치 표상만 학습. Alpha-blending으로 안전 도입.
 - L11: "영원한 현재" 탈출. 세타 위상 전이 + STDP ≈ TD-lambda on Successor Representation (George et al. 2023). 시간적 인지의 시작.
 
-### 자기 참조 학습 단계 (L12+)
+### 주의 + 조건화 학습 (L12-L13)
 
 | Phase | 이름 | 핵심 메커니즘 | 의식 이론 | 상태 |
 |-------|------|--------------|-----------|------|
 | **L12** | **주의 선택 (Attention)** | **Global Workspace 게이팅** | **Dehaene/Baars** | **✓ 완료** |
-| L13 | 에이전시 감지 | 예측-결과 비교 → "내가 했다" | Frith | 계획 |
-| L14 | 내러티브 자기 | 시간적 자기 모델 업데이트 | Damasio | 계획 |
+| **L13** | **조건 맛 혐오 (Garcia Effect)** | **bad_food_eye→LA Hebbian** | **Garcia & Koelling 1966** | **✓ 완료** |
+
+### 자기 참조 학습 단계 (L14+)
+
+| Phase | 이름 | 핵심 메커니즘 | 의식 이론 | 상태 |
+|-------|------|--------------|-----------|------|
+| L14 | 에이전시 감지 | 예측-결과 비교 → "내가 했다" | Frith | 계획 |
+| L15 | 내러티브 자기 | 시간적 자기 모델 업데이트 | Damasio | 계획 |
 
 ### Phase L12: Global Workspace (주의 기반 경쟁) ✓ 완료
 - **문제**: food_memory→motor 12.0이 항상 동일 강도 → 위험해도 음식 추적 (상태 의존적 행동 없음)
@@ -393,17 +402,65 @@
 
 **Phase L12 완료**: 20,710 뉴런, 37 학습 시냅스, 12 new static
 
+### Phase L13: 조건 맛 혐오 (Conditioned Taste Aversion) ✓ 완료
+- **문제**: 나쁜 음식 시각 → 접근 반사(35.0) 그대로 작동, 시각적 회피 학습 없음
+- **해결**: Garcia Effect (Garcia & Koelling 1966) — 나쁜 음식 시각(CS)과 내장 불쾌(US) 연합 학습
+- **구조**: 뉴런 변경 없음 (20,710 유지), +2 DENSE Hebbian 시냅스 (bad_food_eye L/R → lateral_amygdala)
+- **메커니즘**:
+  - 나쁜 음식 섭취 → trigger_taste_aversion() → learn_taste_aversion()
+  - Hebbian: Δw = η × prev_bad_food_activity (timing bug 해결: 이전 스텝 활성 사용)
+  - bad_food_eye → LA → CEA → Fear → Motor Push-Pull (기존 경로 재사용)
+- **eta 튜닝**: 0.003 (너무 느림, w=0.45/20ep) → **0.02** (w=1.95/20ep, 4.3x 빠름)
+- **학습 곡선 (eta=0.02, 20ep)**: BadFood→LA 0.1→1.95, Selectivity 0.58→0.66 (피크 0.72)
+- **검증 (2026-02-21)**: 생존율 55% ✓, Pain 0% ✓, Predator 0% ✓, Reward 2.57% ✓
+- **체크포인트**: `checkpoints/brain_L13_eta02_20ep.npz` (44 시냅스)
+
+**Phase L13 완료**: 20,710 뉴런, 39 학습 시냅스 (37 + 2 DENSE Hebbian)
+
+### Phase L14: Agency Detection (에이전시 감지) ✓ 완료
+- **목표**: 자기 행동의 감각적 결과를 예측하여 "내가 했다" vs "외부 사건" 구분
+- **생물학적 근거**: Frith (2005) — 소뇌 전방 모델 (efference copy → predicted sensory)
+- **구조**: Agency_PE(50 LIF) = +50 뉴런 (20,710 유지, Phase 20 Self_Predict 재사용)
+- **Forward Model**: self_efference → self_predict (DENSE Hebbian, eta=0.005, w_max=10.0)
+  - 학습: 음식 접근/섭취, 고통 경험, 배경(매 5스텝) 총 4개 학습 호출 위치
+  - DENSE pull_from_device → view.copy() → reshape → modify → clip → flatten → view[:] = → push_to_device
+- **Agency Prediction Error**: V1_Food(+8.0, 실제 감각) + Self_Predict(-6.0, 예측, 억제) → PE
+  - 높은 PE = 예측과 불일치 = 낮은 에이전시
+  - Agency_PE → Self_Agency (-2.0): 감쇠 신호
+- **환경 변경**: motor_noise (σ=0.05) + sensor_jitter (σ=0.03)
+  - **핵심 버그 수정**: pain_rays는 sensor_jitter에서 제외 (Push-Pull 60/-40 정밀도 보호)
+- **eta 튜닝**: 0.04 (ep3에 포화) → **0.005** (20ep에 걸쳐 점진적 학습)
+- **학습 곡선 (20ep)**: FM 1.0→1.17(ep1)→1.46(ep2)→~7.6(ep13)
+- **검증**: 생존율 ~65% ✓, Pain 0% ✓, Reward Freq ~2.7% ✓
+- **체크포인트**: `checkpoints/brain_L14_20ep.npz`
+
+**Phase L14 완료**: 20,710 뉴런, 40 학습 시냅스 (39 + 1 DENSE Hebbian)
+
+### 환경: 모터 노이즈 + 센서 지터 추가 ✓ 완료 (2026-02-21)
+- **motor_noise**: 각도 변화에 Gaussian 노이즈 (σ=0.05) → 완벽한 모터 제어 불가
+- **sensor_jitter**: 감각 레이에 곱셈 노이즈 (σ=0.03) → 환경 인식 불확실성
+- **pain_rays 제외**: Push-Pull(60/-40)은 정밀한 L/R 차이에 의존 → jitter 적용 시 회피 파괴
+- **Config**: `motor_noise_enabled=True`, `motor_noise_std=0.05`, `sensor_jitter_enabled=True`, `sensor_jitter_std=0.03`
+
+### 환경: 포식자 추가 ✓ 완료 (2026-02-18)
+- **설계**: "이동형 pain source" — 뇌 변경 제로, 기존 pain_rays + danger_signal 재사용
+- **PredatorAgent**: wander(1.5)/chase(2.0) 상태 기계, nest=safe zone
+- **Config**: speed=2.0 (< agent 3.0), chase_range=120, pain_intensity=0.8
+- **검증**: 70% 생존 ✓, 5% predator death, 0% pain death
+
 ---
 
 ## 환경 진화 계획
 
-| 단계 | 환경 | 복잡도 | 대응 Phase |
-|------|------|--------|------------|
-| 현재 | ForagerGym (2D) | ⭐ | Phase 1-10 |
-| **다음** | **포식자 추가** | **⭐⭐** | **L12 후** |
-| 중기 | 3D 환경 | ⭐⭐⭐ | Phase 13-14 |
-| 장기 | 다중 에이전트 | ⭐⭐⭐⭐ | Phase 15-17 |
-| 최종 | 언어 환경 | ⭐⭐⭐⭐⭐ | Phase 18-20 |
+| 단계 | 환경 | 복잡도 | 대응 Phase | 상태 |
+|------|------|--------|------------|------|
+| 기본 | ForagerGym (2D) | ⭐ | Phase 1-10 | ✓ |
+| 다중 음식 | good/bad food (60/40) | ⭐⭐ | L5 | ✓ |
+| 포식자 | 이동형 위협 (PredatorAgent) | ⭐⭐ | L12 후 | ✓ |
+| 모터 노이즈 + 센서 지터 | motor_noise σ=0.05, sensor_jitter σ=0.03 | ⭐⭐⭐ | L14 | ✓ |
+| 중기 | 3D 환경 | ⭐⭐⭐⭐ | L15+ | 계획 |
+| 장기 | 다중 에이전트 | ⭐⭐⭐⭐ | L15+ | 계획 |
+| 최종 | 언어 환경 | ⭐⭐⭐⭐⭐ | L15+ | 계획 |
 
 ---
 
@@ -411,13 +468,13 @@
 
 > 2륜 차동 구동 로봇. I/O 매핑은 깔끔하나 센서 드리프트/조명/통신 지터에 주의 필요.
 
-| 단계 | 시점 | 내용 | 비고 |
-|------|------|------|------|
-| 0 | 지금 | SensorAdapter / MotorAdapter 추상화 인터페이스 정의 | 코드 레벨만 |
-| 1 | L13 | 시뮬에 모터 노이즈(±10%) + 외란 + 센서 지터 추가 | 에이전시 회로를 non-trivial하게 |
-| 2 | L13 후 | ESP32 센서 연결 (거리/터치/전압만). **카메라는 PC 웹캠** | 통신 RTT/지터 실측 |
-| 3 | L14 후 | place cell을 ego-centric(Δx,Δθ)으로 재설계 or 외부 기준(AprilTag) | IMU 드리프트 대응 |
-| 4 | 최종 | 2륜 구동 + 실제 주행 (모터/바퀴/미끄러짐) | 전체 폐루프 |
+| 단계 | 시점 | 내용 | 비고 | 상태 |
+|------|------|------|------|------|
+| 0 | 지금 | SensorAdapter / MotorAdapter 추상화 인터페이스 정의 | 코드 레벨만 | 계획 |
+| 1 | L14 | 시뮬에 모터 노이즈(±10%) + 외란 + 센서 지터 추가 | 에이전시 회로를 non-trivial하게 | ✓ 완료 |
+| 2 | L14 후 | ESP32 센서 연결 (거리/터치/전압만). **카메라는 PC 웹캠** | 통신 RTT/지터 실측 | **VL53L0X 확인 ✓** |
+| 3 | L15 후 | place cell을 ego-centric(Δx,Δθ)으로 재설계 or 외부 기준(AprilTag) | IMU 드리프트 대응 | 계획 |
+| 4 | 최종 | 2륜 구동 + 실제 주행 (모터/바퀴/미끄러짐) | 전체 폐루프 | 계획 |
 
 ### 현실 연결 시 필수 사항
 - **카메라**: 초기엔 PC USB 웹캠 (ESP32-CAM은 조명 변화에 불안정)
@@ -488,4 +545,4 @@
 
 ---
 
-*최종 업데이트: 2026-02-18 (Phase L12 완료, 20,710 뉴런, 37 학습 시냅스, 50% 생존율, ESP32 로드맵 추가)*
+*최종 업데이트: 2026-02-21 (Phase L13 완료, 20,710 뉴런, 39 학습 시냅스, 55% 생존율, ESP32 VL53L0X 확인)*
