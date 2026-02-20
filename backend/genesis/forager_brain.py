@@ -229,7 +229,7 @@ class ForagerBrainConfig:
 
     # Phase L13: Conditioned Taste Aversion (bad_food_eye → LA Hebbian)
     taste_aversion_learning_enabled: bool = True
-    taste_aversion_hebbian_eta: float = 0.003     # 학습률 (Garcia Effect: 빠른 one-trial 학습)
+    taste_aversion_hebbian_eta: float = 0.02      # 학습률 (Garcia Effect: one-trial 학습, 0.003→0.02)
     taste_aversion_hebbian_w_max: float = 5.0     # 최대 가중치 (danger_to_la 25.0보다 낮게)
     taste_aversion_hebbian_init_w: float = 0.1    # 초기 가중치 (LA 초기 간섭 방지)
 
