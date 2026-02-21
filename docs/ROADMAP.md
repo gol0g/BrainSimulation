@@ -357,7 +357,7 @@
 > L1-L8: 감각운동 학습 완성 ✓
 > L9-L11: 인지적 학습 (개념→행동, 예측, 시간) ✓
 > L12-L13: 주의 + 조건화 학습 ✓
-> L14+: 자기 참조 학습 (에이전시, 내러티브, 의식)
+> L14-L15: 자기 참조 학습 (에이전시, 내러티브) ✓
 
 ### 인지적 학습 단계 (L9-L11 계획)
 
@@ -379,12 +379,12 @@
 | **L12** | **주의 선택 (Attention)** | **Global Workspace 게이팅** | **Dehaene/Baars** | **✓ 완료** |
 | **L13** | **조건 맛 혐오 (Garcia Effect)** | **bad_food_eye→LA Hebbian** | **Garcia & Koelling 1966** | **✓ 완료** |
 
-### 자기 참조 학습 단계 (L14+)
+### 자기 참조 학습 단계 (L14-L15) ✓ 완료
 
 | Phase | 이름 | 핵심 메커니즘 | 의식 이론 | 상태 |
 |-------|------|--------------|-----------|------|
-| L14 | 에이전시 감지 | 예측-결과 비교 → "내가 했다" | Frith | 계획 |
-| L15 | 내러티브 자기 | 시간적 자기 모델 업데이트 | Damasio | 계획 |
+| **L14** | **에이전시 감지** | **예측-결과 비교 → "내가 했다"** | **Frith** | **✓ 완료** |
+| **L15** | **내러티브 자기** | **에이전시 게이팅 자서전 학습** | **Damasio** | **✓ 완료** |
 
 ### Phase L12: Global Workspace (주의 기반 경쟁) ✓ 완료
 - **문제**: food_memory→motor 12.0이 항상 동일 강도 → 위험해도 음식 추적 (상태 의존적 행동 없음)
@@ -444,8 +444,8 @@
   3. **Agency→Narrative DENSE Hebbian**: eta=0.01, w_max=8.0, init_w=1.0
 - **변경 요약**: 0 new neurons, +1 DENSE Hebbian synapse, learn_self_narrative() 수정
 - **기존 body→narrative에 agency_gate×salience_gate 곱셈 적용**
-- **검증**: (결과 대기중)
-- **체크포인트**: `checkpoints/brain_L15_20ep.npz`
+- **검증**: 생존율 55% ✓, Pain 0% ✓, Predator 0% ✓, Reward 2.79% ✓, Selectivity 0.70 (best)
+- **체크포인트**: `checkpoints/brain_L15_20ep.npz` (46 시냅스)
 
 **Phase L15 완료**: 20,710 뉴런, 41 학습 시냅스 (40 + 1 DENSE Hebbian)
 
