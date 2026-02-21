@@ -1128,6 +1128,17 @@ class ForagerBrainConfig:
     agency_pe_to_inhibitory_weight: float = 2.0
     agency_inhibitory_to_pe_weight: float = -1.5
 
+    # ─── Phase L15: Narrative Self (Agency-Gated Autobiographical Learning) ───
+    narrative_self_enabled: bool = True
+    # Agency→Narrative DENSE Hebbian
+    agency_to_narrative_eta: float = 0.01          # Gentle learning rate
+    agency_to_narrative_w_max: float = 8.0         # Max weight (gentle modulator)
+    agency_to_narrative_init_w: float = 1.0        # Initial weight
+    # Agency gating for body→narrative learning
+    narrative_agency_gate_baseline: float = 0.15   # Agency rate normalization baseline
+    # Body state change detection
+    narrative_body_change_scale: float = 10.0      # Amplify Δbody for salience
+
     dt: float = 1.0
 
     @property
@@ -1314,6 +1325,9 @@ class ForagerBrain:
         self.last_self_agency_rate = 0.0
         self.last_self_narrative_rate = 0.0
         self.last_self_inhibitory_rate = 0.0
+
+        # Phase L15: Narrative Self state defaults
+        self.prev_self_body_rate = 0.0  # For Δbody change detection
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -4787,6 +4801,7 @@ class ForagerBrain:
             "wm_temporal": "temporal_to_context_hebbian",
             "meta_valence": "valence_to_confidence_hebbian",
             "self_narrative": "body_to_narrative_hebbian",
+            "agency_narrative": "agency_to_narrative_hebbian",
         }
         for key, attr in hebbian_synapses.items():
             if hasattr(self, attr):
@@ -4861,6 +4876,11 @@ class ForagerBrain:
             self.efference_to_predict_hebbian.vars["g"].pull_from_device()
             weights["forward_model"] = self.efference_to_predict_hebbian.vars["g"].view.copy()
 
+        # Phase L15: Agency→Narrative Hebbian (DENSE)
+        if self.config.narrative_self_enabled and hasattr(self, 'agency_to_narrative_hebbian'):
+            self.agency_to_narrative_hebbian.vars["g"].pull_from_device()
+            weights["agency_narrative"] = self.agency_to_narrative_hebbian.vars["g"].view.copy()
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -4934,6 +4954,7 @@ class ForagerBrain:
             "wm_temporal": "temporal_to_context_hebbian",
             "meta_valence": "valence_to_confidence_hebbian",
             "self_narrative": "body_to_narrative_hebbian",
+            "agency_narrative": "agency_to_narrative_hebbian",
         }
         for key, attr in hebbian_synapses.items():
             if key in data and hasattr(self, attr):
@@ -5019,6 +5040,13 @@ class ForagerBrain:
             if "forward_model" in data:
                 self.efference_to_predict_hebbian.vars["g"].view[:] = data["forward_model"]
                 self.efference_to_predict_hebbian.vars["g"].push_to_device()
+                loaded += 1
+
+        # Phase L15: Agency→Narrative Hebbian (DENSE)
+        if self.config.narrative_self_enabled and hasattr(self, 'agency_to_narrative_hebbian'):
+            if "agency_narrative" in data:
+                self.agency_to_narrative_hebbian.vars["g"].view[:] = data["agency_narrative"]
+                self.agency_to_narrative_hebbian.vars["g"].push_to_device()
                 loaded += 1
 
         # Phase L5: 피질 R-STDP (SPARSE)
@@ -7164,6 +7192,19 @@ class ForagerBrain:
         print(f"    20h: Hebbian DENSE (Body→Narrative, eta={self.config.self_narrative_binding_eta}, "
               f"w_max={self.config.self_narrative_binding_w_max})")
 
+        # ============================================================
+        # Phase L15: Agency → Narrative DENSE Hebbian
+        # ============================================================
+        if self.config.narrative_self_enabled:
+            self.agency_to_narrative_hebbian = self.model.add_synapse_population(
+                "agency_to_narrative_hebb", "DENSE",
+                self.self_agency, self.self_narrative,
+                init_weight_update("StaticPulse", {},
+                                   {"g": self.config.agency_to_narrative_init_w}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}))
+            print(f"    L15: Hebbian DENSE (Agency→Narrative, eta={self.config.agency_to_narrative_eta}, "
+                  f"w_max={self.config.agency_to_narrative_w_max})")
+
         print(f"    Motor direct: {self.config.self_model_to_motor_weight} (disabled)")
         total_neurons = (self.config.n_self_body + self.config.n_self_efference +
                         self.config.n_self_predict + self.config.n_self_agency +
@@ -7286,10 +7327,11 @@ class ForagerBrain:
 
     def learn_self_narrative(self, reward_context: bool):
         """
-        Phase 20h: Body → Self_Narrative Hebbian 학습
+        Phase 20h + L15: Body → Self_Narrative Hebbian 학습
 
-        보상 시(food eaten, pain) 강한 학습, 배경 시 약한 감쇠.
-        내 몸 상태와 자기 서사를 연합 학습.
+        L15 Agency-Gated: 자기 원인(high agency)일수록 강한 학습,
+        신체 상태 변화(salience)가 클수록 강한 학습.
+        Damasio (2010): 자기 서사는 자기 원인 경험에서 더 강하게 형성.
         """
         if not self.config.self_model_enabled:
             return None
@@ -7300,15 +7342,64 @@ class ForagerBrain:
 
         narrative_scale = max(0.1, self.last_self_narrative_rate)
 
+        # Phase L15: Agency gate — high agency = stronger learning
+        agency_gate = 1.0
+        if self.config.narrative_self_enabled:
+            baseline = self.config.narrative_agency_gate_baseline
+            agency_gate = max(0.3, min(2.0, self.last_self_agency_rate / max(0.01, baseline)))
+
+        # Phase L15: Salience gate — body state change = stronger learning
+        salience_gate = 1.0
+        if self.config.narrative_self_enabled:
+            delta_body = abs(self.last_self_body_rate - self.prev_self_body_rate)
+            salience_gate = 1.0 + min(2.0, delta_body * self.config.narrative_body_change_scale)
+
         n_pre = self.config.n_self_body
         n_post = self.config.n_self_narrative
         self.body_to_narrative_hebbian.vars["g"].pull_from_device()
         w = self.body_to_narrative_hebbian.vars["g"].view.copy()
         w = w.reshape(n_pre, n_post)
-        w += eta * learning_factor * narrative_scale
+        w += eta * learning_factor * narrative_scale * agency_gate * salience_gate
         w = np.clip(w, 0.0, w_max)
         self.body_to_narrative_hebbian.vars["g"].view[:] = w.flatten()
         self.body_to_narrative_hebbian.vars["g"].push_to_device()
+
+        return {
+            "avg_w": float(np.mean(w)),
+            "max_w": float(np.max(w)),
+            "learning_factor": learning_factor,
+            "agency_gate": agency_gate,
+            "salience_gate": salience_gate,
+        }
+
+    def learn_agency_narrative(self, reward_context: bool):
+        """
+        Phase L15: Agency → Self_Narrative DENSE Hebbian 학습
+
+        자기 주체성(agency) 패턴을 서사(narrative)에 연결.
+        높은 agency일 때 더 강하게 학습 → 자기 원인 행동의 기억 강화.
+        """
+        if not self.config.self_model_enabled or not self.config.narrative_self_enabled:
+            return None
+        if not hasattr(self, 'agency_to_narrative_hebbian'):
+            return None
+
+        eta = self.config.agency_to_narrative_eta
+        w_max = self.config.agency_to_narrative_w_max
+        learning_factor = 1.0 if reward_context else 0.15
+
+        # Agency-modulated: stronger when agency is high
+        agency_mod = max(0.1, self.last_self_agency_rate)
+
+        n_pre = self.config.n_self_agency
+        n_post = self.config.n_self_narrative
+        self.agency_to_narrative_hebbian.vars["g"].pull_from_device()
+        w = self.agency_to_narrative_hebbian.vars["g"].view.copy()
+        w = w.reshape(n_pre, n_post)
+        w += eta * learning_factor * agency_mod
+        w = np.clip(w, 0.0, w_max)
+        self.agency_to_narrative_hebbian.vars["g"].view[:] = w.flatten()
+        self.agency_to_narrative_hebbian.vars["g"].push_to_device()
 
         return {
             "avg_w": float(np.mean(w)),
@@ -9370,6 +9461,8 @@ class ForagerBrain:
             self_narrative_rate = self_narrative_spikes / (self.config.n_self_narrative * 5)
             self_inhibitory_sm_rate = self_inhibitory_sm_spikes / (self.config.n_self_inhibitory * 5)
 
+            # Phase L15: Track previous body rate for Δbody change detection
+            self.prev_self_body_rate = self.last_self_body_rate
             self.last_self_body_rate = self_body_rate
             self.last_self_efference_rate = self_efference_rate
             self.last_self_predict_rate = self_predict_rate
@@ -9782,6 +9875,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_self_model: bool = False,
                 no_predator: bool = False,
                 no_agency: bool = False,
+                no_narrative_self: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -9851,6 +9945,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         env_config.motor_noise_enabled = False
         env_config.sensor_jitter_enabled = False
         print("  [!] Phase L14 (Agency Detection) DISABLED")
+    if no_narrative_self:
+        brain_config.narrative_self_enabled = False
+        print("  [!] Phase L15 (Narrative Self) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -10117,6 +10214,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     if brain_config.agency_detection_enabled:
                         brain.learn_forward_model(reward_context=True)
 
+                    # Phase L15: Agency→Narrative 학습 (음식 먹기 = 강한 학습)
+                    if brain_config.narrative_self_enabled:
+                        brain.learn_agency_narrative(reward_context=True)
+
                     # Phase L11: SWR 경험 버퍼에 좋은 음식 저장
                     if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
                         brain.add_experience(food_pos[0], food_pos[1], 0, env.steps, 25.0)
@@ -10144,6 +10245,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                     # Phase L14: Forward Model 학습 (나쁜 음식 = 강한 학습)
                     if brain_config.agency_detection_enabled:
                         brain.learn_forward_model(reward_context=True)
+
+                    # Phase L15: Agency→Narrative 학습 (나쁜 음식 = 강한 학습)
+                    if brain_config.narrative_self_enabled:
+                        brain.learn_agency_narrative(reward_context=True)
 
                     # Phase L11: SWR 경험 버퍼에 나쁜 음식 저장
                     if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
@@ -10211,6 +10316,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if brain_config.agency_detection_enabled and env_info.get('in_pain', False):
                 brain.learn_forward_model(reward_context=True)
 
+            # Phase L15: Pain zone → Agency→Narrative 강한 학습
+            if brain_config.narrative_self_enabled and env_info.get('in_pain', False):
+                brain.learn_agency_narrative(reward_context=True)
+
             # Pain Zone 진입 이벤트
             if log_level in ["normal", "debug", "verbose"]:
                 if env_info.get('in_pain', False) and env.pain_zone_visits == 1 and env.pain_zone_steps == 1:
@@ -10235,6 +10344,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             # Phase L14: Forward Model 배경 학습 (약한 학습 = 매 5스텝)
             if brain_config.agency_detection_enabled and env.steps % 5 == 0:
                 brain.learn_forward_model(reward_context=False)
+
+            # Phase L15: Agency→Narrative 배경 학습 (약한 학습 = 매 10스텝)
+            if brain_config.narrative_self_enabled and env.steps % 10 == 0:
+                brain.learn_agency_narrative(reward_context=False)
 
             # Data logging (sampled every N steps)
             if logger:
@@ -10446,6 +10559,19 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"    Agency_PE rate: {brain.last_agency_pe_rate:.3f}")
             print(f"    Self_Agency rate: {brain.last_self_agency_rate:.3f}")
             print(f"    Self_Predict rate: {brain.last_self_predict_rate:.3f}")
+
+        # Phase L15: Narrative Self 현황
+        if brain_config.narrative_self_enabled and hasattr(brain, 'agency_to_narrative_hebbian'):
+            print(f"  --- Phase L15: Narrative Self (Agency-Gated) ---")
+            brain.agency_to_narrative_hebbian.vars["g"].pull_from_device()
+            an_avg = float(np.mean(brain.agency_to_narrative_hebbian.vars["g"].view))
+            an_max = float(np.max(brain.agency_to_narrative_hebbian.vars["g"].view))
+            brain.body_to_narrative_hebbian.vars["g"].pull_from_device()
+            bn_avg = float(np.mean(brain.body_to_narrative_hebbian.vars["g"].view))
+            bn_max = float(np.max(brain.body_to_narrative_hebbian.vars["g"].view))
+            print(f"    Agency→Narrative avg_w: {an_avg:.3f}, max_w: {an_max:.3f}")
+            print(f"    Body→Narrative avg_w: {bn_avg:.3f}, max_w: {bn_max:.3f}")
+            print(f"    Self_Narrative rate: {brain.last_self_narrative_rate:.3f}")
 
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
@@ -10761,6 +10887,8 @@ if __name__ == "__main__":
                        help="Disable predators in environment")
     parser.add_argument("--no-agency", action="store_true",
                        help="Disable Phase L14 (Agency Detection)")
+    parser.add_argument("--no-narrative-self", action="store_true",
+                       help="Disable Phase L15 (Narrative Self)")
     # Data logging for dashboard
     parser.add_argument("--log-data", action="store_true",
                        help="Enable data logging for dashboard visualization")
@@ -10794,6 +10922,7 @@ if __name__ == "__main__":
         no_self_model=args.no_self_model,
         no_predator=args.no_predator,
         no_agency=args.no_agency,
+        no_narrative_self=args.no_narrative_self,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,

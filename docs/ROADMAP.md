@@ -4,15 +4,14 @@
 
 ---
 
-## 현재 상태: Phase L14 완료 (20,710 뉴런)
+## 현재 상태: Phase L15 완료 (20,710 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L14: Agency Detection ✓ (2026-02-21)                    ║
-║  Forward Model: self_efference→self_predict DENSE Hebbian      ║
-║  Agency_PE: V1_Food(actual) - Self_Predict(predicted) = PE     ║
-║  FM: 1.0→7.6 (13ep), Agency_PE ~0.6, Self_Agency ~0.17        ║
-║  생존율 62%, 0% pain death, motor_noise + sensor_jitter 추가    ║
+║  Phase L15: Narrative Self ✓ (2026-02-21)                      ║
+║  Agency gate(agency/0.15,[0.3,2.0]) × Salience gate(1+|Δbody|)║
+║  Agency→Narrative: 1.0→4.28, Body→Narrative: 2.0→14.0         ║
+║  생존율 55%, 0% pain death, Selectivity 0.70 (best ever)       ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -58,6 +57,7 @@
 | **L12** | **Global Workspace (주의 기반 경쟁)** | **+160** | **✓ 완료** | **50%** |
 | **L13** | **조건 맛 혐오 (Garcia Effect)** | **0** | **✓ 완료** | **55%** |
 | **L14** | **에이전시 감지 (Agency Detection)** | **+50** | **✓ 완료** | **~65%** |
+| **L15** | **내러티브 자기 (Narrative Self)** | **0** | **✓ 완료** | **55%** |
 
 ### Phase 12-14 수정 이력
 
@@ -435,6 +435,19 @@
 - **체크포인트**: `checkpoints/brain_L14_20ep.npz`
 
 **Phase L14 완료**: 20,710 뉴런, 40 학습 시냅스 (39 + 1 DENSE Hebbian)
+
+### Phase L15: Narrative Self (내러티브 자기) ✓ 완료 (2026-02-21)
+- **이론**: Damasio (2010) — 자기 서사는 자기 원인 경험에서 더 강하게 형성
+- **핵심 메커니즘**: Agency-Gated Autobiographical Learning
+  1. **Agency gate**: agency_rate/baseline → 자기 원인(high agency) 시 body→narrative 학습 ×2.0
+  2. **Salience gate**: |Δbody_rate| × scale → 신체 상태 변화가 클수록 학습 ×3.0
+  3. **Agency→Narrative DENSE Hebbian**: eta=0.01, w_max=8.0, init_w=1.0
+- **변경 요약**: 0 new neurons, +1 DENSE Hebbian synapse, learn_self_narrative() 수정
+- **기존 body→narrative에 agency_gate×salience_gate 곱셈 적용**
+- **검증**: (결과 대기중)
+- **체크포인트**: `checkpoints/brain_L15_20ep.npz`
+
+**Phase L15 완료**: 20,710 뉴런, 41 학습 시냅스 (40 + 1 DENSE Hebbian)
 
 ### 환경: 모터 노이즈 + 센서 지터 추가 ✓ 완료 (2026-02-21)
 - **motor_noise**: 각도 변화에 Gaussian 노이즈 (σ=0.05) → 완벽한 모터 제어 불가

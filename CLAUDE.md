@@ -291,13 +291,13 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L14 완료 - Agency Detection (20,710 뉴런)
+### 현재 상태: Phase L15 완료 - Narrative Self (20,710 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L14: Agency Detection ✓ (2026-02-21)                    ║
+║  Phase L15: Narrative Self ✓ (2026-02-21)                       ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→...→L13→L14):                     ║
+║  Learning Foundation (Phase L1→...→L14→L15):                     ║
 ║    - L1-L4: BG 기반 학습 (D1/D2, R-STDP, Anti-Hebbian)       ║
 ║    - L5-L6: 피질 학습 (perceptual R-STDP, PE)                ║
 ║    - L7-L8: 음식 유형별 차등 학습 (도파민 딥)                 ║
@@ -307,22 +307,23 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║    - L12: Global Workspace → 주의 기반 경쟁 (Dehaene 2011)   ║
 ║    - L13: Taste Aversion → 시각-내장 연합 학습 (Garcia 1966)  ║
 ║    - L14: Agency Detection → 전방 모델 (Frith 2005)           ║
+║    - L15: Narrative Self → 에이전시 게이팅 자서전 (Damasio 2010)║
 ║                                                               ║
-║  L14 변경 사항:                                               ║
-║    - +50 neurons (Agency_PE), +1 DENSE Hebbian (Forward Model)║
-║    - Forward Model: self_efference→self_predict (eta=0.005)   ║
-║    - Agency_PE = V1_Food(+8.0) + Self_Predict(-6.0) → PE     ║
-║    - 환경: motor_noise(σ=0.05) + sensor_jitter(σ=0.03)       ║
-║    - pain_rays 지터 제외 (Push-Pull 정밀도 보호)              ║
+║  L15 변경 사항:                                               ║
+║    - 0 new neurons, +1 DENSE Hebbian (agency→narrative)       ║
+║    - Agency gate: agency_rate/0.15, [0.3, 2.0]               ║
+║    - Salience gate: 1+|Δbody|×10, max 3.0                    ║
+║    - Body→Narr: 2.0→14.0 (fast, ep5 saturated)               ║
+║    - Agency→Narr: 1.0→4.28 (gradual, 20ep)                   ║
 ║                                                               ║
 ║  검증 결과:                                                   ║
-║    - Survival Rate: ~65% ✓                                   ║
+║    - Survival Rate: 55% ✓                                    ║
 ║    - Pain Death: 0% ✓                                        ║
-║    - Reward Freq: ~2.7% ✓                                    ║
-║    - FM: 1.0→~7.6, Agency_PE ~0.600                          ║
+║    - Reward Freq: 2.79% ✓                                    ║
+║    - Food Selectivity: 0.70 (best ever)                       ║
 ║                                                               ║
-║  뉴런 수:       20,710 (+50 Agency_PE)                          ║
-║  학습 시냅스:   40 (+1 DENSE Hebbian)                            ║
+║  뉴런 수:       20,710 (변동 없음)                               ║
+║  학습 시냅스:   41 (+1 DENSE Hebbian)                            ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -331,7 +332,7 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ```
 backend/genesis/
 ├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식 + GW 시각화)
-├── forager_brain.py   # Forager Brain (20,710 뉴런, Phase 1-20 + L1-L14)
+├── forager_brain.py   # Forager Brain (20,710 뉴런, Phase 1-20 + L1-L15)
 └── checkpoints/       # 체크포인트 저장
 ```
 
@@ -359,6 +360,7 @@ backend/genesis/
 20. **포식자 = 이동형 pain source**: 뇌 변경 0으로 새로운 환경 위협 추가 가능 (기존 회로 재사용)
 21. **sensor_jitter는 pain_rays 제외 필수**: Push-Pull(60/-40)은 정밀한 L/R 차이에 의존 → 노이즈 적용 시 회피 기능 파괴
 22. **Forward Model eta 점진적**: DENSE Hebbian uniform update는 빠르게 포화 → eta=0.005 (0.04에서 8x 감소)
+23. **Agency gate로 기존 학습 조절**: 새 시냅스 최소화 (0 뉴런, 1 시냅스) — gate 곱셈으로 기존 body→narrative 학습 강화/약화
 
 ---
 
