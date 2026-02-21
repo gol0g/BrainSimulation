@@ -316,11 +316,13 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║    - Body→Narr: 2.0→14.0 (fast, ep5 saturated)               ║
 ║    - Agency→Narr: 1.0→4.28 (gradual, 20ep)                   ║
 ║                                                               ║
-║  검증 결과:                                                   ║
-║    - Survival Rate: 55% ✓                                    ║
-║    - Pain Death: 0% ✓                                        ║
-║    - Reward Freq: 2.79% ✓                                    ║
-║    - Food Selectivity: 0.70 (best ever)                       ║
+║  검증 결과 (20ep / 100ep):                                   ║
+║    - Survival: 55% / 56% ✓                                   ║
+║    - Pain Death: 0% / 0% ✓                                   ║
+║    - Reward Freq: 2.79% / 2.75% ✓                            ║
+║    - Selectivity: 0.70 (20ep best)                            ║
+║    - Hippo: 2.12→11.84/18.0 (100ep, 계속 성장)               ║
+║    - 4 synapses saturated at 100ep (Garcia/FM/Narr/Body)     ║
 ║                                                               ║
 ║  뉴런 수:       20,710 (변동 없음)                               ║
 ║  학습 시냅스:   41 (+1 DENSE Hebbian)                            ║
@@ -361,6 +363,7 @@ backend/genesis/
 21. **sensor_jitter는 pain_rays 제외 필수**: Push-Pull(60/-40)은 정밀한 L/R 차이에 의존 → 노이즈 적용 시 회피 기능 파괴
 22. **Forward Model eta 점진적**: DENSE Hebbian uniform update는 빠르게 포화 → eta=0.005 (0.04에서 8x 감소)
 23. **Agency gate로 기존 학습 조절**: 새 시냅스 최소화 (0 뉴런, 1 시냅스) — gate 곱셈으로 기존 body→narrative 학습 강화/약화
+24. **100ep 중기 검증**: 해마만 계속 성장 (65%), 4개 시냅스 포화 (Garcia/FM/Agency→Narr/Body→Narr) — 500ep에서는 w_max 상향 또는 weight_decay로 동적 평형 고려
 
 ---
 
