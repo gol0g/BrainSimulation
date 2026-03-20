@@ -1757,10 +1757,13 @@ class ForagerBrain:
         if self.config.gw_enabled:
             self._build_gw_circuit()
 
+        # Enable spike recording for all populations (batched GPU pull)
+        self._enable_spike_recording()
+
         # Build and load
         print("Building model...")
         self.model.build()
-        self.model.load()
+        self.model.load(num_recording_timesteps=10)
 
         # SPARSE 시냅스는 connectivity를 먼저 pull해야 .values가 동작함 (CRITICAL)
         # connectivity 패턴은 고정이므로 최초 1회만 pull
@@ -1807,6 +1810,186 @@ class ForagerBrain:
 
         # 스파이크 카운팅용
         self.spike_threshold = self.config.tau_refrac - 0.5
+
+    def _enable_spike_recording(self):
+        """모든 스파이크 카운팅 대상 population에 spike_recording_enabled 설정.
+
+        model.build() 호출 전에 실행해야 함.
+        process() 루프에서 RefracTime.pull_from_device()를 하던 모든 population 대상.
+        이후 pull_recording_buffers_from_device() 한 번으로 전체 스파이크 데이터 수집 가능.
+        """
+        # Phase 2a: 기본 회로
+        always_on = [
+            self.motor_left, self.motor_right,
+            self.hunger_drive, self.satiety_drive,
+            self.low_energy_sensor, self.high_energy_sensor,
+        ]
+        for pop in always_on:
+            pop.spike_recording_enabled = True
+
+        # Phase 2b: Amygdala
+        if self.config.amygdala_enabled:
+            for pop in [self.lateral_amygdala, self.central_amygdala, self.fear_response]:
+                pop.spike_recording_enabled = True
+
+        # Phase 3: Hippocampus
+        if self.config.hippocampus_enabled:
+            self.place_cells.spike_recording_enabled = True
+            if self.config.directional_food_memory:
+                self.food_memory_left.spike_recording_enabled = True
+                self.food_memory_right.spike_recording_enabled = True
+            elif self.food_memory is not None:
+                self.food_memory.spike_recording_enabled = True
+
+        # Phase 4 / L2: Basal Ganglia (D1/D2 MSN)
+        if self.config.basal_ganglia_enabled:
+            for pop in [self.d1_left, self.d1_right, self.d2_left, self.d2_right,
+                        self.direct_left, self.direct_right,
+                        self.indirect_left, self.indirect_right,
+                        self.dopamine_neurons]:
+                pop.spike_recording_enabled = True
+
+            # Phase L10: NAc
+            if self.config.td_learning_enabled:
+                self.nac_value.spike_recording_enabled = True
+
+            # Phase L12: Global Workspace
+            if self.config.gw_enabled:
+                for pop in [self.gw_food_left, self.gw_food_right, self.gw_safety]:
+                    pop.spike_recording_enabled = True
+
+        # Phase 5: Prefrontal Cortex
+        if self.config.prefrontal_enabled:
+            for pop in [self.working_memory, self.goal_food,
+                        self.goal_safety, self.inhibitory_control]:
+                pop.spike_recording_enabled = True
+
+        # Phase 6a: Cerebellum
+        if self.config.cerebellum_enabled:
+            for pop in [self.granule_cells, self.purkinje_cells,
+                        self.deep_nuclei, self.error_signal]:
+                pop.spike_recording_enabled = True
+
+        # Phase 6b: Thalamus
+        if self.config.thalamus_enabled:
+            for pop in [self.food_relay, self.danger_relay, self.trn, self.arousal]:
+                pop.spike_recording_enabled = True
+
+        # Phase 8: V1
+        if self.config.v1_enabled:
+            for pop in [self.v1_food_left, self.v1_food_right,
+                        self.v1_danger_left, self.v1_danger_right]:
+                pop.spike_recording_enabled = True
+
+        # Phase 9: V2/V4
+        if self.config.v2v4_enabled and self.config.v1_enabled:
+            for pop in [self.v2_edge_food, self.v2_edge_danger,
+                        self.v4_food_object, self.v4_danger_object,
+                        self.v4_novel_object]:
+                pop.spike_recording_enabled = True
+
+        # Phase 10: IT Cortex
+        if self.config.it_enabled and self.config.v2v4_enabled:
+            for pop in [self.it_food_category, self.it_danger_category,
+                        self.it_neutral_category, self.it_association,
+                        self.it_memory_buffer]:
+                pop.spike_recording_enabled = True
+
+        # Phase 11: Auditory Cortex
+        if self.config.auditory_enabled:
+            for pop in [self.a1_danger, self.a1_food, self.a2_association]:
+                pop.spike_recording_enabled = True
+
+        # Phase 12: Multimodal Integration
+        if self.config.multimodal_enabled:
+            for pop in [self.sts_food, self.sts_danger,
+                        self.sts_congruence, self.sts_mismatch]:
+                pop.spike_recording_enabled = True
+
+        # Phase 13: Parietal Cortex
+        if self.config.parietal_enabled:
+            for pop in [self.ppc_space_left, self.ppc_space_right,
+                        self.ppc_goal_food, self.ppc_goal_safety,
+                        self.ppc_attention, self.ppc_path_buffer]:
+                pop.spike_recording_enabled = True
+
+        # Phase 14: Premotor Cortex
+        if self.config.premotor_enabled:
+            for pop in [self.pmd_left, self.pmd_right,
+                        self.pmv_approach, self.pmv_avoid,
+                        self.sma_sequence, self.motor_preparation]:
+                pop.spike_recording_enabled = True
+
+        # Phase 15: Social Brain
+        if self.config.social_brain_enabled:
+            for pop in [self.sts_social, self.tpj_self, self.tpj_other,
+                        self.tpj_compare, self.acc_conflict, self.acc_monitor,
+                        self.social_approach, self.social_avoid]:
+                pop.spike_recording_enabled = True
+
+            # Phase 15b: Mirror Neurons
+            if self.config.mirror_enabled:
+                for pop in [self.social_observation, self.mirror_food,
+                            self.vicarious_reward, self.social_memory]:
+                    pop.spike_recording_enabled = True
+
+            # Phase 15c: Theory of Mind
+            if self.config.tom_enabled:
+                for pop in [self.tom_intention, self.tom_belief,
+                            self.tom_prediction, self.tom_surprise,
+                            self.coop_compete_coop, self.coop_compete_compete]:
+                    pop.spike_recording_enabled = True
+
+        # Phase 16: Association Cortex
+        if self.config.association_cortex_enabled:
+            for pop in [self.assoc_edible, self.assoc_threatening,
+                        self.assoc_animate, self.assoc_context,
+                        self.assoc_valence, self.assoc_binding,
+                        self.assoc_novelty]:
+                pop.spike_recording_enabled = True
+
+        # Phase 17: Language Circuit
+        if self.config.language_enabled:
+            for pop in [self.wernicke_food, self.wernicke_danger,
+                        self.wernicke_social, self.wernicke_context,
+                        self.broca_food, self.broca_danger,
+                        self.broca_social, self.broca_sequence,
+                        self.vocal_gate, self.call_mirror, self.call_binding]:
+                pop.spike_recording_enabled = True
+
+        # Phase 18: WM Expansion
+        if self.config.wm_expansion_enabled:
+            for pop in [self.wm_thalamic, self.wm_update_gate,
+                        self.temporal_recent, self.temporal_prior,
+                        self.goal_pending, self.goal_switch,
+                        self.wm_context_binding, self.wm_inhibitory]:
+                pop.spike_recording_enabled = True
+
+        # Phase 19: Metacognition
+        if self.config.metacognition_enabled:
+            for pop in [self.meta_confidence, self.meta_uncertainty,
+                        self.meta_evaluate, self.meta_arousal_mod,
+                        self.meta_inhibitory_pop]:
+                pop.spike_recording_enabled = True
+
+        # Phase 20: Self-Model
+        if self.config.self_model_enabled:
+            for pop in [self.self_body, self.self_efference, self.self_predict,
+                        self.self_agency, self.self_narrative,
+                        self.self_inhibitory_sm]:
+                pop.spike_recording_enabled = True
+
+        # Phase L14: Agency PE
+        if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
+            self.agency_pe.spike_recording_enabled = True
+
+        # Phase L6: Prediction Error
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            for pop in [self.pe_food_left, self.pe_food_right,
+                        self.pe_danger_left, self.pe_danger_right]:
+                pop.spike_recording_enabled = True
+
+        print("  Spike recording enabled for all monitored populations")
 
     def _create_static_synapse(self, name: str, pre, post, weight: float,
                                sparsity: Optional[float] = None):
@@ -8515,381 +8698,233 @@ class ForagerBrain:
         gw_food_r_spikes = 0
         gw_safety_spikes = 0
 
+        # === 시뮬레이션 10스텝 실행 (spike_recording으로 배치 수집) ===
         for _ in range(10):
             self.model.step_time()
 
-            # 스파이크 카운팅 (Phase 2a)
-            self.motor_left.vars["RefracTime"].pull_from_device()
-            self.motor_right.vars["RefracTime"].pull_from_device()
-            self.hunger_drive.vars["RefracTime"].pull_from_device()
-            self.satiety_drive.vars["RefracTime"].pull_from_device()
-            self.low_energy_sensor.vars["RefracTime"].pull_from_device()
-            self.high_energy_sensor.vars["RefracTime"].pull_from_device()
+        # 한 번의 GPU→CPU 전송으로 모든 population의 스파이크 데이터 수집
+        self.model.pull_recording_buffers_from_device()
 
-            motor_left_spikes += np.sum(self.motor_left.vars["RefracTime"].view > self.spike_threshold)
-            motor_right_spikes += np.sum(self.motor_right.vars["RefracTime"].view > self.spike_threshold)
-            hunger_spikes += np.sum(self.hunger_drive.vars["RefracTime"].view > self.spike_threshold)
-            satiety_spikes += np.sum(self.satiety_drive.vars["RefracTime"].view > self.spike_threshold)
-            low_energy_spikes += np.sum(self.low_energy_sensor.vars["RefracTime"].view > self.spike_threshold)
-            high_energy_spikes += np.sum(self.high_energy_sensor.vars["RefracTime"].view > self.spike_threshold)
+        # 스파이크 카운팅 (Phase 2a) — spike_recording_data[0] = times array
+        # DEBUG: spike recording 검증 (첫 5스텝만)
+        motor_left_spikes = len(self.motor_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+        motor_right_spikes = len(self.motor_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+        hunger_spikes = len(self.hunger_drive.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+        satiety_spikes = len(self.satiety_drive.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+        low_energy_spikes = len(self.low_energy_sensor.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+        high_energy_spikes = len(self.high_energy_sensor.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 2b 스파이크 카운팅
-            if self.config.amygdala_enabled:
-                self.lateral_amygdala.vars["RefracTime"].pull_from_device()
-                self.central_amygdala.vars["RefracTime"].pull_from_device()
-                self.fear_response.vars["RefracTime"].pull_from_device()
+        # Phase 2b 스파이크 카운팅
+        if self.config.amygdala_enabled:
+            la_spikes = len(self.lateral_amygdala.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            cea_spikes = len(self.central_amygdala.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            fear_spikes = len(self.fear_response.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                la_spikes += np.sum(self.lateral_amygdala.vars["RefracTime"].view > self.spike_threshold)
-                cea_spikes += np.sum(self.central_amygdala.vars["RefracTime"].view > self.spike_threshold)
-                fear_spikes += np.sum(self.fear_response.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 3 스파이크 카운팅
+        if self.config.hippocampus_enabled:
+            place_cell_spikes = len(self.place_cells.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 3 스파이크 카운팅
-            if self.config.hippocampus_enabled:
-                self.place_cells.vars["RefracTime"].pull_from_device()
-                place_cell_spikes += np.sum(self.place_cells.vars["RefracTime"].view > self.spike_threshold)
+            if self.config.directional_food_memory:
+                food_memory_spikes = (len(self.food_memory_left.spike_recording_data[0][0])
+                                      + len(self.food_memory_right.spike_recording_data[0][0]))
+            elif self.food_memory is not None:
+                food_memory_spikes = len(self.food_memory.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                if self.config.directional_food_memory:
-                    self.food_memory_left.vars["RefracTime"].pull_from_device()
-                    self.food_memory_right.vars["RefracTime"].pull_from_device()
-                    food_memory_spikes += np.sum(self.food_memory_left.vars["RefracTime"].view > self.spike_threshold)
-                    food_memory_spikes += np.sum(self.food_memory_right.vars["RefracTime"].view > self.spike_threshold)
-                elif self.food_memory is not None:
-                    self.food_memory.vars["RefracTime"].pull_from_device()
-                    food_memory_spikes += np.sum(self.food_memory.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 4 스파이크 카운팅 (Phase L2: D1/D2 MSN)
+        if self.config.basal_ganglia_enabled:
+            d1_l_spikes = len(self.d1_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            d1_r_spikes = len(self.d1_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            d2_l_spikes = len(self.d2_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            d2_r_spikes = len(self.d2_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            striatum_spikes = d1_l_spikes + d1_r_spikes + d2_l_spikes + d2_r_spikes  # 호환용
+            direct_l_spikes = len(self.direct_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            direct_r_spikes = len(self.direct_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            direct_spikes = direct_l_spikes + direct_r_spikes
+            indirect_l_spikes = len(self.indirect_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            indirect_r_spikes = len(self.indirect_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            indirect_spikes = indirect_l_spikes + indirect_r_spikes
+            dopamine_spikes = len(self.dopamine_neurons.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 4 스파이크 카운팅 (Phase L2: D1/D2 MSN)
-            if self.config.basal_ganglia_enabled:
-                self.d1_left.vars["RefracTime"].pull_from_device()
-                self.d1_right.vars["RefracTime"].pull_from_device()
-                self.d2_left.vars["RefracTime"].pull_from_device()
-                self.d2_right.vars["RefracTime"].pull_from_device()
-                self.direct_left.vars["RefracTime"].pull_from_device()
-                self.direct_right.vars["RefracTime"].pull_from_device()
-                self.indirect_left.vars["RefracTime"].pull_from_device()
-                self.indirect_right.vars["RefracTime"].pull_from_device()
-                self.dopamine_neurons.vars["RefracTime"].pull_from_device()
+            # Phase L10: NAc spike counting
+            if self.config.td_learning_enabled:
+                nac_value_spikes = len(self.nac_value.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                d1_l_spikes = np.sum(self.d1_left.vars["RefracTime"].view > self.spike_threshold)
-                d1_r_spikes = np.sum(self.d1_right.vars["RefracTime"].view > self.spike_threshold)
-                d2_l_spikes = np.sum(self.d2_left.vars["RefracTime"].view > self.spike_threshold)
-                d2_r_spikes = np.sum(self.d2_right.vars["RefracTime"].view > self.spike_threshold)
-                striatum_spikes += d1_l_spikes + d1_r_spikes + d2_l_spikes + d2_r_spikes  # 호환용
-                direct_l_spikes = np.sum(self.direct_left.vars["RefracTime"].view > self.spike_threshold)
-                direct_r_spikes = np.sum(self.direct_right.vars["RefracTime"].view > self.spike_threshold)
-                direct_spikes += direct_l_spikes + direct_r_spikes
-                indirect_l_spikes = np.sum(self.indirect_left.vars["RefracTime"].view > self.spike_threshold)
-                indirect_r_spikes = np.sum(self.indirect_right.vars["RefracTime"].view > self.spike_threshold)
-                indirect_spikes += indirect_l_spikes + indirect_r_spikes
-                dopamine_spikes += np.sum(self.dopamine_neurons.vars["RefracTime"].view > self.spike_threshold)
+            # Phase L12: GW spike counting
+            if self.config.gw_enabled:
+                gw_food_l_spikes = len(self.gw_food_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                gw_food_r_spikes = len(self.gw_food_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                gw_safety_spikes = len(self.gw_safety.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                # Phase L10: NAc spike counting
-                if self.config.td_learning_enabled:
-                    self.nac_value.vars["RefracTime"].pull_from_device()
-                    nac_value_spikes += np.sum(self.nac_value.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 5 스파이크 카운팅
+        if self.config.prefrontal_enabled:
+            working_memory_spikes = len(self.working_memory.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            goal_food_spikes = len(self.goal_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            goal_safety_spikes = len(self.goal_safety.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            inhibitory_spikes = len(self.inhibitory_control.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                # Phase L12: GW spike counting
-                if self.config.gw_enabled:
-                    self.gw_food_left.vars["RefracTime"].pull_from_device()
-                    self.gw_food_right.vars["RefracTime"].pull_from_device()
-                    self.gw_safety.vars["RefracTime"].pull_from_device()
-                    gw_food_l_spikes += np.sum(self.gw_food_left.vars["RefracTime"].view > self.spike_threshold)
-                    gw_food_r_spikes += np.sum(self.gw_food_right.vars["RefracTime"].view > self.spike_threshold)
-                    gw_safety_spikes += np.sum(self.gw_safety.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 6a 스파이크 카운팅
+        if self.config.cerebellum_enabled:
+            granule_spikes = len(self.granule_cells.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            purkinje_spikes = len(self.purkinje_cells.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            deep_nuclei_spikes = len(self.deep_nuclei.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            error_spikes = len(self.error_signal.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 5 스파이크 카운팅
-            if self.config.prefrontal_enabled:
-                self.working_memory.vars["RefracTime"].pull_from_device()
-                self.goal_food.vars["RefracTime"].pull_from_device()
-                self.goal_safety.vars["RefracTime"].pull_from_device()
-                self.inhibitory_control.vars["RefracTime"].pull_from_device()
+        # Phase 6b 스파이크 카운팅
+        if self.config.thalamus_enabled:
+            food_relay_spikes = len(self.food_relay.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            danger_relay_spikes = len(self.danger_relay.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            trn_spikes = len(self.trn.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            arousal_spikes = len(self.arousal.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                working_memory_spikes += np.sum(self.working_memory.vars["RefracTime"].view > self.spike_threshold)
-                goal_food_spikes += np.sum(self.goal_food.vars["RefracTime"].view > self.spike_threshold)
-                goal_safety_spikes += np.sum(self.goal_safety.vars["RefracTime"].view > self.spike_threshold)
-                inhibitory_spikes += np.sum(self.inhibitory_control.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 8 스파이크 카운팅 (V1)
+        if self.config.v1_enabled:
+            v1_food_left_spikes = len(self.v1_food_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v1_food_right_spikes = len(self.v1_food_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v1_danger_left_spikes = len(self.v1_danger_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v1_danger_right_spikes = len(self.v1_danger_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 6a 스파이크 카운팅
-            if self.config.cerebellum_enabled:
-                self.granule_cells.vars["RefracTime"].pull_from_device()
-                self.purkinje_cells.vars["RefracTime"].pull_from_device()
-                self.deep_nuclei.vars["RefracTime"].pull_from_device()
-                self.error_signal.vars["RefracTime"].pull_from_device()
+        # Phase 9 스파이크 카운팅 (V2/V4)
+        if self.config.v2v4_enabled and self.config.v1_enabled:
+            v2_edge_food_spikes = len(self.v2_edge_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v2_edge_danger_spikes = len(self.v2_edge_danger.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v4_food_object_spikes = len(self.v4_food_object.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v4_danger_object_spikes = len(self.v4_danger_object.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            v4_novel_object_spikes = len(self.v4_novel_object.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                granule_spikes += np.sum(self.granule_cells.vars["RefracTime"].view > self.spike_threshold)
-                purkinje_spikes += np.sum(self.purkinje_cells.vars["RefracTime"].view > self.spike_threshold)
-                deep_nuclei_spikes += np.sum(self.deep_nuclei.vars["RefracTime"].view > self.spike_threshold)
-                error_spikes += np.sum(self.error_signal.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 10 스파이크 카운팅 (IT Cortex)
+        if self.config.it_enabled and self.config.v2v4_enabled:
+            it_food_category_spikes = len(self.it_food_category.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 6b 스파이크 카운팅
-            if self.config.thalamus_enabled:
-                self.food_relay.vars["RefracTime"].pull_from_device()
-                self.danger_relay.vars["RefracTime"].pull_from_device()
-                self.trn.vars["RefracTime"].pull_from_device()
-                self.arousal.vars["RefracTime"].pull_from_device()
+            # Phase L9: IT_Food 활성도 캐싱 (trace 누적용)
+            if self.config.it_bg_enabled:
+                n_it_f = self.config.n_it_food_category
+                self._it_food_active = 1.0 if (it_food_category_spikes / max(n_it_f, 1)) > 0.05 else 0.0
 
-                food_relay_spikes += np.sum(self.food_relay.vars["RefracTime"].view > self.spike_threshold)
-                danger_relay_spikes += np.sum(self.danger_relay.vars["RefracTime"].view > self.spike_threshold)
-                trn_spikes += np.sum(self.trn.vars["RefracTime"].view > self.spike_threshold)
-                arousal_spikes += np.sum(self.arousal.vars["RefracTime"].view > self.spike_threshold)
+            it_danger_category_spikes = len(self.it_danger_category.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            it_neutral_category_spikes = len(self.it_neutral_category.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            it_association_spikes = len(self.it_association.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            it_memory_buffer_spikes = len(self.it_memory_buffer.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 8 스파이크 카운팅 (V1)
-            if self.config.v1_enabled:
-                self.v1_food_left.vars["RefracTime"].pull_from_device()
-                self.v1_food_right.vars["RefracTime"].pull_from_device()
-                self.v1_danger_left.vars["RefracTime"].pull_from_device()
-                self.v1_danger_right.vars["RefracTime"].pull_from_device()
+        # Phase 11 스파이크 카운팅 (Auditory Cortex)
+        if self.config.auditory_enabled:
+            a1_danger_spikes = len(self.a1_danger.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            a1_food_spikes = len(self.a1_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            a2_association_spikes = len(self.a2_association.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                v1_food_left_spikes += np.sum(self.v1_food_left.vars["RefracTime"].view > self.spike_threshold)
-                v1_food_right_spikes += np.sum(self.v1_food_right.vars["RefracTime"].view > self.spike_threshold)
-                v1_danger_left_spikes += np.sum(self.v1_danger_left.vars["RefracTime"].view > self.spike_threshold)
-                v1_danger_right_spikes += np.sum(self.v1_danger_right.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 12 스파이크 카운팅 (Multimodal Integration)
+        if self.config.multimodal_enabled:
+            sts_food_spikes = len(self.sts_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            sts_danger_spikes = len(self.sts_danger.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            sts_congruence_spikes = len(self.sts_congruence.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            sts_mismatch_spikes = len(self.sts_mismatch.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 9 스파이크 카운팅 (V2/V4)
-            if self.config.v2v4_enabled and self.config.v1_enabled:
-                self.v2_edge_food.vars["RefracTime"].pull_from_device()
-                self.v2_edge_danger.vars["RefracTime"].pull_from_device()
-                self.v4_food_object.vars["RefracTime"].pull_from_device()
-                self.v4_danger_object.vars["RefracTime"].pull_from_device()
-                self.v4_novel_object.vars["RefracTime"].pull_from_device()
+        # Phase 13 스파이크 카운팅 (Parietal Cortex)
+        if self.config.parietal_enabled:
+            ppc_space_left_spikes = len(self.ppc_space_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            ppc_space_right_spikes = len(self.ppc_space_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            ppc_goal_food_spikes = len(self.ppc_goal_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            ppc_goal_safety_spikes = len(self.ppc_goal_safety.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            ppc_attention_spikes = len(self.ppc_attention.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            ppc_path_buffer_spikes = len(self.ppc_path_buffer.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                v2_edge_food_spikes += np.sum(self.v2_edge_food.vars["RefracTime"].view > self.spike_threshold)
-                v2_edge_danger_spikes += np.sum(self.v2_edge_danger.vars["RefracTime"].view > self.spike_threshold)
-                v4_food_object_spikes += np.sum(self.v4_food_object.vars["RefracTime"].view > self.spike_threshold)
-                v4_danger_object_spikes += np.sum(self.v4_danger_object.vars["RefracTime"].view > self.spike_threshold)
-                v4_novel_object_spikes += np.sum(self.v4_novel_object.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 14 스파이크 카운팅 (Premotor Cortex)
+        if self.config.premotor_enabled:
+            pmd_left_spikes = len(self.pmd_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            pmd_right_spikes = len(self.pmd_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            pmv_approach_spikes = len(self.pmv_approach.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            pmv_avoid_spikes = len(self.pmv_avoid.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            sma_sequence_spikes = len(self.sma_sequence.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            motor_prep_spikes = len(self.motor_preparation.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 10 스파이크 카운팅 (IT Cortex)
-            if self.config.it_enabled and self.config.v2v4_enabled:
-                self.it_food_category.vars["RefracTime"].pull_from_device()
-                self.it_danger_category.vars["RefracTime"].pull_from_device()
-                self.it_neutral_category.vars["RefracTime"].pull_from_device()
-                self.it_association.vars["RefracTime"].pull_from_device()
-                self.it_memory_buffer.vars["RefracTime"].pull_from_device()
+        # Phase 15 스파이크 카운팅 (Social Brain)
+        if self.config.social_brain_enabled:
+            sts_social_spikes = len(self.sts_social.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            tpj_self_spikes = len(self.tpj_self.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            tpj_other_spikes = len(self.tpj_other.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            tpj_compare_spikes = len(self.tpj_compare.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            acc_conflict_spikes = len(self.acc_conflict.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            acc_monitor_spikes = len(self.acc_monitor.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            social_approach_spikes = len(self.social_approach.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            social_avoid_spikes = len(self.social_avoid.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                it_food_category_spikes += np.sum(self.it_food_category.vars["RefracTime"].view > self.spike_threshold)
+            # Phase 15b 스파이크 카운팅 (Mirror Neurons)
+            if self.config.mirror_enabled:
+                social_obs_spikes = len(self.social_observation.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                mirror_food_spikes = len(self.mirror_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                vicarious_reward_spikes = len(self.vicarious_reward.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                social_memory_spikes = len(self.social_memory.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                # Phase L9: IT_Food 활성도 캐싱 (trace 누적용)
-                if self.config.it_bg_enabled:
-                    n_it_f = self.config.n_it_food_category
-                    self._it_food_active = 1.0 if (it_food_category_spikes / max(n_it_f, 1)) > 0.05 else 0.0
+            # Phase 15c 스파이크 카운팅 (Theory of Mind)
+            if self.config.tom_enabled:
+                tom_intention_spikes = len(self.tom_intention.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                tom_belief_spikes = len(self.tom_belief.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                tom_prediction_spikes = len(self.tom_prediction.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                tom_surprise_spikes = len(self.tom_surprise.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                coop_spikes = len(self.coop_compete_coop.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+                compete_spikes = len(self.coop_compete_compete.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                it_danger_category_spikes += np.sum(self.it_danger_category.vars["RefracTime"].view > self.spike_threshold)
-                it_neutral_category_spikes += np.sum(self.it_neutral_category.vars["RefracTime"].view > self.spike_threshold)
-                it_association_spikes += np.sum(self.it_association.vars["RefracTime"].view > self.spike_threshold)
-                it_memory_buffer_spikes += np.sum(self.it_memory_buffer.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 16 스파이크 카운팅 (Association Cortex)
+        if self.config.association_cortex_enabled:
+            assoc_edible_spikes = len(self.assoc_edible.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            assoc_threatening_spikes = len(self.assoc_threatening.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            assoc_animate_spikes = len(self.assoc_animate.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            assoc_context_spikes = len(self.assoc_context.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            assoc_valence_spikes = len(self.assoc_valence.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            assoc_binding_spikes = len(self.assoc_binding.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            assoc_novelty_spikes = len(self.assoc_novelty.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 11 스파이크 카운팅 (Auditory Cortex)
-            if self.config.auditory_enabled:
-                self.a1_danger.vars["RefracTime"].pull_from_device()
-                self.a1_food.vars["RefracTime"].pull_from_device()
-                self.a2_association.vars["RefracTime"].pull_from_device()
+        # Phase 17 스파이크 카운팅 (Language Circuit)
+        if self.config.language_enabled:
+            wernicke_food_spikes = len(self.wernicke_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            wernicke_danger_spikes = len(self.wernicke_danger.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            wernicke_social_spikes = len(self.wernicke_social.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            wernicke_context_spikes = len(self.wernicke_context.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            broca_food_spikes = len(self.broca_food.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            broca_danger_spikes = len(self.broca_danger.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            broca_social_spikes = len(self.broca_social.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            broca_sequence_spikes = len(self.broca_sequence.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            vocal_gate_spikes = len(self.vocal_gate.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            call_mirror_spikes = len(self.call_mirror.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            call_binding_spikes = len(self.call_binding.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                a1_danger_spikes += np.sum(self.a1_danger.vars["RefracTime"].view > self.spike_threshold)
-                a1_food_spikes += np.sum(self.a1_food.vars["RefracTime"].view > self.spike_threshold)
-                a2_association_spikes += np.sum(self.a2_association.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 18 스파이크 카운팅 (WM Expansion)
+        if self.config.wm_expansion_enabled:
+            wm_thalamic_spikes = len(self.wm_thalamic.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            wm_update_gate_spikes = len(self.wm_update_gate.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            temporal_recent_spikes = len(self.temporal_recent.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            temporal_prior_spikes = len(self.temporal_prior.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            goal_pending_spikes = len(self.goal_pending.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            goal_switch_spikes = len(self.goal_switch.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            wm_context_binding_spikes = len(self.wm_context_binding.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            wm_inhibitory_spikes = len(self.wm_inhibitory.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 12 스파이크 카운팅 (Multimodal Integration)
-            if self.config.multimodal_enabled:
-                self.sts_food.vars["RefracTime"].pull_from_device()
-                self.sts_danger.vars["RefracTime"].pull_from_device()
-                self.sts_congruence.vars["RefracTime"].pull_from_device()
-                self.sts_mismatch.vars["RefracTime"].pull_from_device()
+        # Phase 19: Metacognition 스파이크 카운팅
+        if self.config.metacognition_enabled:
+            meta_confidence_spikes = len(self.meta_confidence.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            meta_uncertainty_spikes = len(self.meta_uncertainty.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            meta_evaluate_spikes = len(self.meta_evaluate.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            meta_arousal_mod_spikes = len(self.meta_arousal_mod.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            meta_inhibitory_spikes = len(self.meta_inhibitory_pop.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                sts_food_spikes += np.sum(self.sts_food.vars["RefracTime"].view > self.spike_threshold)
-                sts_danger_spikes += np.sum(self.sts_danger.vars["RefracTime"].view > self.spike_threshold)
-                sts_congruence_spikes += np.sum(self.sts_congruence.vars["RefracTime"].view > self.spike_threshold)
-                sts_mismatch_spikes += np.sum(self.sts_mismatch.vars["RefracTime"].view > self.spike_threshold)
+        # Phase 20: Self-Model 스파이크 카운팅
+        if self.config.self_model_enabled:
+            self_body_spikes = len(self.self_body.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            self_efference_spikes = len(self.self_efference.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            self_predict_spikes = len(self.self_predict.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            self_agency_spikes = len(self.self_agency.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            self_narrative_spikes = len(self.self_narrative.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            self_inhibitory_sm_spikes = len(self.self_inhibitory_sm.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-            # Phase 13 스파이크 카운팅 (Parietal Cortex)
-            if self.config.parietal_enabled:
-                self.ppc_space_left.vars["RefracTime"].pull_from_device()
-                self.ppc_space_right.vars["RefracTime"].pull_from_device()
-                self.ppc_goal_food.vars["RefracTime"].pull_from_device()
-                self.ppc_goal_safety.vars["RefracTime"].pull_from_device()
-                self.ppc_attention.vars["RefracTime"].pull_from_device()
-                self.ppc_path_buffer.vars["RefracTime"].pull_from_device()
+        # Phase L14 스파이크 카운팅 (Agency PE)
+        if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
+            agency_pe_spikes = len(self.agency_pe.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-                ppc_space_left_spikes += np.sum(self.ppc_space_left.vars["RefracTime"].view > self.spike_threshold)
-                ppc_space_right_spikes += np.sum(self.ppc_space_right.vars["RefracTime"].view > self.spike_threshold)
-                ppc_goal_food_spikes += np.sum(self.ppc_goal_food.vars["RefracTime"].view > self.spike_threshold)
-                ppc_goal_safety_spikes += np.sum(self.ppc_goal_safety.vars["RefracTime"].view > self.spike_threshold)
-                ppc_attention_spikes += np.sum(self.ppc_attention.vars["RefracTime"].view > self.spike_threshold)
-                ppc_path_buffer_spikes += np.sum(self.ppc_path_buffer.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 14 스파이크 카운팅 (Premotor Cortex)
-            if self.config.premotor_enabled:
-                self.pmd_left.vars["RefracTime"].pull_from_device()
-                self.pmd_right.vars["RefracTime"].pull_from_device()
-                self.pmv_approach.vars["RefracTime"].pull_from_device()
-                self.pmv_avoid.vars["RefracTime"].pull_from_device()
-                self.sma_sequence.vars["RefracTime"].pull_from_device()
-                self.motor_preparation.vars["RefracTime"].pull_from_device()
-
-                pmd_left_spikes += np.sum(self.pmd_left.vars["RefracTime"].view > self.spike_threshold)
-                pmd_right_spikes += np.sum(self.pmd_right.vars["RefracTime"].view > self.spike_threshold)
-                pmv_approach_spikes += np.sum(self.pmv_approach.vars["RefracTime"].view > self.spike_threshold)
-                pmv_avoid_spikes += np.sum(self.pmv_avoid.vars["RefracTime"].view > self.spike_threshold)
-                sma_sequence_spikes += np.sum(self.sma_sequence.vars["RefracTime"].view > self.spike_threshold)
-                motor_prep_spikes += np.sum(self.motor_preparation.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 15 스파이크 카운팅 (Social Brain)
-            if self.config.social_brain_enabled:
-                self.sts_social.vars["RefracTime"].pull_from_device()
-                self.tpj_self.vars["RefracTime"].pull_from_device()
-                self.tpj_other.vars["RefracTime"].pull_from_device()
-                self.tpj_compare.vars["RefracTime"].pull_from_device()
-                self.acc_conflict.vars["RefracTime"].pull_from_device()
-                self.acc_monitor.vars["RefracTime"].pull_from_device()
-                self.social_approach.vars["RefracTime"].pull_from_device()
-                self.social_avoid.vars["RefracTime"].pull_from_device()
-
-                sts_social_spikes += np.sum(self.sts_social.vars["RefracTime"].view > self.spike_threshold)
-                tpj_self_spikes += np.sum(self.tpj_self.vars["RefracTime"].view > self.spike_threshold)
-                tpj_other_spikes += np.sum(self.tpj_other.vars["RefracTime"].view > self.spike_threshold)
-                tpj_compare_spikes += np.sum(self.tpj_compare.vars["RefracTime"].view > self.spike_threshold)
-                acc_conflict_spikes += np.sum(self.acc_conflict.vars["RefracTime"].view > self.spike_threshold)
-                acc_monitor_spikes += np.sum(self.acc_monitor.vars["RefracTime"].view > self.spike_threshold)
-                social_approach_spikes += np.sum(self.social_approach.vars["RefracTime"].view > self.spike_threshold)
-                social_avoid_spikes += np.sum(self.social_avoid.vars["RefracTime"].view > self.spike_threshold)
-
-                # Phase 15b 스파이크 카운팅 (Mirror Neurons)
-                if self.config.mirror_enabled:
-                    self.social_observation.vars["RefracTime"].pull_from_device()
-                    self.mirror_food.vars["RefracTime"].pull_from_device()
-                    self.vicarious_reward.vars["RefracTime"].pull_from_device()
-                    self.social_memory.vars["RefracTime"].pull_from_device()
-
-                    social_obs_spikes += np.sum(self.social_observation.vars["RefracTime"].view > self.spike_threshold)
-                    mirror_food_spikes += np.sum(self.mirror_food.vars["RefracTime"].view > self.spike_threshold)
-                    vicarious_reward_spikes += np.sum(self.vicarious_reward.vars["RefracTime"].view > self.spike_threshold)
-                    social_memory_spikes += np.sum(self.social_memory.vars["RefracTime"].view > self.spike_threshold)
-
-                # Phase 15c 스파이크 카운팅 (Theory of Mind)
-                if self.config.tom_enabled:
-                    self.tom_intention.vars["RefracTime"].pull_from_device()
-                    self.tom_belief.vars["RefracTime"].pull_from_device()
-                    self.tom_prediction.vars["RefracTime"].pull_from_device()
-                    self.tom_surprise.vars["RefracTime"].pull_from_device()
-                    self.coop_compete_coop.vars["RefracTime"].pull_from_device()
-                    self.coop_compete_compete.vars["RefracTime"].pull_from_device()
-
-                    tom_intention_spikes += np.sum(self.tom_intention.vars["RefracTime"].view > self.spike_threshold)
-                    tom_belief_spikes += np.sum(self.tom_belief.vars["RefracTime"].view > self.spike_threshold)
-                    tom_prediction_spikes += np.sum(self.tom_prediction.vars["RefracTime"].view > self.spike_threshold)
-                    tom_surprise_spikes += np.sum(self.tom_surprise.vars["RefracTime"].view > self.spike_threshold)
-                    coop_spikes += np.sum(self.coop_compete_coop.vars["RefracTime"].view > self.spike_threshold)
-                    compete_spikes += np.sum(self.coop_compete_compete.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 16 스파이크 카운팅 (Association Cortex)
-            if self.config.association_cortex_enabled:
-                self.assoc_edible.vars["RefracTime"].pull_from_device()
-                self.assoc_threatening.vars["RefracTime"].pull_from_device()
-                self.assoc_animate.vars["RefracTime"].pull_from_device()
-                self.assoc_context.vars["RefracTime"].pull_from_device()
-                self.assoc_valence.vars["RefracTime"].pull_from_device()
-                self.assoc_binding.vars["RefracTime"].pull_from_device()
-                self.assoc_novelty.vars["RefracTime"].pull_from_device()
-
-                assoc_edible_spikes += np.sum(self.assoc_edible.vars["RefracTime"].view > self.spike_threshold)
-                assoc_threatening_spikes += np.sum(self.assoc_threatening.vars["RefracTime"].view > self.spike_threshold)
-                assoc_animate_spikes += np.sum(self.assoc_animate.vars["RefracTime"].view > self.spike_threshold)
-                assoc_context_spikes += np.sum(self.assoc_context.vars["RefracTime"].view > self.spike_threshold)
-                assoc_valence_spikes += np.sum(self.assoc_valence.vars["RefracTime"].view > self.spike_threshold)
-                assoc_binding_spikes += np.sum(self.assoc_binding.vars["RefracTime"].view > self.spike_threshold)
-                assoc_novelty_spikes += np.sum(self.assoc_novelty.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 17 스파이크 카운팅 (Language Circuit)
-            if self.config.language_enabled:
-                self.wernicke_food.vars["RefracTime"].pull_from_device()
-                self.wernicke_danger.vars["RefracTime"].pull_from_device()
-                self.wernicke_social.vars["RefracTime"].pull_from_device()
-                self.wernicke_context.vars["RefracTime"].pull_from_device()
-                self.broca_food.vars["RefracTime"].pull_from_device()
-                self.broca_danger.vars["RefracTime"].pull_from_device()
-                self.broca_social.vars["RefracTime"].pull_from_device()
-                self.broca_sequence.vars["RefracTime"].pull_from_device()
-                self.vocal_gate.vars["RefracTime"].pull_from_device()
-                self.call_mirror.vars["RefracTime"].pull_from_device()
-                self.call_binding.vars["RefracTime"].pull_from_device()
-
-                wernicke_food_spikes += np.sum(self.wernicke_food.vars["RefracTime"].view > self.spike_threshold)
-                wernicke_danger_spikes += np.sum(self.wernicke_danger.vars["RefracTime"].view > self.spike_threshold)
-                wernicke_social_spikes += np.sum(self.wernicke_social.vars["RefracTime"].view > self.spike_threshold)
-                wernicke_context_spikes += np.sum(self.wernicke_context.vars["RefracTime"].view > self.spike_threshold)
-                broca_food_spikes += np.sum(self.broca_food.vars["RefracTime"].view > self.spike_threshold)
-                broca_danger_spikes += np.sum(self.broca_danger.vars["RefracTime"].view > self.spike_threshold)
-                broca_social_spikes += np.sum(self.broca_social.vars["RefracTime"].view > self.spike_threshold)
-                broca_sequence_spikes += np.sum(self.broca_sequence.vars["RefracTime"].view > self.spike_threshold)
-                vocal_gate_spikes += np.sum(self.vocal_gate.vars["RefracTime"].view > self.spike_threshold)
-                call_mirror_spikes += np.sum(self.call_mirror.vars["RefracTime"].view > self.spike_threshold)
-                call_binding_spikes += np.sum(self.call_binding.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 18 스파이크 카운팅 (WM Expansion)
-            if self.config.wm_expansion_enabled:
-                self.wm_thalamic.vars["RefracTime"].pull_from_device()
-                self.wm_update_gate.vars["RefracTime"].pull_from_device()
-                self.temporal_recent.vars["RefracTime"].pull_from_device()
-                self.temporal_prior.vars["RefracTime"].pull_from_device()
-                self.goal_pending.vars["RefracTime"].pull_from_device()
-                self.goal_switch.vars["RefracTime"].pull_from_device()
-                self.wm_context_binding.vars["RefracTime"].pull_from_device()
-                self.wm_inhibitory.vars["RefracTime"].pull_from_device()
-
-                wm_thalamic_spikes += np.sum(self.wm_thalamic.vars["RefracTime"].view > self.spike_threshold)
-                wm_update_gate_spikes += np.sum(self.wm_update_gate.vars["RefracTime"].view > self.spike_threshold)
-                temporal_recent_spikes += np.sum(self.temporal_recent.vars["RefracTime"].view > self.spike_threshold)
-                temporal_prior_spikes += np.sum(self.temporal_prior.vars["RefracTime"].view > self.spike_threshold)
-                goal_pending_spikes += np.sum(self.goal_pending.vars["RefracTime"].view > self.spike_threshold)
-                goal_switch_spikes += np.sum(self.goal_switch.vars["RefracTime"].view > self.spike_threshold)
-                wm_context_binding_spikes += np.sum(self.wm_context_binding.vars["RefracTime"].view > self.spike_threshold)
-                wm_inhibitory_spikes += np.sum(self.wm_inhibitory.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 19: Metacognition 스파이크 카운팅
-            if self.config.metacognition_enabled:
-                self.meta_confidence.vars["RefracTime"].pull_from_device()
-                self.meta_uncertainty.vars["RefracTime"].pull_from_device()
-                self.meta_evaluate.vars["RefracTime"].pull_from_device()
-                self.meta_arousal_mod.vars["RefracTime"].pull_from_device()
-                self.meta_inhibitory_pop.vars["RefracTime"].pull_from_device()
-
-                meta_confidence_spikes += np.sum(self.meta_confidence.vars["RefracTime"].view > self.spike_threshold)
-                meta_uncertainty_spikes += np.sum(self.meta_uncertainty.vars["RefracTime"].view > self.spike_threshold)
-                meta_evaluate_spikes += np.sum(self.meta_evaluate.vars["RefracTime"].view > self.spike_threshold)
-                meta_arousal_mod_spikes += np.sum(self.meta_arousal_mod.vars["RefracTime"].view > self.spike_threshold)
-                meta_inhibitory_spikes += np.sum(self.meta_inhibitory_pop.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase 20: Self-Model 스파이크 카운팅
-            if self.config.self_model_enabled:
-                self.self_body.vars["RefracTime"].pull_from_device()
-                self.self_efference.vars["RefracTime"].pull_from_device()
-                self.self_predict.vars["RefracTime"].pull_from_device()
-                self.self_agency.vars["RefracTime"].pull_from_device()
-                self.self_narrative.vars["RefracTime"].pull_from_device()
-                self.self_inhibitory_sm.vars["RefracTime"].pull_from_device()
-
-                self_body_spikes += np.sum(self.self_body.vars["RefracTime"].view > self.spike_threshold)
-                self_efference_spikes += np.sum(self.self_efference.vars["RefracTime"].view > self.spike_threshold)
-                self_predict_spikes += np.sum(self.self_predict.vars["RefracTime"].view > self.spike_threshold)
-                self_agency_spikes += np.sum(self.self_agency.vars["RefracTime"].view > self.spike_threshold)
-                self_narrative_spikes += np.sum(self.self_narrative.vars["RefracTime"].view > self.spike_threshold)
-                self_inhibitory_sm_spikes += np.sum(self.self_inhibitory_sm.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase L14 스파이크 카운팅 (Agency PE)
-            if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
-                self.agency_pe.vars["RefracTime"].pull_from_device()
-                agency_pe_spikes += np.sum(self.agency_pe.vars["RefracTime"].view > self.spike_threshold)
-
-            # Phase L6 스파이크 카운팅 (Prediction Error)
-            if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
-                self.pe_food_left.vars["RefracTime"].pull_from_device()
-                self.pe_food_right.vars["RefracTime"].pull_from_device()
-                self.pe_danger_left.vars["RefracTime"].pull_from_device()
-                self.pe_danger_right.vars["RefracTime"].pull_from_device()
-
-                pe_food_l_spikes += np.sum(self.pe_food_left.vars["RefracTime"].view > self.spike_threshold)
-                pe_food_r_spikes += np.sum(self.pe_food_right.vars["RefracTime"].view > self.spike_threshold)
-                pe_danger_l_spikes += np.sum(self.pe_danger_left.vars["RefracTime"].view > self.spike_threshold)
-                pe_danger_r_spikes += np.sum(self.pe_danger_right.vars["RefracTime"].view > self.spike_threshold)
+        # Phase L6 스파이크 카운팅 (Prediction Error)
+        if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
+            pe_food_l_spikes = len(self.pe_food_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            pe_food_r_spikes = len(self.pe_food_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            pe_danger_l_spikes = len(self.pe_danger_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+            pe_danger_r_spikes = len(self.pe_danger_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
         # === 4. 스파이크율 계산 ===
         max_spikes_motor = self.config.n_motor_left * 5  # 10ms / 2ms refrac = 5 max
