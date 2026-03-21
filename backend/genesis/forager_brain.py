@@ -1151,7 +1151,7 @@ class ForagerBrainConfig:
     kc_it_food_sparsity: float = 0.05
     kc_to_inh_weight: float = 5.0
     kc_to_inh_sparsity: float = 0.05
-    kc_inh_to_kc_weight: float = -8.0
+    kc_inh_to_kc_weight: float = -15.0
     kc_inh_to_kc_sparsity: float = 0.08
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
