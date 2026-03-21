@@ -1139,6 +1139,28 @@ class ForagerBrainConfig:
     # Body state change detection
     narrative_body_change_scale: float = 10.0      # Amplify Δbody for salience
 
+    # ─── Phase L16: Sparse Expansion Layer (Mushroom Body / DG) ───
+    sparse_expansion_enabled: bool = True
+    n_kc_per_side: int = 1500
+    n_kc_inhibitory_per_side: int = 200
+    kc_food_eye_weight: float = 3.0
+    kc_food_eye_sparsity: float = 0.10
+    kc_good_bad_food_weight: float = 4.0
+    kc_good_bad_food_sparsity: float = 0.10
+    kc_it_food_weight: float = 2.0
+    kc_it_food_sparsity: float = 0.05
+    kc_to_inh_weight: float = 5.0
+    kc_to_inh_sparsity: float = 0.05
+    kc_inh_to_kc_weight: float = -8.0
+    kc_inh_to_kc_sparsity: float = 0.08
+    kc_to_d1_init_w: float = 0.5
+    kc_to_d1_sparsity: float = 0.05
+    kc_rstdp_eta: float = 0.0003
+    kc_rstdp_w_max: float = 3.0
+    kc_rstdp_w_rest: float = 0.5
+    kc_d2_eta: float = 0.0002
+    kc_d2_w_min: float = 0.05
+
     dt: float = 1.0
 
     @property
@@ -1242,6 +1264,8 @@ class ForagerBrainConfig:
             base += self.n_ca3_sequence + self.n_swr_gate + self.n_replay_inhibitory
         if self.gw_enabled:
             base += self.n_gw_food * 2 + self.n_gw_safety  # 50+50+60 = 160
+        if self.sparse_expansion_enabled and self.basal_ganglia_enabled and self.perceptual_learning_enabled:
+            base += (self.n_kc_per_side * 2 + self.n_kc_inhibitory_per_side * 2)
         return base
 
 
@@ -1328,6 +1352,15 @@ class ForagerBrain:
 
         # Phase L15: Narrative Self state defaults
         self.prev_self_body_rate = 0.0  # For Δbody change detection
+
+        # Phase L16: Sparse Expansion (KC) state defaults
+        if self.config.sparse_expansion_enabled:
+            self.kc_d1_trace_l = 0.0
+            self.kc_d1_trace_r = 0.0
+            self.kc_d2_trace_l = 0.0
+            self.kc_d2_trace_r = 0.0
+            self.last_kc_l_rate = 0.0
+            self.last_kc_r_rate = 0.0
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -1745,6 +1778,11 @@ class ForagerBrain:
                 and self.config.basal_ganglia_enabled):
             self._build_it_bg_circuit()
 
+        # Phase L16: Sparse Expansion Layer (Mushroom Body / DG)
+        if (self.config.sparse_expansion_enabled and self.config.basal_ganglia_enabled
+                and self.config.perceptual_learning_enabled):
+            self._build_sparse_expansion_circuit()
+
         # Phase L10: NAc Critic (TD Learning)
         if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
             self._build_nac_circuit()
@@ -1787,6 +1825,13 @@ class ForagerBrain:
                         self.it_food_to_d2_l, self.it_food_to_d2_r]:
                 syn.pull_connectivity_from_device()
 
+        # Phase L16: KC→D1/D2 SPARSE connectivity pull
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
+            self.kc_to_d1_l.pull_connectivity_from_device()
+            self.kc_to_d1_r.pull_connectivity_from_device()
+            self.kc_to_d2_l.pull_connectivity_from_device()
+            self.kc_to_d2_r.pull_connectivity_from_device()
+
         # Phase L10: NAc R-STDP SPARSE connectivity pull
         if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
             self.food_to_nac_l.pull_connectivity_from_device()
@@ -1806,7 +1851,8 @@ class ForagerBrain:
                         self.pe_danger_to_it_danger_l, self.pe_danger_to_it_danger_r]:
                 syn.pull_connectivity_from_device()
 
-        print(f"Model ready! Total: {self.config.total_neurons:,} neurons")
+        n_total = self.config.total_neurons
+        print(f"Model ready! Total: {n_total:,} neurons")
 
         # 스파이크 카운팅용
         self.spike_threshold = self.config.tau_refrac - 0.5
@@ -4722,6 +4768,50 @@ class ForagerBrain:
                     syn.vars["g"].push_to_device()
                 results[f"it_food_d2_{label}"] = float(np.nanmean(w))
 
+        # === Phase L16: KC → D1/D2 ===
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
+            kc_eta = self.config.kc_rstdp_eta
+            kc_w_max = self.config.kc_rstdp_w_max
+            kc_w_rest = self.config.kc_rstdp_w_rest
+            kc_d2_eta = self.config.kc_d2_eta
+            kc_w_min = self.config.kc_d2_w_min
+
+            for side, d1_trace, d2_trace, d1_syn, d2_syn in [
+                ("l", self.kc_d1_trace_l, self.kc_d2_trace_l, self.kc_to_d1_l, self.kc_to_d2_l),
+                ("r", self.kc_d1_trace_r, self.kc_d2_trace_r, self.kc_to_d1_r, self.kc_to_d2_r),
+            ]:
+                # KC→D1 R-STDP
+                need_update = False
+                d1_syn.vars["g"].pull_from_device()
+                w = d1_syn.vars["g"].values.copy()
+                if apply_decay:
+                    w -= (decay * 50) * (w - kc_w_rest)
+                    need_update = True
+                if has_dopamine and d1_trace > 0.01:
+                    w += kc_eta * d1_trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    np.clip(w, 0.0, kc_w_max, out=w)
+                    d1_syn.vars["g"].values = w
+                    d1_syn.vars["g"].push_to_device()
+                results[f"kc_d1_{side}"] = float(np.nanmean(w))
+
+                # KC→D2 Anti-Hebbian
+                need_update = False
+                d2_syn.vars["g"].pull_from_device()
+                w = d2_syn.vars["g"].values.copy()
+                if apply_decay:
+                    w -= (decay * 50) * (w - kc_w_rest)
+                    need_update = True
+                if has_dopamine and d2_trace > 0.01:
+                    w -= kc_d2_eta * d2_trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    np.clip(w, kc_w_min, kc_w_max, out=w)
+                    d2_syn.vars["g"].values = w
+                    d2_syn.vars["g"].push_to_device()
+                results[f"kc_d2_{side}"] = float(np.nanmean(w))
+
         # === Phase L10: NAc R-STDP (food_eye → nac_value) ===
         if self.config.td_learning_enabled:
             nac_eta = self.config.nac_rstdp_eta
@@ -5064,6 +5154,17 @@ class ForagerBrain:
             self.agency_to_narrative_hebbian.vars["g"].pull_from_device()
             weights["agency_narrative"] = self.agency_to_narrative_hebbian.vars["g"].view.copy()
 
+        # Phase L16: KC→D1/D2 (4 SPARSE synapses)
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
+            self.kc_to_d1_l.vars["g"].pull_from_device()
+            weights["kc_d1_left"] = self.kc_to_d1_l.vars["g"].values.copy()
+            self.kc_to_d1_r.vars["g"].pull_from_device()
+            weights["kc_d1_right"] = self.kc_to_d1_r.vars["g"].values.copy()
+            self.kc_to_d2_l.vars["g"].pull_from_device()
+            weights["kc_d2_left"] = self.kc_to_d2_l.vars["g"].values.copy()
+            self.kc_to_d2_r.vars["g"].pull_from_device()
+            weights["kc_d2_right"] = self.kc_to_d2_r.vars["g"].values.copy()
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -5231,6 +5332,18 @@ class ForagerBrain:
                 self.agency_to_narrative_hebbian.vars["g"].view[:] = data["agency_narrative"]
                 self.agency_to_narrative_hebbian.vars["g"].push_to_device()
                 loaded += 1
+
+        # Phase L16: KC→D1/D2 (SPARSE)
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
+            for key, syn in [
+                ("kc_d1_left", self.kc_to_d1_l),
+                ("kc_d1_right", self.kc_to_d1_r),
+                ("kc_d2_left", self.kc_to_d2_l),
+                ("kc_d2_right", self.kc_to_d2_r),
+            ]:
+                if key in data:
+                    self._load_sparse_weights(syn, data[key])
+                    loaded += 1
 
         # Phase L5: 피질 R-STDP (SPARSE)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
@@ -7763,6 +7876,131 @@ class ForagerBrain:
         total_pe = self.config.n_pe_food + self.config.n_pe_danger
         print(f"  Prediction Error circuit complete: {total_pe} neurons, 4 learning synapses")
 
+    def _build_sparse_expansion_circuit(self):
+        """Phase L16: Sparse Expansion Layer (Mushroom Body / DG)
+
+        생물학적 근거:
+        - 초파리 Mushroom Body: 희소한 Kenyon Cell 표현 (Aso et al., 2014)
+        - 해마 DG: pattern separation via sparse coding (Leutgeb et al., 2007)
+        - 적은 입력 → 많은 KC (expansion) → WTA로 희소화 → D1/D2 학습
+        """
+        from pygenn import init_var, init_weight_update, init_postsynaptic, init_sparse_connectivity
+
+        n_kc = self.config.n_kc_per_side
+        n_inh = self.config.n_kc_inhibitory_per_side
+
+        print(f"  Phase L16: Building Sparse Expansion (KC)...")
+
+        # === KC LIF parameters (high C for sparse firing) ===
+        kc_params = {
+            "C": 30.0, "TauM": 20.0, "Vrest": -65.0,
+            "Vreset": -65.0, "Vthresh": -50.0,
+            "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        kc_init = {"V": -65.0, "RefracTime": 0.0}
+
+        # KC inhibitory (low C for fast response)
+        kc_inh_params = {
+            "C": 1.0, "TauM": 20.0, "Vrest": -65.0,
+            "Vreset": -65.0, "Vthresh": -50.0,
+            "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+
+        # === A) KC Populations ===
+        self.kc_left = self.model.add_neuron_population(
+            "kc_left", n_kc, "LIF", kc_params, kc_init)
+        self.kc_right = self.model.add_neuron_population(
+            "kc_right", n_kc, "LIF", kc_params, kc_init)
+        self.kc_inhibitory_left = self.model.add_neuron_population(
+            "kc_inhibitory_left", n_inh, "LIF", kc_inh_params, kc_init)
+        self.kc_inhibitory_right = self.model.add_neuron_population(
+            "kc_inhibitory_right", n_inh, "LIF", kc_inh_params, kc_init)
+
+        self.kc_left.spike_recording_enabled = True
+        self.kc_right.spike_recording_enabled = True
+        self.kc_inhibitory_left.spike_recording_enabled = True
+        self.kc_inhibitory_right.spike_recording_enabled = True
+
+        # === B) Input synapses: 8 SPARSE static ===
+        # food_eye → KC
+        self._create_static_synapse(
+            "food_eye_l_to_kc_l", self.food_eye_left, self.kc_left,
+            self.config.kc_food_eye_weight, sparsity=self.config.kc_food_eye_sparsity)
+        self._create_static_synapse(
+            "food_eye_r_to_kc_r", self.food_eye_right, self.kc_right,
+            self.config.kc_food_eye_weight, sparsity=self.config.kc_food_eye_sparsity)
+
+        # good_food_eye → KC
+        self._create_static_synapse(
+            "good_food_eye_l_to_kc_l", self.good_food_eye_left, self.kc_left,
+            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+        self._create_static_synapse(
+            "good_food_eye_r_to_kc_r", self.good_food_eye_right, self.kc_right,
+            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+
+        # bad_food_eye → KC
+        self._create_static_synapse(
+            "bad_food_eye_l_to_kc_l", self.bad_food_eye_left, self.kc_left,
+            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+        self._create_static_synapse(
+            "bad_food_eye_r_to_kc_r", self.bad_food_eye_right, self.kc_right,
+            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+
+        # it_food_category → KC (bilateral)
+        self._create_static_synapse(
+            "it_food_to_kc_l", self.it_food_category, self.kc_left,
+            self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
+        self._create_static_synapse(
+            "it_food_to_kc_r", self.it_food_category, self.kc_right,
+            self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
+
+        # === C) WTA synapses: 4 SPARSE static ===
+        self._create_static_synapse(
+            "kc_l_to_kc_inh_l", self.kc_left, self.kc_inhibitory_left,
+            self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
+        self._create_static_synapse(
+            "kc_inh_l_to_kc_l", self.kc_inhibitory_left, self.kc_left,
+            self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+        self._create_static_synapse(
+            "kc_r_to_kc_inh_r", self.kc_right, self.kc_inhibitory_right,
+            self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
+        self._create_static_synapse(
+            "kc_inh_r_to_kc_r", self.kc_inhibitory_right, self.kc_right,
+            self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+
+        # === D) Output learning synapses: 4 SPARSE (KC → D1/D2) ===
+        kc_d1_w = self.config.kc_to_d1_init_w
+        kc_sp = self.config.kc_to_d1_sparsity
+
+        self.kc_to_d1_l = self.model.add_synapse_population(
+            "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_to_d1_r = self.model.add_synapse_population(
+            "kc_r_to_d1_r", "SPARSE", self.kc_right, self.d1_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_to_d2_l = self.model.add_synapse_population(
+            "kc_l_to_d2_l", "SPARSE", self.kc_left, self.d2_left,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_to_d2_r = self.model.add_synapse_population(
+            "kc_r_to_d2_r", "SPARSE", self.kc_right, self.d2_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+
+        # === E) Log ===
+        print(f"  Phase L16: Sparse Expansion (KC)")
+        print(f"    KC: {n_kc}L + {n_kc}R = {n_kc*2} neurons")
+        print(f"    KC_Inh: {n_inh}L + {n_inh}R = {n_inh*2} neurons")
+        print(f"    Input: 8 SPARSE static, WTA: 4 SPARSE static")
+        print(f"    Output: 4 SPARSE learning (R-STDP/Anti-Hebb)")
+        print(f"    Individual learning connections: ~{int(n_kc * 100 * 0.05 * 4)}")
+
     def _build_it_bg_circuit(self):
         """Phase L9: IT Cortex → BG (피질 하향 연결)
 
@@ -8919,6 +9157,13 @@ class ForagerBrain:
         if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
             agency_pe_spikes = len(self.agency_pe.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
+        # Phase L16: KC 스파이크 카운팅
+        kc_l_spikes = 0
+        kc_r_spikes = 0
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_left'):
+            kc_l_spikes = len(self.kc_left.spike_recording_data[0][0])
+            kc_r_spikes = len(self.kc_right.spike_recording_data[0][0])
+
         # Phase L6 스파이크 카운팅 (Prediction Error)
         if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
             pe_food_l_spikes = len(self.pe_food_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
@@ -9028,6 +9273,29 @@ class ForagerBrain:
                 tm = self.config.rstdp_trace_max
                 self.nac_trace_l = min(self.nac_trace_l * td + food_l_active * nac_active, tm)
                 self.nac_trace_r = min(self.nac_trace_r * td + food_r_active * nac_active, tm)
+
+            # Phase L16: KC rate & trace
+            if self.config.sparse_expansion_enabled and hasattr(self, 'kc_left'):
+                n_kc = self.config.n_kc_per_side
+                kc_l_rate = kc_l_spikes / max(n_kc * 10, 1)  # 10 timesteps
+                kc_r_rate = kc_r_spikes / max(n_kc * 10, 1)
+                self.last_kc_l_rate = kc_l_rate
+                self.last_kc_r_rate = kc_r_rate
+
+                # KC→D1 trace (pre×post)
+                kc_l_active = 1.0 if kc_l_rate > 0.03 else 0.0
+                kc_r_active = 1.0 if kc_r_rate > 0.03 else 0.0
+                d1_l_active_kc = 1.0 if d1_l_rate > 0.05 else 0.0
+                d1_r_active_kc = 1.0 if d1_r_rate > 0.05 else 0.0
+
+                trace_decay = self.config.rstdp_trace_decay
+                trace_max = self.config.rstdp_trace_max
+                self.kc_d1_trace_l = min(self.kc_d1_trace_l * trace_decay + kc_l_active * d1_l_active_kc, trace_max)
+                self.kc_d1_trace_r = min(self.kc_d1_trace_r * trace_decay + kc_r_active * d1_r_active_kc, trace_max)
+
+                # KC→D2 trace (pre-synaptic only)
+                self.kc_d2_trace_l = min(self.kc_d2_trace_l * trace_decay + kc_l_active, trace_max)
+                self.kc_d2_trace_r = min(self.kc_d2_trace_r * trace_decay + kc_r_active, trace_max)
 
         # Phase L12: GW rate + broadcast
         gw_food_l_rate = gw_food_r_rate = gw_safety_rate = 0.0
@@ -9911,6 +10179,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_predator: bool = False,
                 no_agency: bool = False,
                 no_narrative_self: bool = False,
+                no_sparse_expansion: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -9983,6 +10252,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_narrative_self:
         brain_config.narrative_self_enabled = False
         print("  [!] Phase L15 (Narrative Self) DISABLED")
+    if no_sparse_expansion:
+        brain_config.sparse_expansion_enabled = False
+        print("  [!] Phase L16 (Sparse Expansion) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -10608,6 +10880,21 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"    Body→Narrative avg_w: {bn_avg:.3f}, max_w: {bn_max:.3f}")
             print(f"    Self_Narrative rate: {brain.last_self_narrative_rate:.3f}")
 
+        # Phase L16: Sparse Expansion (KC) 현황
+        if brain_config.sparse_expansion_enabled and hasattr(brain, 'kc_to_d1_l'):
+            print(f"  --- Phase L16: Sparse Expansion (KC) ---")
+            print(f"    KC rate: L={brain.last_kc_l_rate:.3f} R={brain.last_kc_r_rate:.3f}")
+            brain.kc_to_d1_l.vars["g"].pull_from_device()
+            kc_d1_l_w = float(np.nanmean(brain.kc_to_d1_l.vars["g"].values))
+            brain.kc_to_d1_r.vars["g"].pull_from_device()
+            kc_d1_r_w = float(np.nanmean(brain.kc_to_d1_r.vars["g"].values))
+            brain.kc_to_d2_l.vars["g"].pull_from_device()
+            kc_d2_l_w = float(np.nanmean(brain.kc_to_d2_l.vars["g"].values))
+            brain.kc_to_d2_r.vars["g"].pull_from_device()
+            kc_d2_r_w = float(np.nanmean(brain.kc_to_d2_r.vars["g"].values))
+            print(f"    KC→D1 avg_w: L={kc_d1_l_w:.3f} R={kc_d1_r_w:.3f}")
+            print(f"    KC→D2 avg_w: L={kc_d2_l_w:.3f} R={kc_d2_r_w:.3f}")
+
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
             print(f"  --- Phase L5: Cortical R-STDP ---")
@@ -10924,6 +11211,8 @@ if __name__ == "__main__":
                        help="Disable Phase L14 (Agency Detection)")
     parser.add_argument("--no-narrative-self", action="store_true",
                        help="Disable Phase L15 (Narrative Self)")
+    parser.add_argument("--no-sparse-expansion", action="store_true",
+                       help="Disable Phase L16 (Sparse Expansion Layer)")
     # Data logging for dashboard
     parser.add_argument("--log-data", action="store_true",
                        help="Enable data logging for dashboard visualization")
@@ -10958,6 +11247,7 @@ if __name__ == "__main__":
         no_predator=args.no_predator,
         no_agency=args.no_agency,
         no_narrative_self=args.no_narrative_self,
+        no_sparse_expansion=args.no_sparse_expansion,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
