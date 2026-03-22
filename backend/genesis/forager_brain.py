@@ -144,7 +144,11 @@ class ForagerBrainConfig:
     # Phase 1 회로 (벽 회피, 음식 추적)
     wall_push_weight: float = 60.0           # 벽 회피 (Push)
     wall_pull_weight: float = -40.0          # 벽 회피 (Pull)
-    food_weight: float = 35.0                # 음식 추적 (동측) Phase L2: 25→35 (BG D1/D2 + Reward Freq 균형)
+    food_weight: float = 35.0                # Legacy: perceptual_learning 비활성 시에만 사용
+    # 학습 기반 음식 접근 (food_eye 35.0 하드코딩 대체)
+    food_approach_init_w: float = 25.0      # good_food_eye→Motor 초기 가중치 (강한 접근 본능)
+    food_approach_w_max: float = 40.0       # 최대 가중치 (충분히 높게 — 학습으로 도달)
+    food_approach_eta: float = 0.001        # 학습률 (좋은 음식 먹으면 강화)
 
     # === Phase 2b 시냅스 가중치 (신규) ===
     # Pain → LA (무조건 반사, 고정)
@@ -1830,6 +1834,11 @@ class ForagerBrain:
                         self.it_food_to_d2_l, self.it_food_to_d2_r]:
                 syn.pull_connectivity_from_device()
 
+        # Food Approach SPARSE connectivity pull
+        if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
+            self.good_food_to_motor_l.pull_connectivity_from_device()
+            self.good_food_to_motor_r.pull_connectivity_from_device()
+
         # Phase L16: KC→D1/D2 SPARSE connectivity pull
         if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
             self.kc_to_d1_l.pull_connectivity_from_device()
@@ -2133,16 +2142,41 @@ class ForagerBrain:
         print(f"    Wall Push: {self.config.wall_push_weight}")
         print(f"    Wall Pull: {self.config.wall_pull_weight}")
 
-        # Food tracking: Ipsilateral (동측)
-        # Food_L → Motor_L (같은 방향으로)
-        self._create_static_synapse(
-            "food_left_motor_left", self.food_eye_left, self.motor_left,
-            self.config.food_weight, sparsity=0.15)
-        self._create_static_synapse(
-            "food_right_motor_right", self.food_eye_right, self.motor_right,
-            self.config.food_weight, sparsity=0.15)
-
-        print(f"    Food Ipsi: {self.config.food_weight}")
+        # Food tracking: 학습 기반 접근
+        # food_eye(무차별) → 약한 탐색 보조 (5.0, static)
+        # good_food_eye(선별) → 강한 접근 (R-STDP, 학습으로 성장)
+        if self.config.perceptual_learning_enabled:
+            # food_eye: 약한 무차별 탐색 (모든 음식 방향으로 약간 끌림)
+            food_explore_w = 10.0
+            self._create_static_synapse(
+                "food_left_motor_left", self.food_eye_left, self.motor_left,
+                food_explore_w, sparsity=0.15)
+            self._create_static_synapse(
+                "food_right_motor_right", self.food_eye_right, self.motor_right,
+                food_explore_w, sparsity=0.15)
+            # good_food_eye: 학습 기반 접근 (도파민으로 강화)
+            fa_w = self.config.food_approach_init_w
+            self.good_food_to_motor_l = self.model.add_synapse_population(
+                "good_food_motor_left", "SPARSE", self.good_food_eye_left, self.motor_left,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": fa_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": 0.15}))
+            self.good_food_to_motor_r = self.model.add_synapse_population(
+                "good_food_motor_right", "SPARSE", self.good_food_eye_right, self.motor_right,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": fa_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": 0.15}))
+            print(f"    Food Explore: food_eye→Motor {food_explore_w} (static, weak)")
+            print(f"    Food Approach: good_food_eye→Motor R-STDP (init={fa_w}, learnable)")
+        else:
+            # perceptual_learning 비활성 시 기존 방식 유지 (호환)
+            self._create_static_synapse(
+                "food_left_motor_left", self.food_eye_left, self.motor_left,
+                self.config.food_weight, sparsity=0.15)
+            self._create_static_synapse(
+                "food_right_motor_right", self.food_eye_right, self.motor_right,
+                self.config.food_weight, sparsity=0.15)
+            print(f"    Food Ipsi: {self.config.food_weight} (static, legacy)")
 
     def _build_motor_wta(self):
         """모터 WTA: 좌우 모터 경쟁"""
@@ -4819,6 +4853,34 @@ class ForagerBrain:
                     d2_syn.vars["g"].push_to_device()
                 results[f"kc_d2_{side}"] = float(np.nanmean(w))
 
+        # === Food Approach R-STDP (good_food_eye → Motor, 학습 기반 접근) ===
+        if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
+            fa_eta = self.config.food_approach_eta
+            fa_w_max = self.config.food_approach_w_max
+            fa_w_rest = self.config.food_approach_init_w
+
+            for side, syn in [
+                ("l", self.good_food_to_motor_l),
+                ("r", self.good_food_to_motor_r),
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values.copy()
+                if apply_decay:
+                    w -= (decay * 10) * (w - fa_w_rest)
+                    need_update = True
+                if has_dopamine and self.rstdp_trace_l + self.rstdp_trace_r > 0.01:
+                    # 도파민 양수: 좋은 음식 → 접근 강화
+                    # 도파민 음수: 나쁜 음식 → 접근 약화 (dip이 자동 반전)
+                    trace = self.rstdp_trace_l if side == "l" else self.rstdp_trace_r
+                    w += fa_eta * trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    np.clip(w, 0.0, fa_w_max, out=w)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                results[f"food_approach_{side}"] = float(np.nanmean(w))
+
         # === Phase L10: NAc R-STDP (food_eye → nac_value) ===
         if self.config.td_learning_enabled:
             nac_eta = self.config.nac_rstdp_eta
@@ -5176,6 +5238,13 @@ class ForagerBrain:
             self.kc_to_d2_r.vars["g"].pull_from_device()
             weights["kc_d2_right"] = self.kc_to_d2_r.vars["g"].values.copy()
 
+        # Food Approach (2 SPARSE synapses)
+        if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
+            self.good_food_to_motor_l.vars["g"].pull_from_device()
+            weights["food_approach_left"] = self.good_food_to_motor_l.vars["g"].values.copy()
+            self.good_food_to_motor_r.vars["g"].pull_from_device()
+            weights["food_approach_right"] = self.good_food_to_motor_r.vars["g"].values.copy()
+
         # Phase L5: 피질 R-STDP (8 SPARSE synapses)
         if self.config.perceptual_learning_enabled and self.config.it_enabled:
             cortical_synapses = {
@@ -5351,6 +5420,16 @@ class ForagerBrain:
                 ("kc_d1_right", self.kc_to_d1_r),
                 ("kc_d2_left", self.kc_to_d2_l),
                 ("kc_d2_right", self.kc_to_d2_r),
+            ]:
+                if key in data:
+                    self._load_sparse_weights(syn, data[key])
+                    loaded += 1
+
+        # Food Approach (SPARSE)
+        if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
+            for key, syn in [
+                ("food_approach_left", self.good_food_to_motor_l),
+                ("food_approach_right", self.good_food_to_motor_r),
             ]:
                 if key in data:
                     self._load_sparse_weights(syn, data[key])
