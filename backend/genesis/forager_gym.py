@@ -147,8 +147,8 @@ class ForagerConfig:
     sensor_jitter_std: float = 0.03          # σ for multiplicative ray noise (±3%)
 
     # === Environment E1: Obstacles (정적 장애물) ===
-    obstacles_enabled: bool = False  # wall_rays 간섭 문제로 비활성화, 별도 obstacle_rays 필요
-    n_obstacles: int = 1
+    obstacles_enabled: bool = True   # 별도 obstacle_rays로 분리 완료
+    n_obstacles: int = 3
     obstacle_min_size: float = 15.0
     obstacle_max_size: float = 30.0
 
@@ -1260,6 +1260,7 @@ class ForagerGym:
         """관찰 반환"""
         food_rays_l, food_rays_r = self._cast_food_rays()
         wall_rays_l, wall_rays_r = self._cast_wall_rays()
+        obstacle_rays_l, obstacle_rays_r = self._cast_obstacle_rays()
 
         # Phase L5: 타입별 음식 레이캐스트
         if self.config.n_food_types >= 2:
@@ -1340,8 +1341,10 @@ class ForagerGym:
             jitter_std = self.config.sensor_jitter_std
             n_half = self.config.n_rays // 2
             # pain_rays 제외: Push-Pull(60/-40)은 정밀한 L/R 차이에 의존
+            # obstacle_rays는 약한 가중치(20/-12)이므로 jitter 적용 가능
             for rays in [food_rays_l, food_rays_r, wall_rays_l, wall_rays_r,
-                         good_food_rays_l, good_food_rays_r, bad_food_rays_l, bad_food_rays_r]:
+                         good_food_rays_l, good_food_rays_r, bad_food_rays_l, bad_food_rays_r,
+                         obstacle_rays_l, obstacle_rays_r]:
                 rays *= (1.0 + np.random.normal(0, jitter_std, rays.shape))
                 np.clip(rays, 0.0, 1.0, out=rays)
 
@@ -1407,6 +1410,10 @@ class ForagerGym:
             "predator_rays_right": predator_rays_r,
             "predator_danger": predator_danger,
             "predator_contact": float(getattr(self, '_predator_contact', False)),
+
+            # Obstacle (별도 레이, wall_rays에서 분리)
+            "obstacle_rays_left": obstacle_rays_l,
+            "obstacle_rays_right": obstacle_rays_r,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1528,11 +1535,12 @@ class ForagerGym:
         return rays_left, rays_right
 
     def _cast_single_wall_ray(self, angle: float) -> float:
-        """단일 레이로 벽/장애물까지 거리 (0=멀리, 1=매우가까움)"""
+        """단일 레이로 맵 경계 벽까지 거리 (0=멀리, 1=매우가까움)
+        장애물은 별도 _cast_obstacle_rays()에서 처리."""
         cos_a = np.cos(angle)
         sin_a = np.sin(angle)
 
-        # 각 벽까지 거리 계산
+        # 각 벽까지 거리 계산 (맵 경계만)
         distances = []
 
         # 오른쪽 벽
@@ -1556,42 +1564,80 @@ class ForagerGym:
             if d > 0:
                 distances.append(d)
 
-        # === E1: 장애물 AABB와 ray intersection ===
-        if self.config.obstacles_enabled and self.obstacles:
-            ox_pos = self.agent_x
-            oy_pos = self.agent_y
-            for bx, by, bw, bh in self.obstacles:
-                # Ray-AABB intersection (slab method)
-                # t_min, t_max for each axis
-                if abs(cos_a) > 1e-8:
-                    t1 = (bx - ox_pos) / cos_a
-                    t2 = (bx + bw - ox_pos) / cos_a
-                    if t1 > t2:
-                        t1, t2 = t2, t1
+        if not distances:
+            return 0.0
+
+        min_dist = min(distances)
+        if min_dist >= self.config.view_range:
+            return 0.0
+        return 1.0 - (min_dist / self.config.view_range)
+
+    def _cast_obstacle_rays(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        장애물 전용 레이캐스트 (L/R 분리)
+        맵 경계 벽은 무시, 장애물 AABB만 감지.
+
+        Returns:
+            (left_rays, right_rays): 각각 n_rays//2 크기
+        """
+        n_half = self.config.n_rays // 2
+        rays_left = np.zeros(n_half)
+        rays_right = np.zeros(n_half)
+
+        if not self.config.obstacles_enabled or not self.obstacles:
+            return rays_left, rays_right
+
+        for i in range(n_half):
+            # Left rays (-π/2 ~ 0)
+            angle_l = self.agent_angle - np.pi/2 + (i / n_half) * np.pi/2
+            rays_left[i] = self._cast_single_obstacle_ray(angle_l)
+
+            # Right rays (0 ~ π/2)
+            angle_r = self.agent_angle + (i / n_half) * np.pi/2
+            rays_right[i] = self._cast_single_obstacle_ray(angle_r)
+
+        return rays_left, rays_right
+
+    def _cast_single_obstacle_ray(self, angle: float) -> float:
+        """단일 레이로 장애물까지 거리 (0=멀리, 1=매우가까움)
+        맵 경계 벽은 무시, 장애물 AABB만 감지."""
+        cos_a = np.cos(angle)
+        sin_a = np.sin(angle)
+        ox_pos = self.agent_x
+        oy_pos = self.agent_y
+        distances = []
+
+        for bx, by, bw, bh in self.obstacles:
+            # Ray-AABB intersection (slab method)
+            if abs(cos_a) > 1e-8:
+                t1 = (bx - ox_pos) / cos_a
+                t2 = (bx + bw - ox_pos) / cos_a
+                if t1 > t2:
+                    t1, t2 = t2, t1
+            else:
+                if bx <= ox_pos <= bx + bw:
+                    t1, t2 = -1e30, 1e30
                 else:
-                    if bx <= ox_pos <= bx + bw:
-                        t1, t2 = -1e30, 1e30
-                    else:
-                        continue  # ray parallel and outside
+                    continue  # ray parallel and outside
 
-                if abs(sin_a) > 1e-8:
-                    t3 = (by - oy_pos) / sin_a
-                    t4 = (by + bh - oy_pos) / sin_a
-                    if t3 > t4:
-                        t3, t4 = t4, t3
+            if abs(sin_a) > 1e-8:
+                t3 = (by - oy_pos) / sin_a
+                t4 = (by + bh - oy_pos) / sin_a
+                if t3 > t4:
+                    t3, t4 = t4, t3
+            else:
+                if by <= oy_pos <= by + bh:
+                    t3, t4 = -1e30, 1e30
                 else:
-                    if by <= oy_pos <= by + bh:
-                        t3, t4 = -1e30, 1e30
-                    else:
-                        continue
+                    continue
 
-                t_enter = max(t1, t3)
-                t_exit = min(t2, t4)
+            t_enter = max(t1, t3)
+            t_exit = min(t2, t4)
 
-                if t_enter < t_exit and t_exit > 0:
-                    hit_t = t_enter if t_enter > 0 else 0.0
-                    if hit_t > 0:
-                        distances.append(hit_t)
+            if t_enter < t_exit and t_exit > 0:
+                hit_t = t_enter if t_enter > 0 else 0.0
+                if hit_t > 0:
+                    distances.append(hit_t)
 
         if not distances:
             return 0.0

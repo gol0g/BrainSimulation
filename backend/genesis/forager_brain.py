@@ -79,6 +79,11 @@ class ForagerBrainConfig:
     # === SENSORY (Phase 1 재사용) ===
     n_food_eye: int = 800       # Food detection (L: 400, R: 400)
     n_wall_eye: int = 400       # Wall detection (L: 200, R: 200)
+    # Obstacle detection (wall_rays에서 분리, 약한 회피)
+    obstacle_eye_enabled: bool = True
+    n_obstacle_eye: int = 400   # Obstacle detection (L: 200, R: 200)
+    obstacle_push_weight: float = 20.0   # wall(60)보다 약함
+    obstacle_pull_weight: float = -12.0  # wall(-40)보다 약함
 
     # === HYPOTHALAMUS (Phase 2a 신규) ===
     # 이중 센서 방식: Low와 High 분리
@@ -1173,6 +1178,8 @@ class ForagerBrainConfig:
                 self.n_low_energy_sensor + self.n_high_energy_sensor +
                 self.n_hunger_drive + self.n_satiety_drive +
                 self.n_motor_left + self.n_motor_right)
+        if self.obstacle_eye_enabled:
+            base += self.n_obstacle_eye
         if self.amygdala_enabled:
             base += (self.n_pain_eye + self.n_danger_sensor +
                      self.n_lateral_amygdala + self.n_central_amygdala +
@@ -1415,6 +1422,15 @@ class ForagerBrain:
             "wall_eye_right", n_wall_half, sensory_lif_model, sensory_params, sensory_init)
 
         print(f"  Sensory: Food_L/R({n_food_half}x2) + Wall_L/R({n_wall_half}x2)")
+
+        # === Obstacle Eye (wall_rays에서 분리된 장애물 감지) ===
+        if self.config.obstacle_eye_enabled:
+            n_obs_half = self.config.n_obstacle_eye // 2
+            self.obstacle_eye_left = self.model.add_neuron_population(
+                "obstacle_eye_left", n_obs_half, sensory_lif_model, sensory_params, sensory_init)
+            self.obstacle_eye_right = self.model.add_neuron_population(
+                "obstacle_eye_right", n_obs_half, sensory_lif_model, sensory_params, sensory_init)
+            print(f"  Obstacle Eye: L/R({n_obs_half}x2) [Push={self.config.obstacle_push_weight}, Pull={self.config.obstacle_pull_weight}]")
 
         # === Phase L5: Good/Bad Food Eye (지각 학습용) ===
         if self.config.perceptual_learning_enabled:
@@ -1887,6 +1903,11 @@ class ForagerBrain:
         for pop in always_on:
             pop.spike_recording_enabled = True
 
+        # Obstacle Eye
+        if self.config.obstacle_eye_enabled:
+            self.obstacle_eye_left.spike_recording_enabled = True
+            self.obstacle_eye_right.spike_recording_enabled = True
+
         # Phase 2b: Amygdala
         if self.config.amygdala_enabled:
             for pop in [self.lateral_amygdala, self.central_amygdala, self.fear_response]:
@@ -2177,6 +2198,26 @@ class ForagerBrain:
                 "food_right_motor_right", self.food_eye_right, self.motor_right,
                 self.config.food_weight, sparsity=0.15)
             print(f"    Food Ipsi: {self.config.food_weight} (static, legacy)")
+
+        # === Obstacle avoidance: Push-Pull (약한 가중치) ===
+        if self.config.obstacle_eye_enabled:
+            print("  Building Obstacle avoidance circuit...")
+            # Obstacle_L → Motor_R (Push)
+            self._create_static_synapse(
+                "obstacle_left_motor_right", self.obstacle_eye_left, self.motor_right,
+                self.config.obstacle_push_weight, sparsity=0.15)
+            self._create_static_synapse(
+                "obstacle_right_motor_left", self.obstacle_eye_right, self.motor_left,
+                self.config.obstacle_push_weight, sparsity=0.15)
+            # Obstacle_L → Motor_L (Pull - inhibit)
+            self._create_static_synapse(
+                "obstacle_left_motor_left_inhib", self.obstacle_eye_left, self.motor_left,
+                self.config.obstacle_pull_weight, sparsity=0.15)
+            self._create_static_synapse(
+                "obstacle_right_motor_right_inhib", self.obstacle_eye_right, self.motor_right,
+                self.config.obstacle_pull_weight, sparsity=0.15)
+            print(f"    Obstacle Push: {self.config.obstacle_push_weight} (weak, wall={self.config.wall_push_weight})")
+            print(f"    Obstacle Pull: {self.config.obstacle_pull_weight} (weak, wall={self.config.wall_pull_weight})")
 
     def _build_motor_wta(self):
         """모터 WTA: 좌우 모터 경쟁"""
@@ -8569,6 +8610,16 @@ class ForagerBrain:
         self.wall_eye_right.vars["I_input"].view[:] = wall_r * wall_sensitivity
         self.wall_eye_left.vars["I_input"].push_to_device()
         self.wall_eye_right.vars["I_input"].push_to_device()
+
+        # Obstacle Eye 입력 (wall에서 분리된 약한 회피)
+        if self.config.obstacle_eye_enabled:
+            obs_l = np.mean(observation.get("obstacle_rays_left", np.zeros(8)))
+            obs_r = np.mean(observation.get("obstacle_rays_right", np.zeros(8)))
+            obstacle_sensitivity = 40.0
+            self.obstacle_eye_left.vars["I_input"].view[:] = obs_l * obstacle_sensitivity
+            self.obstacle_eye_right.vars["I_input"].view[:] = obs_r * obstacle_sensitivity
+            self.obstacle_eye_left.vars["I_input"].push_to_device()
+            self.obstacle_eye_right.vars["I_input"].push_to_device()
 
         # === Phase L5: Good/Bad Food Eye 입력 ===
         good_food_l = 0.0
