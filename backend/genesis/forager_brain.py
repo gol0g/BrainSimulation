@@ -82,8 +82,8 @@ class ForagerBrainConfig:
     # Obstacle detection (wall_rays에서 분리, 약한 회피)
     obstacle_eye_enabled: bool = True
     n_obstacle_eye: int = 400   # Obstacle detection (L: 200, R: 200)
-    obstacle_push_weight: float = 20.0   # wall(60)보다 약함
-    obstacle_pull_weight: float = -12.0  # wall(-40)보다 약함
+    obstacle_push_weight: float = 8.0    # 매우 약한 힌트 수준 (wall 60의 13%)
+    obstacle_pull_weight: float = -4.0   # 부드러운 회피 (wall -40의 10%)
 
     # === HYPOTHALAMUS (Phase 2a 신규) ===
     # 이중 센서 방식: Low와 High 분리

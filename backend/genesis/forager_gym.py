@@ -147,10 +147,10 @@ class ForagerConfig:
     sensor_jitter_std: float = 0.03          # σ for multiplicative ray noise (±3%)
 
     # === Environment E1: Obstacles (정적 장애물) ===
-    obstacles_enabled: bool = True   # 별도 obstacle_rays로 분리 완료
-    n_obstacles: int = 3
-    obstacle_min_size: float = 15.0
-    obstacle_max_size: float = 30.0
+    obstacles_enabled: bool = False  # 400x400 맵에서는 이동 공간 부족. 맵 확장 후 활성화
+    n_obstacles: int = 1
+    obstacle_min_size: float = 10.0
+    obstacle_max_size: float = 20.0
 
     # 시뮬레이션
     max_steps: int = 3000
