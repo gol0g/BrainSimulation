@@ -517,6 +517,12 @@ class ForagerGym:
         self.npc_agents: List[NPCAgent] = []
         self.npc_food_stolen: int = 0                 # NPC가 빼앗은 음식 수
 
+        # Learning graph (real-time weight visualization)
+        self._weight_history: Dict[str, List[float]] = {}
+        self._weight_sample_interval: int = 50  # 50 steps per sample
+        self._selectivity_history: List[float] = []
+        self._food_eaten_types: List[int] = []  # 0=good, 1=bad
+
         # Pygame (lazy init)
         self.screen = None
         self.clock = None
@@ -574,6 +580,11 @@ class ForagerGym:
         self.patch_visits = [0] * self.config.n_patches
         self.patch_food_eaten = [0] * self.config.n_patches
         self.was_in_patch = [False] * self.config.n_patches
+
+        # Learning graph reset
+        self._weight_history = {}
+        self._selectivity_history = []
+        self._food_eaten_types = []
 
         # Phase 17: Agent vocalization state
         self._agent_call_type = 0
@@ -702,6 +713,12 @@ class ForagerGym:
         food_eaten, food_type = self._check_food_collision()
         if food_eaten:
             self.total_food_eaten += 1
+            # Track food type for selectivity graph
+            self._food_eaten_types.append(food_type)
+            if len(self._food_eaten_types) >= 10:
+                recent = self._food_eaten_types[-10:]
+                good = sum(1 for t in recent if t == 0)
+                self._selectivity_history.append(good / len(recent))
             # Phase L12: 위험 근접 보너스 (pain zone 근처에서 먹으면 +50%)
             danger_bonus = 1.0
             if self.config.danger_food_enabled:
@@ -2264,6 +2281,16 @@ class ForagerGym:
         """뇌 활성화 정보 설정 (시각화용)"""
         self.brain_info = brain_info
 
+        # Sample learning weights for graph
+        if self.steps % self._weight_sample_interval == 0:
+            lw = brain_info.get("learning_weights", {})
+            for name, val in lw.items():
+                if val is None or val == 0.0:
+                    continue
+                if name not in self._weight_history:
+                    self._weight_history[name] = []
+                self._weight_history[name].append(float(val))
+
     def render(self):
         """Pygame 렌더링"""
         if self.render_mode != "pygame":
@@ -2621,10 +2648,108 @@ class ForagerGym:
         # === 뇌 활성화 패널 (공간 배치형) ===
         self._render_brain_schematic(600, 0)
 
+        # === 학습 추이 그래프 (하단) ===
+        self._render_learning_graph(self.screen, 5, 460, 390, 170)
+
         pygame.display.flip()
         # SLOW 모드만 FPS 캡 (10fps), 나머지는 제한 없음
         if self._speed_idx == 0:
             self.clock.tick(10)
+
+    def _render_learning_graph(self, surface, x, y, width, height):
+        """실시간 학습 추이 미니 그래프 (시냅스 가중치 + 음식 선택성)"""
+        import pygame
+
+        has_weights = bool(self._weight_history)
+        has_selectivity = len(self._selectivity_history) >= 2
+
+        if not has_weights and not has_selectivity:
+            return
+
+        # 배경
+        pygame.draw.rect(surface, (20, 22, 20), (x, y, width, height))
+        pygame.draw.rect(surface, (60, 65, 60), (x, y, width, height), 1)
+
+        # 제목
+        graph_font = pygame.font.SysFont("consolas", 11)
+        title = graph_font.render("Learning Progress", True, (180, 180, 180))
+        surface.blit(title, (x + 5, y + 2))
+
+        # 그래프 영역 분할: 상단 = 가중치 (60%), 하단 = 선택성 (40%)
+        weight_gh = int((height - 35) * 0.6) if has_selectivity else (height - 35)
+        sel_gh = (height - 35) - weight_gh if has_selectivity else 0
+
+        gx = x + 5
+        gy_w = y + 18
+        gw = width - 10
+
+        colors = {
+            "D1_RSTDP": (100, 200, 100),   # green
+            "Hippo": (100, 150, 250),        # blue
+            "Garcia": (250, 100, 100),       # red
+            "KC_D1": (250, 200, 50),         # yellow
+        }
+
+        # --- Weight graph ---
+        if has_weights:
+            all_vals = [v for vals in self._weight_history.values() for v in vals]
+            if all_vals:
+                y_max = max(all_vals) * 1.1 + 0.1
+
+                for name, vals in self._weight_history.items():
+                    if len(vals) < 2:
+                        continue
+                    color = colors.get(name, (150, 150, 150))
+                    points = []
+                    for i, v in enumerate(vals):
+                        px = gx + int(i / max(len(vals) - 1, 1) * gw)
+                        py = gy_w + weight_gh - int(v / y_max * weight_gh)
+                        py = max(gy_w, min(gy_w + weight_gh, py))
+                        points.append((px, py))
+                    if len(points) >= 2:
+                        pygame.draw.lines(surface, color, False, points, 2)
+
+                # 범례 (가중치)
+                lx = gx
+                ly = gy_w + weight_gh + 1
+                for name, color in colors.items():
+                    if name in self._weight_history and self._weight_history[name]:
+                        val = self._weight_history[name][-1]
+                        label = graph_font.render(f"{name}:{val:.1f}", True, color)
+                        surface.blit(label, (lx, ly))
+                        lx += label.get_width() + 8
+
+        # --- Selectivity graph ---
+        if has_selectivity:
+            gy_s = gy_w + weight_gh + 16
+            sel_label = graph_font.render("Food Selectivity", True, (180, 180, 180))
+            surface.blit(sel_label, (gx, gy_s - 2))
+            gy_s += 12
+            sel_draw_h = sel_gh - 14
+
+            if sel_draw_h > 10:
+                # 0.5 baseline (dashed)
+                baseline_y = gy_s + sel_draw_h - int(0.5 * sel_draw_h)
+                for dash_x in range(gx, gx + gw, 8):
+                    pygame.draw.line(surface, (80, 80, 80),
+                                     (dash_x, baseline_y), (min(dash_x + 4, gx + gw), baseline_y), 1)
+
+                # Selectivity line
+                sel_color = (200, 180, 100)
+                points = []
+                for i, v in enumerate(self._selectivity_history):
+                    px = gx + int(i / max(len(self._selectivity_history) - 1, 1) * gw)
+                    py = gy_s + sel_draw_h - int(v * sel_draw_h)
+                    py = max(gy_s, min(gy_s + sel_draw_h, py))
+                    points.append((px, py))
+                if len(points) >= 2:
+                    pygame.draw.lines(surface, sel_color, False, points, 2)
+
+                # Current value
+                if self._selectivity_history:
+                    cur = self._selectivity_history[-1]
+                    val_label = graph_font.render(f"Sel:{cur:.2f}", True, sel_color)
+                    surface.blit(val_label, (gx + gw - val_label.get_width(), gy_s - 2))
 
     def _render_brain_schematic(self, x: int, y: int):
         """뇌 영역을 공간 배치하고 활성화 시 밝게 표시"""

@@ -1353,6 +1353,11 @@ class ForagerBrain:
         # Phase L15: Narrative Self state defaults
         self.prev_self_body_rate = 0.0  # For Δbody change detection
 
+        # Learning weight cache (for real-time graph in render)
+        self._last_rstdp_results = {}
+        self._last_hippo_avg_w = 0.0
+        self._last_garcia_avg_w = 0.0
+
         # Phase L16: Sparse Expansion (KC) state defaults
         if self.config.sparse_expansion_enabled:
             self.kc_d1_trace_l = 0.0
@@ -4597,7 +4602,9 @@ class ForagerBrain:
             return
 
         # R-STDP 가중치 업데이트 (감쇠 전, dopamine_level이 높을 때)
-        self._update_rstdp_weights()
+        rstdp_res = self._update_rstdp_weights()
+        if rstdp_res:
+            self._last_rstdp_results = rstdp_res
 
         self.dopamine_level *= self.config.dopamine_decay
 
@@ -4903,9 +4910,11 @@ class ForagerBrain:
                 self.place_to_food_memory_right.vars["g"].push_to_device()
                 side = "RIGHT"
 
+            avg_w = float(np.mean(weights))
+            self._last_hippo_avg_w = avg_w
             return {
                 "n_strengthened": n_strengthened,
-                "avg_weight": float(np.mean(weights)),
+                "avg_weight": avg_w,
                 "max_weight": float(np.max(weights)),
                 "side": side
             }
@@ -4928,10 +4937,12 @@ class ForagerBrain:
             self.place_to_food_memory.vars["g"].push_to_device()
 
             n_strengthened = np.sum(active_cells > 0.1)
+            avg_w = float(np.mean(weights))
+            self._last_hippo_avg_w = avg_w
 
             return {
                 "n_strengthened": int(n_strengthened),
-                "avg_weight": float(np.mean(weights)),
+                "avg_weight": avg_w,
                 "max_weight": float(np.max(weights))
             }
 
@@ -8361,6 +8372,11 @@ class ForagerBrain:
             results[f"avg_w_{side}"] = float(np.mean(weights))
             results[f"max_w_{side}"] = float(np.max(weights))
 
+        # Cache for real-time graph
+        avg_left = results.get("avg_w_left", 0.0)
+        avg_right = results.get("avg_w_right", 0.0)
+        self._last_garcia_avg_w = (avg_left + avg_right) / 2.0
+
         return results
 
     def add_experience(self, pos_x: float, pos_y: float, food_type: int,
@@ -10019,6 +10035,18 @@ class ForagerBrain:
 
             # 출력
             "angle_delta": angle_delta,
+
+            # 학습 가중치 (실시간 그래프용)
+            "learning_weights": {
+                "D1_RSTDP": (self._last_rstdp_results.get("rstdp_avg_w_left", 0.0)
+                             + self._last_rstdp_results.get("rstdp_avg_w_right", 0.0)) / 2.0
+                             if self._last_rstdp_results else 0.0,
+                "Hippo": self._last_hippo_avg_w,
+                "Garcia": self._last_garcia_avg_w,
+                "KC_D1": (self._last_rstdp_results.get("kc_d1_l", 0.0)
+                          + self._last_rstdp_results.get("kc_d1_r", 0.0)) / 2.0
+                          if self._last_rstdp_results else 0.0,
+            },
         }
 
         # === 7. 이상 감지 ===
