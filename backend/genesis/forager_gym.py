@@ -146,6 +146,12 @@ class ForagerConfig:
     sensor_jitter_enabled: bool = True
     sensor_jitter_std: float = 0.03          # σ for multiplicative ray noise (±3%)
 
+    # === Environment E1: Obstacles (정적 장애물) ===
+    obstacles_enabled: bool = False  # wall_rays 간섭 문제로 비활성화, 별도 obstacle_rays 필요
+    n_obstacles: int = 1
+    obstacle_min_size: float = 15.0
+    obstacle_max_size: float = 30.0
+
     # 시뮬레이션
     max_steps: int = 3000
 
@@ -163,10 +169,14 @@ class PredatorAgent:
         self.chase_steps = 0
         self.contact_steps = 0
 
-    def step(self, player_pos, map_w: float, map_h: float, config: 'ForagerConfig'):
+    def step(self, player_pos, map_w: float, map_h: float, config: 'ForagerConfig',
+             obstacles: Optional[List[Tuple[float, float, float, float]]] = None):
         px, py = player_pos
         dist = math.sqrt((self.x - px)**2 + (self.y - py)**2)
         player_in_nest = self._is_in_nest(px, py, config)
+
+        # 이동 전 위치 저장 (장애물 복원용)
+        pre_move_x, pre_move_y = self.x, self.y
 
         # 상태 전환 (히스테리시스: 시작 chase_range, 해제 1.5x)
         if self.state == "wander":
@@ -195,6 +205,20 @@ class PredatorAgent:
         if self.y != old_y:  # 상하 벽
             self.angle = -self.angle
             self._wander_timer = 0
+
+        # 장애물 충돌 (AABB-circle)
+        if obstacles:
+            for ox, oy, ow, oh in obstacles:
+                closest_x = max(ox, min(self.x, ox + ow))
+                closest_y = max(oy, min(self.y, oy + oh))
+                dx_o = self.x - closest_x
+                dy_o = self.y - closest_y
+                if dx_o * dx_o + dy_o * dy_o < self.radius * self.radius:
+                    self.x = pre_move_x
+                    self.y = pre_move_y
+                    self.angle += np.random.uniform(-0.5, 0.5)
+                    self._wander_timer = 0
+                    break
 
     def _chase(self, px: float, py: float, config: 'ForagerConfig'):
         target = math.atan2(py - self.y, px - self.x)
@@ -257,19 +281,21 @@ class NPCAgent:
         self.near_pain_zone = False         # pain zone 근접 여부
 
     def step(self, foods: list, player_pos: Tuple[float, float],
-             map_width: float, map_height: float, config: 'ForagerConfig'):
+             map_width: float, map_height: float, config: 'ForagerConfig',
+             obstacles: Optional[List[Tuple[float, float, float, float]]] = None):
         """NPC 행동 업데이트
 
         forager: 가장 가까운 음식 방향으로 이동 (70%), 랜덤 탐색 (30%)
         predator: 플레이어 추적
         """
         if self.behavior == "forager":
-            self._forager_step(foods, map_width, map_height, config)
+            self._forager_step(foods, map_width, map_height, config, obstacles)
         elif self.behavior == "predator":
             self._predator_step(player_pos, map_width, map_height, config)
 
     def _forager_step(self, foods: list, map_w: float, map_h: float,
-                      config: 'ForagerConfig'):
+                      config: 'ForagerConfig',
+                      obstacles: Optional[List[Tuple[float, float, float, float]]] = None):
         """음식 탐색 행동"""
         # 가장 가까운 음식 찾기
         best_dist = float('inf')
@@ -363,6 +389,19 @@ class NPCAgent:
         elif new_y > map_h - self.radius:
             new_y = map_h - self.radius
             self.angle = -self.angle
+
+        # 장애물 충돌 (AABB-circle)
+        if obstacles:
+            for ox, oy, ow, oh in obstacles:
+                closest_x = max(ox, min(new_x, ox + ow))
+                closest_y = max(oy, min(new_y, oy + oh))
+                dx = new_x - closest_x
+                dy = new_y - closest_y
+                if dx * dx + dy * dy < self.radius * self.radius:
+                    new_x = self.x
+                    new_y = self.y
+                    self.angle += np.random.uniform(-0.5, 0.5)
+                    break
 
         self.x = new_x
         self.y = new_y
@@ -471,6 +510,9 @@ class ForagerGym:
         self.was_in_patch: List[bool] = []            # 이전 스텝 Patch 내 여부
         self._init_patches()
 
+        # === Environment E1: Obstacles ===
+        self.obstacles: List[Tuple[float, float, float, float]] = []  # (x, y, w, h)
+
         # === Phase 15: NPC 에이전트 ===
         self.npc_agents: List[NPCAgent] = []
         self.npc_food_stolen: int = 0                 # NPC가 빼앗은 음식 수
@@ -492,6 +534,9 @@ class ForagerGym:
 
         # Pain Zone 위치 생성 (음식 생성 전에 해야 food가 pain zone을 피함)
         self._generate_pain_zones()
+
+        # 장애물 생성 (음식 생성 전에 해야 food가 장애물을 피함)
+        self._generate_obstacles()
 
         # 음식 생성 (Field에만, Pain Zone 외부)
         self.foods = []
@@ -615,6 +660,23 @@ class ForagerGym:
         if _bounced:
             self.wall_bounces_total += 1
 
+        # === E1: 장애물 충돌 처리 (AABB-circle) ===
+        if self.config.obstacles_enabled and self.obstacles:
+            for ox, oy, ow, oh in self.obstacles:
+                # AABB-circle collision: 가장 가까운 점 찾기
+                closest_x = max(ox, min(new_x, ox + ow))
+                closest_y = max(oy, min(new_y, oy + oh))
+                dx = new_x - closest_x
+                dy = new_y - closest_y
+                dist_sq = dx * dx + dy * dy
+                r = self.config.agent_radius
+                if dist_sq < r * r:
+                    # 충돌 → 이전 위치로 복원
+                    new_x = self.agent_x
+                    new_y = self.agent_y
+                    _bounced = True
+                    break
+
         self.agent_x = new_x
         self.agent_y = new_y
 
@@ -704,7 +766,8 @@ class ForagerGym:
         if self.config.social_enabled:
             for npc in self.npc_agents:
                 npc.step(self.foods, (self.agent_x, self.agent_y),
-                         self.config.width, self.config.height, self.config)
+                         self.config.width, self.config.height, self.config,
+                         obstacles=self.obstacles if self.config.obstacles_enabled else None)
                 # NPC 음식 경쟁
                 if npc.check_food_collision(self.foods, self.config,
                                             current_step=self.steps):
@@ -740,7 +803,8 @@ class ForagerGym:
         if self.config.predator_enabled and self.predators:
             for pred in self.predators:
                 pred.step((self.agent_x, self.agent_y),
-                          self.config.width, self.config.height, self.config)
+                          self.config.width, self.config.height, self.config,
+                          obstacles=self.obstacles if self.config.obstacles_enabled else None)
                 dist = math.sqrt((self.agent_x - pred.x)**2 + (self.agent_y - pred.y)**2)
                 if dist < self.config.predator_catch_radius:
                     self._predator_contact = True
@@ -894,6 +958,72 @@ class ForagerGym:
                 break
 
         self.pain_zones = zones
+
+    def _generate_obstacles(self):
+        """정적 장애물 생성 (매 에피소드 랜덤 배치)"""
+        if not self.config.obstacles_enabled:
+            self.obstacles = []
+            return
+
+        margin = 30.0
+        nest_cx, nest_cy = self.config.width / 2, self.config.height / 2
+        nest_half = self.config.nest_size / 2
+        gap = 20.0  # 장애물 간 최소 간격
+
+        obstacles = []
+        for _ in range(self.config.n_obstacles):
+            for _ in range(500):
+                w = np.random.uniform(self.config.obstacle_min_size,
+                                      self.config.obstacle_max_size)
+                h = np.random.uniform(self.config.obstacle_min_size,
+                                      self.config.obstacle_max_size)
+                x = np.random.uniform(margin, self.config.width - margin - w)
+                y = np.random.uniform(margin, self.config.height - margin - h)
+
+                # 둥지와 겹치지 않음 (중앙 100x100 + 마진)
+                nest_margin = 10
+                if (x + w > nest_cx - nest_half - nest_margin and
+                        x < nest_cx + nest_half + nest_margin and
+                        y + h > nest_cy - nest_half - nest_margin and
+                        y < nest_cy + nest_half + nest_margin):
+                    continue
+
+                # Pain Zone과 겹치지 않음
+                pain_overlap = False
+                for pz_x, pz_y in self.pain_zones:
+                    # AABB-circle: 장애물 AABB에서 pain zone 중심까지 최소 거리
+                    closest_x = max(x, min(pz_x, x + w))
+                    closest_y = max(y, min(pz_y, y + h))
+                    dist = math.sqrt((pz_x - closest_x)**2 + (pz_y - closest_y)**2)
+                    if dist < self.config.pain_zone_radius + 20:
+                        pain_overlap = True
+                        break
+                if pain_overlap:
+                    continue
+
+                # 다른 장애물과 겹치지 않음 (gap px 간격)
+                obs_overlap = False
+                for ox, oy, ow, oh in obstacles:
+                    # AABB-AABB 간격 체크
+                    if (x - gap < ox + ow and x + w + gap > ox and
+                            y - gap < oy + oh and y + h + gap > oy):
+                        obs_overlap = True
+                        break
+                if obs_overlap:
+                    continue
+
+                obstacles.append((x, y, w, h))
+                break
+
+        self.obstacles = obstacles
+
+    def _point_in_obstacle(self, px: float, py: float, margin: float = 0.0) -> bool:
+        """점이 장애물 내부(+마진)에 있는지 확인"""
+        for ox, oy, ow, oh in self.obstacles:
+            if (ox - margin <= px <= ox + ow + margin and
+                    oy - margin <= py <= oy + oh + margin):
+                return True
+        return False
 
     def _in_pain_zone(self) -> bool:
         """내부 원형 Pain Zone 내부인지 확인"""
@@ -1381,7 +1511,7 @@ class ForagerGym:
         return rays_left, rays_right
 
     def _cast_single_wall_ray(self, angle: float) -> float:
-        """단일 레이로 벽까지 거리 (0=멀리, 1=매우가까움)"""
+        """단일 레이로 벽/장애물까지 거리 (0=멀리, 1=매우가까움)"""
         cos_a = np.cos(angle)
         sin_a = np.sin(angle)
 
@@ -1408,6 +1538,43 @@ class ForagerGym:
             d = -self.agent_y / sin_a
             if d > 0:
                 distances.append(d)
+
+        # === E1: 장애물 AABB와 ray intersection ===
+        if self.config.obstacles_enabled and self.obstacles:
+            ox_pos = self.agent_x
+            oy_pos = self.agent_y
+            for bx, by, bw, bh in self.obstacles:
+                # Ray-AABB intersection (slab method)
+                # t_min, t_max for each axis
+                if abs(cos_a) > 1e-8:
+                    t1 = (bx - ox_pos) / cos_a
+                    t2 = (bx + bw - ox_pos) / cos_a
+                    if t1 > t2:
+                        t1, t2 = t2, t1
+                else:
+                    if bx <= ox_pos <= bx + bw:
+                        t1, t2 = -1e30, 1e30
+                    else:
+                        continue  # ray parallel and outside
+
+                if abs(sin_a) > 1e-8:
+                    t3 = (by - oy_pos) / sin_a
+                    t4 = (by + bh - oy_pos) / sin_a
+                    if t3 > t4:
+                        t3, t4 = t4, t3
+                else:
+                    if by <= oy_pos <= by + bh:
+                        t3, t4 = -1e30, 1e30
+                    else:
+                        continue
+
+                t_enter = max(t1, t3)
+                t_exit = min(t2, t4)
+
+                if t_enter < t_exit and t_exit > 0:
+                    hit_t = t_enter if t_enter > 0 else 0.0
+                    if hit_t > 0:
+                        distances.append(hit_t)
 
         if not distances:
             return 0.0
@@ -1564,9 +1731,13 @@ class ForagerGym:
                         if (x - oz_x)**2 + (y - oz_y)**2 < (pz_r + margin)**2:
                             in_zone = True
                             break
-                    if not in_zone:
-                        self.foods.append((x, y, food_type))
-                        break
+                    if in_zone:
+                        continue
+                    # 장애물 내부 제외
+                    if self._point_in_obstacle(x, y, self.config.food_radius):
+                        continue
+                    self.foods.append((x, y, food_type))
+                    break
                 else:
                     pass  # fall through to other spawn methods
                 if len(self.foods) >= self.config.n_food + n:
@@ -1595,9 +1766,12 @@ class ForagerGym:
                             if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
                                 in_zone = True
                                 break
-                        if not in_zone:
-                            self.foods.append((x, y, food_type))
-                            break
+                        if in_zone:
+                            continue
+                        if self._point_in_obstacle(x, y, self.config.food_radius):
+                            continue
+                        self.foods.append((x, y, food_type))
+                        break
                     continue
 
             # Phase L6: 클러스터 리스폰 (먹은 위치 근처에 60% 확률로 생성)
@@ -1620,10 +1794,13 @@ class ForagerGym:
                         if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
                             in_zone = True
                             break
-                    if not in_zone:
-                        self.foods.append((x, y, food_type))
-                        self._last_eaten_pos = None
-                        break
+                    if in_zone:
+                        continue
+                    if self._point_in_obstacle(x, y, self.config.food_radius):
+                        continue
+                    self.foods.append((x, y, food_type))
+                    self._last_eaten_pos = None
+                    break
                 else:
                     self._last_eaten_pos = None  # 클러스터 실패 → 랜덤 폴백
                     # fall through to random spawn below
@@ -1645,9 +1822,13 @@ class ForagerGym:
                     if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
                         in_zone = True
                         break
-                if not in_zone:
-                    self.foods.append((x, y, food_type))
-                    break
+                if in_zone:
+                    continue
+                # 장애물 내부면 다시
+                if self._point_in_obstacle(x, y, self.config.food_radius):
+                    continue
+                self.foods.append((x, y, food_type))
+                break
 
     # === Phase 15: Agent Sensing Methods ===
 
@@ -2179,6 +2360,16 @@ class ForagerGym:
                         dx2 = int(pz_cx + dash_r * math.cos(rad + math.radians(8)))
                         dy2 = int(pz_cy + dash_r * math.sin(rad + math.radians(8)))
                         pygame.draw.line(env_surface, (120, 40, 40), (dx, dy), (dx2, dy2), 1)
+
+        # === E1: Obstacles (정적 장애물) ===
+        if self.config.obstacles_enabled and self.obstacles:
+            for ox, oy, ow, oh in self.obstacles:
+                # 본체 (어두운 회색)
+                pygame.draw.rect(env_surface, (60, 65, 60),
+                                 (int(ox), int(oy), int(ow), int(oh)))
+                # 테두리 (밝은 회색)
+                pygame.draw.rect(env_surface, (80, 85, 80),
+                                 (int(ox), int(oy), int(ow), int(oh)), 2)
 
         # === Food Patches (반투명 원) ===
         if self.config.food_patch_enabled and self.patches:
