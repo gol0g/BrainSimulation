@@ -5,7 +5,7 @@ ForagerGym - Phase 2a+2b: 항상성 + 공포 조건화 환경
 Slither.io와 달리 내부 감각(Interoception)이 핵심.
 
 Phase 2a 특징:
-- 400x400 2D 공간
+- 800x800 2D 공간 (렌더링은 400x400으로 축소 표시)
 - Nest (중앙, 안전) + Field (외곽, 음식)
 - Energy 시스템 (항상성)
 
@@ -26,34 +26,34 @@ import time
 class ForagerConfig:
     """Phase 2a+2b 환경 설정"""
     # 맵
-    width: int = 400
-    height: int = 400
-    nest_size: int = 100  # 중앙 둥지 크기
+    width: int = 800
+    height: int = 800
+    nest_size: int = 150  # 중앙 둥지 크기 (400: 100 → 800: 150)
 
     # 에이전트
-    agent_speed: float = 3.0
+    agent_speed: float = 4.5  # 400: 3.0 → 800: 4.5
     agent_radius: float = 10.0
 
     # 음식 (난이도 조정 - 직선 이동만으론 생존 어려움)
-    n_food: int = 15           # 35 → 15 (적당히 희소)
+    n_food: int = 45           # 800: 음식 밀도 높여서 탐색 부담 줄임
     food_radius: float = 8.0
     food_value: float = 25.0
 
     # === Food Patch 설정 (Hebbian 학습 검증용) ===
     food_patch_enabled: bool = False           # Food Patch 모드 활성화
     n_patches: int = 2                         # Patch 개수
-    patch_radius: float = 50.0                 # Patch 반경
+    patch_radius: float = 80.0                 # Patch 반경 (400: 50 → 800: 80)
     food_spawn_in_patch_prob: float = 0.8      # Patch 내 음식 생성 확률 (80%)
 
     # 에너지 (항상성)
     energy_start: float = 50.0  # 기본 시작 에너지
     energy_max: float = 100.0
-    energy_decay_field: float = 0.15   # 0.12 → 0.15 (약간 빠른 소모)
+    energy_decay_field: float = 0.10   # 800맵: 이동 거리 증가 → 감쇠 줄임
     energy_decay_nest: float = 0.05    # 0.04 → 0.05
 
     # 감각
     n_rays: int = 16  # 음식/벽 감지 레이 수
-    view_range: float = 150.0  # 시야 거리 (Phase 7: 120 → 150)
+    view_range: float = 250.0  # 시야 거리 (400: 150 → 800: 250)
 
     # 보상
     reward_food: float = 1.0
@@ -63,11 +63,11 @@ class ForagerConfig:
     # === Phase 2b: Pain Zone (내부 원형 영역) ===
     pain_zone_enabled: bool = True      # Pain Zone 활성화 여부
     pain_zone_count: int = 2            # 내부 원형 Pain Zone 개수
-    pain_zone_radius: float = 60.0      # 각 Pain Zone 반경 (px)
+    pain_zone_radius: float = 90.0      # 각 Pain Zone 반경 (400: 60 → 800: 90)
     pain_intensity: float = 1.0         # 고통 강도 (0~1)
     pain_damage: float = 0.3            # Pain Zone에서 매 스텝 Energy 감소
     pain_max_damage: float = 200.0      # 누적 Pain 데미지 한계
-    danger_range: float = 80.0          # Danger Cue 감지 거리 - 조기 경고
+    danger_range: float = 130.0         # Danger Cue 감지 거리 (400: 80 → 800: 130)
 
     # Phase 2b 보상
     reward_pain: float = -0.5           # Pain Zone에서 매 스텝
@@ -75,38 +75,38 @@ class ForagerConfig:
 
     # === Phase 11: Sound System (청각) ===
     sound_enabled: bool = True          # 소리 시스템 활성화
-    danger_sound_range: float = 100.0   # Pain Zone 소리 범위
-    food_sound_range: float = 80.0      # 음식 소리 범위
+    danger_sound_range: float = 160.0   # Pain Zone 소리 범위 (400: 100 → 800: 160)
+    food_sound_range: float = 130.0     # 음식 소리 범위 (400: 80 → 800: 130)
     sound_decay: float = 1.5            # 거리에 따른 감쇠 지수
     food_cluster_bonus: float = 0.3     # 음식 클러스터 보너스
 
     # === Phase 15: Social (다중 에이전트) ===
     social_enabled: bool = True             # 다중 에이전트 활성화
     n_npc_agents: int = 2                   # NPC 수
-    npc_speed: float = 2.5                  # NPC 이동 속도 (플레이어보다 약간 느림)
+    npc_speed: float = 3.5                  # NPC 이동 속도 (400: 2.5 → 800: 3.5)
     npc_radius: float = 10.0               # NPC 충돌 반경
     npc_behavior: str = "forager"           # "forager" (음식 탐색) or "predator" (추적)
-    agent_view_range: float = 120.0         # 에이전트 감지 거리
-    agent_sound_range: float = 100.0        # 에이전트 소리 감지 거리
+    agent_view_range: float = 200.0         # 에이전트 감지 거리 (400: 120 → 800: 200)
+    agent_sound_range: float = 160.0        # 에이전트 소리 감지 거리 (400: 100 → 800: 160)
     npc_food_eat_enabled: bool = True       # NPC가 음식을 먹을 수 있는지
-    social_proximity_range: float = 60.0    # 사회적 상호작용 거리
+    social_proximity_range: float = 100.0   # 사회적 상호작용 거리 (400: 60 → 800: 100)
 
     # === Phase 15b: Mirror Neuron 관찰 채널 ===
     npc_eating_signal_duration: int = 5         # NPC 먹기 이벤트 지속 시간 (steps)
-    npc_food_observation_range: float = 120.0   # NPC 먹기 관찰 가능 거리
+    npc_food_observation_range: float = 200.0   # NPC 먹기 관찰 가능 거리 (400: 120 → 800: 200)
 
     # === Phase 15c: Theory of Mind ===
-    npc_intention_observation_range: float = 120.0    # 의도 추론 관찰 거리
-    npc_competition_range: float = 80.0               # 경쟁 감지 거리
+    npc_intention_observation_range: float = 200.0    # 의도 추론 관찰 거리 (400: 120 → 800: 200)
+    npc_competition_range: float = 130.0              # 경쟁 감지 거리 (400: 80 → 800: 130)
     npc_food_seek_threshold: int = 20                  # 음식 추구 확신 threshold (steps)
 
     # === Phase 17: NPC Vocalization (발성) ===
     npc_vocalization_enabled: bool = True       # NPC 발성 활성화
-    npc_call_range: float = 100.0              # NPC 발성 가청 범위 (pixels)
+    npc_call_range: float = 160.0              # NPC 발성 가청 범위 (400: 100 → 800: 160)
     npc_call_duration: int = 5                 # 발성 지속 시간 (steps)
     npc_call_food_prob: float = 0.8            # NPC가 먹을 때 food call 확률
     npc_call_danger_prob: float = 0.9          # NPC가 pain zone 근처에서 danger call 확률
-    agent_call_range: float = 80.0             # 에이전트 발성 가청 범위
+    agent_call_range: float = 130.0            # 에이전트 발성 가청 범위 (400: 80 → 800: 130)
     agent_call_cooldown: int = 10              # 에이전트 발성 쿨다운 (steps)
     npc_call_response_speed: float = 0.15      # NPC가 에이전트 call에 반응하는 강도
 
@@ -118,7 +118,7 @@ class ForagerConfig:
     # === Phase L6: Food Cluster Respawn (예측 학습 환경) ===
     food_cluster_respawn: bool = True         # 클러스터 리스폰 활성화
     food_cluster_prob: float = 0.6            # 먹은 위치 근처 리스폰 확률 (60%)
-    food_cluster_radius: float = 80.0         # 클러스터 반경 (px)
+    food_cluster_radius: float = 120.0        # 클러스터 반경 (400: 80 → 800: 120)
 
     # === Phase L12: Danger-Adjacent Food (위험 근접 고보상 음식) ===
     danger_food_enabled: bool = True          # 위험 근접 음식 활성화
@@ -128,17 +128,17 @@ class ForagerConfig:
     # === Predator Config ===
     predator_enabled: bool = True
     n_predators: int = 1                      # 1마리로 시작 (점진적 난이도)
-    predator_speed: float = 2.0              # agent 3.0보다 느림 → 탈출 가능
+    predator_speed: float = 3.0              # agent 4.5보다 느림 → 탈출 가능 (400: 2.0 → 800: 3.0)
     predator_radius: float = 12.0            # agent 10보다 약간 큼
     predator_turn_rate: float = 0.15         # rad/step (agent 0.3보다 느림)
-    predator_chase_range: float = 120.0      # 추적 시작 거리
+    predator_chase_range: float = 200.0      # 추적 시작 거리 (400: 120 → 800: 200)
     predator_catch_radius: float = 15.0      # 접촉 판정 (agent_r + predator_r 근사)
     predator_damage: float = 0.3             # 접촉 시 매 스텝 에너지 감소
     predator_nest_safe: bool = True          # 둥지 = 안전지대
-    predator_view_range: float = 120.0       # 에이전트의 포식자 감지 거리
+    predator_view_range: float = 200.0       # 에이전트의 포식자 감지 거리 (400: 120 → 800: 200)
     predator_pain_intensity: float = 0.8     # pain signal 강도 (zone 1.0보다 약간 약함)
     predator_danger_intensity: float = 0.9   # danger signal 강도
-    predator_wander_speed: float = 1.5       # 배회 시 속도
+    predator_wander_speed: float = 2.2       # 배회 시 속도 (400: 1.5 → 800: 2.2)
 
     # === Phase L14: Motor Noise + Sensor Jitter ===
     motor_noise_enabled: bool = True
@@ -147,13 +147,13 @@ class ForagerConfig:
     sensor_jitter_std: float = 0.03          # σ for multiplicative ray noise (±3%)
 
     # === Environment E1: Obstacles (정적 장애물) ===
-    obstacles_enabled: bool = False  # 400x400 맵에서는 이동 공간 부족. 맵 확장 후 활성화
-    n_obstacles: int = 1
-    obstacle_min_size: float = 10.0
-    obstacle_max_size: float = 20.0
+    obstacles_enabled: bool = True
+    n_obstacles: int = 1             # 800맵에서 1개부터 시작
+    obstacle_min_size: float = 20.0  # 400: 10 → 800: 20
+    obstacle_max_size: float = 50.0  # 400: 20 → 800: 50
 
     # 시뮬레이션
-    max_steps: int = 3000
+    max_steps: int = 4500  # 400: 3000 → 800: 4500
 
 
 class PredatorAgent:
@@ -2391,15 +2391,17 @@ class ForagerGym:
         # 배경
         self.screen.fill((40, 40, 40))
 
-        # === 환경 영역 (400x400) ===
-        env_surface = pygame.Surface((400, 400))
+        # === 환경 영역 (맵 크기로 그린 후 400x400으로 축소 표시) ===
+        mw, mh = self.config.width, self.config.height
+        env_surface = pygame.Surface((mw, mh))
         env_surface.fill((25, 28, 25))
 
         # Phase L12: 배경 그리드 (미세한 공간 참조)
-        for gx in range(0, 401, 50):
-            pygame.draw.line(env_surface, (35, 38, 35), (gx, 0), (gx, 400), 1)
-        for gy in range(0, 401, 50):
-            pygame.draw.line(env_surface, (35, 38, 35), (0, gy), (400, gy), 1)
+        grid_step = max(50, mw // 8)  # 맵 크기에 비례
+        for gx in range(0, mw + 1, grid_step):
+            pygame.draw.line(env_surface, (35, 38, 35), (gx, 0), (gx, mh), 1)
+        for gy in range(0, mh + 1, grid_step):
+            pygame.draw.line(env_surface, (35, 38, 35), (0, gy), (mw, gy), 1)
 
         # === Phase 2b+L12: Pain Zone (그래디언트 위험 필드) ===
         if self.config.pain_zone_enabled and self.pain_zones:
@@ -2462,7 +2464,7 @@ class ForagerGym:
                                   (int(px), int(py)), int(self.config.patch_radius), 2)
 
         # Nest 영역 (밝은 색)
-        cx, cy = 200, 200  # 400/2
+        cx, cy = mw // 2, mh // 2
         half = self.config.nest_size // 2
         pygame.draw.rect(env_surface, (50, 60, 50),
                         (cx - half, cy - half, self.config.nest_size, self.config.nest_size))
@@ -2533,7 +2535,7 @@ class ForagerGym:
 
         # Phase L12: 궤적 트레일 (GW 상태별 색상 — 선분 + 모드 전환 마커)
         if len(self.position_history) > 2:
-            trail_len = min(len(self.position_history), 400)
+            trail_len = min(len(self.position_history), 600)
             trail_start = max(0, len(self.position_history) - trail_len)
             prev_gw = None
             for i in range(trail_start, len(self.position_history) - 1):
@@ -2605,20 +2607,27 @@ class ForagerGym:
             else:
                 mode_text = "EXPLORING"
                 mode_color = (120, 160, 255)
-            # 반투명 배경 박스
-            mode_bg = pygame.Surface((140, 20), pygame.SRCALPHA)
+            # 반투명 배경 박스 (맵 스케일에 비례)
+            s = mw / 400.0
+            mode_bg = pygame.Surface((int(140 * s), int(20 * s)), pygame.SRCALPHA)
             mode_bg.fill((0, 0, 0, 120))
-            env_surface.blit(mode_bg, (5, 5))
-            mode_surf = self.small_font.render(mode_text, True, mode_color)
-            env_surface.blit(mode_surf, (10, 7))
+            env_surface.blit(mode_bg, (int(5 * s), int(5 * s)))
+            # 큰 폰트로 렌더링 (축소 후 읽기 가능)
+            mode_font = pygame.font.Font(None, int(18 * s))
+            mode_surf = mode_font.render(mode_text, True, mode_color)
+            env_surface.blit(mode_surf, (int(10 * s), int(7 * s)))
 
         # Phase L12: 에피소드 진행 바 (환경 하단)
         progress = self.steps / self.config.max_steps
-        bar_w = int(396 * progress)
-        pygame.draw.rect(env_surface, (40, 45, 40), (2, 394, 396, 4))
+        prog_bar_total = mw - 4
+        bar_w = int(prog_bar_total * progress)
+        pygame.draw.rect(env_surface, (40, 45, 40), (2, mh - 6, prog_bar_total, 4))
         bar_color = (80, 200, 80) if self.energy > 30 else (200, 80, 80)
-        pygame.draw.rect(env_surface, bar_color, (2, 394, bar_w, 4))
+        pygame.draw.rect(env_surface, bar_color, (2, mh - 6, bar_w, 4))
 
+        # 맵을 400x400으로 축소하여 화면에 표시 (패널 레이아웃 유지)
+        if mw != 400 or mh != 400:
+            env_surface = pygame.transform.scale(env_surface, (400, 400))
         self.screen.blit(env_surface, (0, 0))
 
         # === 정보 패널 (200x400) ===
