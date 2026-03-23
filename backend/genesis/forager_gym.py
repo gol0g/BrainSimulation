@@ -148,7 +148,7 @@ class ForagerConfig:
 
     # === Environment E1: Obstacles (정적 장애물) ===
     obstacles_enabled: bool = True
-    n_obstacles: int = 1             # 800맵에서 1개부터 시작
+    n_obstacles: int = 1
     obstacle_min_size: float = 20.0  # 400: 10 → 800: 20
     obstacle_max_size: float = 50.0  # 400: 20 → 800: 50
 
