@@ -8030,12 +8030,12 @@ class ForagerBrain:
         }
         kc_init = {"V": -65.0, "RefracTime": 0.0}
 
-        # KC inhibitory (low C for fast response)
+        # KC inhibitory (SensoryLIF for dynamic I_input control)
         kc_inh_params = {
             "C": 1.0, "TauM": 20.0, "Vrest": -65.0,
-            "Vreset": -65.0, "Vthresh": -50.0,
-            "Ioffset": 0.0, "TauRefrac": 2.0
+            "Vreset": -65.0, "Vthresh": -50.0, "TauRefrac": 2.0
         }
+        kc_inh_init = {"V": -65.0, "RefracTime": 0.0, "I_input": 0.0}
 
         # === A) KC Populations ===
         self.kc_left = self.model.add_neuron_population(
@@ -8043,9 +8043,9 @@ class ForagerBrain:
         self.kc_right = self.model.add_neuron_population(
             "kc_right", n_kc, "LIF", kc_params, kc_init)
         self.kc_inhibitory_left = self.model.add_neuron_population(
-            "kc_inhibitory_left", n_inh, "LIF", kc_inh_params, kc_init)
+            "kc_inhibitory_left", n_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
         self.kc_inhibitory_right = self.model.add_neuron_population(
-            "kc_inhibitory_right", n_inh, "LIF", kc_inh_params, kc_init)
+            "kc_inhibitory_right", n_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
 
         self.kc_left.spike_recording_enabled = True
         self.kc_right.spike_recording_enabled = True
@@ -9427,6 +9427,20 @@ class ForagerBrain:
                 kc_r_rate = kc_r_spikes / max(n_kc * 10, 1)
                 self.last_kc_l_rate = kc_l_rate
                 self.last_kc_r_rate = kc_r_rate
+
+                # Homeostatic KC inhibition: target ~5% activation
+                # KC rate > target → increase I_input to inhibitory neurons → more suppression
+                kc_target = 0.05
+                kc_avg_rate = (kc_l_rate + kc_r_rate) / 2.0
+                # Proportional + integral control
+                kc_error = kc_avg_rate - kc_target
+                self._kc_inh_integral = getattr(self, '_kc_inh_integral', 0.0) + kc_error * 0.1
+                self._kc_inh_integral = max(0.0, min(self._kc_inh_integral, 50.0))  # clamp
+                kc_inh_drive = max(0.0, kc_error * 100.0 + self._kc_inh_integral)
+                self.kc_inhibitory_left.vars["I_input"].view[:] = kc_inh_drive
+                self.kc_inhibitory_left.vars["I_input"].push_to_device()
+                self.kc_inhibitory_right.vars["I_input"].view[:] = kc_inh_drive
+                self.kc_inhibitory_right.vars["I_input"].push_to_device()
 
                 # KC→D1 trace (pre×post)
                 kc_l_active = 1.0 if kc_l_rate > 0.03 else 0.0
