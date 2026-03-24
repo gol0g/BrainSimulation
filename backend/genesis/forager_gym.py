@@ -146,6 +146,12 @@ class ForagerConfig:
     sensor_jitter_enabled: bool = True
     sensor_jitter_std: float = 0.03          # σ for multiplicative ray noise (±3%)
 
+    # === Environment E2: Zones (영역 다양성) ===
+    zones_enabled: bool = True
+    n_rich_zones: int = 2              # 풍부 영역 개수
+    rich_zone_radius: float = 120.0    # 영역 반경
+    rich_zone_food_boost: float = 0.7  # 이 영역에 음식 스폰될 확률 비중
+
     # === Environment E1: Obstacles (정적 장애물) ===
     obstacles_enabled: bool = True
     n_obstacles: int = 1
@@ -510,6 +516,9 @@ class ForagerGym:
         self.was_in_patch: List[bool] = []            # 이전 스텝 Patch 내 여부
         self._init_patches()
 
+        # === Environment E2: Rich Zones (영역 다양성) ===
+        self.rich_zones: List[Tuple[float, float]] = []  # [(cx, cy), ...] 풍부 영역 중심 좌표
+
         # === Environment E1: Obstacles ===
         self.obstacles: List[Tuple[float, float, float, float]] = []  # (x, y, w, h)
 
@@ -543,6 +552,9 @@ class ForagerGym:
 
         # 장애물 생성 (음식 생성 전에 해야 food가 장애물을 피함)
         self._generate_obstacles()
+
+        # Rich Zone 생성 (음식 생성 전에 해야 food가 영역 비중 반영)
+        self._generate_rich_zones()
 
         # 음식 생성 (Field에만, Pain Zone 외부)
         self.foods = []
@@ -1034,6 +1046,61 @@ class ForagerGym:
 
         self.obstacles = obstacles
 
+    def _generate_rich_zones(self):
+        """Rich Zone 생성 (매 에피소드 랜덤 배치) — 음식 풍부 영역"""
+        if not self.config.zones_enabled:
+            self.rich_zones = []
+            return
+
+        r = self.config.rich_zone_radius
+        margin = r + 10  # 벽에서 최소 10px 간격
+        nest_cx, nest_cy = self.config.width / 2, self.config.height / 2
+        nest_half = self.config.nest_size / 2
+
+        zones = []
+        for _ in range(self.config.n_rich_zones):
+            for _ in range(500):
+                cx = np.random.uniform(margin, self.config.width - margin)
+                cy = np.random.uniform(margin, self.config.height - margin)
+
+                # 둥지와 겹치지 않기 (circle-rect intersection)
+                nearest_x = max(nest_cx - nest_half, min(cx, nest_cx + nest_half))
+                nearest_y = max(nest_cy - nest_half, min(cy, nest_cy + nest_half))
+                dist_to_nest = math.sqrt((cx - nearest_x)**2 + (cy - nearest_y)**2)
+                if dist_to_nest < r + 20:
+                    continue
+
+                # Pain Zone과 겹치지 않기
+                pain_overlap = False
+                for pz_x, pz_y in self.pain_zones:
+                    if math.sqrt((cx - pz_x)**2 + (cy - pz_y)**2) < r + self.config.pain_zone_radius + 20:
+                        pain_overlap = True
+                        break
+                if pain_overlap:
+                    continue
+
+                # 다른 rich zone과 겹치지 않기
+                zone_overlap = False
+                for oz_x, oz_y in zones:
+                    if math.sqrt((cx - oz_x)**2 + (cy - oz_y)**2) < 2 * r + 30:
+                        zone_overlap = True
+                        break
+                if zone_overlap:
+                    continue
+
+                zones.append((cx, cy))
+                break
+
+        self.rich_zones = zones
+
+    def _in_rich_zone(self, x: float, y: float) -> int:
+        """주어진 좌표가 어느 Rich Zone 내에 있는지 반환 (없으면 -1)"""
+        r_sq = self.config.rich_zone_radius ** 2
+        for i, (zx, zy) in enumerate(self.rich_zones):
+            if (x - zx)**2 + (y - zy)**2 <= r_sq:
+                return i
+        return -1
+
     def _point_in_obstacle(self, px: float, py: float, margin: float = 0.0) -> bool:
         """점이 장애물 내부(+마진)에 있는지 확인"""
         for ox, oy, ow, oh in self.obstacles:
@@ -1414,6 +1481,9 @@ class ForagerGym:
             # Obstacle (별도 레이, wall_rays에서 분리)
             "obstacle_rays_left": obstacle_rays_l,
             "obstacle_rays_right": obstacle_rays_r,
+
+            # E2: Zone richness (에이전트가 rich zone 내에 있으면 1.0, 아니면 0.0)
+            "zone_richness": float(self._in_rich_zone(self.agent_x, self.agent_y) >= 0),
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -1871,7 +1941,38 @@ class ForagerGym:
                 if len(self.foods) >= self.config.n_food:
                     continue  # 클러스터로 이미 생성됨
 
-            # 기존 방식: 랜덤 위치 (Patch 모드 OFF 또는 클러스터 실패 시)
+            # E2: Rich Zone 비중 적용 — rich_zone_food_boost 확률로 rich zone 내에 생성
+            spawned_in_rich = False
+            if (self.config.zones_enabled and self.rich_zones
+                    and np.random.random() < self.config.rich_zone_food_boost):
+                rz_x, rz_y = self.rich_zones[np.random.randint(len(self.rich_zones))]
+                rz_r = self.config.rich_zone_radius
+                for _ in range(50):
+                    angle = np.random.uniform(0, 2 * np.pi)
+                    r_dist = np.sqrt(np.random.uniform(0, 1)) * rz_r
+                    x = rz_x + r_dist * np.cos(angle)
+                    y = rz_y + r_dist * np.sin(angle)
+                    if not (margin <= x <= self.config.width - margin and
+                            margin <= y <= self.config.height - margin):
+                        continue
+                    if (cx - half <= x <= cx + half and cy - half <= y <= cy + half):
+                        continue
+                    in_zone = False
+                    for pz_x, pz_y in self.pain_zones:
+                        if (x - pz_x)**2 + (y - pz_y)**2 < pain_r**2:
+                            in_zone = True
+                            break
+                    if in_zone:
+                        continue
+                    if self._point_in_obstacle(x, y, self.config.food_radius):
+                        continue
+                    self.foods.append((x, y, food_type))
+                    spawned_in_rich = True
+                    break
+            if spawned_in_rich:
+                continue
+
+            # 기존 방식: 랜덤 위치 (Patch 모드 OFF 또는 클러스터/Rich Zone 실패 시)
             for _ in range(100):
                 x = np.random.uniform(margin, self.config.width - margin)
                 y = np.random.uniform(margin, self.config.height - margin)
@@ -2462,6 +2563,22 @@ class ForagerGym:
                 # Patch 테두리
                 pygame.draw.circle(env_surface, (80, 150, 80),
                                   (int(px), int(py)), int(self.config.patch_radius), 2)
+
+        # === E2: Rich Zones (반투명 연초록 원) ===
+        if self.config.zones_enabled and self.rich_zones:
+            rz_r = int(self.config.rich_zone_radius)
+            for rz_cx, rz_cy in self.rich_zones:
+                # 반투명 연초록 원
+                rz_surf = pygame.Surface((rz_r * 2, rz_r * 2), pygame.SRCALPHA)
+                pygame.draw.circle(rz_surf, (60, 140, 60, 40),
+                                   (rz_r, rz_r), rz_r)
+                env_surface.blit(rz_surf, (int(rz_cx) - rz_r, int(rz_cy) - rz_r))
+                # 테두리 (밝은 초록, 점선)
+                pygame.draw.circle(env_surface, (80, 180, 80),
+                                  (int(rz_cx), int(rz_cy)), rz_r, 1)
+                # 중심 마커 (작은 원)
+                pygame.draw.circle(env_surface, (100, 200, 100),
+                                  (int(rz_cx), int(rz_cy)), 4)
 
         # Nest 영역 (밝은 색)
         cx, cy = mw // 2, mh // 2
