@@ -128,10 +128,10 @@ class ForagerConfig:
     # === Predator Config ===
     predator_enabled: bool = True
     n_predators: int = 1                      # 1마리로 시작 (점진적 난이도)
-    predator_speed: float = 3.0              # agent 4.5보다 느림 → 탈출 가능 (400: 2.0 → 800: 3.0)
+    predator_speed: float = 2.5              # agent 4.5의 56% → 여유 있는 탈출 (800맵 밸런스)
     predator_radius: float = 12.0            # agent 10보다 약간 큼
     predator_turn_rate: float = 0.15         # rad/step (agent 0.3보다 느림)
-    predator_chase_range: float = 200.0      # 추적 시작 거리 (400: 120 → 800: 200)
+    predator_chase_range: float = 150.0      # 800: 150px (에이전트 반응할 시간 확보)
     predator_catch_radius: float = 15.0      # 접촉 판정 (agent_r + predator_r 근사)
     predator_damage: float = 0.3             # 접촉 시 매 스텝 에너지 감소
     predator_nest_safe: bool = True          # 둥지 = 안전지대
