@@ -4,14 +4,15 @@
 
 ---
 
-## 현재 상태: Phase L15 완료 (20,710 뉴런)
+## 현재 상태: Phase L16 + 환경 고도화 (24,510 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L15: Narrative Self ✓ (2026-02-21)                      ║
-║  Agency gate(agency/0.15,[0.3,2.0]) × Salience gate(1+|Δbody|)║
-║  Agency→Narrative: 1.0→4.28, Body→Narrative: 2.0→14.0         ║
-║  생존율 55%, 0% pain death, Selectivity 0.70 (best ever)       ║
+║  Phase L16: Sparse Expansion + 800맵 (2026-03-25)               ║
+║  KC(1500×2) sparse expansion → 30K 학습 연결                    ║
+║  food_eye 35.0 하드코딩 제거 → R-STDP 학습 접근                ║
+║  800×800맵, 장애물 1개, Rich Zones 2개                          ║
+║  생존율 65%, Reward 2.60%, Selectivity 0.67                     ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -58,6 +59,12 @@
 | **L13** | **조건 맛 혐오 (Garcia Effect)** | **0** | **✓ 완료** | **55%** |
 | **L14** | **에이전시 감지 (Agency Detection)** | **+50** | **✓ 완료** | **~65%** |
 | **L15** | **내러티브 자기 (Narrative Self)** | **0** | **✓ 완료** | **55%** |
+| **L16** | **Sparse Expansion (KC 패턴 분리)** | **+3,400** | **✓ 완료** | **65%** |
+| **Opt** | **Spike recording 배치화** | **0** | **✓ 완료** | GPU 60% |
+| **Fix** | **food_eye 하드코딩→학습 교체** | **0** | **✓ 완료** | **89%** (400) |
+| **E1** | **장애물 (obstacle_rays 분리)** | **+400** | **✓ 완료** | 60% |
+| **E2** | **Rich Zones (영역 다양성)** | **0** | **✓ 완료** | Reward+0.46pp |
+| **Map** | **맵 확장 400→800** | **0** | **✓ 완료** | **65%** (800) |
 
 ### Phase 12-14 수정 이력
 
@@ -457,6 +464,29 @@
 - **Pain Escape**: 41.6% (개선 여지), Avg Dist→Pain: 107px (경계 따라감)
 - **체크포인트**: `brain_L15_100ep.npz` (46 시냅스)
 
+### Phase L16: Sparse Expansion Layer ✓ 완료 (2026-03-21)
+- **문제**: L15 400ep 장기 훈련에서 생존율 ~60% 천장. 학습 가능 시냅스(41개) 부족
+- **해결**: 초파리 Mushroom Body KC 패턴 — sparse random projection + WTA + R-STDP
+- **구조**: KC(1500×2 LIF) + KC_inh(200×2 SensoryLIF, homeostatic PI control)
+- **입력**: food_eye/good_bad_food/IT_Food → KC (SPARSE 0.10, static)
+- **출력**: KC → D1/D2 (SPARSE 0.05, R-STDP/Anti-Hebbian) = ~30,000 학습 연결
+- **검증**: 800맵 100ep: 65% 생존 ✓, Reward 2.60% ✓
+
+### 하드코딩 제거: food_eye→Motor 학습화 ✓ 완료 (2026-03-22)
+- **문제**: food_eye→Motor 35.0 (하드코딩)이 good+bad 무차별 접근 → 학습된 회피를 압도
+- **해결**: food_eye 10.0(탐색, static) + good_food_eye 25.0(R-STDP, 학습)
+- **효과**: 나쁜 음식 접근 반사 제거 → 회피가 Garcia+도파민 딥에서 창발
+- **결과**: 400맵 생존율 56% → **89%** (+33pp), Selectivity 0.67-0.72
+
+### 환경 고도화: 800×800 맵 + 장애물 + Rich Zones ✓ 완료 (2026-03-22~24)
+- **맵 확장**: 400→800, 모든 거리 파라미터 비례 스케일링
+- **장애물**: obstacle_rays 분리 (wall_rays와 독립), obstacle_eye(200×2) Push-Pull 8/-4, 1개
+- **Rich Zones**: 2개 (radius 120px), 70% food clustering, zone_richness observation 추가
+- **포식자 밸런스**: speed 2.5 (agent 4.5의 56%), chase_range 150px
+- **학습 추이 시각화**: 실시간 미니 그래프 (D1/Hippo/Garcia/KC + food selectivity)
+- **렌더링**: 800px 내부 → 400px 축소 표시, 패널 위치 유지
+- **Spike recording 배치화**: pull 1,310회→1회, GPU 3D 90%→60%
+
 ### 환경: 모터 노이즈 + 센서 지터 추가 ✓ 완료 (2026-02-21)
 - **motor_noise**: 각도 변화에 Gaussian 노이즈 (σ=0.05) → 완벽한 모터 제어 불가
 - **sensor_jitter**: 감각 레이에 곱셈 노이즈 (σ=0.03) → 환경 인식 불확실성
@@ -475,13 +505,17 @@
 
 | 단계 | 환경 | 복잡도 | 대응 Phase | 상태 |
 |------|------|--------|------------|------|
-| 기본 | ForagerGym (2D) | ⭐ | Phase 1-10 | ✓ |
+| 기본 | ForagerGym (2D, 400×400) | ⭐ | Phase 1-10 | ✓ |
 | 다중 음식 | good/bad food (60/40) | ⭐⭐ | L5 | ✓ |
 | 포식자 | 이동형 위협 (PredatorAgent) | ⭐⭐ | L12 후 | ✓ |
 | 모터 노이즈 + 센서 지터 | motor_noise σ=0.05, sensor_jitter σ=0.03 | ⭐⭐⭐ | L14 | ✓ |
-| 중기 | 3D 환경 | ⭐⭐⭐⭐ | L15+ | 계획 |
-| 장기 | 다중 에이전트 | ⭐⭐⭐⭐ | L15+ | 계획 |
-| 최종 | 언어 환경 | ⭐⭐⭐⭐⭐ | L15+ | 계획 |
+| **맵 확장** | **800×800, 스케일링 파라미터** | ⭐⭐⭐ | **L16** | **✓** |
+| **장애물** | **obstacle_rays 분리, Push-Pull 8/-4** | ⭐⭐⭐ | **E1** | **✓** |
+| **영역 다양성** | **Rich Zones 2개, 70% food clustering** | ⭐⭐⭐ | **E2** | **✓** |
+| **학습 추이 시각화** | **실시간 그래프 (D1/Hippo/Garcia/KC)** | ⭐⭐ | **E4/E5** | **✓** |
+| 시간 변화 | rich zone 이동, 음식 고갈 | ⭐⭐⭐⭐ | E3 | 계획 |
+| 장기 | 다중 에이전트 | ⭐⭐⭐⭐ | L16+ | 계획 |
+| 최종 | 언어 환경 | ⭐⭐⭐⭐⭐ | L16+ | 계획 |
 
 ---
 

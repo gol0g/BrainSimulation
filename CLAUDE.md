@@ -291,41 +291,45 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L15 완료 - Narrative Self (20,710 뉴런)
+### 현재 상태: Phase L16 + 환경 고도화 (24,510 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L15: Narrative Self ✓ (2026-02-21)                       ║
+║  Phase L16: Sparse Expansion + 환경 고도화 (2026-03-25)          ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Learning Foundation (Phase L1→...→L14→L15):                     ║
-║    - L1-L4: BG 기반 학습 (D1/D2, R-STDP, Anti-Hebbian)       ║
-║    - L5-L6: 피질 학습 (perceptual R-STDP, PE)                ║
-║    - L7-L8: 음식 유형별 차등 학습 (도파민 딥)                 ║
-║    - L9: 피질 표상→BG 의사결정 연결                           ║
-║    - L10: NAc Critic → RPE 도파민 (Schultz 1997)              ║
-║    - L11: SWR Replay → 오프라인 기억 강화 (Buzsáki 2015)     ║
-║    - L12: Global Workspace → 주의 기반 경쟁 (Dehaene 2011)   ║
-║    - L13: Taste Aversion → 시각-내장 연합 학습 (Garcia 1966)  ║
-║    - L14: Agency Detection → 전방 모델 (Frith 2005)           ║
-║    - L15: Narrative Self → 에이전시 게이팅 자서전 (Damasio 2010)║
+║  L1-L15 Learning Foundation ✓ (2026-02-21)                      ║
+║  L16: KC Sparse Expansion (2026-03-21)                          ║
+║    - KC(1500×2) + KC_inh(200×2) = +3,400 뉴런                  ║
+║    - 초파리 MB 패턴: food_eye→KC(sparse 10%)→D1/D2(R-STDP)     ║
+║    - 학습 연결 ~10K → ~30K (3배 확장)                           ║
+║    - Homeostatic KC: SensoryLIF + PI control (target 5%)        ║
 ║                                                               ║
-║  L15 변경 사항:                                               ║
-║    - 0 new neurons, +1 DENSE Hebbian (agency→narrative)       ║
-║    - Agency gate: agency_rate/0.15, [0.3, 2.0]               ║
-║    - Salience gate: 1+|Δbody|×10, max 3.0                    ║
-║    - Body→Narr: 2.0→14.0 (fast, ep5 saturated)               ║
-║    - Agency→Narr: 1.0→4.28 (gradual, 20ep)                   ║
+║  성능 최적화 (2026-03-21):                                     ║
+║    - Spike recording 배치화: GPU pull 1,310→1회/process()       ║
+║    - GPU 3D 사용률: 90-100% → 60-87%                           ║
 ║                                                               ║
-║  검증 결과 (20ep / 100ep):                                   ║
-║    - Survival: 55% / 56% ✓                                   ║
-║    - Pain Death: 0% / 0% ✓                                   ║
-║    - Reward Freq: 2.79% / 2.75% ✓                            ║
-║    - Selectivity: 0.70 (20ep best)                            ║
-║    - Hippo: 2.12→11.84/18.0 (100ep, 계속 성장)               ║
-║    - 4 synapses saturated at 100ep (Garcia/FM/Narr/Body)     ║
+║  하드코딩 제거 (2026-03-22):                                   ║
+║    - food_eye→Motor 35.0 (하드코딩) → 제거                     ║
+║    - food_eye 10.0 (탐색, static) + good_food_eye 25.0 (R-STDP)║
+║    - 나쁜 음식 접근 반사 제거 → 회피가 학습에서 창발            ║
+║    - 400맵 생존율: 56% → 89% (+33pp)                           ║
 ║                                                               ║
-║  뉴런 수:       20,710 (변동 없음)                               ║
-║  학습 시냅스:   41 (+1 DENSE Hebbian)                            ║
+║  환경 고도화 (2026-03-22~24):                                  ║
+║    - 맵 확장: 400×400 → 800×800                                ║
+║    - 장애물 1개 (obstacle_rays 분리, Push-Pull 8/-4)           ║
+║    - Rich Zones 2개 (radius 120px, 70% food clustering)        ║
+║    - 학습 추이 시각화 (실시간 그래프)                           ║
+║    - 포식자 밸런스: speed 2.5, chase 150px                     ║
+║                                                               ║
+║  검증 결과 (800맵 100ep):                                     ║
+║    - Survival: 65% ✓                                          ║
+║    - Reward Freq: 2.60% ✓                                     ║
+║    - Selectivity: 0.67                                        ║
+║    - Predator Death: 21%                                      ║
+║    - Pain Death: 0% ✓                                         ║
+║                                                               ║
+║  뉴런 수:       24,510                                          ║
+║  학습 시냅스:   47 (41 + 4 KC + 2 food_approach)                ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -333,9 +337,15 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 ```
 backend/genesis/
-├── forager_gym.py     # ForagerGym 환경 (NPC + Pain Zone + 다중 음식 + GW 시각화)
-├── forager_brain.py   # Forager Brain (20,710 뉴런, Phase 1-20 + L1-L15)
+├── forager_gym.py     # ForagerGym 800×800 (장애물 + Rich Zones + 학습 그래프)
+├── forager_brain.py   # Forager Brain (24,510 뉴런, Phase 1-20 + L1-L16)
 └── checkpoints/       # 체크포인트 저장
+docs/research/
+├── drosophila_brain_simulation.md      # 초파리 뇌 시뮬레이션 리서치
+├── drosophila_technical_adoption.md    # 기술 차용 분석
+└── design_spike_batching.md            # spike recording 배치화 설계
+gpu_check.ps1          # GPU 3D 사용률 측정 (PDH 카운터)
+gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 ```
 
 ### 핵심 교훈
@@ -364,6 +374,13 @@ backend/genesis/
 22. **Forward Model eta 점진적**: DENSE Hebbian uniform update는 빠르게 포화 → eta=0.005 (0.04에서 8x 감소)
 23. **Agency gate로 기존 학습 조절**: 새 시냅스 최소화 (0 뉴런, 1 시냅스) — gate 곱셈으로 기존 body→narrative 학습 강화/약화
 24. **100ep 중기 검증**: 해마만 계속 성장 (65%), 4개 시냅스 포화 (Garcia/FM/Agency→Narr/Body→Narr) — 500ep에서는 w_max 상향 또는 weight_decay로 동적 평형 고려
+25. **학습 가능 연결이 성능 천장을 결정**: 41개 population 수준 시냅스로는 60% 천장. KC sparse expansion으로 개별 뉴런 수준 30K 연결 추가 → 천장 돌파
+26. **하드코딩된 반사를 학습으로 교체하면 성능 급상승**: food_eye 35.0(하드코딩) → good_food_eye 25.0(R-STDP) 교체로 56%→89% (+33pp). 나쁜 음식 회피가 학습에서 창발
+27. **spike recording 배치화**: pull_from_device() 1,310회→1회. GPU 3D 90%→60%. 성능과 안정성 동시 개선
+28. **맵 크기와 장애물**: 400맵에서 장애물은 치명적 (이동 공간 부족). 800맵으로 확장 후 장애물 1개 가능. 맵 크기에 비례해 모든 거리 파라미터 스케일링 필요
+29. **obstacle_rays를 wall_rays에서 분리**: 장애물을 wall_rays에 넣으면 Push-Pull(60/-40)이 과반응. 별도 obstacle_eye(8/-4) 필요
+30. **nvidia-smi는 WDDM에서 부정확**: GPU 3D 사용률은 PowerShell Get-Counter PDH 카운터로 측정 (gpu_check.ps1)
+31. **WSL BSOD 방지**: .wslconfig (memory=8GB, networkingMode=mirrored). Hyper-V VmSwitch 크래시 방지
 
 ---
 
