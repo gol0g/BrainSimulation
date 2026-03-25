@@ -8085,6 +8085,16 @@ class ForagerBrain:
             "it_food_to_kc_r", self.it_food_category, self.kc_right,
             self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
 
+        # social_memory → KC (사회적 관찰 정보 → 패턴 분리 → BG 학습)
+        if self.config.social_brain_enabled and self.config.mirror_enabled and hasattr(self, 'social_memory'):
+            self._create_static_synapse(
+                "social_mem_to_kc_l", self.social_memory, self.kc_left,
+                2.0, sparsity=0.05)
+            self._create_static_synapse(
+                "social_mem_to_kc_r", self.social_memory, self.kc_right,
+                2.0, sparsity=0.05)
+            print(f"    Social_Memory→KC: 2.0, sparsity=0.05 (L17: social→BG learning)")
+
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
             "kc_l_to_kc_inh_l", self.kc_left, self.kc_inhibitory_left,
