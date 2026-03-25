@@ -152,6 +152,11 @@ class ForagerConfig:
     rich_zone_radius: float = 120.0    # 영역 반경
     rich_zone_food_boost: float = 0.7  # 이 영역에 음식 스폰될 확률 비중
 
+    # === Environment E3: Temporal Dynamics (시간 변화) ===
+    temporal_shift_enabled: bool = True
+    temporal_shift_interval: int = 1500   # N스텝마다 rich zone 위치 변경
+    temporal_shift_announce: bool = True  # 변경 시 시각 신호 (렌더링용)
+
     # === Environment E1: Obstacles (정적 장애물) ===
     obstacles_enabled: bool = True
     n_obstacles: int = 1
@@ -597,6 +602,7 @@ class ForagerGym:
         self._weight_history = {}
         self._selectivity_history = []
         self._food_eaten_types = []
+        self._zone_shifted_this_step = False
 
         # Phase 17: Agent vocalization state
         self._agent_call_type = 0
@@ -872,6 +878,14 @@ class ForagerGym:
         gw_state = self.brain_info.get("gw_broadcast", "neutral") if hasattr(self, 'brain_info') and self.brain_info else "neutral"
         self.position_history.append((self.agent_x, self.agent_y, gw_state))
 
+        # 5.5 Temporal shift: rich zone 위치 변경
+        self._zone_shifted_this_step = False
+        if (self.config.temporal_shift_enabled and self.config.zones_enabled
+                and self.steps > 0
+                and self.steps % self.config.temporal_shift_interval == 0):
+            self._shift_rich_zones()
+            self._zone_shifted_this_step = True
+
         # 6. 종료 조건
         self.steps += 1
         done = False
@@ -935,6 +949,7 @@ class ForagerGym:
             "predator_contact": self._predator_contact if self.config.predator_enabled else False,
             "predator_damage_total": self.predator_damage_total if self.config.predator_enabled else 0,
             "predator_contact_steps": self.predator_contact_steps if self.config.predator_enabled else 0,
+            "zone_shifted": self._zone_shifted_this_step,
         }
 
         # 렌더링
@@ -1100,6 +1115,23 @@ class ForagerGym:
             if (x - zx)**2 + (y - zy)**2 <= r_sq:
                 return i
         return -1
+
+    def _shift_rich_zones(self):
+        """E3: Rich zone 위치를 랜덤하게 재배치"""
+        old_zones = self.rich_zones.copy()
+        self._generate_rich_zones()
+        if self.rich_zones != old_zones:
+            # 기존 음식 중 일부를 새 rich zone으로 이동 (음식 밀도 재분배)
+            for i, food in enumerate(self.foods):
+                if np.random.random() < 0.3:  # 30% 확률로 새 rich zone에 리스폰
+                    if self.rich_zones:
+                        zx, zy = self.rich_zones[np.random.randint(len(self.rich_zones))]
+                        r = self.config.rich_zone_radius * 0.8
+                        nx = zx + np.random.uniform(-r, r)
+                        ny = zy + np.random.uniform(-r, r)
+                        nx = np.clip(nx, 20, self.config.width - 20)
+                        ny = np.clip(ny, 20, self.config.height - 20)
+                        self.foods[i] = (nx, ny, food[2])
 
     def _point_in_obstacle(self, px: float, py: float, margin: float = 0.0) -> bool:
         """점이 장애물 내부(+마진)에 있는지 확인"""
