@@ -8095,6 +8095,16 @@ class ForagerBrain:
                 2.0, sparsity=0.05)
             print(f"    Social_Memory→KC: 2.0, sparsity=0.05 (L17: social→BG learning)")
 
+        # a1_food → KC (청각 음식 신호 → 패턴 분리 → BG 학습)
+        if self.config.auditory_enabled and hasattr(self, 'a1_food'):
+            self._create_static_synapse(
+                "a1_food_to_kc_l", self.a1_food, self.kc_left,
+                2.0, sparsity=0.05)
+            self._create_static_synapse(
+                "a1_food_to_kc_r", self.a1_food, self.kc_right,
+                2.0, sparsity=0.05)
+            print(f"    A1_Food→KC: 2.0, sparsity=0.05 (auditory→BG learning)")
+
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
             "kc_l_to_kc_inh_l", self.kc_left, self.kc_inhibitory_left,
@@ -9091,6 +9101,22 @@ class ForagerBrain:
         gw_food_l_spikes = 0
         gw_food_r_spikes = 0
         gw_safety_spikes = 0
+
+        # === Phase 11: 청각 입력 (Sound → A1) ===
+        if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
+            sound_sensitivity = 40.0
+            sd_l = np.mean(observation.get("sound_danger_left", np.zeros(4)))
+            sd_r = np.mean(observation.get("sound_danger_right", np.zeros(4)))
+            sf_l = np.mean(observation.get("sound_food_left", np.zeros(4)))
+            sf_r = np.mean(observation.get("sound_food_right", np.zeros(4)))
+            self.sound_danger_left.vars["I_input"].view[:] = sd_l * sound_sensitivity
+            self.sound_danger_right.vars["I_input"].view[:] = sd_r * sound_sensitivity
+            self.sound_food_left.vars["I_input"].view[:] = sf_l * sound_sensitivity
+            self.sound_food_right.vars["I_input"].view[:] = sf_r * sound_sensitivity
+            self.sound_danger_left.vars["I_input"].push_to_device()
+            self.sound_danger_right.vars["I_input"].push_to_device()
+            self.sound_food_left.vars["I_input"].push_to_device()
+            self.sound_food_right.vars["I_input"].push_to_device()
 
         # === 시뮬레이션 10스텝 실행 (spike_recording으로 배치 수집) ===
         for _ in range(10):
