@@ -8105,6 +8105,26 @@ class ForagerBrain:
                 2.0, sparsity=0.05)
             print(f"    A1_Food→KC: 2.0, sparsity=0.05 (auditory→BG learning)")
 
+        # assoc_edible → KC (연합 피질 "먹을 수 있는 것" → BG 학습)
+        if hasattr(self, 'assoc_edible'):
+            self._create_static_synapse(
+                "assoc_edible_to_kc_l", self.assoc_edible, self.kc_left,
+                2.0, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_edible_to_kc_r", self.assoc_edible, self.kc_right,
+                2.0, sparsity=0.05)
+            print(f"    Assoc_Edible→KC: 2.0, sparsity=0.05 (association→BG learning)")
+
+        # ppc_goal_food → KC (공간 목표 → BG 학습)
+        if hasattr(self, 'ppc_goal_food'):
+            self._create_static_synapse(
+                "ppc_goal_food_to_kc_l", self.ppc_goal_food, self.kc_left,
+                1.5, sparsity=0.05)
+            self._create_static_synapse(
+                "ppc_goal_food_to_kc_r", self.ppc_goal_food, self.kc_right,
+                1.5, sparsity=0.05)
+            print(f"    PPC_Goal_Food→KC: 1.5, sparsity=0.05 (spatial goal→BG learning)")
+
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
             "kc_l_to_kc_inh_l", self.kc_left, self.kc_inhibitory_left,
