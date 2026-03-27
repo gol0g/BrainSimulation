@@ -321,16 +321,19 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║    - 학습 추이 시각화 (실시간 그래프)                           ║
 ║    - 포식자 밸런스: speed 2.5, chase 150px                     ║
 ║                                                               ║
-║  검증 결과 (800맵 200ep):                                     ║
-║    - Survival: 64% ✓                                          ║
-║    - Reward Freq: 2.58% ✓                                     ║
-║    - Selectivity: 0.64                                        ║
+║  검증 결과 (800맵 100ep):                                     ║
+║    - Survival: 64% ✓ (peak 80% at 20ep)                      ║
+║    - Reward Freq: 2.55% ✓                                     ║
+║    - Selectivity: 0.61                                        ║
 ║    - Predator Death: 19%                                      ║
 ║    - Pain Death: 0% ✓                                         ║
 ║                                                               ║
-║  L17: Social→KC pathway (2026-03-25)                           ║
-║    - Social_Memory→KC(L/R) static 2.0 (NPC 관찰→BG 학습)      ║
-║    - E3: Temporal shift (1500스텝마다 rich zone 이동)           ║
+║  KC 입력 (검증 완료):                                          ║
+║    - food_eye + good/bad_food (시각)                           ║
+║    - IT_Food (피질 범주)                                       ║
+║    - Assoc_Edible (연합 "먹을 수 있는 것")                     ║
+║    - PPC_Goal_Food (공간 목표)                                 ║
+║  비활성: Social/A1/Wernicke→KC (KC 노이즈 → 추후 용량 확장)   ║
 ║                                                               ║
 ║  뉴런 수:       24,510                                          ║
 ║  학습 시냅스:   47 (41 + 4 KC + 2 food_approach)                ║
