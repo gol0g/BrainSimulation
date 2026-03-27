@@ -8125,6 +8125,16 @@ class ForagerBrain:
                 1.5, sparsity=0.05)
             print(f"    PPC_Goal_Food→KC: 1.5, sparsity=0.05 (spatial goal→BG learning)")
 
+        # wernicke_food → KC (언어 "음식 소리" → BG 학습)
+        if self.config.language_enabled and hasattr(self, 'wernicke_food'):
+            self._create_static_synapse(
+                "wernicke_food_to_kc_l", self.wernicke_food, self.kc_left,
+                2.0, sparsity=0.05)
+            self._create_static_synapse(
+                "wernicke_food_to_kc_r", self.wernicke_food, self.kc_right,
+                2.0, sparsity=0.05)
+            print(f"    Wernicke_Food→KC: 2.0, sparsity=0.05 (language→BG learning)")
+
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
             "kc_l_to_kc_inh_l", self.kc_left, self.kc_inhibitory_left,
