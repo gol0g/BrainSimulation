@@ -9107,8 +9107,8 @@ class ForagerBrain:
         gw_food_r_spikes = 0
         gw_safety_spikes = 0
 
-        # === Phase 11: 청각 입력 (Sound → A1) ===
-        if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
+        # === Phase 11: 청각 입력 (Sound → A1) — 비활성화 (STS 과활성 → 성능 하락) ===
+        if False and self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
             sound_sensitivity = 40.0
             sd_l = np.mean(observation.get("sound_danger_left", np.zeros(4)))
             sd_r = np.mean(observation.get("sound_danger_right", np.zeros(4)))
