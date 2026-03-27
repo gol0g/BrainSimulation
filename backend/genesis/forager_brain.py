@@ -8085,25 +8085,8 @@ class ForagerBrain:
             "it_food_to_kc_r", self.it_food_category, self.kc_right,
             self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
 
-        # social_memory → KC (사회적 관찰 정보 → 패턴 분리 → BG 학습)
-        if self.config.social_brain_enabled and self.config.mirror_enabled and hasattr(self, 'social_memory'):
-            self._create_static_synapse(
-                "social_mem_to_kc_l", self.social_memory, self.kc_left,
-                2.0, sparsity=0.05)
-            self._create_static_synapse(
-                "social_mem_to_kc_r", self.social_memory, self.kc_right,
-                2.0, sparsity=0.05)
-            print(f"    Social_Memory→KC: 2.0, sparsity=0.05 (L17: social→BG learning)")
-
-        # a1_food → KC (청각 음식 신호 → 패턴 분리 → BG 학습)
-        if self.config.auditory_enabled and hasattr(self, 'a1_food'):
-            self._create_static_synapse(
-                "a1_food_to_kc_l", self.a1_food, self.kc_left,
-                2.0, sparsity=0.05)
-            self._create_static_synapse(
-                "a1_food_to_kc_r", self.a1_food, self.kc_right,
-                2.0, sparsity=0.05)
-            print(f"    A1_Food→KC: 2.0, sparsity=0.05 (auditory→BG learning)")
+        # social_memory / a1_food → KC: 비활성화 (KC에 노이즈 추가 → 성능 하락 확인)
+        # 추후 KC 용량 확장 또는 가중치 튜닝 후 재활성화
 
         # assoc_edible → KC (연합 피질 "먹을 수 있는 것" → BG 학습)
         if hasattr(self, 'assoc_edible'):
@@ -8125,15 +8108,7 @@ class ForagerBrain:
                 1.5, sparsity=0.05)
             print(f"    PPC_Goal_Food→KC: 1.5, sparsity=0.05 (spatial goal→BG learning)")
 
-        # wernicke_food → KC (언어 "음식 소리" → BG 학습)
-        if self.config.language_enabled and hasattr(self, 'wernicke_food'):
-            self._create_static_synapse(
-                "wernicke_food_to_kc_l", self.wernicke_food, self.kc_left,
-                2.0, sparsity=0.05)
-            self._create_static_synapse(
-                "wernicke_food_to_kc_r", self.wernicke_food, self.kc_right,
-                2.0, sparsity=0.05)
-            print(f"    Wernicke_Food→KC: 2.0, sparsity=0.05 (language→BG learning)")
+        # wernicke_food → KC: 비활성화 (KC 노이즈 문제, 추후 재활성화)
 
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
