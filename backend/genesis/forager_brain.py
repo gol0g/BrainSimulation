@@ -1150,8 +1150,8 @@ class ForagerBrainConfig:
 
     # ─── Phase L16: Sparse Expansion Layer (Mushroom Body / DG) ───
     sparse_expansion_enabled: bool = True
-    n_kc_per_side: int = 1500
-    n_kc_inhibitory_per_side: int = 200
+    n_kc_per_side: int = 3000       # 1500→3000 (다중감각 입력 수용)
+    n_kc_inhibitory_per_side: int = 400  # 200→400 (비례 확장)
     kc_food_eye_weight: float = 3.0
     kc_food_eye_sparsity: float = 0.10
     kc_good_bad_food_weight: float = 4.0
@@ -8085,8 +8085,15 @@ class ForagerBrain:
             "it_food_to_kc_r", self.it_food_category, self.kc_right,
             self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
 
-        # social_memory / a1_food → KC: 비활성화 (KC에 노이즈 추가 → 성능 하락 확인)
-        # 추후 KC 용량 확장 또는 가중치 튜닝 후 재활성화
+        # social_memory → KC (KC 3000으로 확장 → 재활성화)
+        if self.config.social_brain_enabled and self.config.mirror_enabled and hasattr(self, 'social_memory'):
+            self._create_static_synapse(
+                "social_mem_to_kc_l", self.social_memory, self.kc_left,
+                1.5, sparsity=0.03)
+            self._create_static_synapse(
+                "social_mem_to_kc_r", self.social_memory, self.kc_right,
+                1.5, sparsity=0.03)
+            print(f"    Social_Memory→KC: 1.5, sparsity=0.03")
 
         # assoc_edible → KC (연합 피질 "먹을 수 있는 것" → BG 학습)
         if hasattr(self, 'assoc_edible'):
@@ -8108,7 +8115,15 @@ class ForagerBrain:
                 1.5, sparsity=0.05)
             print(f"    PPC_Goal_Food→KC: 1.5, sparsity=0.05 (spatial goal→BG learning)")
 
-        # wernicke_food → KC: 비활성화 (KC 노이즈 문제, 추후 재활성화)
+        # wernicke_food → KC (KC 3000으로 확장 → 재활성화, 낮은 가중치)
+        if self.config.language_enabled and hasattr(self, 'wernicke_food'):
+            self._create_static_synapse(
+                "wernicke_food_to_kc_l", self.wernicke_food, self.kc_left,
+                1.0, sparsity=0.03)
+            self._create_static_synapse(
+                "wernicke_food_to_kc_r", self.wernicke_food, self.kc_right,
+                1.0, sparsity=0.03)
+            print(f"    Wernicke_Food→KC: 1.0, sparsity=0.03 (language→BG)")
 
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
@@ -9107,9 +9122,9 @@ class ForagerBrain:
         gw_food_r_spikes = 0
         gw_safety_spikes = 0
 
-        # === Phase 11: 청각 입력 (Sound → A1) — 비활성화 (STS 과활성 → 성능 하락) ===
-        if False and self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
-            sound_sensitivity = 40.0
+        # === Phase 11: 청각 입력 (Sound → A1) — sensitivity 절반으로 재활성화 ===
+        if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
+            sound_sensitivity = 20.0  # 40→20 (STS 과활성 방지)
             sd_l = np.mean(observation.get("sound_danger_left", np.zeros(4)))
             sd_r = np.mean(observation.get("sound_danger_right", np.zeros(4)))
             sf_l = np.mean(observation.get("sound_food_left", np.zeros(4)))
