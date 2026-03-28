@@ -321,19 +321,20 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 ║    - 학습 추이 시각화 (실시간 그래프)                           ║
 ║    - 포식자 밸런스: speed 2.5, chase 150px                     ║
 ║                                                               ║
-║  검증 결과 (800맵 100ep):                                     ║
-║    - Survival: 64% ✓ (peak 80% at 20ep)                      ║
-║    - Reward Freq: 2.55% ✓                                     ║
-║    - Selectivity: 0.61                                        ║
-║    - Predator Death: 19%                                      ║
+║  검증 결과 (800맵 KC3000 400ep):                               ║
+║    - Survival: avg 61%, peak 74% ✓                            ║
+║    - Reward Freq: 2.62% ✓                                     ║
+║    - Selectivity: 0.67                                        ║
+║    - Predator Death: 21%                                      ║
 ║    - Pain Death: 0% ✓                                         ║
 ║                                                               ║
-║  KC 입력 (검증 완료):                                          ║
+║  KC 3000×2 입력 (9개 다중감각):                                ║
 ║    - food_eye + good/bad_food (시각)                           ║
 ║    - IT_Food (피질 범주)                                       ║
 ║    - Assoc_Edible (연합 "먹을 수 있는 것")                     ║
 ║    - PPC_Goal_Food (공간 목표)                                 ║
-║  비활성: Social/A1/Wernicke→KC (KC 노이즈 → 추후 용량 확장)   ║
+║    - Social_Memory (사회적 관찰)                               ║
+║    - Wernicke_Food (언어 이해)                                 ║
 ║                                                               ║
 ║  뉴런 수:       24,510                                          ║
 ║  학습 시냅스:   47 (41 + 4 KC + 2 food_approach)                ║
