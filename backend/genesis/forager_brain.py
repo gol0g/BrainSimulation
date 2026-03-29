@@ -9556,6 +9556,10 @@ class ForagerBrain:
                 self.kc_d2_trace_l = min(self.kc_d2_trace_l * trace_decay + kc_l_active, trace_max)
                 self.kc_d2_trace_r = min(self.kc_d2_trace_r * trace_decay + kc_r_active, trace_max)
 
+                # C1: Sound long-trace 롤백 (trace 가산이 KC 학습 방해 확인)
+                # Call Semantics는 R-STDP(도파민 필수)로 해결 불가
+                # 다음 단계: sound→D1 Hebbian 또는 환경 설계 변경 필요
+
         # Phase L12: GW rate + broadcast
         gw_food_l_rate = gw_food_r_rate = gw_safety_rate = 0.0
         gw_broadcast = "neutral"
