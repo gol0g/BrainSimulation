@@ -69,6 +69,8 @@ def test_call_semantics(brain, n_trials=100):
         angle, info = brain.process(test_obs)
 
         # 판정: call 방향으로 회전했는가
+        # angle_delta = (motor_R - motor_L) * 0.5
+        # angle > 0 = 오른쪽 회전, angle < 0 = 왼쪽 회전
         if call_direction == "left" and angle < -0.01:
             correct += 1
         elif call_direction == "right" and angle > 0.01:

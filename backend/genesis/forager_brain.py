@@ -8095,6 +8095,16 @@ class ForagerBrain:
                 1.5, sparsity=0.03)
             print(f"    Social_Memory→KC: 1.5, sparsity=0.03")
 
+        # a1_food → KC (청각→BG, Call Semantics 강화용)
+        if self.config.auditory_enabled and hasattr(self, 'a1_food'):
+            self._create_static_synapse(
+                "a1_food_to_kc_l", self.a1_food, self.kc_left,
+                3.0, sparsity=0.05)
+            self._create_static_synapse(
+                "a1_food_to_kc_r", self.a1_food, self.kc_right,
+                3.0, sparsity=0.05)
+            print(f"    A1_Food→KC: 3.0, sparsity=0.05 (auditory→BG for call semantics)")
+
         # assoc_edible → KC (연합 피질 "먹을 수 있는 것" → BG 학습)
         if hasattr(self, 'assoc_edible'):
             self._create_static_synapse(
@@ -8115,15 +8125,15 @@ class ForagerBrain:
                 1.5, sparsity=0.05)
             print(f"    PPC_Goal_Food→KC: 1.5, sparsity=0.05 (spatial goal→BG learning)")
 
-        # wernicke_food → KC (KC 3000으로 확장 → 재활성화, 낮은 가중치)
+        # wernicke_food → KC (Call Semantics 핵심 경로)
         if self.config.language_enabled and hasattr(self, 'wernicke_food'):
             self._create_static_synapse(
                 "wernicke_food_to_kc_l", self.wernicke_food, self.kc_left,
-                1.0, sparsity=0.03)
+                3.0, sparsity=0.05)
             self._create_static_synapse(
                 "wernicke_food_to_kc_r", self.wernicke_food, self.kc_right,
-                1.0, sparsity=0.03)
-            print(f"    Wernicke_Food→KC: 1.0, sparsity=0.03 (language→BG)")
+                3.0, sparsity=0.05)
+            print(f"    Wernicke_Food→KC: 3.0, sparsity=0.05 (language→BG, call semantics)")
 
         # === C) WTA synapses: 4 SPARSE static ===
         self._create_static_synapse(
