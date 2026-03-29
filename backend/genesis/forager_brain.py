@@ -4947,25 +4947,24 @@ class ForagerBrain:
 
         return results if results else None
 
-    def learn_food_location(self, food_position: tuple = None):
+    def learn_food_location(self, food_position: tuple = None, anti_learn: bool = False):
         """
         Phase 3b/3c: 음식 발견 시 Hebbian 학습
-
-        음식을 먹었을 때 호출되어 현재 활성화된 Place Cells와
-        Food Memory 사이의 연결을 강화합니다.
-
-        Phase 3c (directional): 음식 위치에 따라 좌/우 Food Memory 선택적 학습
+        C0.5: anti_learn=True면 가중치 약화 (나쁜 음식 위치 기억 약화)
 
         Args:
-            food_position: (x, y) 정규화된 음식 위치 (Phase 3c용)
+            food_position: (x, y) 정규화된 음식 위치
+            anti_learn: True면 Δw = -η * pre_activity (가중치 감소)
 
-        Δw = η * pre_activity
+        Δw = ±η * pre_activity
         """
         if not self.config.hippocampus_enabled or not self.food_learning_enabled:
             return
 
         active_cells = self.last_active_place_cells
         eta = self.config.place_to_food_memory_eta
+        if anti_learn:
+            eta = -eta * 0.5  # 약화는 강화의 절반 속도
         w_max = self.config.place_to_food_memory_w_max
         n_pre = self.config.n_place_cells
 
@@ -5426,7 +5425,8 @@ class ForagerBrain:
             if "swr_experience_buffer" in data:
                 buf = data["swr_experience_buffer"]
                 if buf.size > 0:
-                    self.experience_buffer = [tuple(row) for row in buf.reshape(-1, 5)]
+                    cols = buf.shape[-1] if buf.ndim > 1 else (6 if buf.size % 6 == 0 else 5)
+                    self.experience_buffer = [tuple(row) for row in buf.reshape(-1, cols)]
                     loaded += 1
 
         # Phase L13: Taste Aversion Hebbian (DENSE)
@@ -8540,11 +8540,14 @@ class ForagerBrain:
         return results
 
     def add_experience(self, pos_x: float, pos_y: float, food_type: int,
-                       step: int, reward: float):
-        """Phase L11: 경험 버퍼에 음식 이벤트 저장"""
+                       step: int, reward: float, tagged: bool = False):
+        """Phase L11 + C0.5: 경험 버퍼에 이벤트 저장 (selective replay용 tag)"""
         if not self.config.swr_replay_enabled:
             return
-        self.experience_buffer.append((pos_x, pos_y, food_type, step, reward))
+        # 음식 섭취 이벤트는 자동 tag (보상 시점 SWR 태깅 — Yang et al. Science 2024)
+        if reward != 0:
+            tagged = True
+        self.experience_buffer.append((pos_x, pos_y, food_type, step, reward, tagged))
         if len(self.experience_buffer) > self.config.swr_experience_max:
             self.experience_buffer = self.experience_buffer[-self.config.swr_experience_max:]
 
@@ -8560,21 +8563,37 @@ class ForagerBrain:
         if len(self.experience_buffer) == 0:
             return {"replayed_count": 0}
 
-        good_experiences = [e for e in self.experience_buffer if e[2] == 0]
-        if len(good_experiences) == 0:
-            good_experiences = self.experience_buffer
+        # C0.5: Selective Replay — tagged 경험 80% 우선 (Yang et al. Science 2024)
+        tagged_exp = [e for e in self.experience_buffer if len(e) > 5 and e[5]]
+        untagged_exp = [e for e in self.experience_buffer if len(e) <= 5 or not e[5]]
+        # fallback: 기존 5-tuple 경험은 good food만 선택
+        if not tagged_exp:
+            tagged_exp = [e for e in self.experience_buffer if e[2] == 0]
+        if not tagged_exp:
+            tagged_exp = self.experience_buffer
 
         stats_before = self.get_hippocampus_stats()
         avg_w_before = stats_before.get("avg_weight", 0.0) if stats_before else 0.0
 
-        n_replay = min(self.config.swr_replay_count, len(good_experiences))
-        replay_indices = np.random.choice(
-            len(good_experiences), size=n_replay, replace=False)
+        n_replay = min(self.config.swr_replay_count, len(self.experience_buffer))
+        # 80% tagged, 20% random
+        n_tagged = min(int(n_replay * 0.8), len(tagged_exp))
+        n_random = n_replay - n_tagged
+
+        replay_pool = []
+        if n_tagged > 0 and tagged_exp:
+            idxs = np.random.choice(len(tagged_exp), size=n_tagged, replace=False)
+            replay_pool.extend([tagged_exp[i] for i in idxs])
+        if n_random > 0 and untagged_exp:
+            idxs = np.random.choice(len(untagged_exp), size=min(n_random, len(untagged_exp)), replace=False)
+            replay_pool.extend([untagged_exp[i] for i in idxs])
+        if not replay_pool:
+            replay_pool = self.experience_buffer[:n_replay]
 
         replayed = 0
-        for idx in replay_indices:
-            exp = good_experiences[idx]
-            pos_x, pos_y, food_type, step, reward = exp
+        for exp in replay_pool:
+            pos_x, pos_y, food_type = exp[0], exp[1], exp[2]
+            step, reward = exp[3], exp[4]
 
             # 1. SWR Gate ON → replay_inhibitory → Motor 억제
             self.swr_gate.vars["I_input"].view[:] = 30.0
@@ -8597,7 +8616,11 @@ class ForagerBrain:
                 self.model.step_time()
 
             # 5. Hebbian 학습 (기존 함수 재사용)
-            self.learn_food_location(food_position=(pos_x, pos_y))
+            # C0.5: negative 경험 (bad food)은 anti-learning (가중치 약화)
+            if reward < 0:
+                self.learn_food_location(food_position=(pos_x, pos_y), anti_learn=True)
+            else:
+                self.learn_food_location(food_position=(pos_x, pos_y))
             replayed += 1
 
         # 리플레이 후 정리
