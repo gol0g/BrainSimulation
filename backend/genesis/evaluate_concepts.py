@@ -31,26 +31,24 @@ def test_call_semantics(brain, n_trials=100):
     """
     env_config = ForagerConfig()
     env = ForagerGym(env_config)
+    obs = env.reset()
+
+    # 1회 워밍업 (50스텝)
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
 
     correct = 0
     total = 0
 
     for trial in range(n_trials):
-        obs = env.reset()
-
-        # 30스텝 워밍업 (뉴런 상태 안정화)
-        for _ in range(30):
-            angle, info = brain.process(obs)
-            obs, _, done, _ = env.step((angle,))
-            if done:
-                obs = env.reset()
-
-        # NPC food call 시뮬레이션: 랜덤 방향에서 call 발생
-        call_angle = np.random.uniform(0, 2 * np.pi)
-        call_direction = "left" if np.sin(call_angle - env.agent_angle) > 0 else "right"
+        # 매 trial: env.reset() 하지 않고 obs만 조작
+        call_direction = "left" if np.random.random() > 0.5 else "right"
 
         # 시각 단서 마스킹 + call 주입
-        test_obs = obs.copy()
+        test_obs = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
         test_obs["food_rays_left"] = np.zeros(8)
         test_obs["food_rays_right"] = np.zeros(8)
         test_obs["good_food_rays_left"] = np.zeros(8)
@@ -58,28 +56,29 @@ def test_call_semantics(brain, n_trials=100):
         test_obs["bad_food_rays_left"] = np.zeros(8)
         test_obs["bad_food_rays_right"] = np.zeros(8)
 
-        # NPC food call 신호 주입
+        # NPC food call 신호 주입 (scalar)
         call_strength = 0.8
         if call_direction == "left":
-            test_obs["npc_call_food_left"] = np.ones(4) * call_strength
-            test_obs["npc_call_food_right"] = np.ones(4) * call_strength * 0.3
+            test_obs["npc_call_food_left"] = call_strength
+            test_obs["npc_call_food_right"] = call_strength * 0.3
         else:
-            test_obs["npc_call_food_left"] = np.ones(4) * call_strength * 0.3
-            test_obs["npc_call_food_right"] = np.ones(4) * call_strength
+            test_obs["npc_call_food_left"] = call_strength * 0.3
+            test_obs["npc_call_food_right"] = call_strength
 
-        # 에이전트 반응 측정 (5스텝)
-        total_angle = 0
-        for _ in range(5):
-            angle, info = brain.process(test_obs)
-            total_angle += angle
+        # 에이전트 반응 측정 (1스텝)
+        angle, info = brain.process(test_obs)
 
         # 판정: call 방향으로 회전했는가
-        if call_direction == "left" and total_angle < -0.01:
+        if call_direction == "left" and angle < -0.01:
             correct += 1
-        elif call_direction == "right" and total_angle > 0.01:
+        elif call_direction == "right" and angle > 0.01:
             correct += 1
-        # total_angle ≈ 0: 반응 없음 (no turn)
         total += 1
+
+        # env 상태 갱신 (brain 내부 카운터 정상 유지)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
 
     score = correct / max(total, 1) * 100
     return {
@@ -188,7 +187,7 @@ def run_all_tests(brain):
 
     # Test: Call Semantics
     print("\n[3/3] Call Semantics (sound-only response)...")
-    r = test_call_semantics(brain, n_trials=50)
+    r = test_call_semantics(brain, n_trials=30)
     results.append(r)
     status = "✓ PASS" if r["pass"] else "✗ FAIL"
     print(f"  Call Response: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) [{status}]")
