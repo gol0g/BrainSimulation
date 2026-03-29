@@ -8095,15 +8095,15 @@ class ForagerBrain:
                 1.5, sparsity=0.03)
             print(f"    Social_Memory→KC: 1.5, sparsity=0.03")
 
-        # a1_food → KC (청각→BG, Call Semantics 강화용)
-        if self.config.auditory_enabled and hasattr(self, 'a1_food'):
+        # sound_food L/R → KC L/R (측면화 청각→BG, 방향 정보 보존)
+        if self.config.auditory_enabled and hasattr(self, 'sound_food_left'):
             self._create_static_synapse(
-                "a1_food_to_kc_l", self.a1_food, self.kc_left,
-                3.0, sparsity=0.05)
+                "sound_food_l_to_kc_l", self.sound_food_left, self.kc_left,
+                4.0, sparsity=0.08)
             self._create_static_synapse(
-                "a1_food_to_kc_r", self.a1_food, self.kc_right,
-                3.0, sparsity=0.05)
-            print(f"    A1_Food→KC: 3.0, sparsity=0.05 (auditory→BG for call semantics)")
+                "sound_food_r_to_kc_r", self.sound_food_right, self.kc_right,
+                4.0, sparsity=0.08)
+            print(f"    Sound_Food_L→KC_L, R→KC_R: 4.0, sparsity=0.08 (lateralized auditory→BG)")
 
         # assoc_edible → KC (연합 피질 "먹을 수 있는 것" → BG 학습)
         if hasattr(self, 'assoc_edible'):
@@ -9170,6 +9170,16 @@ class ForagerBrain:
             self.sound_danger_right.vars["I_input"].push_to_device()
             self.sound_food_left.vars["I_input"].push_to_device()
             self.sound_food_right.vars["I_input"].push_to_device()
+
+            # C1: Food sound cues → A1 (고음=음식 안전, 저음=음식 위험)
+            food_sound_high = observation.get("food_sound_high", 0.0)
+            food_sound_low = observation.get("food_sound_low", 0.0)
+            if food_sound_high > 0 or food_sound_low > 0:
+                food_sound_sens = 30.0
+                self.a1_food.vars["I_input"].view[:] += food_sound_high * food_sound_sens
+                self.a1_food.vars["I_input"].push_to_device()
+                self.a1_danger.vars["I_input"].view[:] += food_sound_low * food_sound_sens
+                self.a1_danger.vars["I_input"].push_to_device()
 
         # === 시뮬레이션 10스텝 실행 (spike_recording으로 배치 수집) ===
         for _ in range(10):

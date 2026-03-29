@@ -115,6 +115,12 @@ class ForagerConfig:
     food_type_ratio: float = 0.6           # 좋은 음식 비율 (60%)
     bad_food_energy: float = -5.0          # 나쁜 음식 에너지 (부정적)
 
+    # === Phase C1: Food Sound Cues (감각 모호성) ===
+    food_sound_cue_enabled: bool = True        # 음식별 소리 단서 활성화
+    food_sound_range: float = 130.0            # 소리 감지 범위 (800: 130)
+    good_food_sound_freq: float = 0.8          # 좋은 음식: 고음 (0.8)
+    bad_food_sound_freq: float = 0.2           # 나쁜 음식: 저음 (0.2)
+
     # === Phase L6: Food Cluster Respawn (예측 학습 환경) ===
     food_cluster_respawn: bool = True         # 클러스터 리스폰 활성화
     food_cluster_prob: float = 0.6            # 먹은 위치 근처 리스폰 확률 (60%)
@@ -1447,6 +1453,19 @@ class ForagerGym:
                 rays *= (1.0 + np.random.normal(0, jitter_std, rays.shape))
                 np.clip(rays, 0.0, 1.0, out=rays)
 
+        # C1: Food sound cues — 근처 음식의 소리 단서 (good=고음, bad=저음)
+        food_sound_high = 0.0
+        food_sound_low = 0.0
+        if self.config.food_sound_cue_enabled:
+            for fx, fy, ftype in self.foods:
+                dist = np.sqrt((self.agent_x - fx)**2 + (self.agent_y - fy)**2)
+                if dist < self.config.food_sound_range:
+                    strength = 1.0 - dist / self.config.food_sound_range
+                    if ftype == 0:  # good food
+                        food_sound_high = max(food_sound_high, strength)
+                    else:  # bad food
+                        food_sound_low = max(food_sound_low, strength)
+
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
             "food_rays_left": food_rays_l,
@@ -1516,6 +1535,10 @@ class ForagerGym:
 
             # E2: Zone richness (에이전트가 rich zone 내에 있으면 1.0, 아니면 0.0)
             "zone_richness": float(self._in_rich_zone(self.agent_x, self.agent_y) >= 0),
+
+            # C1: Food sound cues (음식별 소리 단서 — 접근 시 소리가 들림)
+            "food_sound_high": food_sound_high,
+            "food_sound_low": food_sound_low,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
