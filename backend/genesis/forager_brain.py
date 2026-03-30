@@ -1149,9 +1149,16 @@ class ForagerBrainConfig:
     narrative_body_change_scale: float = 10.0      # Amplify Δbody for salience
 
     # ─── Phase L16: Sparse Expansion Layer (Mushroom Body / DG) ───
+    # C1.1: KC를 3개 감각 구획으로 분리 (visual/auditory/spatial)
     sparse_expansion_enabled: bool = True
-    n_kc_per_side: int = 3000       # 1500→3000 (다중감각 입력 수용)
-    n_kc_inhibitory_per_side: int = 400  # 200→400 (비례 확장)
+    n_kc_per_side: int = 3000       # 총합 유지 (2000+500+500)
+    n_kc_visual_per_side: int = 2000   # 시각 전용 (food_eye, good/bad_food, IT_Food, Assoc_Edible)
+    n_kc_auditory_per_side: int = 500  # 청각/언어 전용 (Sound_Food, Wernicke)
+    n_kc_spatial_per_side: int = 500   # 공간/사회 전용 (PPC, Social)
+    n_kc_inhibitory_per_side: int = 400  # 총합 유지 (200+100+100)
+    n_kc_visual_inh_per_side: int = 200
+    n_kc_auditory_inh_per_side: int = 100
+    n_kc_spatial_inh_per_side: int = 100
     kc_food_eye_weight: float = 3.0
     kc_food_eye_sparsity: float = 0.10
     kc_good_bad_food_weight: float = 4.0
@@ -1165,9 +1172,11 @@ class ForagerBrainConfig:
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     kc_rstdp_eta: float = 0.0003
+    kc_rstdp_eta_auditory: float = 0.0005  # 청각 구획 더 빠른 학습
     kc_rstdp_w_max: float = 3.0
     kc_rstdp_w_rest: float = 0.5
     kc_d2_eta: float = 0.0002
+    kc_d2_eta_auditory: float = 0.0003     # 청각 D2도 비례 증가
     kc_d2_w_min: float = 0.05
 
     dt: float = 1.0
@@ -1369,12 +1378,31 @@ class ForagerBrain:
         self._last_hippo_avg_w = 0.0
         self._last_garcia_avg_w = 0.0
 
-        # Phase L16: Sparse Expansion (KC) state defaults
+        # Phase L16: Sparse Expansion (KC) state defaults - 3 compartments
         if self.config.sparse_expansion_enabled:
-            self.kc_d1_trace_l = 0.0
-            self.kc_d1_trace_r = 0.0
-            self.kc_d2_trace_l = 0.0
-            self.kc_d2_trace_r = 0.0
+            # Visual compartment traces
+            self.kc_visual_d1_trace_l = 0.0
+            self.kc_visual_d1_trace_r = 0.0
+            self.kc_visual_d2_trace_l = 0.0
+            self.kc_visual_d2_trace_r = 0.0
+            # Auditory compartment traces
+            self.kc_auditory_d1_trace_l = 0.0
+            self.kc_auditory_d1_trace_r = 0.0
+            self.kc_auditory_d2_trace_l = 0.0
+            self.kc_auditory_d2_trace_r = 0.0
+            # Spatial compartment traces
+            self.kc_spatial_d1_trace_l = 0.0
+            self.kc_spatial_d1_trace_r = 0.0
+            self.kc_spatial_d2_trace_l = 0.0
+            self.kc_spatial_d2_trace_r = 0.0
+            # Per-compartment rates
+            self.last_kc_visual_l_rate = 0.0
+            self.last_kc_visual_r_rate = 0.0
+            self.last_kc_auditory_l_rate = 0.0
+            self.last_kc_auditory_r_rate = 0.0
+            self.last_kc_spatial_l_rate = 0.0
+            self.last_kc_spatial_r_rate = 0.0
+            # Aggregate rates (backward compat)
             self.last_kc_l_rate = 0.0
             self.last_kc_r_rate = 0.0
 
@@ -1855,12 +1883,15 @@ class ForagerBrain:
             self.good_food_to_motor_l.pull_connectivity_from_device()
             self.good_food_to_motor_r.pull_connectivity_from_device()
 
-        # Phase L16: KC→D1/D2 SPARSE connectivity pull
-        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
-            self.kc_to_d1_l.pull_connectivity_from_device()
-            self.kc_to_d1_r.pull_connectivity_from_device()
-            self.kc_to_d2_l.pull_connectivity_from_device()
-            self.kc_to_d2_r.pull_connectivity_from_device()
+        # Phase L16: KC→D1/D2 SPARSE connectivity pull (3 compartments)
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_visual_to_d1_l'):
+            for syn in [self.kc_visual_to_d1_l, self.kc_visual_to_d1_r,
+                        self.kc_visual_to_d2_l, self.kc_visual_to_d2_r,
+                        self.kc_auditory_to_d1_l, self.kc_auditory_to_d1_r,
+                        self.kc_auditory_to_d2_l, self.kc_auditory_to_d2_r,
+                        self.kc_spatial_to_d1_l, self.kc_spatial_to_d1_r,
+                        self.kc_spatial_to_d2_l, self.kc_spatial_to_d2_r]:
+                syn.pull_connectivity_from_device()
 
         # Phase L10: NAc R-STDP SPARSE connectivity pull
         if self.config.td_learning_enabled and self.config.basal_ganglia_enabled:
@@ -4850,49 +4881,61 @@ class ForagerBrain:
                     syn.vars["g"].push_to_device()
                 results[f"it_food_d2_{label}"] = float(np.nanmean(w))
 
-        # === Phase L16: KC → D1/D2 ===
-        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
-            kc_eta = self.config.kc_rstdp_eta
+        # === Phase L16: KC → D1/D2 (3 compartments) ===
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_visual_to_d1_l'):
             kc_w_max = self.config.kc_rstdp_w_max
             kc_w_rest = self.config.kc_rstdp_w_rest
-            kc_d2_eta = self.config.kc_d2_eta
             kc_w_min = self.config.kc_d2_w_min
 
-            for side, d1_trace, d2_trace, d1_syn, d2_syn in [
-                ("l", self.kc_d1_trace_l, self.kc_d2_trace_l, self.kc_to_d1_l, self.kc_to_d2_l),
-                ("r", self.kc_d1_trace_r, self.kc_d2_trace_r, self.kc_to_d1_r, self.kc_to_d2_r),
-            ]:
-                # KC→D1 R-STDP
-                need_update = False
-                d1_syn.vars["g"].pull_from_device()
-                w = d1_syn.vars["g"].values.copy()
-                if apply_decay:
-                    w -= (decay * 50) * (w - kc_w_rest)
-                    need_update = True
-                if has_dopamine and d1_trace > 0.01:
-                    w += kc_eta * d1_trace * self.dopamine_level
-                    need_update = True
-                if need_update:
-                    np.clip(w, 0.0, kc_w_max, out=w)
-                    d1_syn.vars["g"].values = w
-                    d1_syn.vars["g"].push_to_device()
-                results[f"kc_d1_{side}"] = float(np.nanmean(w))
+            # Per-compartment eta: auditory gets faster learning
+            compartment_params = [
+                ("visual", self.config.kc_rstdp_eta, self.config.kc_d2_eta,
+                 self.kc_visual_to_d1_l, self.kc_visual_to_d1_r,
+                 self.kc_visual_to_d2_l, self.kc_visual_to_d2_r),
+                ("auditory", self.config.kc_rstdp_eta_auditory, self.config.kc_d2_eta_auditory,
+                 self.kc_auditory_to_d1_l, self.kc_auditory_to_d1_r,
+                 self.kc_auditory_to_d2_l, self.kc_auditory_to_d2_r),
+                ("spatial", self.config.kc_rstdp_eta, self.config.kc_d2_eta,
+                 self.kc_spatial_to_d1_l, self.kc_spatial_to_d1_r,
+                 self.kc_spatial_to_d2_l, self.kc_spatial_to_d2_r),
+            ]
 
-                # KC→D2 Anti-Hebbian
-                need_update = False
-                d2_syn.vars["g"].pull_from_device()
-                w = d2_syn.vars["g"].values.copy()
-                if apply_decay:
-                    w -= (decay * 50) * (w - kc_w_rest)
-                    need_update = True
-                if has_dopamine and d2_trace > 0.01:
-                    w -= kc_d2_eta * d2_trace * self.dopamine_level
-                    need_update = True
-                if need_update:
-                    np.clip(w, kc_w_min, kc_w_max, out=w)
-                    d2_syn.vars["g"].values = w
-                    d2_syn.vars["g"].push_to_device()
-                results[f"kc_d2_{side}"] = float(np.nanmean(w))
+            for comp_tag, eta_d1, eta_d2, d1_l_syn, d1_r_syn, d2_l_syn, d2_r_syn in compartment_params:
+                for side, d1_syn, d2_syn in [("l", d1_l_syn, d2_l_syn), ("r", d1_r_syn, d2_r_syn)]:
+                    d1_trace = getattr(self, f'kc_{comp_tag}_d1_trace_{side}')
+                    d2_trace = getattr(self, f'kc_{comp_tag}_d2_trace_{side}')
+
+                    # KC→D1 R-STDP
+                    need_update = False
+                    d1_syn.vars["g"].pull_from_device()
+                    w = d1_syn.vars["g"].values.copy()
+                    if apply_decay:
+                        w -= (decay * 50) * (w - kc_w_rest)
+                        need_update = True
+                    if has_dopamine and d1_trace > 0.01:
+                        w += eta_d1 * d1_trace * self.dopamine_level
+                        need_update = True
+                    if need_update:
+                        np.clip(w, 0.0, kc_w_max, out=w)
+                        d1_syn.vars["g"].values = w
+                        d1_syn.vars["g"].push_to_device()
+                    results[f"kc_{comp_tag}_d1_{side}"] = float(np.nanmean(w))
+
+                    # KC→D2 Anti-Hebbian
+                    need_update = False
+                    d2_syn.vars["g"].pull_from_device()
+                    w = d2_syn.vars["g"].values.copy()
+                    if apply_decay:
+                        w -= (decay * 50) * (w - kc_w_rest)
+                        need_update = True
+                    if has_dopamine and d2_trace > 0.01:
+                        w -= eta_d2 * d2_trace * self.dopamine_level
+                        need_update = True
+                    if need_update:
+                        np.clip(w, kc_w_min, kc_w_max, out=w)
+                        d2_syn.vars["g"].values = w
+                        d2_syn.vars["g"].push_to_device()
+                    results[f"kc_{comp_tag}_d2_{side}"] = float(np.nanmean(w))
 
         # === Food Approach R-STDP (good_food_eye → Motor, 학습 기반 접근) ===
         if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
@@ -5267,16 +5310,24 @@ class ForagerBrain:
             self.agency_to_narrative_hebbian.vars["g"].pull_from_device()
             weights["agency_narrative"] = self.agency_to_narrative_hebbian.vars["g"].view.copy()
 
-        # Phase L16: KC→D1/D2 (4 SPARSE synapses)
-        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
-            self.kc_to_d1_l.vars["g"].pull_from_device()
-            weights["kc_d1_left"] = self.kc_to_d1_l.vars["g"].values.copy()
-            self.kc_to_d1_r.vars["g"].pull_from_device()
-            weights["kc_d1_right"] = self.kc_to_d1_r.vars["g"].values.copy()
-            self.kc_to_d2_l.vars["g"].pull_from_device()
-            weights["kc_d2_left"] = self.kc_to_d2_l.vars["g"].values.copy()
-            self.kc_to_d2_r.vars["g"].pull_from_device()
-            weights["kc_d2_right"] = self.kc_to_d2_r.vars["g"].values.copy()
+        # Phase L16: KC→D1/D2 (12 SPARSE synapses, 3 compartments)
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_visual_to_d1_l'):
+            for comp_tag, d1_l, d1_r, d2_l, d2_r in [
+                ("visual", self.kc_visual_to_d1_l, self.kc_visual_to_d1_r,
+                 self.kc_visual_to_d2_l, self.kc_visual_to_d2_r),
+                ("auditory", self.kc_auditory_to_d1_l, self.kc_auditory_to_d1_r,
+                 self.kc_auditory_to_d2_l, self.kc_auditory_to_d2_r),
+                ("spatial", self.kc_spatial_to_d1_l, self.kc_spatial_to_d1_r,
+                 self.kc_spatial_to_d2_l, self.kc_spatial_to_d2_r),
+            ]:
+                d1_l.vars["g"].pull_from_device()
+                weights[f"kc_{comp_tag}_d1_left"] = d1_l.vars["g"].values.copy()
+                d1_r.vars["g"].pull_from_device()
+                weights[f"kc_{comp_tag}_d1_right"] = d1_r.vars["g"].values.copy()
+                d2_l.vars["g"].pull_from_device()
+                weights[f"kc_{comp_tag}_d2_left"] = d2_l.vars["g"].values.copy()
+                d2_r.vars["g"].pull_from_device()
+                weights[f"kc_{comp_tag}_d2_right"] = d2_r.vars["g"].values.copy()
 
         # Food Approach (2 SPARSE synapses)
         if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
@@ -5454,14 +5505,23 @@ class ForagerBrain:
                 self.agency_to_narrative_hebbian.vars["g"].push_to_device()
                 loaded += 1
 
-        # Phase L16: KC→D1/D2 (SPARSE)
-        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
-            for key, syn in [
-                ("kc_d1_left", self.kc_to_d1_l),
-                ("kc_d1_right", self.kc_to_d1_r),
-                ("kc_d2_left", self.kc_to_d2_l),
-                ("kc_d2_right", self.kc_to_d2_r),
-            ]:
+        # Phase L16: KC→D1/D2 (SPARSE, 3 compartments)
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_visual_to_d1_l'):
+            kc_compartment_syns = [
+                ("kc_visual_d1_left", self.kc_visual_to_d1_l),
+                ("kc_visual_d1_right", self.kc_visual_to_d1_r),
+                ("kc_visual_d2_left", self.kc_visual_to_d2_l),
+                ("kc_visual_d2_right", self.kc_visual_to_d2_r),
+                ("kc_auditory_d1_left", self.kc_auditory_to_d1_l),
+                ("kc_auditory_d1_right", self.kc_auditory_to_d1_r),
+                ("kc_auditory_d2_left", self.kc_auditory_to_d2_l),
+                ("kc_auditory_d2_right", self.kc_auditory_to_d2_r),
+                ("kc_spatial_d1_left", self.kc_spatial_to_d1_l),
+                ("kc_spatial_d1_right", self.kc_spatial_to_d1_r),
+                ("kc_spatial_d2_left", self.kc_spatial_to_d2_l),
+                ("kc_spatial_d2_right", self.kc_spatial_to_d2_r),
+            ]
+            for key, syn in kc_compartment_syns:
                 if key in data:
                     self._load_sparse_weights(syn, data[key])
                     loaded += 1
@@ -8009,18 +8069,24 @@ class ForagerBrain:
 
     def _build_sparse_expansion_circuit(self):
         """Phase L16: Sparse Expansion Layer (Mushroom Body / DG)
+        C1.1: 3 compartments — visual(2000), auditory(500), spatial(500)
 
         생물학적 근거:
         - 초파리 Mushroom Body: 희소한 Kenyon Cell 표현 (Aso et al., 2014)
         - 해마 DG: pattern separation via sparse coding (Leutgeb et al., 2007)
+        - 감각 구획화: 초파리 MB calyx의 modality-specific input zones
         - 적은 입력 → 많은 KC (expansion) → WTA로 희소화 → D1/D2 학습
         """
         from pygenn import init_var, init_weight_update, init_postsynaptic, init_sparse_connectivity
 
-        n_kc = self.config.n_kc_per_side
-        n_inh = self.config.n_kc_inhibitory_per_side
+        n_vis = self.config.n_kc_visual_per_side
+        n_aud = self.config.n_kc_auditory_per_side
+        n_spa = self.config.n_kc_spatial_per_side
+        n_vis_inh = self.config.n_kc_visual_inh_per_side
+        n_aud_inh = self.config.n_kc_auditory_inh_per_side
+        n_spa_inh = self.config.n_kc_spatial_inh_per_side
 
-        print(f"  Phase L16: Building Sparse Expansion (KC)...")
+        print(f"  Phase L16: Building Sparse Expansion (KC) — 3 compartments...")
 
         # === KC LIF parameters (high C for sparse firing) ===
         kc_params = {
@@ -8037,150 +8103,228 @@ class ForagerBrain:
         }
         kc_inh_init = {"V": -65.0, "RefracTime": 0.0, "I_input": 0.0}
 
-        # === A) KC Populations ===
-        self.kc_left = self.model.add_neuron_population(
-            "kc_left", n_kc, "LIF", kc_params, kc_init)
-        self.kc_right = self.model.add_neuron_population(
-            "kc_right", n_kc, "LIF", kc_params, kc_init)
-        self.kc_inhibitory_left = self.model.add_neuron_population(
-            "kc_inhibitory_left", n_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
-        self.kc_inhibitory_right = self.model.add_neuron_population(
-            "kc_inhibitory_right", n_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
+        # === A) KC Populations — 3 compartments × 2 sides ===
+        # Visual compartment (2000×2)
+        self.kc_visual_left = self.model.add_neuron_population(
+            "kc_visual_left", n_vis, "LIF", kc_params, kc_init)
+        self.kc_visual_right = self.model.add_neuron_population(
+            "kc_visual_right", n_vis, "LIF", kc_params, kc_init)
+        self.kc_visual_inh_left = self.model.add_neuron_population(
+            "kc_visual_inh_left", n_vis_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
+        self.kc_visual_inh_right = self.model.add_neuron_population(
+            "kc_visual_inh_right", n_vis_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
 
-        self.kc_left.spike_recording_enabled = True
-        self.kc_right.spike_recording_enabled = True
-        self.kc_inhibitory_left.spike_recording_enabled = True
-        self.kc_inhibitory_right.spike_recording_enabled = True
+        # Auditory compartment (500×2)
+        self.kc_auditory_left = self.model.add_neuron_population(
+            "kc_auditory_left", n_aud, "LIF", kc_params, kc_init)
+        self.kc_auditory_right = self.model.add_neuron_population(
+            "kc_auditory_right", n_aud, "LIF", kc_params, kc_init)
+        self.kc_auditory_inh_left = self.model.add_neuron_population(
+            "kc_auditory_inh_left", n_aud_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
+        self.kc_auditory_inh_right = self.model.add_neuron_population(
+            "kc_auditory_inh_right", n_aud_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
 
-        # === B) Input synapses: 8 SPARSE static ===
-        # food_eye → KC
+        # Spatial compartment (500×2)
+        self.kc_spatial_left = self.model.add_neuron_population(
+            "kc_spatial_left", n_spa, "LIF", kc_params, kc_init)
+        self.kc_spatial_right = self.model.add_neuron_population(
+            "kc_spatial_right", n_spa, "LIF", kc_params, kc_init)
+        self.kc_spatial_inh_left = self.model.add_neuron_population(
+            "kc_spatial_inh_left", n_spa_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
+        self.kc_spatial_inh_right = self.model.add_neuron_population(
+            "kc_spatial_inh_right", n_spa_inh, sensory_lif_model, kc_inh_params, kc_inh_init)
+
+        # Spike recording for all compartments
+        for pop in [self.kc_visual_left, self.kc_visual_right,
+                    self.kc_visual_inh_left, self.kc_visual_inh_right,
+                    self.kc_auditory_left, self.kc_auditory_right,
+                    self.kc_auditory_inh_left, self.kc_auditory_inh_right,
+                    self.kc_spatial_left, self.kc_spatial_right,
+                    self.kc_spatial_inh_left, self.kc_spatial_inh_right]:
+            pop.spike_recording_enabled = True
+
+        # === B) Input synapses: compartment-specific ===
+
+        # --- Visual compartment inputs ---
+        # food_eye → KC_visual
         self._create_static_synapse(
-            "food_eye_l_to_kc_l", self.food_eye_left, self.kc_left,
+            "food_eye_l_to_kc_vis_l", self.food_eye_left, self.kc_visual_left,
             self.config.kc_food_eye_weight, sparsity=self.config.kc_food_eye_sparsity)
         self._create_static_synapse(
-            "food_eye_r_to_kc_r", self.food_eye_right, self.kc_right,
+            "food_eye_r_to_kc_vis_r", self.food_eye_right, self.kc_visual_right,
             self.config.kc_food_eye_weight, sparsity=self.config.kc_food_eye_sparsity)
-
-        # good_food_eye → KC
+        # good_food_eye → KC_visual
         self._create_static_synapse(
-            "good_food_eye_l_to_kc_l", self.good_food_eye_left, self.kc_left,
+            "good_food_eye_l_to_kc_vis_l", self.good_food_eye_left, self.kc_visual_left,
             self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
         self._create_static_synapse(
-            "good_food_eye_r_to_kc_r", self.good_food_eye_right, self.kc_right,
+            "good_food_eye_r_to_kc_vis_r", self.good_food_eye_right, self.kc_visual_right,
             self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
-
-        # bad_food_eye → KC
+        # bad_food_eye → KC_visual
         self._create_static_synapse(
-            "bad_food_eye_l_to_kc_l", self.bad_food_eye_left, self.kc_left,
+            "bad_food_eye_l_to_kc_vis_l", self.bad_food_eye_left, self.kc_visual_left,
             self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
         self._create_static_synapse(
-            "bad_food_eye_r_to_kc_r", self.bad_food_eye_right, self.kc_right,
+            "bad_food_eye_r_to_kc_vis_r", self.bad_food_eye_right, self.kc_visual_right,
             self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
-
-        # it_food_category → KC (bilateral)
+        # it_food_category → KC_visual (bilateral)
         self._create_static_synapse(
-            "it_food_to_kc_l", self.it_food_category, self.kc_left,
+            "it_food_to_kc_vis_l", self.it_food_category, self.kc_visual_left,
             self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
         self._create_static_synapse(
-            "it_food_to_kc_r", self.it_food_category, self.kc_right,
+            "it_food_to_kc_vis_r", self.it_food_category, self.kc_visual_right,
             self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
-
-        # social_memory → KC (KC 3000으로 확장 → 재활성화)
-        if self.config.social_brain_enabled and self.config.mirror_enabled and hasattr(self, 'social_memory'):
-            self._create_static_synapse(
-                "social_mem_to_kc_l", self.social_memory, self.kc_left,
-                1.5, sparsity=0.03)
-            self._create_static_synapse(
-                "social_mem_to_kc_r", self.social_memory, self.kc_right,
-                1.5, sparsity=0.03)
-            print(f"    Social_Memory→KC: 1.5, sparsity=0.03")
-
-        # sound_food L/R → KC L/R (측면화 청각→BG, 방향 정보 보존)
-        if self.config.auditory_enabled and hasattr(self, 'sound_food_left'):
-            self._create_static_synapse(
-                "sound_food_l_to_kc_l", self.sound_food_left, self.kc_left,
-                4.0, sparsity=0.08)
-            self._create_static_synapse(
-                "sound_food_r_to_kc_r", self.sound_food_right, self.kc_right,
-                4.0, sparsity=0.08)
-            print(f"    Sound_Food_L→KC_L, R→KC_R: 4.0, sparsity=0.08 (lateralized auditory→BG)")
-
-        # assoc_edible → KC (연합 피질 "먹을 수 있는 것" → BG 학습)
+        # assoc_edible → KC_visual (bilateral)
         if hasattr(self, 'assoc_edible'):
             self._create_static_synapse(
-                "assoc_edible_to_kc_l", self.assoc_edible, self.kc_left,
+                "assoc_edible_to_kc_vis_l", self.assoc_edible, self.kc_visual_left,
                 2.0, sparsity=0.05)
             self._create_static_synapse(
-                "assoc_edible_to_kc_r", self.assoc_edible, self.kc_right,
+                "assoc_edible_to_kc_vis_r", self.assoc_edible, self.kc_visual_right,
                 2.0, sparsity=0.05)
-            print(f"    Assoc_Edible→KC: 2.0, sparsity=0.05 (association→BG learning)")
+            print(f"    Assoc_Edible→KC_visual: 2.0, sparsity=0.05")
 
-        # ppc_goal_food → KC (공간 목표 → BG 학습)
-        if hasattr(self, 'ppc_goal_food'):
+        # --- Auditory compartment inputs ---
+        # sound_food L/R → KC_auditory L/R (lateralized)
+        if self.config.auditory_enabled and hasattr(self, 'sound_food_left'):
             self._create_static_synapse(
-                "ppc_goal_food_to_kc_l", self.ppc_goal_food, self.kc_left,
-                1.5, sparsity=0.05)
+                "sound_food_l_to_kc_aud_l", self.sound_food_left, self.kc_auditory_left,
+                4.0, sparsity=0.08)
             self._create_static_synapse(
-                "ppc_goal_food_to_kc_r", self.ppc_goal_food, self.kc_right,
-                1.5, sparsity=0.05)
-            print(f"    PPC_Goal_Food→KC: 1.5, sparsity=0.05 (spatial goal→BG learning)")
-
-        # wernicke_food → KC (Call Semantics 핵심 경로)
+                "sound_food_r_to_kc_aud_r", self.sound_food_right, self.kc_auditory_right,
+                4.0, sparsity=0.08)
+            print(f"    Sound_Food→KC_auditory: 4.0, sparsity=0.08 (lateralized)")
+        # wernicke_food → KC_auditory (Call Semantics 핵심 경로)
         if self.config.language_enabled and hasattr(self, 'wernicke_food'):
             self._create_static_synapse(
-                "wernicke_food_to_kc_l", self.wernicke_food, self.kc_left,
+                "wernicke_food_to_kc_aud_l", self.wernicke_food, self.kc_auditory_left,
                 3.0, sparsity=0.05)
             self._create_static_synapse(
-                "wernicke_food_to_kc_r", self.wernicke_food, self.kc_right,
+                "wernicke_food_to_kc_aud_r", self.wernicke_food, self.kc_auditory_right,
                 3.0, sparsity=0.05)
-            print(f"    Wernicke_Food→KC: 3.0, sparsity=0.05 (language→BG, call semantics)")
+            print(f"    Wernicke_Food→KC_auditory: 3.0, sparsity=0.05 (call semantics)")
 
-        # === C) WTA synapses: 4 SPARSE static ===
-        self._create_static_synapse(
-            "kc_l_to_kc_inh_l", self.kc_left, self.kc_inhibitory_left,
-            self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
-        self._create_static_synapse(
-            "kc_inh_l_to_kc_l", self.kc_inhibitory_left, self.kc_left,
-            self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
-        self._create_static_synapse(
-            "kc_r_to_kc_inh_r", self.kc_right, self.kc_inhibitory_right,
-            self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
-        self._create_static_synapse(
-            "kc_inh_r_to_kc_r", self.kc_inhibitory_right, self.kc_right,
-            self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+        # --- Spatial compartment inputs ---
+        # ppc_goal_food → KC_spatial
+        if hasattr(self, 'ppc_goal_food'):
+            self._create_static_synapse(
+                "ppc_goal_food_to_kc_spa_l", self.ppc_goal_food, self.kc_spatial_left,
+                2.0, sparsity=0.05)
+            self._create_static_synapse(
+                "ppc_goal_food_to_kc_spa_r", self.ppc_goal_food, self.kc_spatial_right,
+                2.0, sparsity=0.05)
+            print(f"    PPC_Goal_Food→KC_spatial: 2.0, sparsity=0.05")
+        # social_memory → KC_spatial
+        if self.config.social_brain_enabled and self.config.mirror_enabled and hasattr(self, 'social_memory'):
+            self._create_static_synapse(
+                "social_mem_to_kc_spa_l", self.social_memory, self.kc_spatial_left,
+                1.5, sparsity=0.03)
+            self._create_static_synapse(
+                "social_mem_to_kc_spa_r", self.social_memory, self.kc_spatial_right,
+                1.5, sparsity=0.03)
+            print(f"    Social_Memory→KC_spatial: 1.5, sparsity=0.03")
 
-        # === D) Output learning synapses: 4 SPARSE (KC → D1/D2) ===
+        # === C) WTA synapses: per-compartment inhibition (no cross-compartment) ===
+        for tag, kc_l, kc_r, inh_l, inh_r in [
+            ("vis", self.kc_visual_left, self.kc_visual_right,
+             self.kc_visual_inh_left, self.kc_visual_inh_right),
+            ("aud", self.kc_auditory_left, self.kc_auditory_right,
+             self.kc_auditory_inh_left, self.kc_auditory_inh_right),
+            ("spa", self.kc_spatial_left, self.kc_spatial_right,
+             self.kc_spatial_inh_left, self.kc_spatial_inh_right),
+        ]:
+            self._create_static_synapse(
+                f"kc_{tag}_l_to_inh_l", kc_l, inh_l,
+                self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
+            self._create_static_synapse(
+                f"kc_{tag}_inh_l_to_kc_l", inh_l, kc_l,
+                self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+            self._create_static_synapse(
+                f"kc_{tag}_r_to_inh_r", kc_r, inh_r,
+                self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
+            self._create_static_synapse(
+                f"kc_{tag}_inh_r_to_kc_r", inh_r, kc_r,
+                self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+
+        # === D) Output learning synapses: 12 SPARSE (3 compartments × 2 sides × D1+D2) ===
         kc_d1_w = self.config.kc_to_d1_init_w
         kc_sp = self.config.kc_to_d1_sparsity
 
-        self.kc_to_d1_l = self.model.add_synapse_population(
-            "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
+        # Visual → D1/D2
+        self.kc_visual_to_d1_l = self.model.add_synapse_population(
+            "kc_vis_l_to_d1_l", "SPARSE", self.kc_visual_left, self.d1_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
             init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
-        self.kc_to_d1_r = self.model.add_synapse_population(
-            "kc_r_to_d1_r", "SPARSE", self.kc_right, self.d1_right,
+        self.kc_visual_to_d1_r = self.model.add_synapse_population(
+            "kc_vis_r_to_d1_r", "SPARSE", self.kc_visual_right, self.d1_right,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
             init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
-        self.kc_to_d2_l = self.model.add_synapse_population(
-            "kc_l_to_d2_l", "SPARSE", self.kc_left, self.d2_left,
+        self.kc_visual_to_d2_l = self.model.add_synapse_population(
+            "kc_vis_l_to_d2_l", "SPARSE", self.kc_visual_left, self.d2_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
             init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
-        self.kc_to_d2_r = self.model.add_synapse_population(
-            "kc_r_to_d2_r", "SPARSE", self.kc_right, self.d2_right,
+        self.kc_visual_to_d2_r = self.model.add_synapse_population(
+            "kc_vis_r_to_d2_r", "SPARSE", self.kc_visual_right, self.d2_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+
+        # Auditory → D1/D2
+        self.kc_auditory_to_d1_l = self.model.add_synapse_population(
+            "kc_aud_l_to_d1_l", "SPARSE", self.kc_auditory_left, self.d1_left,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_auditory_to_d1_r = self.model.add_synapse_population(
+            "kc_aud_r_to_d1_r", "SPARSE", self.kc_auditory_right, self.d1_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_auditory_to_d2_l = self.model.add_synapse_population(
+            "kc_aud_l_to_d2_l", "SPARSE", self.kc_auditory_left, self.d2_left,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_auditory_to_d2_r = self.model.add_synapse_population(
+            "kc_aud_r_to_d2_r", "SPARSE", self.kc_auditory_right, self.d2_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+
+        # Spatial → D1/D2
+        self.kc_spatial_to_d1_l = self.model.add_synapse_population(
+            "kc_spa_l_to_d1_l", "SPARSE", self.kc_spatial_left, self.d1_left,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_spatial_to_d1_r = self.model.add_synapse_population(
+            "kc_spa_r_to_d1_r", "SPARSE", self.kc_spatial_right, self.d1_right,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_spatial_to_d2_l = self.model.add_synapse_population(
+            "kc_spa_l_to_d2_l", "SPARSE", self.kc_spatial_left, self.d2_left,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_spatial_to_d2_r = self.model.add_synapse_population(
+            "kc_spa_r_to_d2_r", "SPARSE", self.kc_spatial_right, self.d2_right,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
             init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
 
         # === E) Log ===
-        print(f"  Phase L16: Sparse Expansion (KC)")
-        print(f"    KC: {n_kc}L + {n_kc}R = {n_kc*2} neurons")
-        print(f"    KC_Inh: {n_inh}L + {n_inh}R = {n_inh*2} neurons")
-        print(f"    Input: 8 SPARSE static, WTA: 4 SPARSE static")
-        print(f"    Output: 4 SPARSE learning (R-STDP/Anti-Hebb)")
-        print(f"    Individual learning connections: ~{int(n_kc * 100 * 0.05 * 4)}")
+        n_total = (n_vis + n_aud + n_spa) * 2
+        n_inh_total = (n_vis_inh + n_aud_inh + n_spa_inh) * 2
+        print(f"  Phase L16: Sparse Expansion (KC) — 3 compartments")
+        print(f"    KC_visual: {n_vis}×2 = {n_vis*2}, KC_auditory: {n_aud}×2 = {n_aud*2}, KC_spatial: {n_spa}×2 = {n_spa*2}")
+        print(f"    KC_Inh: vis={n_vis_inh}×2, aud={n_aud_inh}×2, spa={n_spa_inh}×2 = {n_inh_total}")
+        print(f"    Total KC neurons: {n_total} + {n_inh_total} inh = {n_total + n_inh_total}")
+        print(f"    Output: 12 SPARSE learning (3 compartments × 2 sides × D1+D2)")
+        print(f"    Auditory eta: D1={self.config.kc_rstdp_eta_auditory}, D2={self.config.kc_d2_eta_auditory} (faster)")
 
     def _build_it_bg_circuit(self):
         """Phase L9: IT Cortex → BG (피질 하향 연결)
@@ -9402,12 +9546,20 @@ class ForagerBrain:
         if self.config.agency_detection_enabled and hasattr(self, 'agency_pe'):
             agency_pe_spikes = len(self.agency_pe.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
 
-        # Phase L16: KC 스파이크 카운팅
-        kc_l_spikes = 0
-        kc_r_spikes = 0
-        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_left'):
-            kc_l_spikes = len(self.kc_left.spike_recording_data[0][0])
-            kc_r_spikes = len(self.kc_right.spike_recording_data[0][0])
+        # Phase L16: KC 스파이크 카운팅 (3 compartments)
+        kc_vis_l_spikes = kc_vis_r_spikes = 0
+        kc_aud_l_spikes = kc_aud_r_spikes = 0
+        kc_spa_l_spikes = kc_spa_r_spikes = 0
+        kc_l_spikes = kc_r_spikes = 0  # aggregate for backward compat
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_visual_left'):
+            kc_vis_l_spikes = len(self.kc_visual_left.spike_recording_data[0][0])
+            kc_vis_r_spikes = len(self.kc_visual_right.spike_recording_data[0][0])
+            kc_aud_l_spikes = len(self.kc_auditory_left.spike_recording_data[0][0])
+            kc_aud_r_spikes = len(self.kc_auditory_right.spike_recording_data[0][0])
+            kc_spa_l_spikes = len(self.kc_spatial_left.spike_recording_data[0][0])
+            kc_spa_r_spikes = len(self.kc_spatial_right.spike_recording_data[0][0])
+            kc_l_spikes = kc_vis_l_spikes + kc_aud_l_spikes + kc_spa_l_spikes
+            kc_r_spikes = kc_vis_r_spikes + kc_aud_r_spikes + kc_spa_r_spikes
 
         # Phase L6 스파이크 카운팅 (Prediction Error)
         if self.config.prediction_error_enabled and self.config.v1_enabled and self.config.it_enabled:
@@ -9519,46 +9671,83 @@ class ForagerBrain:
                 self.nac_trace_l = min(self.nac_trace_l * td + food_l_active * nac_active, tm)
                 self.nac_trace_r = min(self.nac_trace_r * td + food_r_active * nac_active, tm)
 
-            # Phase L16: KC rate & trace
-            if self.config.sparse_expansion_enabled and hasattr(self, 'kc_left'):
+            # Phase L16: KC rate & trace (3 compartments)
+            if self.config.sparse_expansion_enabled and hasattr(self, 'kc_visual_left'):
+                n_vis = self.config.n_kc_visual_per_side
+                n_aud = self.config.n_kc_auditory_per_side
+                n_spa = self.config.n_kc_spatial_per_side
                 n_kc = self.config.n_kc_per_side
-                kc_l_rate = kc_l_spikes / max(n_kc * 10, 1)  # 10 timesteps
+
+                # Per-compartment rates
+                kc_vis_l_rate = kc_vis_l_spikes / max(n_vis * 10, 1)
+                kc_vis_r_rate = kc_vis_r_spikes / max(n_vis * 10, 1)
+                kc_aud_l_rate = kc_aud_l_spikes / max(n_aud * 10, 1)
+                kc_aud_r_rate = kc_aud_r_spikes / max(n_aud * 10, 1)
+                kc_spa_l_rate = kc_spa_l_spikes / max(n_spa * 10, 1)
+                kc_spa_r_rate = kc_spa_r_spikes / max(n_spa * 10, 1)
+
+                self.last_kc_visual_l_rate = kc_vis_l_rate
+                self.last_kc_visual_r_rate = kc_vis_r_rate
+                self.last_kc_auditory_l_rate = kc_aud_l_rate
+                self.last_kc_auditory_r_rate = kc_aud_r_rate
+                self.last_kc_spatial_l_rate = kc_spa_l_rate
+                self.last_kc_spatial_r_rate = kc_spa_r_rate
+
+                # Aggregate rates (backward compat)
+                kc_l_rate = kc_l_spikes / max(n_kc * 10, 1)
                 kc_r_rate = kc_r_spikes / max(n_kc * 10, 1)
                 self.last_kc_l_rate = kc_l_rate
                 self.last_kc_r_rate = kc_r_rate
 
-                # Homeostatic KC inhibition: target ~5% activation
-                # KC rate > target → increase I_input to inhibitory neurons → more suppression
+                # Homeostatic KC inhibition: per-compartment PI control (target ~5%)
                 kc_target = 0.05
-                kc_avg_rate = (kc_l_rate + kc_r_rate) / 2.0
-                # Proportional + integral control
-                kc_error = kc_avg_rate - kc_target
-                self._kc_inh_integral = getattr(self, '_kc_inh_integral', 0.0) + kc_error * 0.1
-                self._kc_inh_integral = max(0.0, min(self._kc_inh_integral, 50.0))  # clamp
-                kc_inh_drive = max(0.0, kc_error * 100.0 + self._kc_inh_integral)
-                self.kc_inhibitory_left.vars["I_input"].view[:] = kc_inh_drive
-                self.kc_inhibitory_left.vars["I_input"].push_to_device()
-                self.kc_inhibitory_right.vars["I_input"].view[:] = kc_inh_drive
-                self.kc_inhibitory_right.vars["I_input"].push_to_device()
+                for comp_tag, l_rate, r_rate, inh_l, inh_r in [
+                    ("vis", kc_vis_l_rate, kc_vis_r_rate,
+                     self.kc_visual_inh_left, self.kc_visual_inh_right),
+                    ("aud", kc_aud_l_rate, kc_aud_r_rate,
+                     self.kc_auditory_inh_left, self.kc_auditory_inh_right),
+                    ("spa", kc_spa_l_rate, kc_spa_r_rate,
+                     self.kc_spatial_inh_left, self.kc_spatial_inh_right),
+                ]:
+                    avg_rate = (l_rate + r_rate) / 2.0
+                    error = avg_rate - kc_target
+                    int_attr = f'_kc_{comp_tag}_inh_integral'
+                    integral = getattr(self, int_attr, 0.0) + error * 0.1
+                    integral = max(0.0, min(integral, 50.0))
+                    setattr(self, int_attr, integral)
+                    drive = max(0.0, error * 100.0 + integral)
+                    inh_l.vars["I_input"].view[:] = drive
+                    inh_l.vars["I_input"].push_to_device()
+                    inh_r.vars["I_input"].view[:] = drive
+                    inh_r.vars["I_input"].push_to_device()
 
-                # KC→D1 trace (pre×post)
-                kc_l_active = 1.0 if kc_l_rate > 0.03 else 0.0
-                kc_r_active = 1.0 if kc_r_rate > 0.03 else 0.0
+                # Per-compartment traces
                 d1_l_active_kc = 1.0 if d1_l_rate > 0.05 else 0.0
                 d1_r_active_kc = 1.0 if d1_r_rate > 0.05 else 0.0
-
                 trace_decay = self.config.rstdp_trace_decay
                 trace_max = self.config.rstdp_trace_max
-                self.kc_d1_trace_l = min(self.kc_d1_trace_l * trace_decay + kc_l_active * d1_l_active_kc, trace_max)
-                self.kc_d1_trace_r = min(self.kc_d1_trace_r * trace_decay + kc_r_active * d1_r_active_kc, trace_max)
 
-                # KC→D2 trace (pre-synaptic only)
-                self.kc_d2_trace_l = min(self.kc_d2_trace_l * trace_decay + kc_l_active, trace_max)
-                self.kc_d2_trace_r = min(self.kc_d2_trace_r * trace_decay + kc_r_active, trace_max)
-
-                # C1: Sound long-trace 롤백 (trace 가산이 KC 학습 방해 확인)
-                # Call Semantics는 R-STDP(도파민 필수)로 해결 불가
-                # 다음 단계: sound→D1 Hebbian 또는 환경 설계 변경 필요
+                for comp_tag, l_rate, r_rate in [
+                    ("visual", kc_vis_l_rate, kc_vis_r_rate),
+                    ("auditory", kc_aud_l_rate, kc_aud_r_rate),
+                    ("spatial", kc_spa_l_rate, kc_spa_r_rate),
+                ]:
+                    l_active = 1.0 if l_rate > 0.03 else 0.0
+                    r_active = 1.0 if r_rate > 0.03 else 0.0
+                    # D1 trace (pre×post)
+                    d1_tl = getattr(self, f'kc_{comp_tag}_d1_trace_l')
+                    d1_tr = getattr(self, f'kc_{comp_tag}_d1_trace_r')
+                    setattr(self, f'kc_{comp_tag}_d1_trace_l',
+                            min(d1_tl * trace_decay + l_active * d1_l_active_kc, trace_max))
+                    setattr(self, f'kc_{comp_tag}_d1_trace_r',
+                            min(d1_tr * trace_decay + r_active * d1_r_active_kc, trace_max))
+                    # D2 trace (pre-synaptic only)
+                    d2_tl = getattr(self, f'kc_{comp_tag}_d2_trace_l')
+                    d2_tr = getattr(self, f'kc_{comp_tag}_d2_trace_r')
+                    setattr(self, f'kc_{comp_tag}_d2_trace_l',
+                            min(d2_tl * trace_decay + l_active, trace_max))
+                    setattr(self, f'kc_{comp_tag}_d2_trace_r',
+                            min(d2_tr * trace_decay + r_active, trace_max))
 
         # Phase L12: GW rate + broadcast
         gw_food_l_rate = gw_food_r_rate = gw_safety_rate = 0.0
@@ -10290,8 +10479,12 @@ class ForagerBrain:
                              if self._last_rstdp_results else 0.0,
                 "Hippo": self._last_hippo_avg_w,
                 "Garcia": self._last_garcia_avg_w,
-                "KC_D1": (self._last_rstdp_results.get("kc_d1_l", 0.0)
-                          + self._last_rstdp_results.get("kc_d1_r", 0.0)) / 2.0
+                "KC_D1": (self._last_rstdp_results.get("kc_visual_d1_l", 0.0)
+                          + self._last_rstdp_results.get("kc_visual_d1_r", 0.0)
+                          + self._last_rstdp_results.get("kc_auditory_d1_l", 0.0)
+                          + self._last_rstdp_results.get("kc_auditory_d1_r", 0.0)
+                          + self._last_rstdp_results.get("kc_spatial_d1_l", 0.0)
+                          + self._last_rstdp_results.get("kc_spatial_d1_r", 0.0)) / 6.0
                           if self._last_rstdp_results else 0.0,
             },
         }
@@ -11155,20 +11348,31 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             print(f"    Body→Narrative avg_w: {bn_avg:.3f}, max_w: {bn_max:.3f}")
             print(f"    Self_Narrative rate: {brain.last_self_narrative_rate:.3f}")
 
-        # Phase L16: Sparse Expansion (KC) 현황
-        if brain_config.sparse_expansion_enabled and hasattr(brain, 'kc_to_d1_l'):
-            print(f"  --- Phase L16: Sparse Expansion (KC) ---")
-            print(f"    KC rate: L={brain.last_kc_l_rate:.3f} R={brain.last_kc_r_rate:.3f}")
-            brain.kc_to_d1_l.vars["g"].pull_from_device()
-            kc_d1_l_w = float(np.nanmean(brain.kc_to_d1_l.vars["g"].values))
-            brain.kc_to_d1_r.vars["g"].pull_from_device()
-            kc_d1_r_w = float(np.nanmean(brain.kc_to_d1_r.vars["g"].values))
-            brain.kc_to_d2_l.vars["g"].pull_from_device()
-            kc_d2_l_w = float(np.nanmean(brain.kc_to_d2_l.vars["g"].values))
-            brain.kc_to_d2_r.vars["g"].pull_from_device()
-            kc_d2_r_w = float(np.nanmean(brain.kc_to_d2_r.vars["g"].values))
-            print(f"    KC→D1 avg_w: L={kc_d1_l_w:.3f} R={kc_d1_r_w:.3f}")
-            print(f"    KC→D2 avg_w: L={kc_d2_l_w:.3f} R={kc_d2_r_w:.3f}")
+        # Phase L16: Sparse Expansion (KC) 현황 — 3 compartments
+        if brain_config.sparse_expansion_enabled and hasattr(brain, 'kc_visual_to_d1_l'):
+            print(f"  --- Phase L16: Sparse Expansion (KC, 3 compartments) ---")
+            print(f"    KC rate (aggregate): L={brain.last_kc_l_rate:.3f} R={brain.last_kc_r_rate:.3f}")
+            print(f"    KC_visual  rate: L={brain.last_kc_visual_l_rate:.3f} R={brain.last_kc_visual_r_rate:.3f}")
+            print(f"    KC_auditory rate: L={brain.last_kc_auditory_l_rate:.3f} R={brain.last_kc_auditory_r_rate:.3f}")
+            print(f"    KC_spatial  rate: L={brain.last_kc_spatial_l_rate:.3f} R={brain.last_kc_spatial_r_rate:.3f}")
+            for comp_tag, d1_l, d1_r, d2_l, d2_r in [
+                ("visual", brain.kc_visual_to_d1_l, brain.kc_visual_to_d1_r,
+                 brain.kc_visual_to_d2_l, brain.kc_visual_to_d2_r),
+                ("auditory", brain.kc_auditory_to_d1_l, brain.kc_auditory_to_d1_r,
+                 brain.kc_auditory_to_d2_l, brain.kc_auditory_to_d2_r),
+                ("spatial", brain.kc_spatial_to_d1_l, brain.kc_spatial_to_d1_r,
+                 brain.kc_spatial_to_d2_l, brain.kc_spatial_to_d2_r),
+            ]:
+                d1_l.vars["g"].pull_from_device()
+                d1_r.vars["g"].pull_from_device()
+                d2_l.vars["g"].pull_from_device()
+                d2_r.vars["g"].pull_from_device()
+                d1_l_w = float(np.nanmean(d1_l.vars["g"].values))
+                d1_r_w = float(np.nanmean(d1_r.vars["g"].values))
+                d2_l_w = float(np.nanmean(d2_l.vars["g"].values))
+                d2_r_w = float(np.nanmean(d2_r.vars["g"].values))
+                print(f"    KC_{comp_tag}→D1 avg_w: L={d1_l_w:.3f} R={d1_r_w:.3f}")
+                print(f"    KC_{comp_tag}→D2 avg_w: L={d2_l_w:.3f} R={d2_r_w:.3f}")
 
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
