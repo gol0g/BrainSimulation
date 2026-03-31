@@ -56,20 +56,15 @@ def test_call_semantics(brain, n_trials=100):
         test_obs["bad_food_rays_left"] = np.zeros(8)
         test_obs["bad_food_rays_right"] = np.zeros(8)
 
-        # C1 food sound cue 주입 (고음 = 좋은 음식 근처)
-        # + NPC food call도 동시 주입
+        # C1: sound_food 채널로 방향 단서 주입 (KC_auditory가 학습한 채널)
         call_strength = 0.8
-        test_obs["food_sound_high"] = call_strength  # 좋은 음식 소리
+        test_obs["food_sound_high"] = call_strength
         test_obs["food_sound_low"] = 0.0
         if call_direction == "left":
-            test_obs["npc_call_food_left"] = call_strength
-            test_obs["npc_call_food_right"] = call_strength * 0.3
             test_obs["sound_food_left"] = call_strength
-            test_obs["sound_food_right"] = call_strength * 0.3
+            test_obs["sound_food_right"] = call_strength * 0.1
         else:
-            test_obs["npc_call_food_left"] = call_strength * 0.3
-            test_obs["npc_call_food_right"] = call_strength
-            test_obs["sound_food_left"] = call_strength * 0.3
+            test_obs["sound_food_left"] = call_strength * 0.1
             test_obs["sound_food_right"] = call_strength
 
         # 에이전트 반응 측정 (1스텝)
