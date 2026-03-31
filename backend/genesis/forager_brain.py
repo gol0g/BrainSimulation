@@ -8224,6 +8224,16 @@ class ForagerBrain:
                 1.5, sparsity=0.03)
             print(f"    Social_Memory→KC_spatial: 1.5, sparsity=0.03")
 
+        # C2: Assoc_Binding → KC_spatial (학습된 범주 → BG 의사결정)
+        if hasattr(self, 'assoc_binding'):
+            self._create_static_synapse(
+                "assoc_bind_to_kc_spa_l", self.assoc_binding, self.kc_spatial_left,
+                2.0, sparsity=0.05)
+            self._create_static_synapse(
+                "assoc_bind_to_kc_spa_r", self.assoc_binding, self.kc_spatial_right,
+                2.0, sparsity=0.05)
+            print(f"    Assoc_Binding→KC_spatial: 2.0, sparsity=0.05 (C2: learned category→BG)")
+
         # === C) WTA synapses: per-compartment inhibition (no cross-compartment) ===
         for tag, kc_l, kc_r, inh_l, inh_r in [
             ("vis", self.kc_visual_left, self.kc_visual_right,
