@@ -9749,6 +9749,35 @@ class ForagerBrain:
                     setattr(self, f'kc_{comp_tag}_d2_trace_r',
                             min(d2_tr * trace_decay + r_active, trace_max))
 
+                    # C1: Eligibility bridge for auditory compartment
+                    # Sound onset → synaptic tag (slow decay 0.995 ≈ 200스텝 반감)
+                    # 나중에 dopamine이 오면 이 tag가 남아있어서 KC_aud→D1 학습
+                    if comp_tag == "auditory":
+                        sound_food_l = observation.get("sound_food_left", 0.0)
+                        sound_food_r = observation.get("sound_food_right", 0.0)
+                        food_sound_high = observation.get("food_sound_high", 0.0)
+                        if isinstance(sound_food_l, np.ndarray):
+                            sound_food_l = float(np.mean(sound_food_l))
+                        if isinstance(sound_food_r, np.ndarray):
+                            sound_food_r = float(np.mean(sound_food_r))
+                        sound_on = max(sound_food_l, sound_food_r, food_sound_high)
+                        if sound_on > 0.2:
+                            # Slow-decay eligibility tag (bridge)
+                            tag_l = getattr(self, '_sound_elig_tag_l', 0.0)
+                            tag_r = getattr(self, '_sound_elig_tag_r', 0.0)
+                            self._sound_elig_tag_l = min(tag_l * 0.995 + sound_food_l * 0.5, trace_max)
+                            self._sound_elig_tag_r = min(tag_r * 0.995 + sound_food_r * 0.5, trace_max)
+                        else:
+                            self._sound_elig_tag_l = getattr(self, '_sound_elig_tag_l', 0.0) * 0.995
+                            self._sound_elig_tag_r = getattr(self, '_sound_elig_tag_r', 0.0) * 0.995
+                        # Tag를 auditory D1 trace에 주입 (도파민이 올 때 학습됨)
+                        aud_d1_tl = getattr(self, 'kc_auditory_d1_trace_l')
+                        aud_d1_tr = getattr(self, 'kc_auditory_d1_trace_r')
+                        setattr(self, 'kc_auditory_d1_trace_l',
+                                min(aud_d1_tl + self._sound_elig_tag_l * 0.1, trace_max))
+                        setattr(self, 'kc_auditory_d1_trace_r',
+                                min(aud_d1_tr + self._sound_elig_tag_r * 0.1, trace_max))
+
         # Phase L12: GW rate + broadcast
         gw_food_l_rate = gw_food_r_rate = gw_safety_rate = 0.0
         gw_broadcast = "neutral"
