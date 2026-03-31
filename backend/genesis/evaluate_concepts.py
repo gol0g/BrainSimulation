@@ -213,12 +213,128 @@ def run_all_tests(brain):
     return results
 
 
+def diagnose_auditory(brain, n_trials=20):
+    """
+    C1 진단: 소리가 행동에 영향 못 주는 원인 분리
+
+    Stage 1: Auditory Decode — KC_auditory에서 sound vs no-sound 구분이 되는가
+    Stage 2: Policy Bias — vision 없이 sound만으로 motor bias가 생기는가
+    Stage 3: Eligibility — sound→food 순서에서 KC_aud→D1 가중치가 변하는가
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+
+    # Warmup
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    print("\n" + "=" * 60)
+    print("  AUDITORY DIAGNOSIS (C1)")
+    print("=" * 60)
+
+    # === Stage 1: Auditory Decode ===
+    # sound_food가 있을 때 vs 없을 때 KC_auditory 스파이크 차이
+    kc_aud_with_sound = []
+    kc_aud_without_sound = []
+
+    for trial in range(n_trials):
+        # No sound
+        test_obs = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        test_obs["food_sound_high"] = 0.0
+        test_obs["food_sound_low"] = 0.0
+        test_obs["sound_food_left"] = 0.0
+        test_obs["sound_food_right"] = 0.0
+        angle_no, info_no = brain.process(test_obs)
+        obs, _, done, _ = env.step((angle_no,))
+        if done: obs = env.reset()
+
+        # KC_auditory rate (from info if available, else estimate from angle difference)
+        kc_aud_without_sound.append(abs(angle_no))
+
+        # With sound (left)
+        test_obs2 = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        test_obs2["food_sound_high"] = 0.8
+        test_obs2["food_sound_low"] = 0.0
+        test_obs2["sound_food_left"] = 0.8
+        test_obs2["sound_food_right"] = 0.1
+        test_obs2["food_rays_left"] = np.zeros(8)
+        test_obs2["food_rays_right"] = np.zeros(8)
+        test_obs2["good_food_rays_left"] = np.zeros(8)
+        test_obs2["good_food_rays_right"] = np.zeros(8)
+        angle_snd, info_snd = brain.process(test_obs2)
+        obs, _, done, _ = env.step((angle_snd,))
+        if done: obs = env.reset()
+
+        kc_aud_with_sound.append(angle_snd)
+
+    # Analyze Stage 1
+    avg_no_sound = np.mean([abs(a) for a in kc_aud_without_sound])
+    avg_with_sound = np.mean([abs(a) for a in kc_aud_with_sound])
+    sound_angles = kc_aud_with_sound
+    left_turns = sum(1 for a in sound_angles if a < -0.01)
+    right_turns = sum(1 for a in sound_angles if a > 0.01)
+    no_turns = sum(1 for a in sound_angles if abs(a) <= 0.01)
+
+    print(f"\n[Stage 1] Auditory Representation")
+    print(f"  Motor magnitude: no_sound={avg_no_sound:.4f}, with_sound={avg_with_sound:.4f}")
+    print(f"  Difference: {abs(avg_with_sound - avg_no_sound):.4f}")
+    decode_pass = abs(avg_with_sound - avg_no_sound) > 0.005
+    print(f"  Sound changes motor output: {'YES' if decode_pass else 'NO'}")
+
+    # === Stage 2: Policy Bias ===
+    # sound left일 때 왼쪽으로 도는 비율
+    print(f"\n[Stage 2] Policy Bias (sound left → turn left?)")
+    print(f"  Sound LEFT trials: left_turn={left_turns}, right_turn={right_turns}, no_turn={no_turns}")
+    bias = left_turns / max(left_turns + right_turns, 1)
+    bias_pass = bias > 0.55 or bias < 0.45  # 50%에서 벗어나면 bias 있음
+    print(f"  Left turn ratio: {bias:.1%} (random=50%)")
+    print(f"  Policy bias exists: {'YES' if bias_pass else 'NO (random)'}")
+
+    # === Stage 3: Weight check ===
+    print(f"\n[Stage 3] KC_auditory→D1 Weight Status")
+    try:
+        for name in ['kc_auditory_to_d1_l', 'kc_auditory_to_d2_l']:
+            syn = getattr(brain, name, None)
+            if syn:
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values
+                print(f"  {name}: mean={np.mean(w):.4f}, std={np.std(w):.4f}, min={np.min(w):.4f}, max={np.max(w):.4f}")
+    except Exception as e:
+        print(f"  Weight read error: {e}")
+
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"  DIAGNOSIS SUMMARY")
+    print(f"    Stage 1 (Representation):  {'✓' if decode_pass else '✗'} Sound changes motor")
+    print(f"    Stage 2 (Policy bias):     {'✓' if bias_pass else '✗'} Directional response")
+    print(f"    Bottleneck: ", end="")
+    if not decode_pass:
+        print("REPRESENTATION — sound doesn't affect network output at all")
+    elif not bias_pass:
+        print("POLICY COUPLING — sound affects network but not directionally")
+    else:
+        print("CREDIT ASSIGNMENT — bias exists but doesn't persist across episodes")
+    print(f"{'='*60}")
+
+    return {
+        "decode_pass": decode_pass,
+        "bias_pass": bias_pass,
+        "avg_no_sound": avg_no_sound,
+        "avg_with_sound": avg_with_sound,
+        "left_bias": bias,
+    }
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Concept Formation Evaluation (C0)")
     parser.add_argument("--load-weights", type=str, required=True,
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
-                       choices=["all", "call_semantics", "selectivity", "spatial"],
+                       choices=["all", "call_semantics", "selectivity", "spatial", "diagnose_auditory"],
                        help="Which test to run")
     args = parser.parse_args()
 
@@ -239,3 +355,5 @@ if __name__ == "__main__":
     elif args.test == "spatial":
         r = test_spatial_memory(brain)
         print(f"Spatial Memory: {r['time_in_rich_ratio']:.1%} ({'PASS' if r['pass'] else 'FAIL'})")
+    elif args.test == "diagnose_auditory":
+        diagnose_auditory(brain)

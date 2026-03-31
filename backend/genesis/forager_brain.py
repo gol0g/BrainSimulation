@@ -10835,6 +10835,12 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if approach_signal > 0.01 and brain_config.basal_ganglia_enabled:
                 brain.release_dopamine(reward_magnitude=0.1 * approach_signal)
 
+            # C1: Food sound incentive salience (소리 자체가 작은 도파민)
+            # 생물학적 근거: incentive salience — 음식 관련 감각 단서가 도파민 유발
+            food_sound_high = obs.get("food_sound_high", 0.0)
+            if food_sound_high > 0.3 and brain_config.basal_ganglia_enabled:
+                brain.release_dopamine(reward_magnitude=0.05 * food_sound_high)  # 보조만, 메인 해법 아님
+
             # 통계 수집
             ep_hunger_rates.append(info["hunger_rate"])
             ep_satiety_rates.append(info["satiety_rate"])
