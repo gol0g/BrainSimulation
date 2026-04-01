@@ -291,53 +291,35 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: Phase L16 + 환경 고도화 (24,510 뉴런, 800×800 맵)
+### 현재 상태: 개념 형성 C1-C2 진행 중 (27,910 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase L16: Sparse Expansion + 환경 고도화 (2026-03-25)          ║
+║  개념 형성 커리큘럼 C1-C2 (2026-04-01)                           ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  L1-L15 Learning Foundation ✓ (2026-02-21)                      ║
-║  L16: KC Sparse Expansion (2026-03-21)                          ║
-║    - KC(1500×2) + KC_inh(200×2) = +3,400 뉴런                  ║
-║    - 초파리 MB 패턴: food_eye→KC(sparse 10%)→D1/D2(R-STDP)     ║
-║    - 학습 연결 ~10K → ~30K (3배 확장)                           ║
-║    - Homeostatic KC: SensoryLIF + PI control (target 5%)        ║
+║  생존 학습 L1-L18 ✓ + 환경 고도화 E1-E3 ✓                       ║
 ║                                                               ║
-║  성능 최적화 (2026-03-21):                                     ║
-║    - Spike recording 배치화: GPU pull 1,310→1회/process()       ║
-║    - GPU 3D 사용률: 90-100% → 60-87%                           ║
+║  KC 구획화 (2026-03-30):                                       ║
+║    - KC_visual(2000×2) + KC_auditory(500×2) + KC_spatial(500×2)║
+║    - 각 구획 독립 WTA + R-STDP (12개 학습 시냅스)               ║
+║    - Assoc_Binding→KC_spatial (C2: 학습된 범주→BG)             ║
 ║                                                               ║
-║  하드코딩 제거 (2026-03-22):                                   ║
-║    - food_eye→Motor 35.0 (하드코딩) → 제거                     ║
-║    - food_eye 10.0 (탐색, static) + good_food_eye 25.0 (R-STDP)║
-║    - 나쁜 음식 접근 반사 제거 → 회피가 학습에서 창발            ║
-║    - 400맵 생존율: 56% → 89% (+33pp)                           ║
+║  C1: Eligibility Bridge (2026-03-31):                           ║
+║    - Sound onset → slow-decay tag (0.995) → DA 시 학습          ║
+║    - KC_aud→D1: 0.5→5.0 (학습 성공!)                           ║
+║    - 단일 KC에서 Call Semantics 70% PASS                        ║
+║    - 구획화 KC에서 53% (KC_aud 용량/테스트 문제)               ║
 ║                                                               ║
-║  환경 고도화 (2026-03-22~24):                                  ║
-║    - 맵 확장: 400×400 → 800×800                                ║
-║    - 장애물 1개 (obstacle_rays 분리, Push-Pull 8/-4)           ║
-║    - Rich Zones 2개 (radius 120px, 70% food clustering)        ║
-║    - 학습 추이 시각화 (실시간 그래프)                           ║
-║    - 포식자 밸런스: speed 2.5, chase 150px                     ║
+║  C0 검증 현황:                                                  ║
+║    - Food Selectivity: 0.65 ✓                                  ║
+║    - Spatial Memory: 28-35% ✓ (random 14%)                    ║
+║    - Call Semantics: 53-70% (구획화 후 미해결)                 ║
 ║                                                               ║
-║  검증 결과 (800맵 KC3000 400ep):                               ║
-║    - Survival: avg 61%, peak 74% ✓                            ║
-║    - Reward Freq: 2.62% ✓                                     ║
-║    - Selectivity: 0.67                                        ║
-║    - Predator Death: 21%                                      ║
-║    - Pain Death: 0% ✓                                         ║
+║  미해결: KC_auditory(500) vs KC_visual(2000) 연결 수 불균형    ║
+║  → 소리가 가중치 5.0이어도 BG 선택에서 시각에 묻힘             ║
 ║                                                               ║
-║  KC 3000×2 입력 (9개 다중감각):                                ║
-║    - food_eye + good/bad_food (시각)                           ║
-║    - IT_Food (피질 범주)                                       ║
-║    - Assoc_Edible (연합 "먹을 수 있는 것")                     ║
-║    - PPC_Goal_Food (공간 목표)                                 ║
-║    - Social_Memory (사회적 관찰)                               ║
-║    - Wernicke_Food (언어 이해)                                 ║
-║                                                               ║
-║  뉴런 수:       27,910 (KC 3000×2 + inh 400×2 확장)              ║
-║  학습 시냅스:   47 (41 + 4 KC + 2 food_approach)                ║
+║  뉴런 수:       27,910                                          ║
+║  학습 시냅스:   ~55 (12 KC구획 + 41 기존 + 2 food_approach)     ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -389,6 +371,10 @@ gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 29. **obstacle_rays를 wall_rays에서 분리**: 장애물을 wall_rays에 넣으면 Push-Pull(60/-40)이 과반응. 별도 obstacle_eye(8/-4) 필요
 30. **nvidia-smi는 WDDM에서 부정확**: GPU 3D 사용률은 PowerShell Get-Counter PDH 카운터로 측정 (gpu_check.ps1)
 31. **WSL BSOD 방지**: .wslconfig (memory=8GB, networkingMode=mirrored). Hyper-V VmSwitch 크래시 방지
+32. **KC 구획화가 신호 경합을 해결**: 9개 입력이 단일 KC에서 시각에 묻힘 → visual/auditory/spatial 구획 분리
+33. **Eligibility bridge로 시간 간격 연결**: sound→food 100스텝 간격을 slow-decay tag(0.995)로 연결 → R-STDP 학습 가능
+34. **incentive salience는 보조 수단**: 소리 자체에 도파민 주면 generic alertness만 증가, semantics 아님
+35. **networkingMode=none이 mirrored보다 안전**: mirrored도 BSOD 발생, none으로 VmSwitch 완전 제거
 
 ---
 
