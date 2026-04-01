@@ -1171,6 +1171,7 @@ class ForagerBrainConfig:
     kc_inh_to_kc_sparsity: float = 0.08
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
+    kc_auditory_to_d1_sparsity: float = 0.20  # sweep 결과: 0.20이 최적 (visual과 동일 fan-in)
     kc_rstdp_eta: float = 0.0003
     kc_rstdp_eta_auditory: float = 0.0005  # 청각 구획 더 빠른 학습
     kc_rstdp_w_max: float = 5.0   # 3.0→5.0 (auditory KC가 w_max 도달해도 부족)
@@ -8282,27 +8283,28 @@ class ForagerBrain:
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
             init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
 
-        # Auditory → D1/D2
+        # Auditory → D1/D2 (별도 sparsity — fan-in 균형 조절)
+        kc_aud_sp = self.config.kc_auditory_to_d1_sparsity
         self.kc_auditory_to_d1_l = self.model.add_synapse_population(
             "kc_aud_l_to_d1_l", "SPARSE", self.kc_auditory_left, self.d1_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            init_sparse_connectivity("FixedProbability", {"prob": kc_aud_sp}))
         self.kc_auditory_to_d1_r = self.model.add_synapse_population(
             "kc_aud_r_to_d1_r", "SPARSE", self.kc_auditory_right, self.d1_right,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            init_sparse_connectivity("FixedProbability", {"prob": kc_aud_sp}))
         self.kc_auditory_to_d2_l = self.model.add_synapse_population(
             "kc_aud_l_to_d2_l", "SPARSE", self.kc_auditory_left, self.d2_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            init_sparse_connectivity("FixedProbability", {"prob": kc_aud_sp}))
         self.kc_auditory_to_d2_r = self.model.add_synapse_population(
             "kc_aud_r_to_d2_r", "SPARSE", self.kc_auditory_right, self.d2_right,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
             init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            init_sparse_connectivity("FixedProbability", {"prob": kc_aud_sp}))
 
         # Spatial → D1/D2
         self.kc_spatial_to_d1_l = self.model.add_synapse_population(
