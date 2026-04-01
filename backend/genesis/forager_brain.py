@@ -1173,7 +1173,7 @@ class ForagerBrainConfig:
     kc_to_d1_sparsity: float = 0.05
     kc_rstdp_eta: float = 0.0003
     kc_rstdp_eta_auditory: float = 0.0005  # 청각 구획 더 빠른 학습
-    kc_rstdp_w_max: float = 3.0
+    kc_rstdp_w_max: float = 5.0   # 3.0→5.0 (auditory KC가 w_max 도달해도 부족)
     kc_rstdp_w_rest: float = 0.5
     kc_d2_eta: float = 0.0002
     kc_d2_eta_auditory: float = 0.0003     # 청각 D2도 비례 증가
