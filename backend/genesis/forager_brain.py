@@ -1153,11 +1153,11 @@ class ForagerBrainConfig:
     sparse_expansion_enabled: bool = True
     n_kc_per_side: int = 3000       # 총합 유지 (2000+500+500)
     n_kc_visual_per_side: int = 2000   # 시각 전용 (food_eye, good/bad_food, IT_Food, Assoc_Edible)
-    n_kc_auditory_per_side: int = 500  # 청각/언어 전용 (Sound_Food, Wernicke)
+    n_kc_auditory_per_side: int = 1000 # 500→1000 (ablation 확인: 용량 부족)
     n_kc_spatial_per_side: int = 500   # 공간/사회 전용 (PPC, Social)
-    n_kc_inhibitory_per_side: int = 400  # 총합 유지 (200+100+100)
+    n_kc_inhibitory_per_side: int = 500  # 200+200+100
     n_kc_visual_inh_per_side: int = 200
-    n_kc_auditory_inh_per_side: int = 100
+    n_kc_auditory_inh_per_side: int = 200  # 100→200 (KC_aud 1000에 비례)
     n_kc_spatial_inh_per_side: int = 100
     kc_food_eye_weight: float = 3.0
     kc_food_eye_sparsity: float = 0.10
