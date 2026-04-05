@@ -83,7 +83,7 @@
 | C1.4 | Auditory fan-in sweep (0.10/0.15/0.20) | 0 | 완료 | 43-57% |
 | C1.5 | KC_aud 1000 확장 + ablation | +1200→0 | 효과없음 | 53% |
 | C1.6 | Sound→D1 직접 연결 | 0 | ✓ 추가 | 53% |
-| **C1.7** | **Sound Push-Pull(8/-4) + ambiguity gain** | **0** | **🔄 진행중** | |
+| **C1.7** | **Sound C=5 + Push-Pull(8/-4) + cross-inhibition(-15)** | **0** | **✓ 완료** | **Call 60-63%** |
 
 ### Phase 12-14 수정 이력
 
