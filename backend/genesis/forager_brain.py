@@ -520,8 +520,10 @@ class ForagerBrainConfig:
     # A1 → IT (청각-시각 통합)
     a1_to_it_weight: float = 15.0                   # A1 → IT Category
 
-    # A1 → Motor (청각 유도 행동)
-    a1_to_motor_weight: float = 0.0                 # A1 → Motor (12→0, 포화 방지)
+    # A1 → Motor (청각 유도 행동) — C1: Push-Pull 활성화
+    a1_to_motor_weight: float = 0.0                 # danger sound (유지: 0.0)
+    sound_food_push_weight: float = 8.0             # sound_food ipsi (접근)
+    sound_food_pull_weight: float = -4.0            # sound_food contra (억제)
 
     # A2 Association
     a1_to_a2_weight: float = 10.0                   # A1 → A2
@@ -3688,12 +3690,15 @@ class ForagerBrain:
         self.sound_danger_right = self.model.add_neuron_population(
             "sound_danger_right", self.config.n_sound_danger_right,
             sensory_lif_model, lif_params, lif_init)
+        # sound_food: C=5 (C=1은 포화 → L/R 발화율 차이 소멸)
+        sound_food_params = dict(lif_params)
+        sound_food_params["C"] = 5.0  # 1→5: I=40→3.6spk, I=10→0.8spk (4.5x 차이)
         self.sound_food_left = self.model.add_neuron_population(
             "sound_food_left", self.config.n_sound_food_left,
-            sensory_lif_model, lif_params, lif_init)
+            sensory_lif_model, sound_food_params, lif_init)
         self.sound_food_right = self.model.add_neuron_population(
             "sound_food_right", self.config.n_sound_food_right,
-            sensory_lif_model, lif_params, lif_init)
+            sensory_lif_model, sound_food_params, lif_init)
 
         print(f"    Sound Input: Danger L/R({self.config.n_sound_danger_left}x2) + "
               f"Food L/R({self.config.n_sound_food_left}x2)")
@@ -3778,16 +3783,35 @@ class ForagerBrain:
             "sound_danger_right_to_motor_left", self.sound_danger_right, self.motor_left,
             self.config.a1_to_motor_weight, sparsity=0.1)
 
-        # A1_Food: 같은편 모터 활성화 (접근)
-        # Sound_Food_Left → Motor_Left (왼쪽 음식 소리 → 왼쪽 접근)
+        # A1_Food: Push-Pull (C1: 소리 방향 → 접근)
+        # Sound_Food_Left → Motor_Left (Push: 같은 방향 접근)
         self._create_static_synapse(
             "sound_food_left_to_motor_left", self.sound_food_left, self.motor_left,
-            self.config.a1_to_motor_weight, sparsity=0.1)
+            self.config.sound_food_push_weight, sparsity=0.1)
         self._create_static_synapse(
             "sound_food_right_to_motor_right", self.sound_food_right, self.motor_right,
-            self.config.a1_to_motor_weight, sparsity=0.1)
+            self.config.sound_food_push_weight, sparsity=0.1)
+        # Sound_Food_Left → Motor_Right (Pull: 반대 방향 억제)
+        self._create_static_synapse(
+            "sound_food_left_to_motor_right_pull", self.sound_food_left, self.motor_right,
+            self.config.sound_food_pull_weight, sparsity=0.1)
+        self._create_static_synapse(
+            "sound_food_right_to_motor_left_pull", self.sound_food_right, self.motor_left,
+            self.config.sound_food_pull_weight, sparsity=0.1)
 
-        print(f"    Sound→Motor: {self.config.a1_to_motor_weight} (directional)")
+        print(f"    Sound_Food Push-Pull: push={self.config.sound_food_push_weight}, pull={self.config.sound_food_pull_weight}")
+
+        # C1: Sound→Food_Eye 교차 억제 (Webb cricket phonotaxis 원리)
+        # 소리가 강한 쪽이 반대쪽 시각을 억제 → 시각 전류 비대칭 → 방향 신호
+        # 100뉴런 × 0.15 = 15연결 × -15 = -225 → food_eye 발화 ~17% 감소
+        cross_inh_w = -15.0
+        self._create_static_synapse(
+            "sound_food_l_inhibit_food_eye_r", self.sound_food_left, self.food_eye_right,
+            cross_inh_w, sparsity=0.15)
+        self._create_static_synapse(
+            "sound_food_r_inhibit_food_eye_l", self.sound_food_right, self.food_eye_left,
+            cross_inh_w, sparsity=0.15)
+        print(f"    C1: Sound→Food_Eye cross-inhibition: {cross_inh_w} (Webb phonotaxis)")
 
         # === A1 → A2 Association ===
         self._create_static_synapse(
@@ -9227,7 +9251,8 @@ class ForagerBrain:
 
         # === Phase 11: 청각 입력 (Sound → A1) — sensitivity 절반으로 재활성화 ===
         if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
-            sound_sensitivity = 20.0  # 40→20 (STS 과활성 방지)
+            sound_sensitivity = 20.0
+
             sd_l = np.mean(observation.get("sound_danger_left", np.zeros(4)))
             sd_r = np.mean(observation.get("sound_danger_right", np.zeros(4)))
             sf_l = np.mean(observation.get("sound_food_left", np.zeros(4)))
