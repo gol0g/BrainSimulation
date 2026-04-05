@@ -20,9 +20,9 @@
 # WSL 실행 명령어 (Forager Brain)
 wsl -d Ubuntu-24.04 -- bash -c "
 unset PATH && unset LD_LIBRARY_PATH
-export CUDA_PATH=/usr/local/cuda-12.6
-export PATH=/usr/local/cuda-12.6/bin:/usr/local/bin:/usr/bin:/bin
-export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64
+export CUDA_PATH=/usr/local/cuda-12.3
+export PATH=/usr/local/cuda-12.3/bin:/usr/local/bin:/usr/bin:/bin
+export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64
 source ~/pygenn_wsl/bin/activate
 cd ~/pygenn_test && rm -rf forager_brain_CODE
 python /mnt/c/<PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --render none
@@ -31,7 +31,7 @@ python /mnt/c/<PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --re
 
 **WSL 환경 정보:**
 - Python venv: `~/pygenn_wsl/`
-- CUDA: `/usr/local/cuda-12.6`
+- CUDA: `/usr/local/cuda-12.3`
 - 작업 디렉토리: `~/pygenn_test/`
 - `<PROJECT_PATH>`: 이 프로젝트의 WSL 경로 (예: `/mnt/c/.../BrainSimulation`)
 
@@ -61,9 +61,9 @@ python /mnt/c/<PROJECT_PATH>/backend/genesis/forager_brain.py --episodes 20 --re
 # 새 Phase 구현 후 반드시 실행
 wsl -d Ubuntu-24.04 -- bash -c "
 unset PATH && unset LD_LIBRARY_PATH
-export CUDA_PATH=/usr/local/cuda-12.6
-export PATH=/usr/local/cuda-12.6/bin:/usr/local/bin:/usr/bin:/bin
-export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64
+export CUDA_PATH=/usr/local/cuda-12.3
+export PATH=/usr/local/cuda-12.3/bin:/usr/local/bin:/usr/bin:/bin
+export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64
 source ~/pygenn_wsl/bin/activate
 cd ~/pygenn_test && rm -rf forager_brain_CODE
 python /mnt/c/.../forager_brain.py --episodes 20 --render none
@@ -291,35 +291,26 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: 개념 형성 C1-C2 진행 중 (27,910 뉴런, 800×800 맵)
+### 현재 상태: C4 Contextual Prediction 구현 중 (27,955 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  개념 형성 커리큘럼 C1-C2 (2026-04-01)                           ║
+║  Phase C4: Contextual Prediction (2026-04-03)                    ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  생존 학습 L1-L18 ✓ + 환경 고도화 E1-E3 ✓                       ║
+║  C0-C2 완료:                                                     ║
+║    - C0: Selectivity 0.65 ✓, Spatial 33% ✓, Call 60% ✓          ║
+║    - C1.7: Sound C=5 + Push-Pull(8/-4) + cross-inhibition(-15)  ║
+║    - C2: Assoc_Binding→KC_spatial (범주→BG)                     ║
 ║                                                               ║
-║  KC 구획화 (2026-03-30):                                       ║
-║    - KC_visual(2000×2) + KC_auditory(500×2) + KC_spatial(500×2)║
-║    - 각 구획 독립 WTA + R-STDP (12개 학습 시냅스)               ║
-║    - Assoc_Binding→KC_spatial (C2: 학습된 범주→BG)             ║
+║  C4: 경험 기반 예측 (GPT 자문 → 비판적 수용)                    ║
+║    - Pred_FoodSoon(30 LIF) + Pred_FoodInh(15 LIF) = +45 뉴런   ║
+║    - Context 입력: food_mem, temporal, sound, hunger (static)   ║
+║    - 학습: place→pred, wmcb→pred (R-STDP SPARSE)               ║
+║    - 출력: pred→goal_food(1.5), pred→D1(1.0) — gentle          ║
+║    - Motor 직접 연결 없음 (안전)                                 ║
 ║                                                               ║
-║  C1: Eligibility Bridge (2026-03-31):                           ║
-║    - Sound onset → slow-decay tag (0.995) → DA 시 학습          ║
-║    - KC_aud→D1: 0.5→5.0 (학습 성공!)                           ║
-║    - 단일 KC에서 Call Semantics 70% PASS                        ║
-║    - 구획화 KC에서 53% (KC_aud 용량/테스트 문제)               ║
-║                                                               ║
-║  C0 검증 현황:                                                  ║
-║    - Food Selectivity: 0.65 ✓                                  ║
-║    - Spatial Memory: 28-35% ✓ (random 14%)                    ║
-║    - Call Semantics: 53-70% (구획화 후 미해결)                 ║
-║                                                               ║
-║  미해결: KC_auditory(500) vs KC_visual(2000) 연결 수 불균형    ║
-║  → 소리가 가중치 5.0이어도 BG 선택에서 시각에 묻힘             ║
-║                                                               ║
-║  뉴런 수:       27,910                                          ║
-║  학습 시냅스:   ~55 (12 KC구획 + 41 기존 + 2 food_approach)     ║
+║  뉴런 수:       27,955                                          ║
+║  학습 시냅스:   ~57 (기존 55 + 2 prediction R-STDP)             ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 

@@ -1184,6 +1184,39 @@ class ForagerBrainConfig:
     kc_rstdp_eta_auditory: float = 0.0005
     kc_d2_eta_auditory: float = 0.0003
 
+    # === Phase C4: Contextual Prediction (경험 기반 예측) ===
+    contextual_prediction_enabled: bool = True
+    n_pred_food_soon: int = 30               # 예측 뉴런 (food 예측 readout)
+    n_pred_food_inh: int = 15                # 예측 억제 뉴런 (WTA)
+    # Context → Pred (static)
+    food_mem_to_pred_weight: float = 3.0     # Food Memory → Pred
+    food_mem_to_pred_sparsity: float = 0.05
+    temporal_to_pred_weight: float = 2.0     # Temporal_Recent → Pred
+    temporal_to_pred_sparsity: float = 0.05
+    sound_food_to_pred_weight: float = 2.0   # Sound_Food → Pred
+    sound_food_to_pred_sparsity: float = 0.05
+    hunger_to_pred_weight: float = 3.0       # Hunger → Pred (need-gating)
+    hunger_to_pred_sparsity: float = 0.10
+    # Learnable R-STDP (SPARSE)
+    place_to_pred_init_w: float = 0.5
+    place_to_pred_w_max: float = 3.0
+    place_to_pred_eta: float = 0.0003
+    place_to_pred_sparsity: float = 0.05
+    wmcb_to_pred_init_w: float = 0.5
+    wmcb_to_pred_w_max: float = 3.0
+    wmcb_to_pred_eta: float = 0.0003
+    wmcb_to_pred_sparsity: float = 0.05
+    # Pred → outputs (gentle modulator)
+    pred_to_goal_food_weight: float = 1.5
+    pred_to_goal_food_sparsity: float = 0.05
+    pred_to_d1_weight: float = 1.0           # BG approach bias (symmetric L/R)
+    pred_to_d1_sparsity: float = 0.03
+    # Competition (WTA)
+    pred_to_inh_weight: float = 8.0
+    pred_to_inh_sparsity: float = 0.10
+    pred_inh_to_pred_weight: float = -6.0
+    pred_inh_to_pred_sparsity: float = 0.10
+
     dt: float = 1.0
 
     @property
@@ -1291,6 +1324,8 @@ class ForagerBrainConfig:
             base += self.n_gw_food * 2 + self.n_gw_safety  # 50+50+60 = 160
         if self.sparse_expansion_enabled and self.basal_ganglia_enabled and self.perceptual_learning_enabled:
             base += (self.n_kc_per_side * 2 + self.n_kc_inhibitory_per_side * 2)  # 3000×2 + 400×2 = 6800
+        if self.contextual_prediction_enabled and self.hippocampus_enabled:
+            base += self.n_pred_food_soon + self.n_pred_food_inh  # 30 + 15 = 45
         return base
 
 
@@ -1391,6 +1426,12 @@ class ForagerBrain:
             self.kc_d2_trace_r = 0.0
             self.last_kc_l_rate = 0.0
             self.last_kc_r_rate = 0.0
+
+        # Phase C4: Contextual Prediction state defaults
+        if self.config.contextual_prediction_enabled:
+            self.pred_place_trace = 0.0     # place→pred eligibility trace
+            self.pred_wmcb_trace = 0.0      # wm_context_binding→pred eligibility trace
+            self.last_pred_food_rate = 0.0  # prediction population firing rate
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -1849,6 +1890,12 @@ class ForagerBrain:
         if self.config.gw_enabled:
             self._build_gw_circuit()
 
+        # Phase C4: Contextual Prediction (경험 기반 예측)
+        if (self.config.contextual_prediction_enabled
+                and self.config.hippocampus_enabled
+                and self.config.prefrontal_enabled):
+            self._build_contextual_prediction_circuit()
+
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
 
@@ -1913,6 +1960,13 @@ class ForagerBrain:
             for syn in [self.pe_food_to_it_food_l, self.pe_food_to_it_food_r,
                         self.pe_danger_to_it_danger_l, self.pe_danger_to_it_danger_r]:
                 syn.pull_connectivity_from_device()
+
+        # Phase C4: Contextual Prediction SPARSE connectivity pull
+        if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
+            self.place_to_pred.pull_connectivity_from_device()
+            self.wmcb_to_pred.pull_connectivity_from_device()
+            self.pred_to_d1_l.pull_connectivity_from_device()
+            self.pred_to_d1_r.pull_connectivity_from_device()
 
         n_total = self.config.total_neurons
         print(f"Model ready! Total: {n_total:,} neurons")
@@ -2102,6 +2156,10 @@ class ForagerBrain:
             for pop in [self.pe_food_left, self.pe_food_right,
                         self.pe_danger_left, self.pe_danger_right]:
                 pop.spike_recording_enabled = True
+
+        # Phase C4: Contextual Prediction
+        if self.config.contextual_prediction_enabled and hasattr(self, 'pred_food_soon'):
+            self.pred_food_soon.spike_recording_enabled = True
 
         print("  Spike recording enabled for all monitored populations")
 
@@ -5032,6 +5090,49 @@ class ForagerBrain:
                     syn.vars["g"].push_to_device()
                 results[f"nac_avg_w_{side}"] = float(np.nanmean(w))
 
+        # === Phase C4: Contextual Prediction R-STDP (place→pred, wmcb→pred) ===
+        if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
+            pred_eta_place = self.config.place_to_pred_eta
+            pred_eta_wmcb = self.config.wmcb_to_pred_eta
+            pred_w_max_place = self.config.place_to_pred_w_max
+            pred_w_max_wmcb = self.config.wmcb_to_pred_w_max
+            pred_w_rest = self.config.place_to_pred_init_w
+
+            # Place → Pred R-STDP
+            place_trace = self.pred_place_trace
+            need_update = False
+            self.place_to_pred.vars["g"].pull_from_device()
+            w = self.place_to_pred.vars["g"].values.copy()
+            if apply_decay:
+                w -= (decay * 50) * (w - pred_w_rest)
+                need_update = True
+            if has_dopamine and place_trace > 0.01:
+                w += pred_eta_place * place_trace * self.dopamine_level
+                need_update = True
+            if need_update:
+                np.clip(w, 0.0, pred_w_max_place, out=w)
+                self.place_to_pred.vars["g"].values = w
+                self.place_to_pred.vars["g"].push_to_device()
+            results["pred_place_w"] = float(np.nanmean(w))
+
+            # WMCB → Pred R-STDP
+            if hasattr(self, 'wmcb_to_pred'):
+                wmcb_trace = self.pred_wmcb_trace
+                need_update = False
+                self.wmcb_to_pred.vars["g"].pull_from_device()
+                w = self.wmcb_to_pred.vars["g"].values.copy()
+                if apply_decay:
+                    w -= (decay * 50) * (w - pred_w_rest)
+                    need_update = True
+                if has_dopamine and wmcb_trace > 0.01:
+                    w += pred_eta_wmcb * wmcb_trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    np.clip(w, 0.0, pred_w_max_wmcb, out=w)
+                    self.wmcb_to_pred.vars["g"].values = w
+                    self.wmcb_to_pred.vars["g"].push_to_device()
+                results["pred_wmcb_w"] = float(np.nanmean(w))
+
         return results if results else None
 
     def learn_food_location(self, food_position: tuple = None, anti_learn: bool = False):
@@ -5400,6 +5501,14 @@ class ForagerBrain:
                 syn.vars["g"].pull_from_device()
                 weights[key] = syn.vars["g"].values.copy()
 
+        # Phase C4: Contextual Prediction (2 SPARSE synapses)
+        if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
+            self.place_to_pred.vars["g"].pull_from_device()
+            weights["pred_place"] = self.place_to_pred.vars["g"].values.copy()
+            if hasattr(self, 'wmcb_to_pred'):
+                self.wmcb_to_pred.vars["g"].pull_from_device()
+                weights["pred_wmcb"] = self.wmcb_to_pred.vars["g"].values.copy()
+
         np.savez(filepath, **weights)
         print(f"  [SAVE] All weights saved to {filepath} ({len(weights)} synapses)")
         return filepath
@@ -5593,6 +5702,15 @@ class ForagerBrain:
                 if key in data:
                     self._load_sparse_weights(syn, data[key])
                     loaded += 1
+
+        # Phase C4: Contextual Prediction (SPARSE)
+        if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
+            if "pred_place" in data:
+                self._load_sparse_weights(self.place_to_pred, data["pred_place"])
+                loaded += 1
+            if "pred_wmcb" in data and hasattr(self, 'wmcb_to_pred'):
+                self._load_sparse_weights(self.wmcb_to_pred, data["pred_wmcb"])
+                loaded += 1
 
         print(f"  [LOAD] Weights loaded from {filepath} ({loaded} synapses)")
         return True
@@ -8446,6 +8564,125 @@ class ForagerBrain:
         print(f"    Phase L12: GW({self.config.n_gw_food}x2+{self.config.n_gw_safety}), "
               f"12 static, food_mem->motor reduced to {self.config.food_memory_to_motor_weight}")
 
+    def _build_contextual_prediction_circuit(self):
+        """Phase C4: Contextual Prediction — 경험 기반 음식 예측
+
+        생물학적 근거: Hippocampal predictive map (Bono et al.)
+        "이 장소 + 이 소리 + 최근 문맥 → 곧 음식이 나올 확률 높음"
+
+        핵심: 기존 회로(place, food_memory, WM, sound) 출력을 작은 readout에 수렴시켜
+        예측→BG approach bias. Motor 직접 연결 없음 (안전).
+
+        Populations: pred_food_soon(30 LIF) + pred_food_inh(15 LIF) = +45 neurons
+        Learnable: 2 SPARSE R-STDP (place→pred, wmcb→pred)
+        Output: pred→goal_food(1.5) + pred→D1 L/R(1.0) — gentle modulator
+        """
+        print("  Building C4: Contextual Prediction circuit...")
+
+        cfg = self.config
+        lif_params = {
+            "C": 30.0,  # 높은 capacitance for integration
+            "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        lif_init = {"V": -65.0, "RefracTime": 0.0}
+
+        inh_params = {
+            "C": 10.0,
+            "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+
+        # === A) Populations ===
+        self.pred_food_soon = self.model.add_neuron_population(
+            "pred_food_soon", cfg.n_pred_food_soon, "LIF", lif_params, lif_init)
+        self.pred_food_inh = self.model.add_neuron_population(
+            "pred_food_inh", cfg.n_pred_food_inh, "LIF", inh_params, lif_init)
+
+        # === B) Context inputs (static) ===
+        # Food Memory → Pred ("음식이 여기 있었다" 기억)
+        self._create_static_synapse(
+            "food_mem_l_to_pred", self.food_memory_left, self.pred_food_soon,
+            cfg.food_mem_to_pred_weight, sparsity=cfg.food_mem_to_pred_sparsity)
+        self._create_static_synapse(
+            "food_mem_r_to_pred", self.food_memory_right, self.pred_food_soon,
+            cfg.food_mem_to_pred_weight, sparsity=cfg.food_mem_to_pred_sparsity)
+
+        # Temporal_Recent → Pred ("최근에 무슨 일이 있었다")
+        if hasattr(self, 'temporal_recent'):
+            self._create_static_synapse(
+                "temporal_to_pred", self.temporal_recent, self.pred_food_soon,
+                cfg.temporal_to_pred_weight, sparsity=cfg.temporal_to_pred_sparsity)
+
+        # Sound_Food → Pred ("음식 소리가 들린다")
+        if hasattr(self, 'sound_food_left'):
+            self._create_static_synapse(
+                "sound_food_l_to_pred", self.sound_food_left, self.pred_food_soon,
+                cfg.sound_food_to_pred_weight, sparsity=cfg.sound_food_to_pred_sparsity)
+            self._create_static_synapse(
+                "sound_food_r_to_pred", self.sound_food_right, self.pred_food_soon,
+                cfg.sound_food_to_pred_weight, sparsity=cfg.sound_food_to_pred_sparsity)
+
+        # Hunger → Pred (need-gating: 배고플 때만 예측 의미 있음)
+        self._create_static_synapse(
+            "hunger_to_pred", self.hunger_drive, self.pred_food_soon,
+            cfg.hunger_to_pred_weight, sparsity=cfg.hunger_to_pred_sparsity)
+
+        # === C) Learnable R-STDP (SPARSE) ===
+        # Place_Cells → Pred ("이 장소에서 음식 확률 학습")
+        self.place_to_pred = self.model.add_synapse_population(
+            "place_to_pred", "SPARSE", self.place_cells, self.pred_food_soon,
+            init_weight_update("StaticPulse", {},
+                {"g": init_var("Constant", {"constant": cfg.place_to_pred_init_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": cfg.place_to_pred_sparsity}))
+
+        # WM_Context_Binding → Pred ("이 시간 패턴에서 음식 확률 학습")
+        if hasattr(self, 'wm_context_binding'):
+            self.wmcb_to_pred = self.model.add_synapse_population(
+                "wmcb_to_pred", "SPARSE", self.wm_context_binding, self.pred_food_soon,
+                init_weight_update("StaticPulse", {},
+                    {"g": init_var("Constant", {"constant": cfg.wmcb_to_pred_init_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": cfg.wmcb_to_pred_sparsity}))
+
+        # === D) Output to BG (gentle modulator) ===
+        # Pred → Goal_Food (예측 활성 → 음식 탐색 목표 강화)
+        self._create_static_synapse(
+            "pred_to_goal_food", self.pred_food_soon, self.goal_food,
+            cfg.pred_to_goal_food_weight, sparsity=cfg.pred_to_goal_food_sparsity)
+
+        # Pred → D1 L/R (대칭적 접근 편향 — 방향 무관, 전반적 approach)
+        self.pred_to_d1_l = self.model.add_synapse_population(
+            "pred_to_d1_l", "SPARSE", self.pred_food_soon, self.d1_left,
+            init_weight_update("StaticPulse", {},
+                {"g": init_var("Constant", {"constant": cfg.pred_to_d1_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": cfg.pred_to_d1_sparsity}))
+        self.pred_to_d1_r = self.model.add_synapse_population(
+            "pred_to_d1_r", "SPARSE", self.pred_food_soon, self.d1_right,
+            init_weight_update("StaticPulse", {},
+                {"g": init_var("Constant", {"constant": cfg.pred_to_d1_weight})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": cfg.pred_to_d1_sparsity}))
+
+        # === E) WTA competition ===
+        self._create_static_synapse(
+            "pred_to_inh", self.pred_food_soon, self.pred_food_inh,
+            cfg.pred_to_inh_weight, sparsity=cfg.pred_to_inh_sparsity)
+        self._create_static_synapse(
+            "pred_inh_to_pred", self.pred_food_inh, self.pred_food_soon,
+            cfg.pred_inh_to_pred_weight, sparsity=cfg.pred_inh_to_pred_sparsity)
+
+        n_static = 8  # food_mem×2 + temporal + sound×2 + hunger + WTA×2
+        n_learnable = 2  # place→pred, wmcb→pred
+        n_output = 3  # goal_food + D1_L + D1_R
+        print(f"    Pred_FoodSoon: {cfg.n_pred_food_soon} + Inh: {cfg.n_pred_food_inh} = "
+              f"{cfg.n_pred_food_soon + cfg.n_pred_food_inh} neurons")
+        print(f"    Synapses: {n_static} static + {n_learnable} R-STDP + {n_output} output")
+        print(f"    Output: pred→goal_food({cfg.pred_to_goal_food_weight}), "
+              f"pred→D1({cfg.pred_to_d1_weight})")
+
     def update_prediction_error_rstdp(self, reward_type: str):
         """Phase L6: 예측 오차 R-STDP 가중치 업데이트
 
@@ -9249,6 +9486,9 @@ class ForagerBrain:
         gw_food_r_spikes = 0
         gw_safety_spikes = 0
 
+        # Phase C4: Prediction 스파이크 카운트
+        pred_food_spikes = 0
+
         # === Phase 11: 청각 입력 (Sound → A1) — sensitivity 절반으로 재활성화 ===
         if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
             sound_sensitivity = 20.0
@@ -9332,6 +9572,10 @@ class ForagerBrain:
                 gw_food_l_spikes = len(self.gw_food_left.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
                 gw_food_r_spikes = len(self.gw_food_right.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
                 gw_safety_spikes = len(self.gw_safety.spike_recording_data[0][0])  # [0]=first batch, [0]=times array
+
+            # Phase C4: Prediction spike counting
+            if self.config.contextual_prediction_enabled and hasattr(self, 'pred_food_soon'):
+                pred_food_spikes = len(self.pred_food_soon.spike_recording_data[0][0])
 
         # Phase 5 스파이크 카운팅
         if self.config.prefrontal_enabled:
@@ -9686,6 +9930,27 @@ class ForagerBrain:
             self.last_gw_food_rate = gw_food_rate
             self.last_gw_safety_rate = gw_safety_rate
             self.last_gw_broadcast = gw_broadcast
+
+        # Phase C4: Prediction rate + eligibility trace
+        if self.config.contextual_prediction_enabled and hasattr(self, 'pred_food_soon'):
+            pred_rate = pred_food_spikes / max(self.config.n_pred_food_soon * 10, 1)
+            self.last_pred_food_rate = pred_rate
+            pred_active = 1.0 if pred_rate > 0.03 else 0.0
+
+            # Place→Pred trace: pre(place)×post(pred) coincidence
+            place_rate = place_cell_spikes / max(self.config.n_place_cells * 10, 1) if self.config.hippocampus_enabled else 0.0
+            place_active = 1.0 if place_rate > 0.02 else 0.0
+            trace_decay = self.config.rstdp_trace_decay
+            trace_max = self.config.rstdp_trace_max
+            self.pred_place_trace = min(
+                self.pred_place_trace * trace_decay + place_active * pred_active, trace_max)
+
+            # WMCB→Pred trace: pre(wmcb)×post(pred) coincidence
+            if hasattr(self, 'wm_context_binding'):
+                wmcb_rate = self.last_wm_context_binding_rate
+                wmcb_active = 1.0 if wmcb_rate > 0.02 else 0.0
+                self.pred_wmcb_trace = min(
+                    self.pred_wmcb_trace * trace_decay + wmcb_active * pred_active, trace_max)
 
         # Phase L5: 피질 R-STDP 적격 추적 (좋은/나쁜 음식 활성도 기반)
         if self.config.perceptual_learning_enabled:
@@ -10404,7 +10669,10 @@ class ForagerBrain:
                 "KC_D1": (self._last_rstdp_results.get("kc_d1_l", 0.0)
                           + self._last_rstdp_results.get("kc_d1_r", 0.0)) / 2.0
                           if self._last_rstdp_results else 0.0,
+                "Pred_Place": self._last_rstdp_results.get("pred_place_w", 0.0)
+                              if self._last_rstdp_results else 0.0,
             },
+            "pred_food_rate": self.last_pred_food_rate,
         }
 
         # === 7. 이상 감지 ===
@@ -10566,6 +10834,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_agency: bool = False,
                 no_narrative_self: bool = False,
                 no_sparse_expansion: bool = False,
+                no_prediction: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -10641,6 +10910,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_sparse_expansion:
         brain_config.sparse_expansion_enabled = False
         print("  [!] Phase L16 (Sparse Expansion) DISABLED")
+    if no_prediction:
+        brain_config.contextual_prediction_enabled = False
+        print("  [!] Phase C4 (Contextual Prediction) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -11286,6 +11558,18 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 avg_w = float(np.nanmean(syn.vars["g"].values))
                 print(f"    {label} avg_w: {avg_w:.3f}")
 
+        # Phase C4: Contextual Prediction 가중치 현황
+        if brain_config.contextual_prediction_enabled and hasattr(brain, 'place_to_pred'):
+            print(f"  --- Phase C4: Contextual Prediction ---")
+            print(f"    Pred_FoodSoon rate: {brain.last_pred_food_rate:.3f}")
+            brain.place_to_pred.vars["g"].pull_from_device()
+            pp_w = float(np.nanmean(brain.place_to_pred.vars["g"].values))
+            print(f"    Place→Pred avg_w: {pp_w:.3f} (init={brain_config.place_to_pred_init_w}, max={brain_config.place_to_pred_w_max})")
+            if hasattr(brain, 'wmcb_to_pred'):
+                brain.wmcb_to_pred.vars["g"].pull_from_device()
+                wc_w = float(np.nanmean(brain.wmcb_to_pred.vars["g"].values))
+                print(f"    WMCB→Pred avg_w: {wc_w:.3f} (init={brain_config.wmcb_to_pred_init_w}, max={brain_config.wmcb_to_pred_w_max})")
+
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
             print(f"  --- Phase L5: Cortical R-STDP ---")
@@ -11604,6 +11888,8 @@ if __name__ == "__main__":
                        help="Disable Phase L15 (Narrative Self)")
     parser.add_argument("--no-sparse-expansion", action="store_true",
                        help="Disable Phase L16 (Sparse Expansion Layer)")
+    parser.add_argument("--no-prediction", action="store_true",
+                       help="Disable Phase C4 (Contextual Prediction)")
     # Data logging for dashboard
     parser.add_argument("--log-data", action="store_true",
                        help="Enable data logging for dashboard visualization")
@@ -11639,6 +11925,7 @@ if __name__ == "__main__":
         no_agency=args.no_agency,
         no_narrative_self=args.no_narrative_self,
         no_sparse_expansion=args.no_sparse_expansion,
+        no_prediction=args.no_prediction,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,

@@ -8,12 +8,12 @@
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  개념 형성 C1 진행 중 (2026-04-05)                               ║
-║  단일 KC(3000) + Sound Push-Pull(8/-4) 테스트 중                ║
-║  KC 구획화 시도→롤백 (auditory가 visual에 묻힘)                 ║
-║  Sound→D1 직접 + eligibility bridge + incentive salience        ║
-║  핵심 문제: sound→Motor가 0.0이었음 → Push-Pull 추가           ║
-║  C0: Selectivity 0.65 ✓, Spatial 28-35% ✓, Call ~50% (미해결) ║
+║  C4 Contextual Prediction ✓ 완료 (2026-04-03)                   ║
+║  C0-C2 완료 + C4: Pred_FoodSoon(30) + R-STDP                   ║
+║  검증: 70% 생존, Reward 2.58%, Selectivity 0.67                ║
+║  Place→Pred: 0.5→2.997 (포화, 학습 확인)                       ║
+║  다음: C5 자발적 탐색 (Curiosity) 또는 C4 포화 문제 개선        ║
+║  뉴런 수: 27,955                                                ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -84,6 +84,7 @@
 | C1.5 | KC_aud 1000 확장 + ablation | +1200→0 | 효과없음 | 53% |
 | C1.6 | Sound→D1 직접 연결 | 0 | ✓ 추가 | 53% |
 | **C1.7** | **Sound C=5 + Push-Pull(8/-4) + cross-inhibition(-15)** | **0** | **✓ 완료** | **Call 60-63%** |
+| **C4** | **Contextual Prediction (place+sound+WM→BG 예측)** | **+45** | **✓ 완료** | **70%** |
 
 ### Phase 12-14 수정 이력
 
@@ -591,12 +592,26 @@ NPC call이 행동 가치를 가지는 학습. "언어" 이전 단계.
 - 성공 기준: 시각 단서 없을 때 call만으로 접근/회피/탐색 전환
 - 기존 Phase 17 구조 활용 (Wernicke→KC 경로 이미 존재)
 
-### C4: 경험 기반 예측
+### C4: 경험 기반 예측 ✓ 완료
 
-기존 회로(해마+WM+메타인지+self-model)를 묶어 문맥 예측 학습.
+기존 회로(해마+WM+sound) 출력을 작은 예측 readout에 수렴시켜 BG 접근 편향.
 
-- 예: "이 위치 + 이 call + 최근 rich-zone 패턴 → 곧 food 나올 확률 높음"
-- 성공: 단순 반응이 아닌 개념적 기대 → 선제적 행동
+**구현 (2026-04-03):**
+- `Pred_FoodSoon` (30 LIF C=30) + `Pred_FoodInh` (15 LIF C=10) = +45 neurons
+- Context 입력 (static): food_memory L/R(3.0), temporal_recent(2.0), sound_food L/R(2.0), hunger(3.0)
+- 학습 입력 (R-STDP SPARSE): place_cells→pred(0.5→3.0, eta=0.0003), wm_context_binding→pred(0.5→3.0)
+- 출력: pred→goal_food(1.5), pred→D1 L/R(1.0) — gentle modulator
+- Motor 직접 연결 없음 (안전)
+- GPT 자문: SR-like hippocampal prediction, 최소 회로 추가 원칙
+
+**검증 (20ep, 2026-04-03):**
+- 생존율 **70%** ✓ (timeout 70%, starve 15%, predator 15%)
+- Reward Freq **2.58%** ✓, Selectivity **0.67** ✓
+- Pred_FoodSoon rate: 0.13~0.29 (활성)
+- Place→Pred: 0.5 → **2.997** (포화, w_max=3.0)
+- WMCB→Pred: 0.5 → **2.997** (포화)
+- **문제**: R-STDP 포화 너무 빠름 (ep6에 w_max 근접) → eta↓ 또는 w_max↑ 검토
+- Checkpoint: brain_C4_20ep.npz (54 synapses)
 
 ### C5: 자발적 탐색 (Curiosity)
 
