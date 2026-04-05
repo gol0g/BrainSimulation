@@ -1757,6 +1757,21 @@ class ForagerBrain:
         # Phase 11: Auditory Cortex circuits
         if self.config.auditory_enabled:
             self._build_auditory_cortex_circuit()
+            # C1: Sound_Food → D1 직접 연결 (BG에서는 빌드 순서 때문에 못 만듦)
+            if self.config.basal_ganglia_enabled and hasattr(self, 'sound_food_left'):
+                sf_init_w = 0.5
+                sf_sp = 0.10
+                self.sound_food_to_d1_l = self.model.add_synapse_population(
+                    "sound_food_l_to_d1_l", "SPARSE", self.sound_food_left, self.d1_left,
+                    init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": sf_init_w})}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                    init_sparse_connectivity("FixedProbability", {"prob": sf_sp}))
+                self.sound_food_to_d1_r = self.model.add_synapse_population(
+                    "sound_food_r_to_d1_r", "SPARSE", self.sound_food_right, self.d1_right,
+                    init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": sf_init_w})}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                    init_sparse_connectivity("FixedProbability", {"prob": sf_sp}))
+                print(f"    C1: Sound_Food→D1 direct (init={sf_init_w}, sp={sf_sp})")
 
         # Phase 12: Multimodal Integration circuits
         if self.config.multimodal_enabled and self.config.it_enabled and self.config.auditory_enabled:
@@ -1847,6 +1862,11 @@ class ForagerBrain:
             self.food_to_d1_r.pull_connectivity_from_device()
             self.food_to_d2_l.pull_connectivity_from_device()  # Phase L4: Anti-Hebbian D2
             self.food_to_d2_r.pull_connectivity_from_device()
+
+        # C1: Sound_Food→D1 SPARSE connectivity pull
+        if self.config.auditory_enabled and hasattr(self, 'sound_food_to_d1_l'):
+            self.sound_food_to_d1_l.pull_connectivity_from_device()
+            self.sound_food_to_d1_r.pull_connectivity_from_device()
 
         # Phase L7: Discriminative BG SPARSE connectivity pull
         if self.config.discriminative_bg_enabled and self.config.perceptual_learning_enabled:
@@ -2624,6 +2644,8 @@ class ForagerBrain:
             print(f"    Phase L7: GoodFood→D2 (Anti-Hebbian): init_w={td2_w}")
             print(f"    Phase L7: BadFood→D2 (Anti-Hebbian, no DA): init_w={td2_w}")
             print(f"    Phase L7: 8 discriminative BG synapses, sparsity={t_sp}")
+
+        # C1: Sound_Food→D1 — 이제 __init__에서 auditory 빌드 직후 생성 (빌드 순서 해결)
 
     def _build_prefrontal_cortex_circuit(self):
         """
@@ -4935,6 +4957,33 @@ class ForagerBrain:
                     syn.vars["g"].values = w
                     syn.vars["g"].push_to_device()
                 results[f"food_approach_{side}"] = float(np.nanmean(w))
+
+        # === C1: Sound_Food → D1 R-STDP (eligibility bridge trace 사용) ===
+        if self.config.auditory_enabled and hasattr(self, 'sound_food_to_d1_l'):
+            sf_eta = 0.001
+            sf_w_max = 5.0
+            sf_w_rest = 0.5
+            sound_tag_l = getattr(self, '_sound_elig_tag_l', 0.0)
+            sound_tag_r = getattr(self, '_sound_elig_tag_r', 0.0)
+
+            for side, syn, tag in [
+                ("l", self.sound_food_to_d1_l, sound_tag_l),
+                ("r", self.sound_food_to_d1_r, sound_tag_r),
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values.copy()
+                if apply_decay:
+                    w -= (decay * 10) * (w - sf_w_rest)
+                    need_update = True
+                if has_dopamine and tag > 0.01:
+                    w += sf_eta * tag * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    np.clip(w, 0.0, sf_w_max, out=w)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                results[f"sound_d1_{side}"] = float(np.nanmean(w))
 
         # === Phase L10: NAc R-STDP (food_eye → nac_value) ===
         if self.config.td_learning_enabled:

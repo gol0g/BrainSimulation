@@ -22,10 +22,11 @@ from forager_gym import ForagerGym, ForagerConfig
 
 def test_call_semantics(brain, n_trials=100):
     """
-    Test 3: Call Semantics — 시각 단서 없이 NPC food call만으로 접근하는가
+    Test 3: Call Semantics — 시각 모호(good=bad 동일) + 소리로 방향 편향
 
-    시각 단서(food_rays)를 0으로 마스킹하고, NPC food call만 남긴 상태에서
-    에이전트가 call 방향으로 이동하는 비율 측정.
+    시각: 양쪽에 동일한 food_rays (good/bad 구분 불가)
+    소리: 한쪽에 고음(좋은 음식), 반대쪽에 저음(나쁜 음식)
+    측정: 에이전트가 고음(좋은 음식) 방향으로 더 가는가
 
     기준: >60% (random=50%)
     """
@@ -44,45 +45,45 @@ def test_call_semantics(brain, n_trials=100):
     total = 0
 
     for trial in range(n_trials):
-        # 매 trial: env.reset() 하지 않고 obs만 조작
-        call_direction = "left" if np.random.random() > 0.5 else "right"
+        good_side = "left" if np.random.random() > 0.5 else "right"
 
-        # 시각 단서 마스킹 + call 주입
+        # 시각: 양쪽 동일 (좋은/나쁜 구분 불가, 둘 다 음식으로 보임)
         test_obs = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
-        test_obs["food_rays_left"] = np.zeros(8)
-        test_obs["food_rays_right"] = np.zeros(8)
-        test_obs["good_food_rays_left"] = np.zeros(8)
-        test_obs["good_food_rays_right"] = np.zeros(8)
-        test_obs["bad_food_rays_left"] = np.zeros(8)
-        test_obs["bad_food_rays_right"] = np.zeros(8)
+        ambiguous = 0.5  # 양쪽에 동일한 음식 시각
+        test_obs["food_rays_left"] = np.ones(8) * ambiguous
+        test_obs["food_rays_right"] = np.ones(8) * ambiguous
+        # good/bad를 동일하게 → 시각으로 구분 불가
+        test_obs["good_food_rays_left"] = np.ones(8) * ambiguous * 0.5
+        test_obs["good_food_rays_right"] = np.ones(8) * ambiguous * 0.5
+        test_obs["bad_food_rays_left"] = np.ones(8) * ambiguous * 0.5
+        test_obs["bad_food_rays_right"] = np.ones(8) * ambiguous * 0.5
 
-        # C1: sound_food 채널로 방향 단서 주입 (KC_auditory가 학습한 채널)
-        call_strength = 0.8
-        test_obs["food_sound_high"] = call_strength
-        test_obs["food_sound_low"] = 0.0
-        if call_direction == "left":
-            test_obs["sound_food_left"] = call_strength
-            test_obs["sound_food_right"] = call_strength * 0.1
+        # 소리: 좋은 쪽에 고음, 나쁜 쪽에 저음
+        test_obs["food_sound_high"] = 0.8  # 좋은 음식 근처
+        test_obs["food_sound_low"] = 0.3   # 나쁜 음식도 근처
+        if good_side == "left":
+            test_obs["sound_food_left"] = 0.8
+            test_obs["sound_food_right"] = 0.2
         else:
-            test_obs["sound_food_left"] = call_strength * 0.1
-            test_obs["sound_food_right"] = call_strength
+            test_obs["sound_food_left"] = 0.2
+            test_obs["sound_food_right"] = 0.8
 
-        # 에이전트 반응 측정 (1스텝)
-        angle, info = brain.process(test_obs)
+        # 에이전트 반응 측정 (5스텝 누적 — SNN 신호 전파 시간 필요)
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(test_obs)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset()
+                break
 
-        # 판정: call 방향으로 회전했는가
-        # angle_delta = (motor_R - motor_L) * 0.5
-        # angle > 0 = 오른쪽 회전, angle < 0 = 왼쪽 회전
-        if call_direction == "left" and angle < -0.01:
+        # 판정: 5스텝 누적 회전이 좋은 음식 방향인가
+        if good_side == "left" and total_angle < -0.02:
             correct += 1
-        elif call_direction == "right" and angle > 0.01:
+        elif good_side == "right" and total_angle > 0.02:
             correct += 1
         total += 1
-
-        # env 상태 갱신 (brain 내부 카운터 정상 유지)
-        obs, _, done, _ = env.step((angle,))
-        if done:
-            obs = env.reset()
 
     score = correct / max(total, 1) * 100
     return {
