@@ -8,12 +8,12 @@
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  개념 형성 커리큘럼 C1-C2 (2026-04-01)                           ║
-║  KC 구획화: visual(2000) + auditory(500) + spatial(500)          ║
-║  C1: Eligibility bridge → Call Semantics 70% (단일 KC)          ║
-║      구획화 KC에서 53% (KC_aud 용량 불균형 미해결)              ║
-║  C2: Assoc_Binding→KC_spatial (학습 범주→BG)                    ║
-║  C0: Selectivity 0.65 ✓, Spatial 28-35% ✓, Call 53-70%        ║
+║  개념 형성 C1 진행 중 (2026-04-05)                               ║
+║  단일 KC(3000) + Sound Push-Pull(8/-4) 테스트 중                ║
+║  KC 구획화 시도→롤백 (auditory가 visual에 묻힘)                 ║
+║  Sound→D1 직접 + eligibility bridge + incentive salience        ║
+║  핵심 문제: sound→Motor가 0.0이었음 → Push-Pull 추가           ║
+║  C0: Selectivity 0.65 ✓, Spatial 28-35% ✓, Call ~50% (미해결) ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -79,6 +79,11 @@
 | **C1.1** | **KC 구획화 (visual/auditory/spatial)** | **0** | **✓ 완료** | **53%** (미해결) |
 | **C1.2** | **Food Sound Cues (고음/저음)** | **0** | **✓ 완료** | Select 0.68 |
 | **C2** | **Assoc_Binding→KC_spatial (범주→BG)** | **0** | **✓ 완료** | Select 0.65 |
+| C1.3 | KC 구획화 시도→롤백 (aud가 vis에 묻힘) | 0 | 롤백 | 53% |
+| C1.4 | Auditory fan-in sweep (0.10/0.15/0.20) | 0 | 완료 | 43-57% |
+| C1.5 | KC_aud 1000 확장 + ablation | +1200→0 | 효과없음 | 53% |
+| C1.6 | Sound→D1 직접 연결 | 0 | ✓ 추가 | 53% |
+| **C1.7** | **Sound Push-Pull(8/-4) + ambiguity gain** | **0** | **🔄 진행중** | |
 
 ### Phase 12-14 수정 이력
 
@@ -548,13 +553,27 @@
 | **청각 의미** | 시각 단서 없이 call만으로 행동이 바뀌는가 | call-only 접근/회피 >60% |
 | **맥락 의존** | 같은 자극이 장소/시간에 따라 다른 의미를 갖는가 | 맥락별 행동 차이 >30% |
 
-### C1: 감각 모호성 환경
+### C1: 감각 모호성 환경 (진행 중)
 
 겉보기 동일한 자극을 다중감각으로 구분해야 하는 과제.
 
-- 환경: 시각적으로 동일한 음식 3종 (good/bad/social-food)
-- 구분 단서: 소리, 사회적 call, 장소 맥락
-- 성공: 단일 감각(시각)만으로는 불가능, 다중감각 통합이 필수
+**완료:**
+- Food sound cues 추가 (고음=good, 저음=bad)
+- Eligibility bridge (sound onset tag, decay 0.995)
+- Sound→D1 직접 연결 + KC 경유 동시
+- KC 구획화 시도→롤백 (auditory가 visual에 묻힘)
+- Ablation: decay가 아닌 구조적 문제 확인
+- Fan-in sweep (0.05~0.20): 미미한 개선
+- KC_auditory 1000 확장: 효과 없음
+
+**현재 진행:**
+- Sound Push-Pull(8/-4) 추가 (이전 0.0이었음 — 핵심 누락)
+- GPT 자문: Push-Pull 8/-4 적절 + ambiguity-gated gain 필요
+
+**남은 것:**
+- Push-Pull 효과 검증
+- Visual ambiguity detection → auditory gain boost
+- 성공 시 C1 테스트 재설계 (시각 모호성 + 소리 차이)
 
 ### C2: 범주 창발 (점진적)
 
