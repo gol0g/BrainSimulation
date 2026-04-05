@@ -369,6 +369,7 @@ gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 36. **SensoryLIF C=1은 발화율 포화**: C=1이면 I_input 10이나 40이나 비슷한 발화 → L/R 차이 소멸. 방향 구분 필요한 감각은 C=5+ 사용
 37. **감각 수준 교차 억제가 Motor Push-Pull보다 효과적**: Webb cricket phonotaxis — sound→food_eye 교차 억제(-15)로 기존 큰 시각 전류를 빼서 방향 차이 생성
 38. **Motor 수준 Push-Pull은 약한 감각에 무력**: sound 8/-4 vs visual 25+10 = Motor에서 7% 비율 → 무시됨
+39. **예측 R-STDP도 빠르게 포화**: place→pred 0.5→3.0 in 6ep (eta=0.0003, w_max=3.0). KC와 동일 패턴. eta 낮추거나 w_max 높여야 점진적 학습
 
 ---
 
