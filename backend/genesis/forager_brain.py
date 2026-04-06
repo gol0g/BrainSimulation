@@ -1217,6 +1217,34 @@ class ForagerBrainConfig:
     pred_inh_to_pred_weight: float = -6.0
     pred_inh_to_pred_sparsity: float = 0.10
 
+    # === Phase C5: Curiosity-Driven Exploration (호기심 기반 탐색) ===
+    curiosity_enabled: bool = True
+    n_curiosity_gate: int = 20              # 호기심 게이트 (novelty × uncertainty)
+    n_curiosity_inh: int = 10               # 안전 억제 (위험 시 호기심 차단)
+    # Inputs → Curiosity_Gate (static)
+    v4_novel_to_curiosity_weight: float = 1.0
+    v4_novel_to_curiosity_sparsity: float = 0.05
+    assoc_novelty_to_curiosity_weight: float = 1.2
+    assoc_novelty_to_curiosity_sparsity: float = 0.05
+    meta_uncertainty_to_curiosity_weight: float = 1.5
+    meta_uncertainty_to_curiosity_sparsity: float = 0.08
+    acc_conflict_to_curiosity_weight: float = 0.8
+    acc_conflict_to_curiosity_sparsity: float = 0.05
+    curiosity_recurrent_weight: float = 0.3  # 짧은 지속 (perseveration 방지)
+    curiosity_recurrent_sparsity: float = 0.05
+    # Safety suppression
+    fear_to_curiosity_inh_weight: float = 8.0
+    fear_to_curiosity_inh_sparsity: float = 0.10
+    gw_safety_to_curiosity_inh_weight: float = 6.0
+    gw_safety_to_curiosity_inh_sparsity: float = 0.10
+    curiosity_inh_to_gate_weight: float = -2.0
+    curiosity_inh_to_gate_sparsity: float = 0.10
+    # Output (gentle modulator — Motor 직접 연결 없음)
+    curiosity_to_goal_food_weight: float = 1.5
+    curiosity_to_goal_food_sparsity: float = 0.05
+    curiosity_to_d1_weight: float = 0.8     # 대칭적 approach bias
+    curiosity_to_d1_sparsity: float = 0.03
+
     dt: float = 1.0
 
     @property
@@ -1326,6 +1354,8 @@ class ForagerBrainConfig:
             base += (self.n_kc_per_side * 2 + self.n_kc_inhibitory_per_side * 2)  # 3000×2 + 400×2 = 6800
         if self.contextual_prediction_enabled and self.hippocampus_enabled:
             base += self.n_pred_food_soon + self.n_pred_food_inh  # 30 + 15 = 45
+        if self.curiosity_enabled:
+            base += self.n_curiosity_gate + self.n_curiosity_inh  # 20 + 10 = 30
         return base
 
 
@@ -1432,6 +1462,10 @@ class ForagerBrain:
             self.pred_place_trace = 0.0     # place→pred eligibility trace
             self.pred_wmcb_trace = 0.0      # wm_context_binding→pred eligibility trace
             self.last_pred_food_rate = 0.0  # prediction population firing rate
+
+        # Phase C5: Curiosity state defaults
+        if self.config.curiosity_enabled:
+            self.last_curiosity_rate = 0.0  # curiosity gate firing rate
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -1896,6 +1930,12 @@ class ForagerBrain:
                 and self.config.prefrontal_enabled):
             self._build_contextual_prediction_circuit()
 
+        # Phase C5: Curiosity-Driven Exploration (호기심 기반 탐색)
+        if (self.config.curiosity_enabled
+                and self.config.metacognition_enabled
+                and self.config.v2v4_enabled):
+            self._build_curiosity_circuit()
+
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
 
@@ -2160,6 +2200,10 @@ class ForagerBrain:
         # Phase C4: Contextual Prediction
         if self.config.contextual_prediction_enabled and hasattr(self, 'pred_food_soon'):
             self.pred_food_soon.spike_recording_enabled = True
+
+        # Phase C5: Curiosity
+        if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
+            self.curiosity_gate.spike_recording_enabled = True
 
         print("  Spike recording enabled for all monitored populations")
 
@@ -8683,6 +8727,113 @@ class ForagerBrain:
         print(f"    Output: pred→goal_food({cfg.pred_to_goal_food_weight}), "
               f"pred→D1({cfg.pred_to_d1_weight})")
 
+    def _build_curiosity_circuit(self):
+        """Phase C5: Curiosity-Driven Exploration — 호기심 기반 탐색
+
+        생물학적 근거: Hippocampal-VTA novelty loop, ACC-BG information-seeking
+        (Gottlieb & Oudeyer, 2013; Bromberg-Martin & Hikosaka, 2009)
+
+        핵심 원리: novelty-gated, uncertainty-reduction-seeking curiosity
+        - Novelty (V4_Novel, Assoc_Novelty): "이것은 탐색할 가치 있음"
+        - Uncertainty (Meta_Uncertainty): "아직 모르는 것이 있음"
+        - Safety_Gate: 위험 시 호기심 차단 (생존 우선)
+        - 출력: Goal_Food + D1 (gentle bias) — Motor 직접 연결 없음
+
+        Populations: curiosity_gate(20 LIF) + curiosity_inh(10 LIF) = +30 neurons
+        All static synapses (no new learning — 기존 BG R-STDP가 탐색 결과 학습)
+        """
+        print("  Building C5: Curiosity-Driven Exploration circuit...")
+
+        cfg = self.config
+        gate_params = {
+            "C": 30.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        inh_params = {
+            "C": 10.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        lif_init = {"V": -65.0, "RefracTime": 0.0}
+
+        # === A) Populations ===
+        self.curiosity_gate = self.model.add_neuron_population(
+            "curiosity_gate", cfg.n_curiosity_gate, "LIF", gate_params, lif_init)
+        self.curiosity_inh = self.model.add_neuron_population(
+            "curiosity_inh", cfg.n_curiosity_inh, "LIF", inh_params, lif_init)
+
+        # === B) Novelty + Uncertainty inputs → Curiosity_Gate ===
+        # V4_Novel → "새로운 객체 감지됨"
+        if hasattr(self, 'v4_novel_object'):
+            self._create_static_synapse(
+                "v4_novel_to_curiosity", self.v4_novel_object, self.curiosity_gate,
+                cfg.v4_novel_to_curiosity_weight, sparsity=cfg.v4_novel_to_curiosity_sparsity)
+
+        # Assoc_Novelty → "새로운 조합 감지됨"
+        if hasattr(self, 'assoc_novelty'):
+            self._create_static_synapse(
+                "assoc_novelty_to_curiosity", self.assoc_novelty, self.curiosity_gate,
+                cfg.assoc_novelty_to_curiosity_weight, sparsity=cfg.assoc_novelty_to_curiosity_sparsity)
+
+        # Meta_Uncertainty → "아직 모르는 것이 있다"
+        if hasattr(self, 'meta_uncertainty'):
+            self._create_static_synapse(
+                "meta_uncertainty_to_curiosity", self.meta_uncertainty, self.curiosity_gate,
+                cfg.meta_uncertainty_to_curiosity_weight, sparsity=cfg.meta_uncertainty_to_curiosity_sparsity)
+
+        # ACC_Conflict → "갈등/모호성 감지됨"
+        if hasattr(self, 'acc_conflict'):
+            self._create_static_synapse(
+                "acc_conflict_to_curiosity", self.acc_conflict, self.curiosity_gate,
+                cfg.acc_conflict_to_curiosity_weight, sparsity=cfg.acc_conflict_to_curiosity_sparsity)
+
+        # Self-recurrent (brief persistence, not perseveration)
+        self._create_static_synapse(
+            "curiosity_recurrent", self.curiosity_gate, self.curiosity_gate,
+            cfg.curiosity_recurrent_weight, sparsity=cfg.curiosity_recurrent_sparsity)
+
+        # === C) Safety suppression ===
+        # Fear → Safety_Gate (위험하면 호기심 억제)
+        if hasattr(self, 'fear_response'):
+            self._create_static_synapse(
+                "fear_to_curiosity_inh", self.fear_response, self.curiosity_inh,
+                cfg.fear_to_curiosity_inh_weight, sparsity=cfg.fear_to_curiosity_inh_sparsity)
+
+        # GW_Safety → Safety_Gate (안전 모드면 호기심 억제)
+        if hasattr(self, 'gw_safety'):
+            self._create_static_synapse(
+                "gw_safety_to_curiosity_inh", self.gw_safety, self.curiosity_inh,
+                cfg.gw_safety_to_curiosity_inh_weight, sparsity=cfg.gw_safety_to_curiosity_inh_sparsity)
+
+        # Safety_Gate → Curiosity_Gate (억제)
+        self._create_static_synapse(
+            "curiosity_inh_to_gate", self.curiosity_inh, self.curiosity_gate,
+            cfg.curiosity_inh_to_gate_weight, sparsity=cfg.curiosity_inh_to_gate_sparsity)
+
+        # === D) Output to BG (gentle modulator — Motor 직접 없음) ===
+        # Curiosity → Goal_Food (호기심이 음식 탐색 목표를 부스트)
+        self._create_static_synapse(
+            "curiosity_to_goal_food", self.curiosity_gate, self.goal_food,
+            cfg.curiosity_to_goal_food_weight, sparsity=cfg.curiosity_to_goal_food_sparsity)
+
+        # Curiosity → D1 L/R (대칭적 approach bias)
+        self._create_static_synapse(
+            "curiosity_to_d1_l", self.curiosity_gate, self.d1_left,
+            cfg.curiosity_to_d1_weight, sparsity=cfg.curiosity_to_d1_sparsity)
+        self._create_static_synapse(
+            "curiosity_to_d1_r", self.curiosity_gate, self.d1_right,
+            cfg.curiosity_to_d1_weight, sparsity=cfg.curiosity_to_d1_sparsity)
+
+        n_syn = 10  # 4 input + 1 recurrent + 3 safety + 3 output (approx)
+        print(f"    Curiosity_Gate: {cfg.n_curiosity_gate} + Inh: {cfg.n_curiosity_inh} = "
+              f"{cfg.n_curiosity_gate + cfg.n_curiosity_inh} neurons")
+        print(f"    Synapses: ~{n_syn} static (all static, no learning)")
+        print(f"    Input: V4_Novel({cfg.v4_novel_to_curiosity_weight}), "
+              f"Assoc_Novelty({cfg.assoc_novelty_to_curiosity_weight}), "
+              f"Meta_Uncertainty({cfg.meta_uncertainty_to_curiosity_weight})")
+        print(f"    Safety: Fear({cfg.fear_to_curiosity_inh_weight})→Inh→Gate({cfg.curiosity_inh_to_gate_weight})")
+        print(f"    Output: →Goal_Food({cfg.curiosity_to_goal_food_weight}), "
+              f"→D1({cfg.curiosity_to_d1_weight})")
+
     def update_prediction_error_rstdp(self, reward_type: str):
         """Phase L6: 예측 오차 R-STDP 가중치 업데이트
 
@@ -9489,6 +9640,9 @@ class ForagerBrain:
         # Phase C4: Prediction 스파이크 카운트
         pred_food_spikes = 0
 
+        # Phase C5: Curiosity 스파이크 카운트
+        curiosity_spikes = 0
+
         # === Phase 11: 청각 입력 (Sound → A1) — sensitivity 절반으로 재활성화 ===
         if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
             sound_sensitivity = 20.0
@@ -9576,6 +9730,10 @@ class ForagerBrain:
             # Phase C4: Prediction spike counting
             if self.config.contextual_prediction_enabled and hasattr(self, 'pred_food_soon'):
                 pred_food_spikes = len(self.pred_food_soon.spike_recording_data[0][0])
+
+            # Phase C5: Curiosity spike counting
+            if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
+                curiosity_spikes = len(self.curiosity_gate.spike_recording_data[0][0])
 
         # Phase 5 스파이크 카운팅
         if self.config.prefrontal_enabled:
@@ -9951,6 +10109,11 @@ class ForagerBrain:
                 wmcb_active = 1.0 if wmcb_rate > 0.02 else 0.0
                 self.pred_wmcb_trace = min(
                     self.pred_wmcb_trace * trace_decay + wmcb_active * pred_active, trace_max)
+
+        # Phase C5: Curiosity rate
+        if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
+            curiosity_rate = curiosity_spikes / max(self.config.n_curiosity_gate * 10, 1)
+            self.last_curiosity_rate = curiosity_rate
 
         # Phase L5: 피질 R-STDP 적격 추적 (좋은/나쁜 음식 활성도 기반)
         if self.config.perceptual_learning_enabled:
@@ -10673,6 +10836,7 @@ class ForagerBrain:
                               if self._last_rstdp_results else 0.0,
             },
             "pred_food_rate": self.last_pred_food_rate,
+            "curiosity_rate": self.last_curiosity_rate,
         }
 
         # === 7. 이상 감지 ===
@@ -10835,6 +10999,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_narrative_self: bool = False,
                 no_sparse_expansion: bool = False,
                 no_prediction: bool = False,
+                no_curiosity: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -10913,6 +11078,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if no_prediction:
         brain_config.contextual_prediction_enabled = False
         print("  [!] Phase C4 (Contextual Prediction) DISABLED")
+    if no_curiosity:
+        brain_config.curiosity_enabled = False
+        print("  [!] Phase C5 (Curiosity) DISABLED")
     if food_patch:
         env_config.food_patch_enabled = True
         print(f"      Patches: {env_config.n_patches}, radius={env_config.patch_radius}")
@@ -11570,6 +11738,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 wc_w = float(np.nanmean(brain.wmcb_to_pred.vars["g"].values))
                 print(f"    WMCB→Pred avg_w: {wc_w:.3f} (init={brain_config.wmcb_to_pred_init_w}, max={brain_config.wmcb_to_pred_w_max})")
 
+        # Phase C5: Curiosity 현황
+        if brain_config.curiosity_enabled and hasattr(brain, 'curiosity_gate'):
+            print(f"  --- Phase C5: Curiosity ---")
+            print(f"    Curiosity_Gate rate: {brain.last_curiosity_rate:.3f}")
+
         # Phase L5: 피질 R-STDP 가중치 현황
         if brain_config.perceptual_learning_enabled and brain_config.it_enabled:
             print(f"  --- Phase L5: Cortical R-STDP ---")
@@ -11890,6 +12063,8 @@ if __name__ == "__main__":
                        help="Disable Phase L16 (Sparse Expansion Layer)")
     parser.add_argument("--no-prediction", action="store_true",
                        help="Disable Phase C4 (Contextual Prediction)")
+    parser.add_argument("--no-curiosity", action="store_true",
+                       help="Disable Phase C5 (Curiosity-Driven Exploration)")
     # Data logging for dashboard
     parser.add_argument("--log-data", action="store_true",
                        help="Enable data logging for dashboard visualization")
@@ -11926,6 +12101,7 @@ if __name__ == "__main__":
         no_narrative_self=args.no_narrative_self,
         no_sparse_expansion=args.no_sparse_expansion,
         no_prediction=args.no_prediction,
+        no_curiosity=args.no_curiosity,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,

@@ -8,12 +8,10 @@
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  C4 Contextual Prediction ✓ 완료 (2026-04-03)                   ║
-║  C0-C2 완료 + C4: Pred_FoodSoon(30) + R-STDP                   ║
-║  검증: 70% 생존, Reward 2.58%, Selectivity 0.67                ║
-║  Place→Pred: 0.5→2.997 (포화, 학습 확인)                       ║
-║  다음: C5 자발적 탐색 (Curiosity) 또는 C4 포화 문제 개선        ║
-║  뉴런 수: 27,955                                                ║
+║  C0-C5 개념 형성 커리큘럼 완료 (2026-04-06)                      ║
+║  C4: Pred_FoodSoon 70% + C5: Curiosity 70%                     ║
+║  27,985 뉴런, ~57 학습 시냅스                                    ║
+║  개념 형성 커리큘럼 전 단계 완료 — 다음: 100ep 장기 검증         ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -85,6 +83,7 @@
 | C1.6 | Sound→D1 직접 연결 | 0 | ✓ 추가 | 53% |
 | **C1.7** | **Sound C=5 + Push-Pull(8/-4) + cross-inhibition(-15)** | **0** | **✓ 완료** | **Call 60-63%** |
 | **C4** | **Contextual Prediction (place+sound+WM→BG 예측)** | **+45** | **✓ 완료** | **70%** |
+| **C5** | **Curiosity (novelty×uncertainty→BG explore bias)** | **+30** | **✓ 완료** | **70%** |
 
 ### Phase 12-14 수정 이력
 
@@ -613,12 +612,24 @@ NPC call이 행동 가치를 가지는 학습. "언어" 이전 단계.
 - **문제**: R-STDP 포화 너무 빠름 (ep6에 w_max 근접) → eta↓ 또는 w_max↑ 검토
 - Checkpoint: brain_C4_20ep.npz (54 synapses)
 
-### C5: 자발적 탐색 (Curiosity)
+### C5: 자발적 탐색 (Curiosity) ✓ 완료
 
-C1-C4 이후. "무엇이 새롭고 가치 있는지"를 판단한 후의 호기심.
+GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 
-- novelty → dopamine → exploration
-- 선행 조건: 개념 후보가 존재해야 의미 있는 탐색 가능
+**구현 (2026-04-06):**
+- `Curiosity_Gate` (20 LIF C=30) + `Curiosity_Inh` (10 LIF C=10) = +30 neurons
+- Input: V4_Novel(1.0), Assoc_Novelty(1.2), Meta_Uncertainty(1.5), ACC_Conflict(0.8)
+- Safety: Fear(8.0)→Inh, GW_Safety(6.0)→Inh → Gate(-2.0) — 생존 우선
+- Output: Gate→Goal_Food(1.5), Gate→D1 L/R(0.8) — gentle, Motor 직접 없음
+- Self-recurrent(0.3): brief persistence
+- All static synapses (학습은 기존 BG R-STDP가 담당)
+
+**검증 (20ep, 2026-04-06):**
+- 생존율 **70%** ✓ (C4와 동일 — 간섭 없음)
+- Reward Freq **2.63%** ✓, Pain Death **0%** ✓
+- Curiosity_Gate rate: 0.005~0.020 (낮지만 안정적 활성화)
+- Safety suppression 확인: 위험 시 Curiosity_Inh가 Gate 억제
+- Checkpoint: brain_C5_20ep.npz (54 synapses)
 
 ### 사이드 브랜치 (메인라인과 독립)
 

@@ -291,26 +291,24 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: C4 Contextual Prediction 구현 중 (27,955 뉴런, 800×800 맵)
+### 현재 상태: C5 Curiosity 검증 중 (27,985 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase C4: Contextual Prediction (2026-04-03)                    ║
+║  Phase C5: Curiosity-Driven Exploration (2026-04-06)             ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  C0-C2 완료:                                                     ║
-║    - C0: Selectivity 0.65 ✓, Spatial 33% ✓, Call 60% ✓          ║
-║    - C1.7: Sound C=5 + Push-Pull(8/-4) + cross-inhibition(-15)  ║
-║    - C2: Assoc_Binding→KC_spatial (범주→BG)                     ║
+║  C0-C4 완료:                                                     ║
+║    - C4: Pred_FoodSoon 70%, place→pred 0.5→3.0 learned          ║
 ║                                                               ║
-║  C4: 경험 기반 예측 (GPT 자문 → 비판적 수용)                    ║
-║    - Pred_FoodSoon(30 LIF) + Pred_FoodInh(15 LIF) = +45 뉴런   ║
-║    - Context 입력: food_mem, temporal, sound, hunger (static)   ║
-║    - 학습: place→pred, wmcb→pred (R-STDP SPARSE)               ║
-║    - 출력: pred→goal_food(1.5), pred→D1(1.0) — gentle          ║
+║  C5: 호기심 기반 탐색 (GPT 자문 → 비판적 수용)                  ║
+║    - Curiosity_Gate(20 LIF) + Curiosity_Inh(10 LIF) = +30 뉴런 ║
+║    - Novelty×Uncertainty→Gate, Fear/Safety→Inh→Gate 억제        ║
+║    - 출력: Gate→Goal_Food(1.5), Gate→D1(0.8) — gentle          ║
+║    - All static (학습은 기존 BG R-STDP가 탐색 결과 학습)        ║
 ║    - Motor 직접 연결 없음 (안전)                                 ║
 ║                                                               ║
-║  뉴런 수:       27,955                                          ║
-║  학습 시냅스:   ~57 (기존 55 + 2 prediction R-STDP)             ║
+║  뉴런 수:       27,985                                          ║
+║  학습 시냅스:   ~57 (C5는 학습 시냅스 0개 추가)                  ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
