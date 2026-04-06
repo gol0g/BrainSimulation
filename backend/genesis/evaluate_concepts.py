@@ -325,12 +325,94 @@ def diagnose_auditory(brain, n_trials=20):
     }
 
 
+def test_npc_call_response(brain, n_trials=60):
+    """
+    Test C3: NPC Call Response — NPC food call만으로 행동이 바뀌는가
+
+    시각: 양쪽에 음식 없음 (food_rays=0)
+    NPC call: 한쪽에서 food call 발생
+    측정: 에이전트가 food call 방향으로 더 가는가
+
+    기존 경로: call→Wernicke→Goal_Food(4.0) + Wernicke→KC→D1 R-STDP
+    기준: >60% (random=50%)
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+
+    # 워밍업
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    correct = 0
+    total = 0
+
+    for trial in range(n_trials):
+        call_side = "left" if np.random.random() > 0.5 else "right"
+
+        # 시각: 음식 없음
+        test_obs = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        test_obs["food_rays_left"] = np.zeros(8)
+        test_obs["food_rays_right"] = np.zeros(8)
+        test_obs["good_food_rays_left"] = np.zeros(8)
+        test_obs["good_food_rays_right"] = np.zeros(8)
+        test_obs["bad_food_rays_left"] = np.zeros(8)
+        test_obs["bad_food_rays_right"] = np.zeros(8)
+        # 환경 소리도 없음
+        test_obs["food_sound_high"] = 0.0
+        test_obs["food_sound_low"] = 0.0
+        test_obs["sound_food_left"] = 0.0
+        test_obs["sound_food_right"] = 0.0
+
+        # NPC food call: 한쪽에서만
+        if call_side == "left":
+            test_obs["npc_call_food_left"] = 0.7
+            test_obs["npc_call_food_right"] = 0.1
+        else:
+            test_obs["npc_call_food_left"] = 0.1
+            test_obs["npc_call_food_right"] = 0.7
+        test_obs["npc_call_danger_left"] = 0.0
+        test_obs["npc_call_danger_right"] = 0.0
+
+        # 5스텝 누적 반응 측정
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(test_obs)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset()
+                break
+
+        # 판정: call 방향으로 회전했는가
+        if call_side == "left" and total_angle < -0.02:
+            correct += 1
+        elif call_side == "right" and total_angle > 0.02:
+            correct += 1
+        total += 1
+
+    score = correct / max(total, 1) * 100
+    return {
+        "test": "npc_call_response",
+        "score": score,
+        "correct": correct,
+        "total": total,
+        "pass": score > 60.0,
+        "baseline": 50.0,
+        "threshold": 60.0,
+    }
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Concept Formation Evaluation (C0)")
     parser.add_argument("--load-weights", type=str, required=True,
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
-                       choices=["all", "call_semantics", "selectivity", "spatial", "diagnose_auditory"],
+                       choices=["all", "call_semantics", "selectivity", "spatial",
+                                "diagnose_auditory", "npc_call"],
                        help="Which test to run")
     args = parser.parse_args()
 
@@ -353,3 +435,6 @@ if __name__ == "__main__":
         print(f"Spatial Memory: {r['time_in_rich_ratio']:.1%} ({'PASS' if r['pass'] else 'FAIL'})")
     elif args.test == "diagnose_auditory":
         diagnose_auditory(brain)
+    elif args.test == "npc_call":
+        r = test_npc_call_response(brain)
+        print(f"NPC Call Response: {r['score']:.1f}% ({'PASS' if r['pass'] else 'FAIL'})")
