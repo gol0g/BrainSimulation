@@ -4,7 +4,7 @@
 
 ---
 
-## 현재 상태: 개념 형성 C1-C2 진행 중 (27,910 뉴런, 800×800 맵)
+## 현재 상태: C0-C5 완료, 100ep 장기 검증 중 (27,985 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
@@ -553,27 +553,16 @@
 | **청각 의미** | 시각 단서 없이 call만으로 행동이 바뀌는가 | call-only 접근/회피 >60% |
 | **맥락 의존** | 같은 자극이 장소/시간에 따라 다른 의미를 갖는가 | 맥락별 행동 차이 >30% |
 
-### C1: 감각 모호성 환경 (진행 중)
+### C1: 감각 모호성 환경 ✓ 완료
 
 겉보기 동일한 자극을 다중감각으로 구분해야 하는 과제.
 
-**완료:**
-- Food sound cues 추가 (고음=good, 저음=bad)
-- Eligibility bridge (sound onset tag, decay 0.995)
-- Sound→D1 직접 연결 + KC 경유 동시
+**해결 과정:**
+- Food sound cues (고음=good, 저음=bad), eligibility bridge (0.995 decay)
 - KC 구획화 시도→롤백 (auditory가 visual에 묻힘)
-- Ablation: decay가 아닌 구조적 문제 확인
-- Fan-in sweep (0.05~0.20): 미미한 개선
-- KC_auditory 1000 확장: 효과 없음
-
-**현재 진행:**
-- Sound Push-Pull(8/-4) 추가 (이전 0.0이었음 — 핵심 누락)
-- GPT 자문: Push-Pull 8/-4 적절 + ambiguity-gated gain 필요
-
-**남은 것:**
-- Push-Pull 효과 검증
-- Visual ambiguity detection → auditory gain boost
-- 성공 시 C1 테스트 재설계 (시각 모호성 + 소리 차이)
+- **핵심 발견**: Sound→Motor = 0.0이었음, SensoryLIF C=1 포화
+- **C1.7 해결**: Sound C=5 + Push-Pull(8/-4) + Webb cross-inhibition(-15)
+- Call Semantics **60-63% PASS** (기준 60%)
 
 ### C2: 범주 창발 (점진적)
 
