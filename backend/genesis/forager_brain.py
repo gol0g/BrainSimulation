@@ -8019,11 +8019,26 @@ class ForagerBrain:
         print(f"    Agency_PE→Self_Agency: {self.config.agency_pe_to_agency_weight} (high PE = low agency)")
         print(f"    Motor direct: 0.0 (disabled)")
 
+    def _normalize_weight_budget(self, w_2d, budget_per_post, w_max):
+        """Per-post neuron incoming weight budget normalization (heterosynaptic).
+
+        강화된 시냅스가 있으면 같은 post 뉴런의 다른 시냅스가 약해짐.
+        Lesson #40: predictive plasticity에서 검증된 패턴.
+        """
+        n_pre, n_post = w_2d.shape
+        for j in range(n_post):
+            col_sum = np.sum(np.maximum(w_2d[:, j], 0.0))
+            if col_sum > budget_per_post:
+                w_2d[:, j] *= budget_per_post / col_sum
+        np.clip(w_2d, 0.0, w_max, out=w_2d)
+        return w_2d
+
     def learn_forward_model(self, reward_context: bool):
         """
         Phase L14: Forward Model Hebbian 학습 (self_efference → self_predict)
 
         운동 명령→감각 예측 매핑 학습. 보상 시 강한 학습, 배경 시 약한 학습.
+        + Per-post weight budget normalization (heterosynaptic stabilization)
         """
         if not self.config.agency_detection_enabled or not self.config.self_model_enabled:
             return None
@@ -8040,7 +8055,8 @@ class ForagerBrain:
         w = self.efference_to_predict_hebbian.vars["g"].view.copy()
         w = w.reshape(n_pre, n_post)
         w += eta * learning_factor * predict_scale
-        w = np.clip(w, 0.0, w_max)
+        # Heterosynaptic budget: prevent uniform saturation
+        w = self._normalize_weight_budget(w, w_max * n_pre * 0.3, w_max)
         self.efference_to_predict_hebbian.vars["g"].view[:] = w.flatten()
         self.efference_to_predict_hebbian.vars["g"].push_to_device()
 
@@ -8085,7 +8101,8 @@ class ForagerBrain:
         w = self.body_to_narrative_hebbian.vars["g"].view.copy()
         w = w.reshape(n_pre, n_post)
         w += eta * learning_factor * narrative_scale * agency_gate * salience_gate
-        w = np.clip(w, 0.0, w_max)
+        # Heterosynaptic budget: prevent uniform saturation at w_max
+        w = self._normalize_weight_budget(w, w_max * n_pre * 0.3, w_max)
         self.body_to_narrative_hebbian.vars["g"].view[:] = w.flatten()
         self.body_to_narrative_hebbian.vars["g"].push_to_device()
 
@@ -8122,7 +8139,8 @@ class ForagerBrain:
         w = self.agency_to_narrative_hebbian.vars["g"].view.copy()
         w = w.reshape(n_pre, n_post)
         w += eta * learning_factor * agency_mod
-        w = np.clip(w, 0.0, w_max)
+        # Heterosynaptic budget
+        w = self._normalize_weight_budget(w, w_max * n_pre * 0.3, w_max)
         self.agency_to_narrative_hebbian.vars["g"].view[:] = w.flatten()
         self.agency_to_narrative_hebbian.vars["g"].push_to_device()
 
