@@ -1470,8 +1470,7 @@ class ForagerBrain:
             self._pred_food_teacher_active = False  # food teacher signal flag
 
         # Phase C5: Curiosity state defaults
-        if self.config.curiosity_enabled:
-            self.last_curiosity_rate = 0.0  # curiosity gate firing rate
+        self.last_curiosity_rate = 0.0  # curiosity gate firing rate (always init)
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
