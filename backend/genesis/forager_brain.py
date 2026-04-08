@@ -1197,15 +1197,22 @@ class ForagerBrainConfig:
     sound_food_to_pred_sparsity: float = 0.05
     hunger_to_pred_weight: float = 3.0       # Hunger → Pred (need-gating)
     hunger_to_pred_sparsity: float = 0.10
-    # Learnable R-STDP (SPARSE)
-    place_to_pred_init_w: float = 0.5
-    place_to_pred_w_max: float = 3.0
-    place_to_pred_eta: float = 0.0003
-    place_to_pred_sparsity: float = 0.05
-    wmcb_to_pred_init_w: float = 0.5
-    wmcb_to_pred_w_max: float = 3.0
-    wmcb_to_pred_eta: float = 0.0003
-    wmcb_to_pred_sparsity: float = 0.05
+    # Learnable Predictive STDP (DENSE — per-post budget normalization 필요)
+    place_to_pred_init_w: float = 0.3
+    place_to_pred_w_max: float = 1.5       # 낮은 개별 상한 (budget이 주 제약)
+    place_to_pred_eta_ltp: float = 0.0002  # teacher-driven LTP
+    place_to_pred_eta_ltd: float = 0.0001  # weight-dependent LTD
+    place_to_pred_w_budget: float = 12.0   # per-post neuron incoming weight budget
+    wmcb_to_pred_init_w: float = 0.2
+    wmcb_to_pred_w_max: float = 1.5
+    wmcb_to_pred_eta_ltp: float = 0.0002
+    wmcb_to_pred_eta_ltd: float = 0.0001
+    # Pred lateral inhibition (symmetry breaking)
+    pred_lateral_inh_weight: float = -5.0
+    pred_lateral_inh_sparsity: float = 0.15
+    # Food teacher → Pred (fixed, strong, drives post spikes)
+    food_teacher_to_pred_weight: float = 8.0
+    food_teacher_to_pred_sparsity: float = 0.10
     # Pred → outputs (gentle modulator)
     pred_to_goal_food_weight: float = 1.5
     pred_to_goal_food_sparsity: float = 0.05
@@ -1459,9 +1466,8 @@ class ForagerBrain:
 
         # Phase C4: Contextual Prediction state defaults
         if self.config.contextual_prediction_enabled:
-            self.pred_place_trace = 0.0     # place→pred eligibility trace
-            self.pred_wmcb_trace = 0.0      # wm_context_binding→pred eligibility trace
             self.last_pred_food_rate = 0.0  # prediction population firing rate
+            self._pred_food_teacher_active = False  # food teacher signal flag
 
         # Phase C5: Curiosity state defaults
         if self.config.curiosity_enabled:
@@ -2001,10 +2007,8 @@ class ForagerBrain:
                         self.pe_danger_to_it_danger_l, self.pe_danger_to_it_danger_r]:
                 syn.pull_connectivity_from_device()
 
-        # Phase C4: Contextual Prediction SPARSE connectivity pull
-        if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
-            self.place_to_pred.pull_connectivity_from_device()
-            self.wmcb_to_pred.pull_connectivity_from_device()
+        # Phase C4: Contextual Prediction SPARSE connectivity pull (D1 output only — place/wmcb are DENSE now)
+        if self.config.contextual_prediction_enabled and hasattr(self, 'pred_to_d1_l'):
             self.pred_to_d1_l.pull_connectivity_from_device()
             self.pred_to_d1_r.pull_connectivity_from_device()
 
@@ -5134,48 +5138,82 @@ class ForagerBrain:
                     syn.vars["g"].push_to_device()
                 results[f"nac_avg_w_{side}"] = float(np.nanmean(w))
 
-        # === Phase C4: Contextual Prediction R-STDP (place→pred, wmcb→pred) ===
+        # === Phase C4: Predictive Plasticity (place→pred, wmcb→pred) ===
+        # Teacher-driven LTP + weight-dependent LTD + per-post budget normalization
+        # NO dopamine here — representation learning is self-supervised
         if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
-            pred_eta_place = self.config.place_to_pred_eta
-            pred_eta_wmcb = self.config.wmcb_to_pred_eta
-            pred_w_max_place = self.config.place_to_pred_w_max
-            pred_w_max_wmcb = self.config.wmcb_to_pred_w_max
-            pred_w_rest = self.config.place_to_pred_init_w
+            eta_ltp = self.config.place_to_pred_eta_ltp
+            eta_ltd = self.config.place_to_pred_eta_ltd
+            w_max = self.config.place_to_pred_w_max
+            w_budget = self.config.place_to_pred_w_budget
+            teacher_active = self._pred_food_teacher_active
 
-            # Place → Pred R-STDP
-            place_trace = self.pred_place_trace
-            need_update = False
+            # Place → Pred: Predictive STDP (DENSE)
             self.place_to_pred.vars["g"].pull_from_device()
-            w = self.place_to_pred.vars["g"].values.copy()
-            if apply_decay:
-                w -= (decay * 50) * (w - pred_w_rest)
-                need_update = True
-            if has_dopamine and place_trace > 0.01:
-                w += pred_eta_place * place_trace * self.dopamine_level
-                need_update = True
-            if need_update:
-                np.clip(w, 0.0, pred_w_max_place, out=w)
-                self.place_to_pred.vars["g"].values = w
-                self.place_to_pred.vars["g"].push_to_device()
-            results["pred_place_w"] = float(np.nanmean(w))
+            w = self.place_to_pred.vars["g"].view.copy()  # DENSE: use .view
+            n_pre = self.config.n_place_cells
+            n_post = self.config.n_pred_food_soon
 
-            # WMCB → Pred R-STDP
+            # LTD: weight-dependent depression on all active synapses (every update)
+            w -= eta_ltd * w  # proportional decay: strong synapses decay more
+
+            # LTP: teacher-driven (food visible → strengthen active context)
+            if teacher_active:
+                # Use place_cell activation array as pre-trace (continuous values)
+                place_activity = self.last_active_place_cells  # shape: (n_place_cells,)
+                if len(place_activity) == n_pre:
+                    w_2d = w.reshape(n_pre, n_post)
+                    # Active cells (above threshold) get LTP proportional to activation
+                    active_mask = place_activity > 0.1  # threshold for "active"
+                    w_2d[active_mask, :] += eta_ltp * place_activity[active_mask, np.newaxis]
+                    w = w_2d.reshape(-1)
+
+            # Per-post budget normalization (heterosynaptic)
+            w_2d = w.reshape(n_pre, n_post)
+            for j in range(n_post):
+                col_sum = np.sum(np.maximum(w_2d[:, j], 0.0))
+                if col_sum > w_budget:
+                    scale = w_budget / col_sum
+                    w_2d[:, j] *= scale
+            w = w_2d.reshape(-1)
+
+            # Clip
+            np.clip(w, 0.0, w_max, out=w)
+            self.place_to_pred.vars["g"].view[:] = w
+            self.place_to_pred.vars["g"].push_to_device()
+            results["pred_place_w"] = float(np.mean(w))
+
+            # WMCB → Pred: Same predictive rule (DENSE)
             if hasattr(self, 'wmcb_to_pred'):
-                wmcb_trace = self.pred_wmcb_trace
-                need_update = False
+                eta_ltp_wm = self.config.wmcb_to_pred_eta_ltp
+                eta_ltd_wm = self.config.wmcb_to_pred_eta_ltd
+                w_max_wm = self.config.wmcb_to_pred_w_max
                 self.wmcb_to_pred.vars["g"].pull_from_device()
-                w = self.wmcb_to_pred.vars["g"].values.copy()
-                if apply_decay:
-                    w -= (decay * 50) * (w - pred_w_rest)
-                    need_update = True
-                if has_dopamine and wmcb_trace > 0.01:
-                    w += pred_eta_wmcb * wmcb_trace * self.dopamine_level
-                    need_update = True
-                if need_update:
-                    np.clip(w, 0.0, pred_w_max_wmcb, out=w)
-                    self.wmcb_to_pred.vars["g"].values = w
-                    self.wmcb_to_pred.vars["g"].push_to_device()
-                results["pred_wmcb_w"] = float(np.nanmean(w))
+                w_wm = self.wmcb_to_pred.vars["g"].view.copy()
+                n_wm_pre = 100  # wm_context_binding size
+
+                # LTD
+                w_wm -= eta_ltd_wm * w_wm
+
+                # LTP on teacher
+                if teacher_active:
+                    wmcb_active = 1.0 if self.last_wm_context_binding_rate > 0.02 else 0.0
+                    if wmcb_active > 0:
+                        w_wm += eta_ltp_wm * wmcb_active
+
+                # Budget normalization (shared with place budget)
+                w_wm_2d = w_wm.reshape(n_wm_pre, n_post)
+                for j in range(n_post):
+                    col_sum = np.sum(np.maximum(w_wm_2d[:, j], 0.0))
+                    if col_sum > w_budget * 0.3:  # WM gets 30% of budget
+                        scale = (w_budget * 0.3) / col_sum
+                        w_wm_2d[:, j] *= scale
+                w_wm = w_wm_2d.reshape(-1)
+
+                np.clip(w_wm, 0.0, w_max_wm, out=w_wm)
+                self.wmcb_to_pred.vars["g"].view[:] = w_wm
+                self.wmcb_to_pred.vars["g"].push_to_device()
+                results["pred_wmcb_w"] = float(np.mean(w_wm))
 
         return results if results else None
 
@@ -5545,13 +5583,13 @@ class ForagerBrain:
                 syn.vars["g"].pull_from_device()
                 weights[key] = syn.vars["g"].values.copy()
 
-        # Phase C4: Contextual Prediction (2 SPARSE synapses)
+        # Phase C4: Contextual Prediction (2 DENSE synapses — predictive plasticity)
         if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
             self.place_to_pred.vars["g"].pull_from_device()
-            weights["pred_place"] = self.place_to_pred.vars["g"].values.copy()
+            weights["pred_place"] = self.place_to_pred.vars["g"].view.copy()
             if hasattr(self, 'wmcb_to_pred'):
                 self.wmcb_to_pred.vars["g"].pull_from_device()
-                weights["pred_wmcb"] = self.wmcb_to_pred.vars["g"].values.copy()
+                weights["pred_wmcb"] = self.wmcb_to_pred.vars["g"].view.copy()
 
         np.savez(filepath, **weights)
         print(f"  [SAVE] All weights saved to {filepath} ({len(weights)} synapses)")
@@ -5747,13 +5785,25 @@ class ForagerBrain:
                     self._load_sparse_weights(syn, data[key])
                     loaded += 1
 
-        # Phase C4: Contextual Prediction (SPARSE)
+        # Phase C4: Contextual Prediction (DENSE — predictive plasticity)
         if self.config.contextual_prediction_enabled and hasattr(self, 'place_to_pred'):
             if "pred_place" in data:
-                self._load_sparse_weights(self.place_to_pred, data["pred_place"])
+                saved = data["pred_place"]
+                current = self.place_to_pred.vars["g"].view
+                if current.shape == saved.shape:
+                    self.place_to_pred.vars["g"].view[:] = saved
+                else:
+                    self.place_to_pred.vars["g"].view[:] = np.mean(saved)
+                self.place_to_pred.vars["g"].push_to_device()
                 loaded += 1
             if "pred_wmcb" in data and hasattr(self, 'wmcb_to_pred'):
-                self._load_sparse_weights(self.wmcb_to_pred, data["pred_wmcb"])
+                saved = data["pred_wmcb"]
+                current = self.wmcb_to_pred.vars["g"].view
+                if current.shape == saved.shape:
+                    self.wmcb_to_pred.vars["g"].view[:] = saved
+                else:
+                    self.wmcb_to_pred.vars["g"].view[:] = np.mean(saved)
+                self.wmcb_to_pred.vars["g"].push_to_device()
                 loaded += 1
 
         print(f"  [LOAD] Weights loaded from {filepath} ({loaded} synapses)")
@@ -8672,23 +8722,37 @@ class ForagerBrain:
             "hunger_to_pred", self.hunger_drive, self.pred_food_soon,
             cfg.hunger_to_pred_weight, sparsity=cfg.hunger_to_pred_sparsity)
 
-        # === C) Learnable R-STDP (SPARSE) ===
-        # Place_Cells → Pred ("이 장소에서 음식 확률 학습")
+        # === C) Learnable Predictive STDP (DENSE — per-post budget normalization) ===
+        # Place_Cells → Pred ("이 장소가 음식을 예측하는가" — teacher-driven, not DA)
+        n_place = cfg.n_place_cells
+        n_pred = cfg.n_pred_food_soon
         self.place_to_pred = self.model.add_synapse_population(
-            "place_to_pred", "SPARSE", self.place_cells, self.pred_food_soon,
+            "place_to_pred", "DENSE", self.place_cells, self.pred_food_soon,
             init_weight_update("StaticPulse", {},
                 {"g": init_var("Constant", {"constant": cfg.place_to_pred_init_w})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": cfg.place_to_pred_sparsity}))
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
 
-        # WM_Context_Binding → Pred ("이 시간 패턴에서 음식 확률 학습")
+        # WM_Context_Binding → Pred (같은 predictive rule)
         if hasattr(self, 'wm_context_binding'):
             self.wmcb_to_pred = self.model.add_synapse_population(
-                "wmcb_to_pred", "SPARSE", self.wm_context_binding, self.pred_food_soon,
+                "wmcb_to_pred", "DENSE", self.wm_context_binding, self.pred_food_soon,
                 init_weight_update("StaticPulse", {},
                     {"g": init_var("Constant", {"constant": cfg.wmcb_to_pred_init_w})}),
-                init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                init_sparse_connectivity("FixedProbability", {"prob": cfg.wmcb_to_pred_sparsity}))
+                init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        # === C2) Food Teacher → Pred (fixed, strong — drives post spikes on food events)
+        # food_eye_left/right → Pred (음식이 보일 때 teacher signal)
+        self._create_static_synapse(
+            "food_teacher_l_to_pred", self.food_eye_left, self.pred_food_soon,
+            cfg.food_teacher_to_pred_weight, sparsity=cfg.food_teacher_to_pred_sparsity)
+        self._create_static_synapse(
+            "food_teacher_r_to_pred", self.food_eye_right, self.pred_food_soon,
+            cfg.food_teacher_to_pred_weight, sparsity=cfg.food_teacher_to_pred_sparsity)
+
+        # === C3) Lateral inhibition inside Pred_FoodSoon (symmetry breaking)
+        self._create_static_synapse(
+            "pred_lateral_inh", self.pred_food_soon, self.pred_food_soon,
+            cfg.pred_lateral_inh_weight, sparsity=cfg.pred_lateral_inh_sparsity)
 
         # === D) Output to BG (gentle modulator) ===
         # Pred → Goal_Food (예측 활성 → 음식 탐색 목표 강화)
@@ -8718,12 +8782,12 @@ class ForagerBrain:
             "pred_inh_to_pred", self.pred_food_inh, self.pred_food_soon,
             cfg.pred_inh_to_pred_weight, sparsity=cfg.pred_inh_to_pred_sparsity)
 
-        n_static = 8  # food_mem×2 + temporal + sound×2 + hunger + WTA×2
-        n_learnable = 2  # place→pred, wmcb→pred
-        n_output = 3  # goal_food + D1_L + D1_R
         print(f"    Pred_FoodSoon: {cfg.n_pred_food_soon} + Inh: {cfg.n_pred_food_inh} = "
               f"{cfg.n_pred_food_soon + cfg.n_pred_food_inh} neurons")
-        print(f"    Synapses: {n_static} static + {n_learnable} R-STDP + {n_output} output")
+        print(f"    Predictive STDP: place({n_place})→pred DENSE + wmcb→pred DENSE")
+        print(f"    Teacher: food_eye→pred({cfg.food_teacher_to_pred_weight}), "
+              f"lateral_inh({cfg.pred_lateral_inh_weight})")
+        print(f"    Budget: W_budget={cfg.place_to_pred_w_budget} per post neuron")
         print(f"    Output: pred→goal_food({cfg.pred_to_goal_food_weight}), "
               f"pred→D1({cfg.pred_to_d1_weight})")
 
@@ -10089,26 +10153,15 @@ class ForagerBrain:
             self.last_gw_safety_rate = gw_safety_rate
             self.last_gw_broadcast = gw_broadcast
 
-        # Phase C4: Prediction rate + eligibility trace
+        # Phase C4: Prediction rate + food teacher signal
         if self.config.contextual_prediction_enabled and hasattr(self, 'pred_food_soon'):
             pred_rate = pred_food_spikes / max(self.config.n_pred_food_soon * 10, 1)
             self.last_pred_food_rate = pred_rate
-            pred_active = 1.0 if pred_rate > 0.03 else 0.0
 
-            # Place→Pred trace: pre(place)×post(pred) coincidence
-            place_rate = place_cell_spikes / max(self.config.n_place_cells * 10, 1) if self.config.hippocampus_enabled else 0.0
-            place_active = 1.0 if place_rate > 0.02 else 0.0
-            trace_decay = self.config.rstdp_trace_decay
-            trace_max = self.config.rstdp_trace_max
-            self.pred_place_trace = min(
-                self.pred_place_trace * trace_decay + place_active * pred_active, trace_max)
-
-            # WMCB→Pred trace: pre(wmcb)×post(pred) coincidence
-            if hasattr(self, 'wm_context_binding'):
-                wmcb_rate = self.last_wm_context_binding_rate
-                wmcb_active = 1.0 if wmcb_rate > 0.02 else 0.0
-                self.pred_wmcb_trace = min(
-                    self.pred_wmcb_trace * trace_decay + wmcb_active * pred_active, trace_max)
+            # Food teacher signal: food is visible (food_rays > threshold)
+            food_l = np.mean(observation.get("food_rays_left", np.zeros(8)))
+            food_r = np.mean(observation.get("food_rays_right", np.zeros(8)))
+            self._pred_food_teacher_active = (food_l > 0.15 or food_r > 0.15)
 
         # Phase C5: Curiosity rate
         if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
@@ -11728,15 +11781,18 @@ def run_training(episodes: int = 20, render_mode: str = "none",
 
         # Phase C4: Contextual Prediction 가중치 현황
         if brain_config.contextual_prediction_enabled and hasattr(brain, 'place_to_pred'):
-            print(f"  --- Phase C4: Contextual Prediction ---")
+            print(f"  --- Phase C4: Predictive Plasticity ---")
             print(f"    Pred_FoodSoon rate: {brain.last_pred_food_rate:.3f}")
             brain.place_to_pred.vars["g"].pull_from_device()
-            pp_w = float(np.nanmean(brain.place_to_pred.vars["g"].values))
-            print(f"    Place→Pred avg_w: {pp_w:.3f} (init={brain_config.place_to_pred_init_w}, max={brain_config.place_to_pred_w_max})")
+            pp_w = brain.place_to_pred.vars["g"].view.copy()
+            at_max = np.sum(pp_w >= brain_config.place_to_pred_w_max * 0.95)
+            at_zero = np.sum(pp_w < 0.01)
+            print(f"    Place→Pred: avg={np.mean(pp_w):.3f}, std={np.std(pp_w):.3f}, "
+                  f"max={np.max(pp_w):.3f}, at_ceil={at_max}, at_zero={at_zero}/{len(pp_w)}")
             if hasattr(brain, 'wmcb_to_pred'):
                 brain.wmcb_to_pred.vars["g"].pull_from_device()
-                wc_w = float(np.nanmean(brain.wmcb_to_pred.vars["g"].values))
-                print(f"    WMCB→Pred avg_w: {wc_w:.3f} (init={brain_config.wmcb_to_pred_init_w}, max={brain_config.wmcb_to_pred_w_max})")
+                wc_w = brain.wmcb_to_pred.vars["g"].view.copy()
+                print(f"    WMCB→Pred: avg={np.mean(wc_w):.3f}, std={np.std(wc_w):.3f}")
 
         # Phase C5: Curiosity 현황
         if brain_config.curiosity_enabled and hasattr(brain, 'curiosity_gate'):
