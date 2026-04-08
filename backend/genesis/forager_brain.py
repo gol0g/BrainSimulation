@@ -1464,10 +1464,9 @@ class ForagerBrain:
             self.last_kc_l_rate = 0.0
             self.last_kc_r_rate = 0.0
 
-        # Phase C4: Contextual Prediction state defaults
-        if self.config.contextual_prediction_enabled:
-            self.last_pred_food_rate = 0.0  # prediction population firing rate
-            self._pred_food_teacher_active = False  # food teacher signal flag
+        # Phase C4: Contextual Prediction state defaults (always init for debug_info)
+        self.last_pred_food_rate = 0.0
+        self._pred_food_teacher_active = False
 
         # Phase C5: Curiosity state defaults
         self.last_curiosity_rate = 0.0  # curiosity gate firing rate (always init)
