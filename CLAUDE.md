@@ -369,6 +369,8 @@ gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 38. **Motor 수준 Push-Pull은 약한 감각에 무력**: sound 8/-4 vs visual 25+10 = Motor에서 7% 비율 → 무시됨
 39. **예측 R-STDP도 빠르게 포화**: place→pred 0.5→3.0 in 6ep (eta=0.0003, w_max=3.0). KC와 동일 패턴. eta 낮추거나 w_max 높여야 점진적 학습
 40. **Predictive plasticity가 R-STDP 포화를 근본 해결**: place→pred를 DA-modulated R-STDP에서 teacher-driven predictive STDP + per-post weight budget(12.0)로 교체. at_ceil 100%→0%, std 0→0.02. 핵심: representation learning(self-supervised) ≠ action learning(DA-gated)
+41. **Heterosynaptic budget은 범용 포화 해결책**: FM 10→3, Body→Narr 14→4.2, Agency→Narr 8→2.4. budget=w_max×n_pre×0.3. 생존 +5pp
+42. **Phase 12-20은 dead weight 아님**: 일괄 비활성화 시 60%→30% 생존 (-30pp). Motor 직접 연결 0.0이어도 간접 경로(Hippo/Amygdala/BG)로 중요 기여. GPT 진단 틀림 — 항상 실험 검증 필수
 
 ---
 

@@ -7120,8 +7120,26 @@ class ForagerBrain:
                         self.config.n_broca_food + self.config.n_broca_danger +
                         self.config.n_broca_social + self.config.n_broca_sequence +
                         self.config.n_vocal_gate + self.config.n_call_mirror + self.config.n_call_binding)
+        # C3: NPC Call Push-Pull → Motor (방향성 있는 call 반응)
+        # call_food_input L/R는 방향 정보를 가지므로 Sound Push-Pull과 동일 패턴 적용
+        call_push = 10.0  # sound_food(8)보다 살짝 강하게 — NPC call 명확한 방향 신호
+        call_pull = -5.0
+        self._create_static_synapse(
+            "call_food_l_to_motor_l", self.call_food_input_left, self.motor_left,
+            call_push, sparsity=0.08)
+        self._create_static_synapse(
+            "call_food_r_to_motor_r", self.call_food_input_right, self.motor_right,
+            call_push, sparsity=0.08)
+        self._create_static_synapse(
+            "call_food_l_to_motor_r_pull", self.call_food_input_left, self.motor_right,
+            call_pull, sparsity=0.08)
+        self._create_static_synapse(
+            "call_food_r_to_motor_l_pull", self.call_food_input_right, self.motor_left,
+            call_pull, sparsity=0.08)
+        print(f"    C3: NPC Call Push-Pull: push={call_push}, pull={call_pull}")
+
         print(f"    Phase 17 Language Circuit: {n_lang_total} neurons")
-        print(f"    Motor direct: {self.config.language_to_motor_weight} (disabled)")
+        print(f"    Motor direct: {self.config.language_to_motor_weight} (disabled, except C3 Call Push-Pull)")
         print(f"    Total neurons now = {self.config.total_neurons:,}")
 
     def learn_call_binding(self, reward_context: bool):
