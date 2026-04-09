@@ -632,13 +632,54 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 - Safety suppression 확인: 위험 시 Curiosity_Inh가 Gate 억제
 - Checkpoint: brain_C5_20ep.npz (54 synapses)
 
-### 사이드 브랜치 (메인라인과 독립)
+---
 
-| 항목 | 설명 | 메인라인 의존 |
-|------|------|-------------|
-| 다중 에이전트 | NPC 추가, 경쟁/협력 | C1 이후 가능 |
-| ESP32 로봇 | 현실 세계 연결 | C2 이후 가능 |
-| 3D 환경 (MuJoCo) | 물리 시뮬레이션 전환 | 독립 |
+## 다음 Phase: Replay-Driven Replanning (GPT 전략 자문 2026-04-09)
+
+> 핵심 목표: 환경이 몰래 바뀐 뒤 → 오프라인 리플레이 → 첫 시도에서 우회 경로 선택
+> "단순 재학습이 아닌 내부 계획을 통한 행동 수정"
+
+### 데모 목표
+
+**"Sleep-dependent first-trial detour replanning after hidden contingency change"**
+- 에이전트가 안정된 경로를 학습
+- 쉬는 동안 세계가 바뀜 (경로 차단, 포식자 이동, 음식 신뢰도 변경)
+- 오프라인 리플레이 후 → 첫 시도에서 새 경로 선택
+- 리플레이 차단 시 → 첫 시도 실패 (대조군)
+
+### 필요 메커니즘 (우선순위)
+
+| 순서 | 메커니즘 | 역할 | 상태 |
+|------|---------|------|------|
+| 1 | ACh/NE 불확실성 게이트 | 세계 변화 감지 → 학습률 조절 | 계획 |
+| 2 | Active Dendrites (PFC/Hippo) | 맥락 분기 → 비선형 결합 | 계획 |
+| 3 | Synaptic Tagging & Capture | 빠른/느린 기억 분리 | 계획 |
+| 4 | Inhibitory Plasticity | 패턴 분리 개선 | 계획 |
+| 5 | Structural Plasticity | 표상 과밀 해결 (후순위) | 계획 |
+
+### 환경 확장 (70% 투자)
+
+- 2D 유지 (3D는 지각 배관에 뉴런 소모 — ROI 낮음)
+- 경로 차단 (장애물 이동)
+- 포식자 영역 변경
+- 확률적 음식 출현
+- 기만적 사회 신호
+- 숨겨진 상태 변화 (latent-state switch)
+
+### 스케일링 현실 (GPT 평가)
+
+- 28K 뉴런 ≈ 초파리 중추뇌 (32K intrinsic neurons)
+- **달성 가능**: 우회 행동, 역전 학습, 숨겨진 상태 추론, 불확실성 기반 탐색/착취
+- **달성 불가**: 범용 언어, 깊은 추상 추론, 대규모 구성적 계획
+- **천장**: LIF 점 뉴런 + 시냅스 가소성만으로는 맥락 분기, 빠른 과제 전환, 선택적 통합에 한계
+
+### 사이드 브랜치 (후순위)
+
+| 항목 | 설명 | 시점 |
+|------|------|------|
+| 다중 에이전트 | NPC 협력/경쟁 심화 | Replanning 이후 |
+| ESP32 로봇 | 현실 세계 연결 | VL53L0X 확인 완료, 대기 |
+| 3D 환경 | 물리 시뮬 전환 | 뉴런 50K+ 이후 |
 
 ---
 
@@ -688,12 +729,12 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 
 ## 마일스톤 체크포인트
 
-| 마일스톤 | 기준 | 목표 시점 |
-|----------|------|-----------|
-| M1 | 10K 뉴런, 시각 개념 형성 | Phase 10 |
-| M2 | 50K 뉴런, 다중 감각 통합 | Phase 15 |
-| M3 | 100K 뉴런, 기초 언어 | Phase 17 |
-| M4 | 500K 뉴런, 추상 추론 | Phase 20 |
+| 마일스톤 | 기준 | 상태 |
+|----------|------|------|
+| **M1** | 10K 뉴런, 시각 개념 형성 | **✓ 완료** (Phase 10, 80% 생존) |
+| **M2** | 28K 뉴런, 개념 형성 C0-C5 + 품질 개선 | **✓ 완료** (65-75% 생존) |
+| M3 | 28K+ 뉴런, Replay-driven Replanning | 계획 (다음 목표) |
+| M4 | 50K+ 뉴런, Active Dendrites + 다중 과제 | 계획 |
 
 ---
 
@@ -723,4 +764,4 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 
 ---
 
-*최종 업데이트: 2026-02-21 (Phase L13 완료, 20,710 뉴런, 39 학습 시냅스, 55% 생존율, ESP32 VL53L0X 확인)*
+*최종 업데이트: 2026-04-09 (C0-C5+C3+Q1-Q3 완료, 27,985 뉴런, ~57 학습 시냅스, 65-75% 생존율, 다음: Replay-Driven Replanning)*
