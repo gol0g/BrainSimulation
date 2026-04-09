@@ -291,24 +291,24 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: C5 Curiosity 검증 중 (27,985 뉴런, 800×800 맵)
+### 현재 상태: 품질 개선 완료, 최종 검증 중 (27,985 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  Phase C5: Curiosity-Driven Exploration (2026-04-06)             ║
+║  개념 형성 C0-C5 + C3 + 품질 개선 완료 (2026-04-09)             ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  C0-C4 완료:                                                     ║
-║    - C4: Pred_FoodSoon 70%, place→pred 0.5→3.0 learned          ║
+║  C3: NPC Call 68% PASS (Push-Pull 10/-5)                        ║
+║  C4: Pred_FoodSoon (predictive plasticity, at_ceil 0%)          ║
+║  C5: Curiosity (marginal 5pp, safety suppression 동작)          ║
 ║                                                               ║
-║  C5: 호기심 기반 탐색 (GPT 자문 → 비판적 수용)                  ║
-║    - Curiosity_Gate(20 LIF) + Curiosity_Inh(10 LIF) = +30 뉴런 ║
-║    - Novelty×Uncertainty→Gate, Fear/Safety→Inh→Gate 억제        ║
-║    - 출력: Gate→Goal_Food(1.5), Gate→D1(0.8) — gentle          ║
-║    - All static (학습은 기존 BG R-STDP가 탐색 결과 학습)        ║
-║    - Motor 직접 연결 없음 (안전)                                 ║
+║  품질 개선 (GPT 진단 → 구현):                                    ║
+║    - Q1: R-STDP→predictive STDP + teacher + budget              ║
+║    - Q2: Heterosynaptic budget (FM 10→3, Narr 14→4.2)          ║
+║    - Q3: Scaffolding 30pp 기여 확인 (dead weight 아님)          ║
 ║                                                               ║
 ║  뉴런 수:       27,985                                          ║
-║  학습 시냅스:   ~57 (C5는 학습 시냅스 0개 추가)                  ║
+║  학습 시냅스:   ~57 (포화 해소, 동적 범위 확보)                  ║
+║  생존율:        65-75% (100ep 검증 진행 중)                      ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 

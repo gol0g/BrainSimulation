@@ -4,14 +4,15 @@
 
 ---
 
-## 현재 상태: C0-C5 완료, 100ep 장기 검증 중 (27,985 뉴런, 800×800 맵)
+## 현재 상태: 품질 개선 완료, 100ep 최종 검증 중 (27,985 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  C0-C5 개념 형성 커리큘럼 완료 (2026-04-06)                      ║
-║  C4: Pred_FoodSoon 70% + C5: Curiosity 70%                     ║
-║  27,985 뉴런, ~57 학습 시냅스                                    ║
-║  개념 형성 커리큘럼 전 단계 완료 — 다음: 100ep 장기 검증         ║
+║  개념 형성 C0-C5 + C3 전부 완료 (2026-04-09)                    ║
+║  품질 개선: predictive plasticity + heterosynaptic budget        ║
+║  R-STDP 포화 해소 (at_ceil 100%→0%), FM/Narr 포화 해소          ║
+║  C3 NPC Call: 68% PASS, 생존 65-75%                             ║
+║  27,985 뉴런, ~57 학습 시냅스, 100ep 최종 검증 진행 중          ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -84,6 +85,10 @@
 | **C1.7** | **Sound C=5 + Push-Pull(8/-4) + cross-inhibition(-15)** | **0** | **✓ 완료** | **Call 60-63%** |
 | **C4** | **Contextual Prediction (place+sound+WM→BG 예측)** | **+45** | **✓ 완료** | **70%** |
 | **C5** | **Curiosity (novelty×uncertainty→BG explore bias)** | **+30** | **✓ 완료** | **70%** |
+| **C3** | **NPC Call Push-Pull (proto-language)** | **0** | **✓ 완료** | **65%** (Call 68%) |
+| **Q1** | **Predictive plasticity (place→pred R-STDP→self-supervised)** | **0** | **✓ 완료** | at_ceil 0% |
+| **Q2** | **Heterosynaptic budget (FM/Narr 포화 해소)** | **0** | **✓ 완료** | FM 10→3 |
+| **Q3** | **Scaffolding ablation (Phase 12-20 기여 확인)** | **0** | **✓ 검증** | -30pp 없으면 |
 
 ### Phase 12-14 수정 이력
 
@@ -573,12 +578,19 @@ IT/Assoc를 scaffold로 유지하면서 KC/Assoc_Binding에서 새 범주 창발
 3. 행동 제어가 새 범주에 실리면
 4. 그때 고정 readout을 점진적으로 줄임
 
-### C3: Call Semantics (proto-language)
+### C3: Call Semantics (proto-language) ✓ 완료
 
 NPC call이 행동 가치를 가지는 학습. "언어" 이전 단계.
 
-- 성공 기준: 시각 단서 없을 때 call만으로 접근/회피/탐색 전환
-- 기존 Phase 17 구조 활용 (Wernicke→KC 경로 이미 존재)
+**구현 (2026-04-09):**
+- call_food_input L/R → Motor Push-Pull (10/-5)
+- 기존 Wernicke→KC + Wernicke→Goal_Food 경로에 방향성 추가
+- 0 새 뉴런 (기존 call_food_input 활용)
+
+**검증:**
+- NPC Call Response: **68.3% PASS** (기준 60%, random 50%)
+- 생존율 65% ✓, Pain Death 0%
+- Push-Pull 튜닝: 6/-3(55%) → 8/-4(58%) → **10/-5(68%)**
 
 ### C4: 경험 기반 예측 ✓ 완료
 
