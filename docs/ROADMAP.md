@@ -4,23 +4,20 @@
 
 ---
 
-## 현재 상태: M2 완료, 다음 Replay-Driven Replanning (27,985 뉴런)
+## 현재 상태: M3 Replay-Driven Replanning 진행 중 (28,015 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  M2 마일스톤 완료 (2026-04-10)                                   ║
+║  M3: Replay-Driven Replanning 3/4 단계 완료 (2026-04-11)        ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  개념 형성: C0-C5 + C3 전부 PASS                                ║
-║  품질 개선: Q1(predictive plasticity) Q2(heterosynaptic) Q3(확인)║
-║  100ep 최종 검증: 47% 생존 ✓, Selectivity 0.74 (역대 최고)      ║
-║  포화 해소: at_ceil 0%, FM 3.0, Narr 4.2, Pain Death 0%        ║
+║  환경: latent-state switch (장애물+Pain zone 2000스텝마다 이동)  ║
+║  ACh uncertainty gate: surprise→eta modulation (+5pp)           ║
+║  Surprise-modulated replay: 놀라움 높을 때 replay 증가 (+5pp)   ║
+║  동적 환경에서 70% 생존 (predator death 35%→15%)               ║
 ║                                                               ║
-║  다음: Replay-Driven Replanning (M3)                             ║
-║    - 환경: latent-state switch (경로 차단, 포식자 이동)           ║
-║    - 메커니즘: ACh/NE uncertainty gate + STC consolidation       ║
-║    - 데모: 첫 시도에서 우회 경로 선택 (리플레이 기반)             ║
+║  남은 것: 첫 시도 우회 테스트 (detour/reversal 측정)             ║
 ║                                                               ║
-║  뉴런: 27,985 | 학습 시냅스: ~57 | 생존: 47-75%                ║
+║  뉴런: 28,015 | 학습 시냅스: ~57 | 생존: 70% (동적 환경)       ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -98,6 +95,9 @@
 | **Q2** | **Heterosynaptic budget (FM/Narr 포화 해소)** | **0** | **✓ 완료** | FM 10→3 |
 | **Q3** | **Scaffolding ablation (Phase 12-20 기여 확인)** | **0** | **✓ 검증** | -30pp 없으면 |
 | **V100** | **100ep 최종 검증 (전체 개선 합산)** | **0** | **✓ 완료** | **47%** (Select 0.74) |
+| **M3-env** | **Latent-state switch (장애물+Pain zone 이동)** | **0** | **✓ 완료** | 60% |
+| **M3-ACh** | **ACh uncertainty gate (surprise→eta mod)** | **+30** | **✓ 완료** | 65% |
+| **M3-SWR** | **Surprise-modulated replay (동적 replay 횟수)** | **0** | **✓ 완료** | **70%** |
 
 ### Phase 12-14 수정 이력
 
