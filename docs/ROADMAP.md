@@ -4,15 +4,23 @@
 
 ---
 
-## 현재 상태: 품질 개선 완료, 100ep 최종 검증 중 (27,985 뉴런)
+## 현재 상태: M2 완료, 다음 Replay-Driven Replanning (27,985 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  개념 형성 C0-C5 + C3 전부 완료 (2026-04-09)                    ║
-║  품질 개선: predictive plasticity + heterosynaptic budget        ║
-║  R-STDP 포화 해소 (at_ceil 100%→0%), FM/Narr 포화 해소          ║
-║  C3 NPC Call: 68% PASS, 생존 65-75%                             ║
-║  27,985 뉴런, ~57 학습 시냅스, 100ep 최종 검증 진행 중          ║
+║  M2 마일스톤 완료 (2026-04-10)                                   ║
+╠═══════════════════════════════════════════════════════════════╣
+║  개념 형성: C0-C5 + C3 전부 PASS                                ║
+║  품질 개선: Q1(predictive plasticity) Q2(heterosynaptic) Q3(확인)║
+║  100ep 최종 검증: 47% 생존 ✓, Selectivity 0.74 (역대 최고)      ║
+║  포화 해소: at_ceil 0%, FM 3.0, Narr 4.2, Pain Death 0%        ║
+║                                                               ║
+║  다음: Replay-Driven Replanning (M3)                             ║
+║    - 환경: latent-state switch (경로 차단, 포식자 이동)           ║
+║    - 메커니즘: ACh/NE uncertainty gate + STC consolidation       ║
+║    - 데모: 첫 시도에서 우회 경로 선택 (리플레이 기반)             ║
+║                                                               ║
+║  뉴런: 27,985 | 학습 시냅스: ~57 | 생존: 47-75%                ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -89,6 +97,7 @@
 | **Q1** | **Predictive plasticity (place→pred R-STDP→self-supervised)** | **0** | **✓ 완료** | at_ceil 0% |
 | **Q2** | **Heterosynaptic budget (FM/Narr 포화 해소)** | **0** | **✓ 완료** | FM 10→3 |
 | **Q3** | **Scaffolding ablation (Phase 12-20 기여 확인)** | **0** | **✓ 검증** | -30pp 없으면 |
+| **V100** | **100ep 최종 검증 (전체 개선 합산)** | **0** | **✓ 완료** | **47%** (Select 0.74) |
 
 ### Phase 12-14 수정 이력
 
