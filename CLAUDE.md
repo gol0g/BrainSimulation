@@ -110,6 +110,68 @@ python /mnt/c/.../forager_brain.py --episodes 20 --render none
 
 ---
 
+## 하네스 프로세스 (MANDATORY — 모든 변경에 적용)
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║  ⚠️  "내가 짜고 내가 평가하면 항상 잘했다고 한다"               ║
+║      구현과 평가를 분리하라. 자기 편향을 경계하라.              ║
+╚═══════════════════════════════════════════════════════════════╝
+```
+
+### 1단계: Sprint Contract (구현 전)
+
+변경을 시작하기 **전에** 반드시 명문화:
+
+```markdown
+## Sprint: [변경명]
+- **목적**: [어떤 문제를 해결하는가]
+- **성공 기준**: [구체적 수치 — 생존율 >X%, 지표 Y >Z]
+- **실패 기준**: [이러면 revert — 생존율 <W%, 지표 하락 >Npp]
+- **ablation 계획**: [비활성화 시 행동 차이 측정 방법]
+```
+
+### 2단계: Generator (구현)
+
+코드를 작성하고 빌드한다. 이 단계에서는 "잘 됐다"고 판단하지 않는다.
+
+### 3단계: Evaluator (독립 평가)
+
+구현 후 반드시 실행:
+
+```bash
+# 회귀 테스트 — 커밋 전 필수
+python verify_regression.py --episodes 20
+```
+
+**verify_regression.py 체크 항목:**
+1. 생존율 >40%
+2. Pain death <15%
+3. Weight health (at_ceil <50%, std >0)
+4. Food selectivity >0.55
+5. 회로 활성 확인 (prediction, curiosity, surprise rate)
+
+**추가 평가 (주요 변경 시):**
+- GPT에 코드 diff 보내서 독립 리뷰 요청
+- ablation 비교 (--no-X 플래그로 비활성화 후 비교)
+- 100ep 장기 검증
+
+### 4단계: Commit or Revert
+
+- verify_regression.py PASS + Sprint Contract 성공 기준 충족 → 커밋
+- FAIL → 수정 또는 revert. "거의 됐다"는 PASS가 아님.
+
+### 자기 비판 체크리스트
+
+커밋 전 스스로 답해야 하는 질문:
+- [ ] 이 변경이 실제로 행동을 바꾸는가? (아니면 decorative인가?)
+- [ ] 생존율 변화가 노이즈(20ep 편차)가 아닌 실제 효과인가?
+- [ ] 기존 기능이 깨지지 않았는가? (regression)
+- [ ] 가중치가 건강한가? (포화, uniform ceiling 없는가?)
+- [ ] 이걸 GPT에 보여주면 "이건 의미 없는 변경"이라고 할 가능성은?
+
+---
+
 ## 외부 AI 제안 처리 (MANDATORY)
 
 외부 AI(Gemini, GPT 등)의 제안을 받을 경우 **비판적으로 수용**한다.
