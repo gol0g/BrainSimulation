@@ -163,6 +163,12 @@ class ForagerConfig:
     temporal_shift_interval: int = 1500   # N스텝마다 rich zone 위치 변경
     temporal_shift_announce: bool = True  # 변경 시 시각 신호 (렌더링용)
 
+    # === Latent-State Switch (M3: Replay-Driven Replanning 환경) ===
+    latent_switch_enabled: bool = True
+    latent_switch_interval: int = 2000    # N스텝마다 환경 변화
+    obstacle_shift_enabled: bool = True   # 장애물 위치 재배치
+    pain_zone_shift_enabled: bool = True  # Pain zone 위치 이동
+
     # === Environment E1: Obstacles (정적 장애물) ===
     obstacles_enabled: bool = True
     n_obstacles: int = 1
@@ -892,6 +898,16 @@ class ForagerGym:
             self._shift_rich_zones()
             self._zone_shifted_this_step = True
 
+        # 5.6 Latent-state switch: 장애물/Pain zone 재배치 (M3 환경)
+        self._latent_switched_this_step = False
+        if (self.config.latent_switch_enabled and self.steps > 0
+                and self.steps % self.config.latent_switch_interval == 0):
+            if self.config.obstacle_shift_enabled and self.config.obstacles_enabled:
+                self._generate_obstacles()  # 장애물 재배치
+            if self.config.pain_zone_shift_enabled and self.config.pain_zone_enabled:
+                self._shift_pain_zones()
+            self._latent_switched_this_step = True
+
         # 6. 종료 조건
         self.steps += 1
         done = False
@@ -1138,6 +1154,24 @@ class ForagerGym:
                         nx = np.clip(nx, 20, self.config.width - 20)
                         ny = np.clip(ny, 20, self.config.height - 20)
                         self.foods[i] = (nx, ny, food[2])
+
+    def _shift_pain_zones(self):
+        """M3: Pain zone 위치를 랜덤하게 재배치 (latent-state switch)"""
+        if not self.pain_zones:
+            return
+        margin = self.config.pain_zone_radius + 30
+        new_zones = []
+        for _ in self.pain_zones:
+            for _ in range(100):
+                cx = np.random.uniform(margin, self.config.width - margin)
+                cy = np.random.uniform(margin, self.config.height - margin)
+                # 에이전트 위에 스폰하지 않음 (즉사 방지)
+                dist = np.sqrt((cx - self.agent_x)**2 + (cy - self.agent_y)**2)
+                if dist > self.config.pain_zone_radius * 2:
+                    new_zones.append((cx, cy))
+                    break
+        if new_zones:
+            self.pain_zones = new_zones
 
     def _point_in_obstacle(self, px: float, py: float, margin: float = 0.0) -> bool:
         """점이 장애물 내부(+마진)에 있는지 확인"""
