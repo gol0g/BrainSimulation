@@ -1252,6 +1252,25 @@ class ForagerBrainConfig:
     curiosity_to_d1_weight: float = 0.8     # 대칭적 approach bias
     curiosity_to_d1_sparsity: float = 0.03
 
+    # === M3: ACh Uncertainty Gate (환경 변화 감지 → 학습률 조절) ===
+    uncertainty_gate_enabled: bool = True
+    n_surprise_accum: int = 20            # 놀라움 축적 뉴런 (slow integration)
+    n_stability_detector: int = 10        # 안정성 감지 뉴런
+    # Inputs → Surprise Accumulator
+    agency_pe_to_surprise_weight: float = 2.0   # 예측 오차 → 놀라움
+    meta_uncertainty_to_surprise_weight: float = 1.5
+    acc_conflict_to_surprise_weight: float = 1.0
+    surprise_recurrent_weight: float = 0.5       # slow accumulation
+    surprise_recurrent_sparsity: float = 0.08
+    # Inputs → Stability Detector
+    meta_confidence_to_stability_weight: float = 2.0
+    pred_food_to_stability_weight: float = 1.5
+    # Competition
+    stability_to_surprise_weight: float = -3.0   # 안정하면 놀라움 억제
+    stability_to_surprise_sparsity: float = 0.10
+    # Output: surprise_rate → process()에서 학습률 조절
+    # (시냅스 출력 없음 — rate를 scalar로 읽어서 eta modulation)
+
     dt: float = 1.0
 
     @property
@@ -1363,6 +1382,8 @@ class ForagerBrainConfig:
             base += self.n_pred_food_soon + self.n_pred_food_inh  # 30 + 15 = 45
         if self.curiosity_enabled:
             base += self.n_curiosity_gate + self.n_curiosity_inh  # 20 + 10 = 30
+        if self.uncertainty_gate_enabled:
+            base += self.n_surprise_accum + self.n_stability_detector  # 20 + 10 = 30
         return base
 
 
@@ -1470,6 +1491,11 @@ class ForagerBrain:
 
         # Phase C5: Curiosity state defaults
         self.last_curiosity_rate = 0.0  # curiosity gate firing rate (always init)
+
+        # M3: ACh Uncertainty Gate state defaults
+        self.last_surprise_rate = 0.0   # surprise accumulator rate
+        self.last_stability_rate = 0.0  # stability detector rate
+        self.uncertainty_eta_mod = 1.0  # learning rate multiplier (1.0=normal, >1=fast learn)
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -1940,6 +1966,11 @@ class ForagerBrain:
                 and self.config.v2v4_enabled):
             self._build_curiosity_circuit()
 
+        # M3: ACh Uncertainty Gate (환경 변화 감지)
+        if (self.config.uncertainty_gate_enabled
+                and self.config.metacognition_enabled):
+            self._build_uncertainty_gate()
+
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
 
@@ -2206,6 +2237,10 @@ class ForagerBrain:
         # Phase C5: Curiosity
         if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
             self.curiosity_gate.spike_recording_enabled = True
+
+        # M3: Uncertainty Gate
+        if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
+            self.surprise_accum.spike_recording_enabled = True
 
         print("  Spike recording enabled for all monitored populations")
 
@@ -4862,10 +4897,11 @@ class ForagerBrain:
         if not has_dopamine and not apply_decay:
             return None
 
-        eta = self.config.rstdp_eta
+        eta = self.config.rstdp_eta * self.uncertainty_eta_mod  # M3: ACh modulation
         w_max = self.config.rstdp_w_max
         w_rest = self.config.rstdp_w_rest
         results = {}
+        results["eta_mod"] = self.uncertainty_eta_mod
 
         # === D1: R-STDP 강화 (보상 시 가중치 증가) ===
         for side, trace, syn in [
@@ -8932,6 +8968,79 @@ class ForagerBrain:
         print(f"    Output: →Goal_Food({cfg.curiosity_to_goal_food_weight}), "
               f"→D1({cfg.curiosity_to_d1_weight})")
 
+    def _build_uncertainty_gate(self):
+        """M3: ACh Uncertainty Gate — 환경 변화 감지 + 학습률 조절
+
+        생물학적 근거: Tu et al. (eLife 2025) — ACh modulates prefrontal
+        outcome coding during threat learning under uncertainty.
+
+        핵심: 지속적 예측 오차 → "세계가 바뀌었다" → 학습률 증가 + 탐색 강화
+        일시적 예측 오차 → "단발성 노이즈" → 무시
+
+        Populations: surprise_accum(20) + stability_detector(10) = +30 neurons
+        Output: surprise_rate를 process()에서 scalar로 읽어 eta modulation
+        Motor 연결 없음 (안전).
+        """
+        print("  Building M3: ACh Uncertainty Gate...")
+
+        cfg = self.config
+        # Surprise Accumulator: slow integration (high C for temporal smoothing)
+        surprise_params = {
+            "C": 50.0,  # 높은 capacitance → 느린 통합 → 일시적 PE 무시
+            "TauM": 30.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 3.0
+        }
+        stability_params = {
+            "C": 20.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        lif_init = {"V": -65.0, "RefracTime": 0.0}
+
+        # === Populations ===
+        self.surprise_accum = self.model.add_neuron_population(
+            "surprise_accum", cfg.n_surprise_accum, "LIF", surprise_params, lif_init)
+        self.stability_detector = self.model.add_neuron_population(
+            "stability_detector", cfg.n_stability_detector, "LIF", stability_params, lif_init)
+
+        # === Surprise inputs (PE signals → accumulate) ===
+        if hasattr(self, 'agency_pe'):
+            self._create_static_synapse(
+                "agency_pe_to_surprise", self.agency_pe, self.surprise_accum,
+                cfg.agency_pe_to_surprise_weight, sparsity=0.08)
+        if hasattr(self, 'meta_uncertainty'):
+            self._create_static_synapse(
+                "meta_uncert_to_surprise", self.meta_uncertainty, self.surprise_accum,
+                cfg.meta_uncertainty_to_surprise_weight, sparsity=0.08)
+        if hasattr(self, 'acc_conflict'):
+            self._create_static_synapse(
+                "acc_conflict_to_surprise", self.acc_conflict, self.surprise_accum,
+                cfg.acc_conflict_to_surprise_weight, sparsity=0.05)
+        # Self-recurrent (slow accumulation — persistent surprise)
+        self._create_static_synapse(
+            "surprise_recurrent", self.surprise_accum, self.surprise_accum,
+            cfg.surprise_recurrent_weight, sparsity=cfg.surprise_recurrent_sparsity)
+
+        # === Stability inputs (confidence/prediction → stable) ===
+        if hasattr(self, 'meta_confidence'):
+            self._create_static_synapse(
+                "meta_conf_to_stability", self.meta_confidence, self.stability_detector,
+                cfg.meta_confidence_to_stability_weight, sparsity=0.08)
+        if hasattr(self, 'pred_food_soon'):
+            self._create_static_synapse(
+                "pred_food_to_stability", self.pred_food_soon, self.stability_detector,
+                cfg.pred_food_to_stability_weight, sparsity=0.08)
+
+        # === Competition: stability suppresses surprise ===
+        self._create_static_synapse(
+            "stability_to_surprise", self.stability_detector, self.surprise_accum,
+            cfg.stability_to_surprise_weight, sparsity=cfg.stability_to_surprise_sparsity)
+
+        print(f"    Surprise_Accum: {cfg.n_surprise_accum} (C=50, slow)")
+        print(f"    Stability_Detector: {cfg.n_stability_detector}")
+        print(f"    Input: Agency_PE({cfg.agency_pe_to_surprise_weight}), "
+              f"Meta_Uncertainty({cfg.meta_uncertainty_to_surprise_weight})")
+        print(f"    Output: surprise_rate → eta_mod (no Motor connection)")
+
     def update_prediction_error_rstdp(self, reward_type: str):
         """Phase L6: 예측 오차 R-STDP 가중치 업데이트
 
@@ -9741,6 +9850,9 @@ class ForagerBrain:
         # Phase C5: Curiosity 스파이크 카운트
         curiosity_spikes = 0
 
+        # M3: Uncertainty Gate 스파이크 카운트
+        surprise_spikes = 0
+
         # === Phase 11: 청각 입력 (Sound → A1) — sensitivity 절반으로 재활성화 ===
         if self.config.auditory_enabled and hasattr(self, 'sound_danger_left'):
             sound_sensitivity = 20.0
@@ -9832,6 +9944,10 @@ class ForagerBrain:
             # Phase C5: Curiosity spike counting
             if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
                 curiosity_spikes = len(self.curiosity_gate.spike_recording_data[0][0])
+
+            # M3: Uncertainty Gate spike counting
+            if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
+                surprise_spikes = len(self.surprise_accum.spike_recording_data[0][0])
 
         # Phase 5 스파이크 카운팅
         if self.config.prefrontal_enabled:
@@ -10201,6 +10317,14 @@ class ForagerBrain:
         if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
             curiosity_rate = curiosity_spikes / max(self.config.n_curiosity_gate * 10, 1)
             self.last_curiosity_rate = curiosity_rate
+
+        # M3: Uncertainty Gate rate → eta modulation
+        if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
+            surprise_rate = surprise_spikes / max(self.config.n_surprise_accum * 10, 1)
+            self.last_surprise_rate = surprise_rate
+            # ACh-like modulation: high surprise → boost learning rate (1.0 ~ 2.0x)
+            # Low surprise (stable) → normal learning (1.0x)
+            self.uncertainty_eta_mod = 1.0 + min(1.0, surprise_rate * 5.0)
 
         # Phase L5: 피질 R-STDP 적격 추적 (좋은/나쁜 음식 활성도 기반)
         if self.config.perceptual_learning_enabled:
@@ -10924,6 +11048,8 @@ class ForagerBrain:
             },
             "pred_food_rate": self.last_pred_food_rate,
             "curiosity_rate": self.last_curiosity_rate,
+            "surprise_rate": self.last_surprise_rate,
+            "eta_mod": self.uncertainty_eta_mod,
         }
 
         # === 7. 이상 감지 ===
