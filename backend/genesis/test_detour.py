@@ -68,31 +68,43 @@ def run_detour_test(learning_eps=10, test_eps=5):
         old_pain_zones = env.pain_zones.copy() if env.pain_zones else []
         old_obstacles = env.obstacles.copy() if env.obstacles else []
 
-        # === Latent Switch: 환경 변경 ===
-        print(f"\n  Latent Switch: relocating pain zones + obstacles...")
-        # 수동으로 Pain zone 재배치
-        if env.pain_zones:
-            margin = env_config.pain_zone_radius + 30
-            new_zones = []
-            for _ in env.pain_zones:
-                for _ in range(100):
+            # === Latent Switch: Rich Zone 이동 (핵심!) ===
+        # Pain zone이 아닌 FOOD 위치를 바꿔야 replay의 hippocampal 기여 측정 가능
+        # Pain 회피는 반사(Push-Pull)로 충분 — replay 없이도 작동
+        # 음식 위치 변경은 hippocampal food memory 업데이트가 필요
+        old_rich_zones = env.rich_zones.copy() if hasattr(env, 'rich_zones') and env.rich_zones else []
+        new_rich = []  # 기본값
+        print(f"\n  Latent Switch: relocating RICH ZONES (food locations)...")
+        print(f"    Old rich zones: {[(int(z[0]),int(z[1])) for z in old_rich_zones]}")
+
+        # Rich zone을 기존 위치에서 멀리 이동
+        if hasattr(env, 'rich_zones') and env.rich_zones:
+            new_rich = []
+            margin = env_config.rich_zone_radius + 50
+            for _ in env.rich_zones:
+                for _ in range(200):
                     cx = np.random.uniform(margin, env_config.width - margin)
                     cy = np.random.uniform(margin, env_config.height - margin)
-                    # 기존 위치에서 최소 거리 확보
                     far_enough = all(
-                        np.sqrt((cx - oz[0])**2 + (cy - oz[1])**2) > env_config.pain_zone_radius * 3
-                        for oz in old_pain_zones
+                        np.sqrt((cx - oz[0])**2 + (cy - oz[1])**2) > env_config.rich_zone_radius * 4
+                        for oz in old_rich_zones
                     )
                     if far_enough:
-                        new_zones.append((cx, cy))
+                        new_rich.append((cx, cy))
                         break
-            if new_zones:
-                env.pain_zones = new_zones
-                print(f"    Pain zones: {old_pain_zones} → {new_zones}")
-
-        # 장애물 재생성
-        env._generate_obstacles()
-        print(f"    Obstacles regenerated")
+            if new_rich:
+                env.rich_zones = new_rich
+                # 음식도 새 rich zone으로 재배치
+                for i, food in enumerate(env.foods):
+                    if np.random.random() < 0.5:
+                        zx, zy = new_rich[np.random.randint(len(new_rich))]
+                        r = env_config.rich_zone_radius * 0.8
+                        nx = zx + np.random.uniform(-r, r)
+                        ny = zy + np.random.uniform(-r, r)
+                        nx = np.clip(nx, 20, env_config.width - 20)
+                        ny = np.clip(ny, 20, env_config.height - 20)
+                        env.foods[i] = (nx, ny, food[2])
+                print(f"    New rich zones: {[(int(z[0]),int(z[1])) for z in new_rich]}")
 
         # === Replay Window ===
         if condition == "replay_on":
@@ -109,16 +121,17 @@ def run_detour_test(learning_eps=10, test_eps=5):
         test_results = []
 
         for ep in range(test_eps):
-            # Reset하되 Pain zone은 유지 (환경 변경 유지)
+            # Reset하되 Rich zone은 변경된 위치 유지
             obs = env.reset()
-            # Pain zone을 변경된 위치로 복원 (reset이 초기화할 수 있으므로)
-            if new_zones:
-                env.pain_zones = new_zones
+            # Rich zone을 변경된 위치로 복원 (reset이 초기화할 수 있으므로)
+            if hasattr(env, 'rich_zones') and new_rich:
+                env.rich_zones = new_rich
 
             done = False
             first_food_step = None
-            pain_entries = 0
-            prev_in_pain = False
+            time_in_old_zone = 0
+            time_in_new_zone = 0
+            total_steps_test = 0
 
             while not done:
                 angle, info = brain.process(obs)
@@ -128,28 +141,37 @@ def run_detour_test(learning_eps=10, test_eps=5):
                 if first_food_step is None and env.total_food_eaten > 0:
                     first_food_step = env.steps
 
-                # Pain zone 진입 카운트
-                in_pain = env._in_pain_zone()
-                if in_pain and not prev_in_pain:
-                    pain_entries += 1
-                prev_in_pain = in_pain
+                # Time in old vs new rich zone
+                ax, ay = env.agent_x, env.agent_y
+                for oz in old_rich_zones:
+                    if np.sqrt((ax - oz[0])**2 + (ay - oz[1])**2) < env_config.rich_zone_radius:
+                        time_in_old_zone += 1
+                if hasattr(env, 'rich_zones'):
+                    for nz in env.rich_zones:
+                        if np.sqrt((ax - nz[0])**2 + (ay - nz[1])**2) < env_config.rich_zone_radius:
+                            time_in_new_zone += 1
+                total_steps_test += 1
 
             steps = env.steps
             food = env.total_food_eaten
             survived = steps >= env_config.max_steps - 10
+            old_ratio = time_in_old_zone / max(total_steps_test, 1)
+            new_ratio = time_in_new_zone / max(total_steps_test, 1)
 
             test_results.append({
                 "steps": steps,
                 "food": food,
                 "survived": survived,
                 "first_food_step": first_food_step or steps,
-                "pain_entries": pain_entries,
+                "old_zone_ratio": old_ratio,
+                "new_zone_ratio": new_ratio,
                 "death_cause": step_info.get("death_cause", "unknown"),
             })
 
             status = "✓" if survived else f"✗({step_info.get('death_cause', '?')})"
             print(f"    test {ep+1}: steps={steps}, food={food}, "
-                  f"pain_entries={pain_entries}, first_food={first_food_step or 'never'} {status}")
+                  f"old_zone={old_ratio:.1%}, new_zone={new_ratio:.1%}, "
+                  f"first_food={first_food_step or 'never'} {status}")
 
             # Replay between test episodes too
             if condition == "replay_on" and brain_config.swr_replay_enabled:
@@ -167,31 +189,35 @@ def run_detour_test(learning_eps=10, test_eps=5):
         avg_steps = np.mean([d["steps"] for d in data])
         avg_food = np.mean([d["food"] for d in data])
         survival = sum(1 for d in data if d["survived"]) / len(data)
-        avg_pain = np.mean([d["pain_entries"] for d in data])
+        avg_old_zone = np.mean([d["old_zone_ratio"] for d in data])
+        avg_new_zone = np.mean([d["new_zone_ratio"] for d in data])
         avg_first_food = np.mean([d["first_food_step"] for d in data])
 
         print(f"\n  {cond.upper()}:")
         print(f"    Survival:        {survival:.0%}")
-        print(f"    Avg steps:       {avg_steps:.0f}")
         print(f"    Avg food:        {avg_food:.1f}")
-        print(f"    Avg pain entries:{avg_pain:.1f}")
+        print(f"    Old zone time:   {avg_old_zone:.1%} (should be LOW if adapted)")
+        print(f"    New zone time:   {avg_new_zone:.1%} (should be HIGH if adapted)")
         print(f"    First food step: {avg_first_food:.0f}")
 
     # 차이 계산
-    on_surv = sum(1 for d in results["replay_on"] if d["survived"]) / len(results["replay_on"])
-    off_surv = sum(1 for d in results["replay_off"] if d["survived"]) / len(results["replay_off"])
-    on_pain = np.mean([d["pain_entries"] for d in results["replay_on"]])
-    off_pain = np.mean([d["pain_entries"] for d in results["replay_off"]])
+    on_old = np.mean([d["old_zone_ratio"] for d in results["replay_on"]])
+    off_old = np.mean([d["old_zone_ratio"] for d in results["replay_off"]])
+    on_new = np.mean([d["new_zone_ratio"] for d in results["replay_on"]])
+    off_new = np.mean([d["new_zone_ratio"] for d in results["replay_off"]])
+    on_food = np.mean([d["food"] for d in results["replay_on"]])
+    off_food = np.mean([d["food"] for d in results["replay_off"]])
     on_food_lat = np.mean([d["first_food_step"] for d in results["replay_on"]])
     off_food_lat = np.mean([d["first_food_step"] for d in results["replay_off"]])
 
     print(f"\n  COMPARISON (replay_on - replay_off):")
-    print(f"    Survival diff:     {(on_surv - off_surv)*100:+.0f}pp")
-    print(f"    Pain entries diff: {on_pain - off_pain:+.1f}")
-    print(f"    First food diff:   {on_food_lat - off_food_lat:+.0f} steps")
+    print(f"    Old zone time:   {on_old - off_old:+.1%} (negative = replay helps forget old)")
+    print(f"    New zone time:   {on_new - off_new:+.1%} (positive = replay finds new)")
+    print(f"    Food count:      {on_food - off_food:+.1f}")
+    print(f"    First food:      {on_food_lat - off_food_lat:+.0f} steps")
 
-    # Pass/Fail
-    replay_helps = (on_surv - off_surv) > 0.05 or (off_pain - on_pain) > 0.5
+    # Pass/Fail — replay should reduce old zone time OR increase new zone time
+    replay_helps = (off_old - on_old) > 0.01 or (on_new - off_new) > 0.01 or (on_food - off_food) > 2
     print(f"\n  VERDICT: {'REPLAY HELPS' if replay_helps else 'REPLAY EFFECT NOT DETECTED'}")
     print(f"{'='*60}")
 
