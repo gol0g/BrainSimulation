@@ -91,6 +91,12 @@ def run_single_seed(seed, learning_eps, condition):
     # === Replay Window ===
     if condition == "revaluation":
         brain.replay_swr()  # includes reverse value backup
+    elif condition == "consolidation_only":
+        # Replay WITHOUT reverse backup — consolidation only
+        old_enabled = brain.config.place_transition_enabled
+        brain.config.place_transition_enabled = False
+        brain.replay_swr()
+        brain.config.place_transition_enabled = old_enabled
     # else: no_replay — skip
 
     # === Test: First 100 steps ===
@@ -142,12 +148,12 @@ def main():
     parser.add_argument("--learning-episodes", type=int, default=10)
     args = parser.parse_args()
 
-    conditions = ["revaluation", "no_replay"]
+    conditions = ["revaluation", "consolidation_only", "no_replay"]
     results = {c: [] for c in conditions}
 
     print("=" * 60)
-    print(f"  M3 DETOUR v4 — Revaluation vs No Replay")
-    print(f"  {args.seeds} seeds × 2 conditions")
+    print(f"  M3 VALIDATION — 3-Way Ablation ({args.seeds} seeds)")
+    print(f"  Conditions: revaluation / consolidation_only / no_replay")
     print("=" * 60)
 
     for seed in range(args.seeds):
@@ -155,8 +161,9 @@ def main():
             r = run_single_seed(seed, args.learning_episodes, cond)
             results[cond].append(r)
         print(f"  seed {seed+1}/{args.seeds}: "
-              f"reval new={results['revaluation'][-1]['new_zone_pct']:.0%} "
-              f"no_rep new={results['no_replay'][-1]['new_zone_pct']:.0%}")
+              f"reval={results['revaluation'][-1]['new_zone_pct']:.0%} "
+              f"consol={results['consolidation_only'][-1]['new_zone_pct']:.0%} "
+              f"no_rep={results['no_replay'][-1]['new_zone_pct']:.0%}")
 
     print(f"\n{'='*60}")
     print("  RESULTS (first 100 steps)")
@@ -176,11 +183,41 @@ def main():
         print(f"    First food: {ff_avg:.0f} steps")
 
     reval_new = np.mean([x["new_zone_pct"] for x in results["revaluation"]])
+    consol_new = np.mean([x["new_zone_pct"] for x in results["consolidation_only"]])
     no_new = np.mean([x["new_zone_pct"] for x in results["no_replay"]])
-    diff = (reval_new - no_new) * 100
 
-    print(f"\n  DIFF: revaluation - no_replay = {diff:+.1f}pp toward new zone")
-    print(f"  VERDICT: {'REVALUATION HELPS' if diff > 5 else 'NOT CONCLUSIVE' if diff > 0 else 'NO EFFECT'}")
+    print(f"\n  COMPARISON (toward new zone):")
+    print(f"    Revaluation vs No Replay:      {(reval_new - no_new)*100:+.1f}pp")
+    print(f"    Revaluation vs Consolidation:   {(reval_new - consol_new)*100:+.1f}pp")
+    print(f"    Consolidation vs No Replay:     {(consol_new - no_new)*100:+.1f}pp")
+
+    # Per-seed paired deltas
+    print(f"\n  PER-SEED DELTAS (reval - no_replay):")
+    deltas = []
+    for i in range(len(results["revaluation"])):
+        d = results["revaluation"][i]["new_zone_pct"] - results["no_replay"][i]["new_zone_pct"]
+        deltas.append(d)
+        print(f"    seed {i}: {d*100:+.1f}pp")
+    positive = sum(1 for d in deltas if d > 0)
+    print(f"  Positive: {positive}/{len(deltas)} seeds")
+    if len(deltas) > 1:
+        mean_d = np.mean(deltas) * 100
+        std_d = np.std(deltas) * 100
+        se = std_d / np.sqrt(len(deltas))
+        print(f"  Mean delta: {mean_d:+.1f}pp ± {se:.1f}pp (SE)")
+
+    print(f"\n  VERDICT:")
+    if (reval_new - no_new) > 0.05 and positive > len(deltas) * 0.6:
+        print(f"    ✓ REVALUATION HELPS (consistent across seeds)")
+    elif (reval_new - no_new) > 0:
+        print(f"    ~ DIRECTION POSITIVE but not consistent")
+    else:
+        print(f"    ✗ NO EFFECT")
+
+    if (reval_new - consol_new) > 0.02:
+        print(f"    ✓ REVERSE BACKUP adds value over consolidation-only")
+    else:
+        print(f"    — Reverse backup benefit unclear")
     print(f"{'='*60}")
 
 
