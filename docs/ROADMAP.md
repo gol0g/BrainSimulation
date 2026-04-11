@@ -98,6 +98,7 @@
 | **M3-env** | **Latent-state switch (장애물+Pain zone 이동)** | **0** | **✓ 완료** | 60% |
 | **M3-ACh** | **ACh uncertainty gate (surprise→eta mod)** | **+30** | **✓ 완료** | 65% |
 | **M3-SWR** | **Surprise-modulated replay (동적 replay 횟수)** | **0** | **✓ 완료** | **70%** |
+| **M3-test** | **Detour test v3 (4조건 replay content)** | **0** | **진행 중** | old 해악 확인 |
 
 ### Phase 12-14 수정 이력
 
