@@ -353,24 +353,25 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: 품질 개선 완료, 최종 검증 중 (27,985 뉴런, 800×800 맵)
+### 현재 상태: M3 Replay-Driven Replanning 진행 중 (28,015 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  개념 형성 C0-C5 + C3 + 품질 개선 완료 (2026-04-09)             ║
+║  M3 Replay-Driven Replanning 3/4 완료 (2026-04-11)              ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  C3: NPC Call 68% PASS (Push-Pull 10/-5)                        ║
-║  C4: Pred_FoodSoon (predictive plasticity, at_ceil 0%)          ║
-║  C5: Curiosity (marginal 5pp, safety suppression 동작)          ║
+║  C0-C5 + C3 완료, Q1-Q3 품질 개선 완료                          ║
 ║                                                               ║
-║  품질 개선 (GPT 진단 → 구현):                                    ║
-║    - Q1: R-STDP→predictive STDP + teacher + budget              ║
-║    - Q2: Heterosynaptic budget (FM 10→3, Narr 14→4.2)          ║
-║    - Q3: Scaffolding 30pp 기여 확인 (dead weight 아님)          ║
+║  M3 환경: latent-state switch (obstacle+pain zone 이동)         ║
+║  M3 ACh: uncertainty gate (surprise→eta mod, predator -20pp)   ║
+║  M3 SWR: surprise-modulated replay (동적 환경 70% 생존)        ║
+║  M3 Detour: old replay 해악 확인, new replay 디버깅 중          ║
 ║                                                               ║
-║  뉴런 수:       27,985                                          ║
+║  하네스 프로세스 도입: Sprint Contract→Evaluator→GPT Review     ║
+║  스킬: /search-papers, /youtube-analyze, /ask-gpt              ║
+║                                                               ║
+║  뉴런 수:       28,015                                          ║
 ║  학습 시냅스:   ~57 (포화 해소, 동적 범위 확보)                  ║
-║  생존율:        47% (100ep 검증 완료), Selectivity 0.74          ║
+║  생존율:        70% (동적 환경), Selectivity 0.74               ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 

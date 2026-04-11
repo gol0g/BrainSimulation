@@ -10,12 +10,14 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║  M3: Replay-Driven Replanning 3/4 단계 완료 (2026-04-11)        ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  환경: latent-state switch (장애물+Pain zone 2000스텝마다 이동)  ║
-║  ACh uncertainty gate: surprise→eta modulation (+5pp)           ║
-║  Surprise-modulated replay: 놀라움 높을 때 replay 증가 (+5pp)   ║
-║  동적 환경에서 70% 생존 (predator death 35%→15%)               ║
+║  ✓ 환경: latent-state switch (장애물+Pain zone 이동)            ║
+║  ✓ ACh uncertainty gate: surprise→eta mod (+5pp, pred -20pp)   ║
+║  ✓ Surprise-modulated replay: 동적 환경 70% 생존               ║
+║  → Detour test v3: old replay 해악 확인, new replay 디버깅 중   ║
+║    (env.reset()이 foods 초기화 → new buffer 오염 가능)          ║
 ║                                                               ║
-║  남은 것: 첫 시도 우회 테스트 (detour/reversal 측정)             ║
+║  하네스 프로세스 도입 완료:                                      ║
+║    Sprint Contract → verify_regression.py → GPT Review          ║
 ║                                                               ║
 ║  뉴런: 28,015 | 학습 시냅스: ~57 | 생존: 70% (동적 환경)       ║
 ╚═══════════════════════════════════════════════════════════════╝
@@ -774,4 +776,4 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 
 ---
 
-*최종 업데이트: 2026-04-09 (C0-C5+C3+Q1-Q3 완료, 27,985 뉴런, ~57 학습 시냅스, 65-75% 생존율, 다음: Replay-Driven Replanning)*
+*최종 업데이트: 2026-04-11 (M3 3/4 완료, 28,015 뉴런, 동적 환경 70% 생존, detour test 디버깅 중)*
