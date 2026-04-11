@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 """
-M3 Detour Test v3 — 4-Condition Replay Content Control
+M3 Detour Test v4 — Revaluation SWR vs No Replay
 
-4 conditions:
-1. no_replay: no SWR after switch
-2. old_replay: SWR with OLD buffer (stale memories — should be harmful)
-3. new_replay: SWR with NEW experiences only (should help)
-4. mixed_replay: SWR with recency-weighted buffer (biologically realistic)
-
-Measures first-100-step heading bias to old vs new rich zones.
+2 conditions × N seeds. 간소화 버전.
+Revaluation replay = reverse value backup through transition graph.
 
 Usage:
-    python test_detour.py --learning-episodes 10 --test-episodes 1 --seeds 20
+    python test_detour.py --seeds 5
 """
 
 import argparse
@@ -25,75 +20,17 @@ from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 
 
-def measure_first_n_steps(brain, env, old_zones, new_zones, n_steps=100):
-    """첫 N스텝 heading bias 측정 — old zone vs new zone 방향"""
-    obs = env.reset()
-    # Rich zone 복원
-    if new_zones:
-        env.rich_zones = new_zones
-
-    time_toward_old = 0
-    time_toward_new = 0
-    time_in_old = 0
-    time_in_new = 0
-    first_food_step = None
-    rz_radius = env.config.rich_zone_radius
-
-    for step in range(n_steps):
-        angle, info = brain.process(obs)
-        old_x, old_y = env.agent_x, env.agent_y
-        obs, reward, done, step_info = env.step((angle,))
-        new_x, new_y = env.agent_x, env.agent_y
-
-        if first_food_step is None and env.total_food_eaten > 0:
-            first_food_step = step
-
-        # Zone occupancy
-        for oz in old_zones:
-            if np.sqrt((new_x - oz[0])**2 + (new_y - oz[1])**2) < rz_radius:
-                time_in_old += 1
-        for nz in new_zones:
-            if np.sqrt((new_x - nz[0])**2 + (new_y - nz[1])**2) < rz_radius:
-                time_in_new += 1
-
-        # Heading: did the agent move TOWARD old or new zone?
-        dx, dy = new_x - old_x, new_y - old_y
-        if abs(dx) + abs(dy) > 0.1:  # moved
-            for oz in old_zones:
-                dist_before = np.sqrt((old_x - oz[0])**2 + (old_y - oz[1])**2)
-                dist_after = np.sqrt((new_x - oz[0])**2 + (new_y - oz[1])**2)
-                if dist_after < dist_before:
-                    time_toward_old += 1
-            for nz in new_zones:
-                dist_before = np.sqrt((old_x - nz[0])**2 + (old_y - nz[1])**2)
-                dist_after = np.sqrt((new_x - nz[0])**2 + (new_y - nz[1])**2)
-                if dist_after < dist_before:
-                    time_toward_new += 1
-
-        if done:
-            break
-
-    return {
-        "old_zone_pct": time_in_old / max(step + 1, 1),
-        "new_zone_pct": time_in_new / max(step + 1, 1),
-        "toward_old_pct": time_toward_old / max(step + 1, 1),
-        "toward_new_pct": time_toward_new / max(step + 1, 1),
-        "first_food": first_food_step,
-        "steps_completed": step + 1,
-    }
-
-
-def run_single_seed(seed, learning_eps, condition, env_config):
-    """단일 seed로 한 조건 실행"""
+def run_single_seed(seed, learning_eps, condition):
+    """단일 seed × 단일 조건"""
     np.random.seed(seed)
 
     brain_config = ForagerBrainConfig()
-    env_config_copy = copy.deepcopy(env_config)
-    env_config_copy.latent_switch_enabled = False
-    env = ForagerGym(env_config_copy, render_mode="none")
+    env_config = ForagerConfig()
+    env_config.latent_switch_enabled = False  # 수동 제어
+    env = ForagerGym(env_config, render_mode="none")
     brain = ForagerBrain(brain_config)
 
-    # === Phase A: Learning ===
+    # === Phase A: Learning (stable env) ===
     for ep in range(learning_eps):
         obs = env.reset()
         done = False
@@ -104,144 +41,148 @@ def run_single_seed(seed, learning_eps, condition, env_config):
             brain.replay_swr()
 
     old_zones = env.rich_zones.copy() if hasattr(env, 'rich_zones') and env.rich_zones else []
-    old_buffer = list(brain.experience_buffer)  # 학습 후 buffer 저장
 
-    # === Latent Switch ===
+    # === Latent Switch: Rich Zone 이동 ===
     new_zones = []
     if old_zones:
-        margin = env_config_copy.rich_zone_radius + 50
+        margin = env_config.rich_zone_radius + 50
         for _ in old_zones:
             for _ in range(200):
-                cx = np.random.uniform(margin, env_config_copy.width - margin)
-                cy = np.random.uniform(margin, env_config_copy.height - margin)
-                far = all(np.sqrt((cx-oz[0])**2 + (cy-oz[1])**2) > env_config_copy.rich_zone_radius * 4
+                cx = np.random.uniform(margin, env_config.width - margin)
+                cy = np.random.uniform(margin, env_config.height - margin)
+                far = all(np.sqrt((cx-oz[0])**2 + (cy-oz[1])**2) > env_config.rich_zone_radius * 4
                          for oz in old_zones)
                 if far:
                     new_zones.append((cx, cy))
                     break
-        if new_zones:
-            env.rich_zones = new_zones
-            for i, food in enumerate(env.foods):
-                if np.random.random() < 0.5 and new_zones:
-                    zx, zy = new_zones[np.random.randint(len(new_zones))]
-                    r = env_config_copy.rich_zone_radius * 0.8
-                    nx = zx + np.random.uniform(-r, r)
-                    ny = zy + np.random.uniform(-r, r)
-                    nx = np.clip(nx, 20, env_config_copy.width - 20)
-                    ny = np.clip(ny, 20, env_config_copy.height - 20)
-                    env.foods[i] = (nx, ny, food[2])
 
-    # === Brief new-env exploration (1 episode to populate buffer with new experiences) ===
+    # Food를 새 rich zone으로 이동
+    if new_zones:
+        env.rich_zones = new_zones
+        for i, food in enumerate(env.foods):
+            if np.random.random() < 0.5:
+                zx, zy = new_zones[np.random.randint(len(new_zones))]
+                r = env_config.rich_zone_radius * 0.8
+                nx = zx + np.random.uniform(-r, r)
+                ny = zy + np.random.uniform(-r, r)
+                nx = np.clip(nx, 20, env_config.width - 20)
+                ny = np.clip(ny, 20, env_config.height - 20)
+                env.foods[i] = (nx, ny, food[2])
+
+    # === 1 episode in new env (discover new food → transition buffer 채우기) ===
     obs = env.reset()
     if new_zones:
         env.rich_zones = new_zones
+        # foods도 새 위치로 재배치
+        for i, food in enumerate(env.foods):
+            if np.random.random() < 0.5 and new_zones:
+                zx, zy = new_zones[np.random.randint(len(new_zones))]
+                r = env_config.rich_zone_radius * 0.8
+                nx = zx + np.random.uniform(-r, r)
+                ny = zy + np.random.uniform(-r, r)
+                nx = np.clip(nx, 20, env_config.width - 20)
+                ny = np.clip(ny, 20, env_config.height - 20)
+                env.foods[i] = (nx, ny, food[2])
     done = False
     while not done:
         angle, info = brain.process(obs)
         obs, reward, done, step_info = env.step((angle,))
-    new_buffer = list(brain.experience_buffer)  # new experiences added
 
-    # === Replay Window (condition-dependent) ===
-    if condition == "no_replay":
-        pass  # no replay
-    elif condition == "old_replay":
-        brain.experience_buffer = old_buffer  # restore old buffer
-        brain.replay_swr()
-    elif condition == "new_replay":
-        # Keep only experiences from after the switch
-        new_only = [e for e in new_buffer if e not in old_buffer]
-        if not new_only:
-            new_only = new_buffer[-5:]  # fallback
-        brain.experience_buffer = new_only
-        brain.replay_swr()
-    elif condition == "mixed_replay":
-        # Recency weighted: keep all but bias toward recent
-        brain.experience_buffer = new_buffer  # includes both old and new
-        brain.replay_swr()
+    # === Replay Window ===
+    if condition == "revaluation":
+        brain.replay_swr()  # includes reverse value backup
+    # else: no_replay — skip
 
-    # === Test: First 100 steps in changed env ===
-    result = measure_first_n_steps(brain, env, old_zones, new_zones, n_steps=100)
-    result["condition"] = condition
-    result["seed"] = seed
-    return result
+    # === Test: First 100 steps ===
+    obs = env.reset()
+    if new_zones:
+        env.rich_zones = new_zones
+        for i, food in enumerate(env.foods):
+            if np.random.random() < 0.5 and new_zones:
+                zx, zy = new_zones[np.random.randint(len(new_zones))]
+                r = env_config.rich_zone_radius * 0.8
+                nx = zx + np.random.uniform(-r, r)
+                ny = zy + np.random.uniform(-r, r)
+                nx = np.clip(nx, 20, env_config.width - 20)
+                ny = np.clip(ny, 20, env_config.height - 20)
+                env.foods[i] = (nx, ny, food[2])
+
+    time_in_new = 0
+    time_in_old = 0
+    first_food = None
+    rz_r = env_config.rich_zone_radius
+
+    for step in range(100):
+        angle, info = brain.process(obs)
+        obs, reward, done, step_info = env.step((angle,))
+        ax, ay = env.agent_x, env.agent_y
+
+        for oz in old_zones:
+            if np.sqrt((ax-oz[0])**2 + (ay-oz[1])**2) < rz_r:
+                time_in_old += 1
+        for nz in new_zones:
+            if np.sqrt((ax-nz[0])**2 + (ay-nz[1])**2) < rz_r:
+                time_in_new += 1
+        if first_food is None and env.total_food_eaten > 0:
+            first_food = step
+        if done:
+            break
+
+    return {
+        "new_zone_pct": time_in_new / 100,
+        "old_zone_pct": time_in_old / 100,
+        "first_food": first_food,
+        "food_100": env.total_food_eaten,
+    }
 
 
-def run_detour_test(learning_eps=10, n_seeds=20):
-    """4조건 × N seeds 실험"""
-    env_config = ForagerConfig()
-    conditions = ["no_replay", "old_replay", "new_replay", "mixed_replay"]
-    all_results = {c: [] for c in conditions}
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seeds", type=int, default=5)
+    parser.add_argument("--learning-episodes", type=int, default=10)
+    args = parser.parse_args()
 
-    print("=" * 70)
-    print("  M3 DETOUR TEST v3 — 4-Condition Replay Content Control")
-    print(f"  {learning_eps} learning eps × {n_seeds} seeds × 4 conditions")
-    print("=" * 70)
+    conditions = ["revaluation", "no_replay"]
+    results = {c: [] for c in conditions}
 
-    for seed in range(n_seeds):
+    print("=" * 60)
+    print(f"  M3 DETOUR v4 — Revaluation vs No Replay")
+    print(f"  {args.seeds} seeds × 2 conditions")
+    print("=" * 60)
+
+    for seed in range(args.seeds):
         for cond in conditions:
-            result = run_single_seed(seed, learning_eps, cond, env_config)
-            all_results[cond].append(result)
-        if (seed + 1) % 5 == 0:
-            print(f"  seed {seed+1}/{n_seeds} complete")
+            r = run_single_seed(seed, args.learning_episodes, cond)
+            results[cond].append(r)
+        print(f"  seed {seed+1}/{args.seeds}: "
+              f"reval new={results['revaluation'][-1]['new_zone_pct']:.0%} "
+              f"no_rep new={results['no_replay'][-1]['new_zone_pct']:.0%}")
 
-    # === Results ===
-    print(f"\n{'='*70}")
-    print("  RESULTS (first 100 steps after latent switch)")
-    print(f"{'='*70}")
+    print(f"\n{'='*60}")
+    print("  RESULTS (first 100 steps)")
+    print(f"{'='*60}")
 
     for cond in conditions:
-        data = all_results[cond]
-        toward_new = np.mean([d["toward_new_pct"] for d in data])
-        toward_old = np.mean([d["toward_old_pct"] for d in data])
-        in_new = np.mean([d["new_zone_pct"] for d in data])
-        in_old = np.mean([d["old_zone_pct"] for d in data])
-        food_steps = [d["first_food"] for d in data if d["first_food"] is not None]
-        avg_food = np.mean(food_steps) if food_steps else float('inf')
-
+        d = results[cond]
+        new_z = np.mean([x["new_zone_pct"] for x in d])
+        old_z = np.mean([x["old_zone_pct"] for x in d])
+        food = np.mean([x["food_100"] for x in d])
+        ff = [x["first_food"] for x in d if x["first_food"] is not None]
+        ff_avg = np.mean(ff) if ff else float('inf')
         print(f"\n  {cond.upper()}:")
-        print(f"    Toward new zone: {toward_new:.1%}")
-        print(f"    Toward old zone: {toward_old:.1%}")
-        print(f"    In new zone:     {in_new:.1%}")
-        print(f"    In old zone:     {in_old:.1%}")
-        print(f"    First food:      {avg_food:.0f} steps ({len(food_steps)}/{len(data)} found)")
+        print(f"    New zone: {new_z:.1%}")
+        print(f"    Old zone: {old_z:.1%}")
+        print(f"    Food(100): {food:.1f}")
+        print(f"    First food: {ff_avg:.0f} steps")
 
-    # === Comparison vs no_replay baseline ===
-    print(f"\n{'='*70}")
-    print("  COMPARISON vs NO_REPLAY baseline")
-    print(f"{'='*70}")
+    reval_new = np.mean([x["new_zone_pct"] for x in results["revaluation"]])
+    no_new = np.mean([x["new_zone_pct"] for x in results["no_replay"]])
+    diff = (reval_new - no_new) * 100
 
-    baseline_new = np.mean([d["toward_new_pct"] for d in all_results["no_replay"]])
-    for cond in ["old_replay", "new_replay", "mixed_replay"]:
-        data = all_results[cond]
-        toward_new = np.mean([d["toward_new_pct"] for d in data])
-        diff = (toward_new - baseline_new) * 100
-        print(f"  {cond}: toward_new {diff:+.1f}pp vs no_replay")
-
-    # Verdict
-    new_vs_no = np.mean([d["toward_new_pct"] for d in all_results["new_replay"]]) - baseline_new
-    old_vs_no = np.mean([d["toward_new_pct"] for d in all_results["old_replay"]]) - baseline_new
-
-    print(f"\n  VERDICT:")
-    if new_vs_no > 0.05:
-        print(f"    ✓ New replay helps (+{new_vs_no*100:.1f}pp toward new zone)")
-    else:
-        print(f"    ✗ New replay doesn't help ({new_vs_no*100:+.1f}pp)")
-    if old_vs_no < -0.02:
-        print(f"    ✓ Old replay hurts ({old_vs_no*100:+.1f}pp — maladaptive consolidation confirmed)")
-    else:
-        print(f"    — Old replay neutral ({old_vs_no*100:+.1f}pp)")
-    print(f"{'='*70}")
-
-    return all_results
+    print(f"\n  DIFF: revaluation - no_replay = {diff:+.1f}pp toward new zone")
+    print(f"  VERDICT: {'REVALUATION HELPS' if diff > 5 else 'NOT CONCLUSIVE' if diff > 0 else 'NO EFFECT'}")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="M3 Detour Test v3")
-    parser.add_argument("--learning-episodes", type=int, default=10)
-    parser.add_argument("--seeds", type=int, default=10)
-    args = parser.parse_args()
-
-    results = run_detour_test(
-        learning_eps=args.learning_episodes,
-        n_seeds=args.seeds
-    )
+    main()
