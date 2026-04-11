@@ -4,22 +4,22 @@
 
 ---
 
-## 현재 상태: M3 Replay-Driven Replanning 진행 중 (28,015 뉴런)
+## 현재 상태: M3 완료, 다음 방향 설정 중 (28,035 뉴런)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  M3: Replay-Driven Replanning 3/4 단계 완료 (2026-04-11)        ║
+║  M3 Replay-Driven Replanning ✓ 완료 (2026-04-11)                ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  ✓ 환경: latent-state switch (장애물+Pain zone 이동)            ║
-║  ✓ ACh uncertainty gate: surprise→eta mod (+5pp, pred -20pp)   ║
-║  ✓ Surprise-modulated replay: 동적 환경 70% 생존               ║
-║  → Detour test v3: old replay 해악 확인, new replay 디버깅 중   ║
-║    (env.reset()이 foods 초기화 → new buffer 오염 가능)          ║
+║  ✓ 환경: latent-state switch                                    ║
+║  ✓ ACh uncertainty gate (+5pp, predator -20pp)                  ║
+║  ✓ Surprise-modulated replay (70% 생존)                         ║
+║  ✓ Revaluation SWR (place transition + reverse value backup)    ║
+║  ✓ Detour test PASS (+14.7pp new zone, 14x food)               ║
 ║                                                               ║
-║  하네스 프로세스 도입 완료:                                      ║
-║    Sprint Contract → verify_regression.py → GPT Review          ║
+║  하네스 프로세스: Sprint Contract→Evaluator→GPT Review           ║
+║  스킬: /search-papers, /youtube-analyze, /ask-gpt              ║
 ║                                                               ║
-║  뉴런: 28,015 | 학습 시냅스: ~57 | 생존: 70% (동적 환경)       ║
+║  뉴런: 28,035 | 생존: 70% (동적 환경) | Selectivity: 0.74      ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
@@ -100,7 +100,8 @@
 | **M3-env** | **Latent-state switch (장애물+Pain zone 이동)** | **0** | **✓ 완료** | 60% |
 | **M3-ACh** | **ACh uncertainty gate (surprise→eta mod)** | **+30** | **✓ 완료** | 65% |
 | **M3-SWR** | **Surprise-modulated replay (동적 replay 횟수)** | **0** | **✓ 완료** | **70%** |
-| **M3-test** | **Detour test v3 (4조건 replay content)** | **0** | **진행 중** | old 해악 확인 |
+| **M3-reval** | **Revaluation SWR (place transition + reverse backup)** | **+20** | **✓ 완료** | **70%** |
+| **M3-test** | **Detour test v4 (revaluation vs no replay)** | **0** | **✓ PASS** | +14.7pp new zone |
 
 ### Phase 12-14 수정 이력
 
@@ -745,7 +746,7 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 |----------|------|------|
 | **M1** | 10K 뉴런, 시각 개념 형성 | **✓ 완료** (Phase 10, 80% 생존) |
 | **M2** | 28K 뉴런, 개념 형성 C0-C5 + 품질 개선 | **✓ 완료** (65-75% 생존) |
-| M3 | 28K+ 뉴런, Replay-driven Replanning | 계획 (다음 목표) |
+| **M3** | **28K+ 뉴런, Replay-driven Replanning** | **✓ 완료** (detour +14.7pp) |
 | M4 | 50K+ 뉴런, Active Dendrites + 다중 과제 | 계획 |
 
 ---
@@ -776,4 +777,4 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 
 ---
 
-*최종 업데이트: 2026-04-11 (M3 3/4 완료, 28,015 뉴런, 동적 환경 70% 생존, detour test 디버깅 중)*
+*최종 업데이트: 2026-04-11 (M3 완료, 28,035 뉴런, revaluation SWR detour PASS, 동적 환경 70% 생존)*

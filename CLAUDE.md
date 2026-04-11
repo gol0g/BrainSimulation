@@ -353,25 +353,19 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: M3 Replay-Driven Replanning 진행 중 (28,015 뉴런, 800×800 맵)
+### 현재 상태: M3 완료, 다음 방향 설정 중 (28,035 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  M3 Replay-Driven Replanning 3/4 완료 (2026-04-11)              ║
+║  M3 Replay-Driven Replanning ✓ 완료 (2026-04-11)                ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  C0-C5 + C3 완료, Q1-Q3 품질 개선 완료                          ║
+║  C0-C5 + C3 + Q1-Q3 + M3 전부 완료                              ║
+║  Revaluation SWR: place transition + reverse value backup       ║
+║  Detour PASS: +14.7pp new zone, 14x food (replanning 작동)     ║
+║  동적 환경 70% 생존, 28,035 뉴런                                ║
 ║                                                               ║
-║  M3 환경: latent-state switch (obstacle+pain zone 이동)         ║
-║  M3 ACh: uncertainty gate (surprise→eta mod, predator -20pp)   ║
-║  M3 SWR: surprise-modulated replay (동적 환경 70% 생존)        ║
-║  M3 Detour: old replay 해악 확인, new replay 디버깅 중          ║
-║                                                               ║
-║  하네스 프로세스 도입: Sprint Contract→Evaluator→GPT Review     ║
+║  하네스 프로세스: Sprint Contract→Evaluator→GPT Review           ║
 ║  스킬: /search-papers, /youtube-analyze, /ask-gpt              ║
-║                                                               ║
-║  뉴런 수:       28,015                                          ║
-║  학습 시냅스:   ~57 (포화 해소, 동적 범위 확보)                  ║
-║  생존율:        70% (동적 환경), Selectivity 0.74               ║
 ╚═══════════════════════════════════════════════════════════════╝
 ```
 
