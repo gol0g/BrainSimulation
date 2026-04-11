@@ -304,7 +304,7 @@ class ForagerBrainConfig:
     place_transition_enabled: bool = True
     place_transition_eta: float = 0.01      # PC_t→PC_t+1 STDP 학습률
     place_transition_w_max: float = 5.0
-    place_transition_init_w: float = 0.1
+    place_transition_init_w: float = 0.01     # 0.1→0.01: recurrent excitation 감소
     n_place_value: int = 20                 # Value population (offline value backup)
     place_to_value_eta: float = 0.005       # DA-gated 3-factor
     place_to_value_w_max: float = 3.0
