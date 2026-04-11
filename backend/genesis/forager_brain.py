@@ -300,6 +300,16 @@ class ForagerBrainConfig:
     swr_gate_to_inh_weight: float = 8.0     # SWR gate → replay_inh 가중치
     place_to_ca3_weight: float = 3.0        # Place → CA3 (static)
     place_to_ca3_sparsity: float = 0.05     # Place → CA3 연결 확률
+    # M3 Revaluation: Place→Place transition + Value backup
+    place_transition_enabled: bool = True
+    place_transition_eta: float = 0.01      # PC_t→PC_t+1 STDP 학습률
+    place_transition_w_max: float = 5.0
+    place_transition_init_w: float = 0.1
+    n_place_value: int = 20                 # Value population (offline value backup)
+    place_to_value_eta: float = 0.005       # DA-gated 3-factor
+    place_to_value_w_max: float = 3.0
+    value_to_d1_weight: float = 1.0         # Value → BG gentle bias
+    reverse_replay_steps: int = 5           # reverse replay chain length
     ca3_to_food_memory_weight: float = 2.0  # CA3 → Food Memory (static, 약함)
 
     # Phase L12: Global Workspace (Attention — Dehaene & Changeux 2011)
@@ -1384,6 +1394,8 @@ class ForagerBrainConfig:
             base += self.n_curiosity_gate + self.n_curiosity_inh  # 20 + 10 = 30
         if self.uncertainty_gate_enabled:
             base += self.n_surprise_accum + self.n_stability_detector  # 20 + 10 = 30
+        if self.place_transition_enabled and self.hippocampus_enabled:
+            base += self.n_place_value  # 20
         return base
 
 
@@ -1496,6 +1508,10 @@ class ForagerBrain:
         self.last_surprise_rate = 0.0   # surprise accumulator rate
         self.last_stability_rate = 0.0  # stability detector rate
         self.uncertainty_eta_mod = 1.0  # learning rate multiplier (1.0=normal, >1=fast learn)
+
+        # M3: Place transition + revaluation state
+        self.prev_place_activation = None  # 이전 스텝의 place cell 활성화
+        self.transition_buffer = []        # [(PC_t indices, PC_t+1 indices, reward)]
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -1970,6 +1986,11 @@ class ForagerBrain:
         if (self.config.uncertainty_gate_enabled
                 and self.config.metacognition_enabled):
             self._build_uncertainty_gate()
+
+        # M3: Place transition + Value population (revaluation SWR)
+        if (self.config.place_transition_enabled
+                and self.config.hippocampus_enabled):
+            self._build_place_transition_circuit()
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
@@ -9041,6 +9062,60 @@ class ForagerBrain:
               f"Meta_Uncertainty({cfg.meta_uncertainty_to_surprise_weight})")
         print(f"    Output: surprise_rate → eta_mod (no Motor connection)")
 
+    def _build_place_transition_circuit(self):
+        """M3: Place→Place transition graph + Value population
+
+        생물학적 근거: Hippocampal place cell sequence replay with
+        backward value propagation (Mattar & Daw 2018, Shin et al. 2022).
+
+        1. W_pp: place→place recurrent STDP (spatial topology)
+        2. Value population: offline value backup target
+        3. Value→D1: gentle BG bias from learned spatial value
+
+        0 new learning synapses at build time — W_pp는 process()에서 수동 업데이트,
+        Value는 reverse replay에서 업데이트.
+        """
+        print("  Building M3: Place Transition + Value circuit...")
+
+        cfg = self.config
+        n_place = cfg.n_place_cells
+        lif_init = {"V": -65.0, "RefracTime": 0.0}
+
+        # Place→Place transition synapse (DENSE, 수동 학습)
+        self.place_transition = self.model.add_synapse_population(
+            "place_transition", "DENSE", self.place_cells, self.place_cells,
+            init_weight_update("StaticPulse", {},
+                {"g": init_var("Constant", {"constant": cfg.place_transition_init_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        # Value population
+        value_params = {
+            "C": 30.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        self.place_value = self.model.add_neuron_population(
+            "place_value", cfg.n_place_value, "LIF", value_params, lif_init)
+
+        # Place → Value (DENSE, reverse replay에서 수동 업데이트)
+        self.place_to_value = self.model.add_synapse_population(
+            "place_to_value", "DENSE", self.place_cells, self.place_value,
+            init_weight_update("StaticPulse", {},
+                {"g": init_var("Constant", {"constant": 0.1})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+
+        # Value → D1 L/R (gentle approach bias from spatial value)
+        self._create_static_synapse(
+            "value_to_d1_l", self.place_value, self.d1_left,
+            cfg.value_to_d1_weight, sparsity=0.05)
+        self._create_static_synapse(
+            "value_to_d1_r", self.place_value, self.d1_right,
+            cfg.value_to_d1_weight, sparsity=0.05)
+
+        print(f"    Place→Place transition: DENSE {n_place}x{n_place} (STDP online)")
+        print(f"    Value population: {cfg.n_place_value} neurons")
+        print(f"    Value→D1: {cfg.value_to_d1_weight} (gentle)")
+        print(f"    Reverse replay: {cfg.reverse_replay_steps} steps backward")
+
     def update_prediction_error_rstdp(self, reward_type: str):
         """Phase L6: 예측 오차 R-STDP 가중치 업데이트
 
@@ -9322,6 +9397,60 @@ class ForagerBrain:
                 self.learn_food_location(food_position=(pos_x, pos_y))
             replayed += 1
 
+        # M3: Reverse replay — value backup through transition graph
+        reverse_replayed = 0
+        if (self.config.place_transition_enabled
+                and hasattr(self, 'place_transition')
+                and len(self.transition_buffer) > 0):
+            self.place_transition.vars["g"].pull_from_device()
+            w_pp = self.place_transition.vars["g"].view.copy()
+            n_pc = self.config.n_place_cells
+            w_pp_2d = w_pp.reshape(n_pc, n_pc)
+
+            self.place_to_value.vars["g"].pull_from_device()
+            w_pv = self.place_to_value.vars["g"].view.copy()
+            n_val = self.config.n_place_value
+            w_pv_2d = w_pv.reshape(n_pc, n_val)
+
+            eta_pv = self.config.place_to_value_eta
+            w_max_pv = self.config.place_to_value_w_max
+            rev_steps = self.config.reverse_replay_steps
+
+            # 최근 rewarded transitions에서 역방향 전파
+            recent_rewards = self.transition_buffer[-5:]
+            for prev_cells, curr_cells, reward in recent_rewards:
+                if reward <= 0 or not curr_cells:
+                    continue
+                # Start from rewarded cells, go backward through W_pp
+                active_set = set(curr_cells[:10])  # 시작: rewarded place cells
+                for step in range(rev_steps):
+                    # 현재 active set의 value 강화
+                    discount = 0.9 ** step  # temporal discount
+                    for cell_idx in active_set:
+                        if cell_idx < n_pc:
+                            w_pv_2d[cell_idx, :] += eta_pv * discount * reward
+                    # W_pp 역방향: 어떤 cells이 active_set으로 전이하는가?
+                    predecessors = set()
+                    for target in active_set:
+                        if target < n_pc:
+                            incoming = w_pp_2d[:, target]
+                            strong = np.where(incoming > 0.5)[0]
+                            predecessors.update(strong[:5].tolist())
+                    if not predecessors:
+                        break
+                    active_set = predecessors
+                reverse_replayed += 1
+
+            # Budget normalization on PC→Value
+            for j in range(n_val):
+                col_sum = np.sum(np.maximum(w_pv_2d[:, j], 0.0))
+                budget = w_max_pv * n_pc * 0.1
+                if col_sum > budget:
+                    w_pv_2d[:, j] *= budget / col_sum
+            np.clip(w_pv_2d, 0.0, w_max_pv, out=w_pv_2d)
+            self.place_to_value.vars["g"].view[:] = w_pv_2d.reshape(-1)
+            self.place_to_value.vars["g"].push_to_device()
+
         # 리플레이 후 정리
         self.swr_gate.vars["I_input"].view[:] = 0.0
         self.swr_gate.vars["I_input"].push_to_device()
@@ -9333,6 +9462,7 @@ class ForagerBrain:
 
         return {
             "replayed_count": replayed,
+            "reverse_replayed": reverse_replayed,
             "buffer_size": len(self.experience_buffer),
             "avg_w_before": avg_w_before,
             "avg_w_after": avg_w_after,
@@ -10312,6 +10442,49 @@ class ForagerBrain:
             food_l = np.mean(observation.get("food_rays_left", np.zeros(8)))
             food_r = np.mean(observation.get("food_rays_right", np.zeros(8)))
             self._pred_food_teacher_active = (food_l > 0.15 or food_r > 0.15)
+
+        # M3: Place→Place transition learning (online STDP)
+        if self.config.place_transition_enabled and hasattr(self, 'place_transition'):
+            current_place = self.last_active_place_cells  # shape: (n_place_cells,)
+            if self.prev_place_activation is not None and len(current_place) == self.config.n_place_cells:
+                # STDP: active_t → active_t+1 연결 강화
+                prev = self.prev_place_activation
+                prev_active = np.where(prev > 0.1)[0]  # 이전 활성 place cells
+                curr_active = np.where(current_place > 0.1)[0]  # 현재 활성 place cells
+                if len(prev_active) > 0 and len(curr_active) > 0:
+                    # 매 50스텝마다 배치 업데이트 (GPU 전송 최소화)
+                    if not hasattr(self, '_transition_update_counter'):
+                        self._transition_update_counter = 0
+                        self._transition_delta = np.zeros((self.config.n_place_cells, self.config.n_place_cells))
+                    # 누적
+                    eta = self.config.place_transition_eta
+                    for pi in prev_active[:5]:  # 상위 5개만 (비용 제한)
+                        for ci in curr_active[:5]:
+                            if pi != ci:
+                                self._transition_delta[pi, ci] += eta
+                    self._transition_update_counter += 1
+                    if self._transition_update_counter >= 50:
+                        self.place_transition.vars["g"].pull_from_device()
+                        w = self.place_transition.vars["g"].view.copy()
+                        n = self.config.n_place_cells
+                        w_2d = w.reshape(n, n)
+                        w_2d += self._transition_delta
+                        # LTD: weight-dependent decay
+                        w_2d -= 0.001 * w_2d
+                        np.clip(w_2d, 0.0, self.config.place_transition_w_max, out=w_2d)
+                        self.place_transition.vars["g"].view[:] = w_2d.reshape(-1)
+                        self.place_transition.vars["g"].push_to_device()
+                        self._transition_delta[:] = 0.0
+                        self._transition_update_counter = 0
+
+                # Transition buffer 기록 (음식 먹을 때)
+                food_eaten = observation.get("food_eaten_this_step", False)
+                if food_eaten or (food_l > 0.3 or food_r > 0.3):
+                    self.transition_buffer.append((prev_active.tolist(), curr_active.tolist(), 1.0))
+                    if len(self.transition_buffer) > 100:
+                        self.transition_buffer = self.transition_buffer[-100:]
+
+            self.prev_place_activation = current_place.copy() if len(current_place) == self.config.n_place_cells else None
 
         # Phase C5: Curiosity rate
         if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
