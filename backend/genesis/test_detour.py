@@ -146,7 +146,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--learning-episodes", type=int, default=10)
+    parser.add_argument("--single-run", type=str, default=None,
+                       help="Run single seed:condition (e.g. '0:revaluation') for subprocess isolation")
     args = parser.parse_args()
+
+    # Single-run mode: 1 seed × 1 condition, print JSON result, exit
+    # Used by shell script to avoid GPU memory leak across builds
+    if args.single_run:
+        parts = args.single_run.split(":")
+        seed, cond = int(parts[0]), parts[1]
+        import json
+        r = run_single_seed(seed, args.learning_episodes, cond)
+        print(f"RESULT_JSON:{json.dumps(r)}")
+        return
 
     conditions = ["revaluation", "consolidation_only", "no_replay"]
     results = {c: [] for c in conditions}

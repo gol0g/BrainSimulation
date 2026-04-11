@@ -11928,15 +11928,17 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 print(f"  [SAVE] Weights saved: avg={stats['avg_weight']:.2f}, "
                       f"max={stats['max_weight']:.2f}, strong={stats['n_strong_connections']}")
 
-        # Phase L11 + M3: SWR Replay (surprise-modulated replay count)
+        # Phase L11 + M3: SWR Replay (surprise-GATED: suppress when uncertain)
         if brain_config.swr_replay_enabled and brain_config.hippocampus_enabled:
-            # M3: surprise가 높으면 replay 횟수 증가 (환경 변화 후 더 많은 통합)
+            # M3 수정: surprise 높으면 replay 억제 (stale memory 강화 방지)
+            # 생물학적 근거: ACh가 높으면 hippocampal replay 억제, 안정 시에만 replay
             base_replay = brain_config.swr_replay_count  # 기본 5회
-            surprise_bonus = 0
+            surprise_gate = 1.0  # 1.0 = full replay, 0.0 = no replay
             if brain_config.uncertainty_gate_enabled:
                 surprise = brain.last_surprise_rate
-                surprise_bonus = int(surprise * 50)  # 0.1 rate → +5회, 0.2 → +10회
-            total_replay = min(base_replay + surprise_bonus, 15)  # 최대 15회
+                # surprise > 0.1이면 replay 억제 (세계가 바뀌었으니 옛 기억 강화 금지)
+                surprise_gate = max(0.0, 1.0 - surprise * 5.0)  # 0.2 rate → 0% replay
+            total_replay = max(0, int(base_replay * surprise_gate))
             old_count = brain_config.swr_replay_count
             brain_config.swr_replay_count = total_replay
 
@@ -11946,7 +11948,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             if replay_info and replay_info["replayed_count"] > 0:
                 print(f"  [SWR] Replayed {replay_info['replayed_count']} experiences "
                       f"(buffer: {replay_info['buffer_size']}, "
-                      f"surprise_bonus: +{surprise_bonus})")
+                      f"surprise_gate: {surprise_gate:.0%})")
                 print(f"  [SWR] Hebbian w: {replay_info['avg_w_before']:.3f} → "
                       f"{replay_info['avg_w_after']:.3f}")
 
