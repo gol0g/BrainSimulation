@@ -9081,12 +9081,11 @@ class ForagerBrain:
         n_place = cfg.n_place_cells
         lif_init = {"V": -65.0, "RefracTime": 0.0}
 
-        # Place→Place transition synapse (DENSE, 수동 학습)
-        self.place_transition = self.model.add_synapse_population(
-            "place_transition", "DENSE", self.place_cells, self.place_cells,
-            init_weight_update("StaticPulse", {},
-                {"g": init_var("Constant", {"constant": cfg.place_transition_init_w})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        # Place→Place transition — CPU numpy only (GPU 메모리 절약)
+        # SNN 시뮬레이션에 사용 안 함 (place cells는 I_input으로 구동)
+        # reverse replay에서 역방향 탐색용으로만 사용
+        n_pc = cfg.n_place_cells
+        self.w_pp = np.zeros((n_pc, n_pc), dtype=np.float32)  # CPU only
 
         # Value population
         value_params = {
@@ -9400,12 +9399,10 @@ class ForagerBrain:
         # M3: Reverse replay — value backup through transition graph
         reverse_replayed = 0
         if (self.config.place_transition_enabled
-                and hasattr(self, 'place_transition')
+                and hasattr(self, 'w_pp')
                 and len(self.transition_buffer) > 0):
-            self.place_transition.vars["g"].pull_from_device()
-            w_pp = self.place_transition.vars["g"].view.copy()
             n_pc = self.config.n_place_cells
-            w_pp_2d = w_pp.reshape(n_pc, n_pc)
+            w_pp_2d = self.w_pp  # CPU numpy array, no GPU pull needed
 
             self.place_to_value.vars["g"].pull_from_device()
             w_pv = self.place_to_value.vars["g"].view.copy()
@@ -9418,6 +9415,10 @@ class ForagerBrain:
 
             # 최근 rewarded transitions에서 역방향 전파
             recent_rewards = self.transition_buffer[-5:]
+            total_preds_found = 0
+            total_value_updates = 0
+            max_wpp = float(np.max(w_pp_2d)) if w_pp_2d.size > 0 else 0.0
+
             for prev_cells, curr_cells, reward in recent_rewards:
                 if reward <= 0 or not curr_cells:
                     continue
@@ -9425,21 +9426,36 @@ class ForagerBrain:
                 active_set = set(curr_cells[:10])  # 시작: rewarded place cells
                 for step in range(rev_steps):
                     # 현재 active set의 value 강화
-                    discount = 0.9 ** step  # temporal discount
+                    discount = 0.9 ** step
                     for cell_idx in active_set:
                         if cell_idx < n_pc:
                             w_pv_2d[cell_idx, :] += eta_pv * discount * reward
-                    # W_pp 역방향: 어떤 cells이 active_set으로 전이하는가?
+                            total_value_updates += 1
+                    # W_pp 역방향: top-k adaptive predecessor selection
                     predecessors = set()
                     for target in active_set:
                         if target < n_pc:
                             incoming = w_pp_2d[:, target]
-                            strong = np.where(incoming > 0.5)[0]
-                            predecessors.update(strong[:5].tolist())
+                            mx = incoming.max()
+                            if mx < 0.02:  # transition graph가 아직 안 배웠음
+                                continue
+                            # Top-5 predecessors (adaptive threshold)
+                            top_k = min(5, n_pc)
+                            cand = np.argpartition(incoming, -top_k)[-top_k:]
+                            threshold = max(0.02, 0.3 * mx)
+                            preds = [int(p) for p in cand if incoming[p] >= threshold and p != target]
+                            predecessors.update(preds)
+                            total_preds_found += len(preds)
                     if not predecessors:
                         break
                     active_set = predecessors
                 reverse_replayed += 1
+
+            # 디버그 로그
+            if reverse_replayed > 0 or len(self.transition_buffer) > 0:
+                print(f"    [REVERSE] buffer={len(self.transition_buffer)}, "
+                      f"max_wpp={max_wpp:.4f}, preds={total_preds_found}, "
+                      f"updates={total_value_updates}")
 
             # Budget normalization on PC→Value
             for j in range(n_val):
@@ -10444,7 +10460,7 @@ class ForagerBrain:
             self._pred_food_teacher_active = (food_l > 0.15 or food_r > 0.15)
 
         # M3: Place→Place transition learning (online STDP)
-        if self.config.place_transition_enabled and hasattr(self, 'place_transition'):
+        if self.config.place_transition_enabled and hasattr(self, 'w_pp'):
             current_place = self.last_active_place_cells  # shape: (n_place_cells,)
             if self.prev_place_activation is not None and len(current_place) == self.config.n_place_cells:
                 # STDP: active_t → active_t+1 연결 강화
@@ -10464,22 +10480,17 @@ class ForagerBrain:
                                 self._transition_delta[pi, ci] += eta
                     self._transition_update_counter += 1
                     if self._transition_update_counter >= 50:
-                        self.place_transition.vars["g"].pull_from_device()
-                        w = self.place_transition.vars["g"].view.copy()
-                        n = self.config.n_place_cells
-                        w_2d = w.reshape(n, n)
-                        w_2d += self._transition_delta
-                        # LTD: weight-dependent decay
-                        w_2d -= 0.001 * w_2d
-                        np.clip(w_2d, 0.0, self.config.place_transition_w_max, out=w_2d)
-                        self.place_transition.vars["g"].view[:] = w_2d.reshape(-1)
-                        self.place_transition.vars["g"].push_to_device()
+                        # CPU only — no GPU pull/push needed
+                        self.w_pp += self._transition_delta
+                        self.w_pp -= 0.001 * self.w_pp  # LTD
+                        np.clip(self.w_pp, 0.0, self.config.place_transition_w_max, out=self.w_pp)
                         self._transition_delta[:] = 0.0
                         self._transition_update_counter = 0
 
-                # Transition buffer 기록 (음식 먹을 때)
-                food_eaten = observation.get("food_eaten_this_step", False)
-                if food_eaten or (food_l > 0.3 or food_r > 0.3):
+                # Transition buffer 기록 (음식이 보일 때)
+                food_vis_l = np.mean(observation.get("food_rays_left", np.zeros(8)))
+                food_vis_r = np.mean(observation.get("food_rays_right", np.zeros(8)))
+                if food_vis_l > 0.2 or food_vis_r > 0.2:
                     self.transition_buffer.append((prev_active.tolist(), curr_active.tolist(), 1.0))
                     if len(self.transition_buffer) > 100:
                         self.transition_buffer = self.transition_buffer[-100:]
