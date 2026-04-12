@@ -175,6 +175,13 @@ class ForagerConfig:
     # 반전 시 good food(초록)이 bad가 되고, bad food(보라)이 good이 됨
     # 에이전트는 시각적으로 구분 불가 — 맛(보상)으로만 학습해야 함
 
+    # === M4: Context-Dependent Rules (위치 의존 음식 규칙) ===
+    context_rules_enabled: bool = False        # 기본 비활성 (극한 테스트용)
+    # Zone A (맵 왼쪽 절반): good food = type 0 (정상)
+    # Zone B (맵 오른쪽 절반): good food = type 1 (반전)
+    # 에이전트는 같은 시각 자극이지만 위치에 따라 다른 행동을 해야 함
+    # 이건 WM + PFC + hippocampal context가 필수인 과제
+
     # === Environment E1: Obstacles (정적 장애물) ===
     obstacles_enabled: bool = True
     n_obstacles: int = 1
@@ -766,12 +773,17 @@ class ForagerGym:
                     if dist < self.config.pain_zone_radius + self.config.danger_range:
                         danger_bonus = 1.0 + self.config.danger_food_bonus
                         break
-            if food_type == 0:  # 좋은 음식
+            # M4: Context-dependent rules — 오른쪽 절반에서 good↔bad 의미 반전
+            effective_type = food_type
+            if self.config.context_rules_enabled and self.agent_x > self.config.width / 2:
+                effective_type = 1 - food_type  # Zone B: 의미 반전
+
+            if effective_type == 0:  # 좋은 음식 (context에 따라 결정)
                 self.energy = min(self.config.energy_max,
                                 self.energy + self.config.food_value * danger_bonus)
                 reward += self.config.reward_food
                 self.good_food_eaten += 1
-            elif food_type == 1:  # 나쁜 음식
+            elif effective_type == 1:  # 나쁜 음식 (context에 따라 결정)
                 self.energy = max(0, self.energy + self.config.bad_food_energy)
                 self.bad_food_eaten += 1
 
