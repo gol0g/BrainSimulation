@@ -14,7 +14,7 @@
 ║  ✓ ACh uncertainty gate (+5pp, predator -20pp)                  ║
 ║  ✓ Surprise-modulated replay (70% 생존)                         ║
 ║  ✓ Revaluation SWR (place transition + reverse value backup)    ║
-║  → Detour test: replay maladaptive after contingency change      ║
+║  → Detour: replay maladaptive | Context rules: selectivity 0.51  ║
 ║                                                               ║
 ║  하네스 프로세스: Sprint Contract→Evaluator→GPT Review           ║
 ║  스킬: /search-papers, /youtube-analyze, /ask-gpt              ║
@@ -747,7 +747,8 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 | **M1** | 10K 뉴런, 시각 개념 형성 | **✓ 완료** (Phase 10, 80% 생존) |
 | **M2** | 28K 뉴런, 개념 형성 C0-C5 + 품질 개선 | **✓ 완료** (65-75% 생존) |
 | **M3** | **28K+ 뉴런, Replay-driven Replanning** | **부분** (env+ACh✓, detour 미증명) |
-| M4 | 50K+ 뉴런, Active Dendrites + 다중 과제 | 계획 |
+| **M4-test** | **환경 스트레스 → context-dependent에서 실패 (0.51)** | **✓ 한계 발견** |
+| M4 | Active Dendrites (context conjunction 표상) | 다음 목표 |
 
 ---
 
