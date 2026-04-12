@@ -1266,9 +1266,9 @@ class ForagerBrainConfig:
     context_gate_enabled: bool = True
     n_ctx_a: int = 4                        # Zone A context neurons
     n_ctx_b: int = 4                        # Zone B context neurons
-    ctx_place_weight: float = 3.0           # place → ctx (biased initialization)
-    ctx_wta_weight: float = -8.0            # CtxA ↔ CtxB mutual inhibition
-    ctx_recurrent_weight: float = 2.0       # self-excitation (winner stability)
+    ctx_place_weight: float = 1.0            # place → ctx (약하게 — WTA 경쟁 여지)
+    ctx_wta_weight: float = -15.0           # CtxA ↔ CtxB strong WTA
+    ctx_recurrent_weight: float = 3.0       # self-excitation (winner stability)
 
     # === M3: ACh Uncertainty Gate (환경 변화 감지 → 학습률 조절) ===
     uncertainty_gate_enabled: bool = True
@@ -2001,6 +2001,11 @@ class ForagerBrain:
                 and self.config.metacognition_enabled):
             self._build_uncertainty_gate()
 
+        # M4: Context Gate (zone-dependent value learning)
+        if (self.config.context_gate_enabled
+                and self.config.hippocampus_enabled):
+            self._build_context_gate_circuit()
+
         # M3: Place transition + Value population (revaluation SWR)
         if (self.config.place_transition_enabled
                 and self.config.hippocampus_enabled):
@@ -2272,6 +2277,11 @@ class ForagerBrain:
         # Phase C5: Curiosity
         if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
             self.curiosity_gate.spike_recording_enabled = True
+
+        # M4: Context Gate
+        if self.config.context_gate_enabled and hasattr(self, 'ctx_a'):
+            self.ctx_a.spike_recording_enabled = True
+            self.ctx_b.spike_recording_enabled = True
 
         # M3: Uncertainty Gate
         if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
@@ -9076,6 +9086,59 @@ class ForagerBrain:
               f"Meta_Uncertainty({cfg.meta_uncertainty_to_surprise_weight})")
         print(f"    Output: surprise_rate → eta_mod (no Motor connection)")
 
+    def _build_context_gate_circuit(self):
+        """M4: Context Gate — zone-dependent value learning
+
+        CtxA(4 LIF): 맵 왼쪽에서 활성 (place cells 왼쪽 절반 편향)
+        CtxB(4 LIF): 맵 오른쪽에서 활성
+        WTA 경쟁: 한 번에 하나만 활성
+        Output: ctx_a_rate / ctx_b_rate → R-STDP eligibility gating
+        """
+        print("  Building M4: Context Gate circuit...")
+        cfg = self.config
+        n_pc = cfg.n_place_cells  # 400 (20x20 grid)
+
+        ctx_params = {
+            "C": 100.0, "TauM": 25.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }  # 높은 C → 입력 차이에 민감 (포화 방지)
+        lif_init = {"V": -65.0, "RefracTime": 0.0}
+
+        # SensoryLIF for direct I_input injection (place cell 분포가 아닌 위치 좌표 기반)
+        sensory_params = {
+            "C": 5.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "TauRefrac": 2.0
+        }
+        sensory_init = {"V": -65.0, "RefracTime": 0.0, "I_input": 0.0}
+
+        self.ctx_a = self.model.add_neuron_population(
+            "ctx_a", cfg.n_ctx_a, sensory_lif_model, sensory_params, sensory_init)
+        self.ctx_b = self.model.add_neuron_population(
+            "ctx_b", cfg.n_ctx_b, sensory_lif_model, sensory_params, sensory_init)
+        # I_input은 process()에서 에이전트 x좌표 기반으로 설정
+        # 왼쪽이면 CtxA에 전류, 오른쪽이면 CtxB에 전류
+        # 이건 place cells가 위치 기반으로 I_input 받는 것과 동일한 원리
+
+        # WTA: CtxA ↔ CtxB mutual inhibition
+        self._create_static_synapse(
+            "ctx_a_to_b_inh", self.ctx_a, self.ctx_b,
+            cfg.ctx_wta_weight, sparsity=0.5)
+        self._create_static_synapse(
+            "ctx_b_to_a_inh", self.ctx_b, self.ctx_a,
+            cfg.ctx_wta_weight, sparsity=0.5)
+
+        # Self-excitation (winner stability)
+        self._create_static_synapse(
+            "ctx_a_recurrent", self.ctx_a, self.ctx_a,
+            cfg.ctx_recurrent_weight, sparsity=0.5)
+        self._create_static_synapse(
+            "ctx_b_recurrent", self.ctx_b, self.ctx_b,
+            cfg.ctx_recurrent_weight, sparsity=0.5)
+
+        print(f"    CtxA: {cfg.n_ctx_a} (SensoryLIF), CtxB: {cfg.n_ctx_b}")
+        print(f"    WTA: {cfg.ctx_wta_weight}, Recurrent: {cfg.ctx_recurrent_weight}")
+        print(f"    I_input driven by agent x-coordinate (same as place cell principle)")
+
     def _build_place_transition_circuit(self):
         """M3: Place→Place transition graph + Value population
 
@@ -10010,6 +10073,10 @@ class ForagerBrain:
         # Phase C5: Curiosity 스파이크 카운트
         curiosity_spikes = 0
 
+        # M4: Context Gate 스파이크 카운트
+        ctx_a_spikes = 0
+        ctx_b_spikes = 0
+
         # M3: Uncertainty Gate 스파이크 카운트
         surprise_spikes = 0
 
@@ -10104,6 +10171,11 @@ class ForagerBrain:
             # Phase C5: Curiosity spike counting
             if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
                 curiosity_spikes = len(self.curiosity_gate.spike_recording_data[0][0])
+
+            # M4: Context Gate spike counting
+            if self.config.context_gate_enabled and hasattr(self, 'ctx_a'):
+                ctx_a_spikes = len(self.ctx_a.spike_recording_data[0][0])
+                ctx_b_spikes = len(self.ctx_b.spike_recording_data[0][0])
 
             # M3: Uncertainty Gate spike counting
             if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
@@ -10515,6 +10587,21 @@ class ForagerBrain:
         if self.config.curiosity_enabled and hasattr(self, 'curiosity_gate'):
             curiosity_rate = curiosity_spikes / max(self.config.n_curiosity_gate * 10, 1)
             self.last_curiosity_rate = curiosity_rate
+
+        # M4: Context Gate — I_input from agent position + rate computation
+        if self.config.context_gate_enabled and hasattr(self, 'ctx_a'):
+            # position_x (0~1) → zone 판별 → I_input
+            pos_x = observation.get("position_x", 0.5)
+            # 왼쪽(0)이면 CtxA, 오른쪽(1)이면 CtxB
+            left_signal = max(0.0, 1.0 - pos_x * 2.0) * 30.0   # pos<0.5 → 0~30
+            right_signal = max(0.0, pos_x * 2.0 - 1.0) * 30.0  # pos>0.5 → 0~30
+            self.ctx_a.vars["I_input"].view[:] = left_signal
+            self.ctx_a.vars["I_input"].push_to_device()
+            self.ctx_b.vars["I_input"].view[:] = right_signal
+            self.ctx_b.vars["I_input"].push_to_device()
+
+            self.last_ctx_a_rate = ctx_a_spikes / max(self.config.n_ctx_a * 10, 1)
+            self.last_ctx_b_rate = ctx_b_spikes / max(self.config.n_ctx_b * 10, 1)
 
         # M3: Uncertainty Gate rate → eta modulation
         if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
