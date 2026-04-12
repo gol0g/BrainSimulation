@@ -428,6 +428,8 @@ gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 40. **Predictive plasticity가 R-STDP 포화를 근본 해결**: place→pred를 DA-modulated R-STDP에서 teacher-driven predictive STDP + per-post weight budget(12.0)로 교체. at_ceil 100%→0%, std 0→0.02. 핵심: representation learning(self-supervised) ≠ action learning(DA-gated)
 41. **Heterosynaptic budget은 범용 포화 해결책**: FM 10→3, Body→Narr 14→4.2, Agency→Narr 8→2.4. budget=w_max×n_pre×0.3. 생존 +5pp
 42. **Phase 12-20은 dead weight 아님**: 일괄 비활성화 시 60%→30% 생존 (-30pp). Motor 직접 연결 0.0이어도 간접 경로(Hippo/Amygdala/BG)로 중요 기여. GPT 진단 틀림 — 항상 실험 검증 필수
+43. **SWR replay는 contingency change 후 maladaptive**: 환경 변화 후 replay(consolidation이든 revaluation이든) = stale memory 강화 → old zone에 갇힘. 5-seed 검증 확인. 초기 3-seed +14.7pp는 노이즈. **small sample로 결론 내지 말 것**
+44. **GPU DENSE 대형 시냅스는 BSOD 유발**: W_pp 400×400 DENSE on GPU → CUDA error 999 → 드라이버 크래시. CPU numpy로 전환하면 해결. SNN 시뮬레이션에 불필요한 시냅스는 GPU에 올리지 말 것
 
 ---
 

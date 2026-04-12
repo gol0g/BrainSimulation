@@ -169,6 +169,12 @@ class ForagerConfig:
     obstacle_shift_enabled: bool = True   # 장애물 위치 재배치
     pain_zone_shift_enabled: bool = True  # Pain zone 위치 이동
 
+    # === M4: Contingency Reversal (음식 규칙 반전) ===
+    contingency_reversal_enabled: bool = True
+    contingency_reversal_interval: int = 2500  # N스텝마다 good↔bad 반전
+    # 반전 시 good food(초록)이 bad가 되고, bad food(보라)이 good이 됨
+    # 에이전트는 시각적으로 구분 불가 — 맛(보상)으로만 학습해야 함
+
     # === Environment E1: Obstacles (정적 장애물) ===
     obstacles_enabled: bool = True
     n_obstacles: int = 1
@@ -564,6 +570,9 @@ class ForagerGym:
         self.agent_angle = np.random.uniform(0, 2 * np.pi)
         self.energy = self.config.energy_start
 
+        # M4: Contingency reversal state
+        self.food_reversed = False
+
         # Pain Zone 위치 생성 (음식 생성 전에 해야 food가 pain zone을 피함)
         self._generate_pain_zones()
 
@@ -898,7 +907,19 @@ class ForagerGym:
             self._shift_rich_zones()
             self._zone_shifted_this_step = True
 
-        # 5.6 Latent-state switch: 장애물/Pain zone 재배치 (M3 환경)
+        # 5.6 M4: Contingency reversal (good↔bad 음식 반전)
+        if (self.config.contingency_reversal_enabled
+                and self.steps > 0
+                and self.steps % self.config.contingency_reversal_interval == 0):
+            self.food_reversed = not getattr(self, 'food_reversed', False)
+            # food_type 0(good)↔1(bad) 스왑
+            new_foods = []
+            for fx, fy, ft in self.foods:
+                new_ft = 1 - ft  # 0→1, 1→0
+                new_foods.append((fx, fy, new_ft))
+            self.foods = new_foods
+
+        # 5.7 Latent-state switch: 장애물/Pain zone 재배치 (M3 환경)
         self._latent_switched_this_step = False
         if (self.config.latent_switch_enabled and self.steps > 0
                 and self.steps % self.config.latent_switch_interval == 0):
