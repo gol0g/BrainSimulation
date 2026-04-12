@@ -14,7 +14,7 @@
 ║  ✓ ACh uncertainty gate (+5pp, predator -20pp)                  ║
 ║  ✓ Surprise-modulated replay (70% 생존)                         ║
 ║  ✓ Revaluation SWR (place transition + reverse value backup)    ║
-║  ✓ Detour test PASS (+14.7pp new zone, 14x food)               ║
+║  → Detour test: replay maladaptive after contingency change      ║
 ║                                                               ║
 ║  하네스 프로세스: Sprint Contract→Evaluator→GPT Review           ║
 ║  스킬: /search-papers, /youtube-analyze, /ask-gpt              ║
@@ -100,8 +100,8 @@
 | **M3-env** | **Latent-state switch (장애물+Pain zone 이동)** | **0** | **✓ 완료** | 60% |
 | **M3-ACh** | **ACh uncertainty gate (surprise→eta mod)** | **+30** | **✓ 완료** | 65% |
 | **M3-SWR** | **Surprise-modulated replay (동적 replay 횟수)** | **0** | **✓ 완료** | **70%** |
-| **M3-reval** | **Revaluation SWR (place transition + reverse backup)** | **+20** | **✓ 완료** | **70%** |
-| **M3-test** | **Detour test v4 (revaluation vs no replay)** | **0** | **✓ PASS** | +14.7pp new zone |
+| **M3-reval** | **Revaluation SWR (place transition + reverse backup)** | **+20** | **✓ 구현** | 70% (detour 미증명) |
+| **M3-test** | **Detour test (5-seed 검증)** | **0** | **✗ 미증명** | replay 해악 확인 |
 
 ### Phase 12-14 수정 이력
 
@@ -746,7 +746,7 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 |----------|------|------|
 | **M1** | 10K 뉴런, 시각 개념 형성 | **✓ 완료** (Phase 10, 80% 생존) |
 | **M2** | 28K 뉴런, 개념 형성 C0-C5 + 품질 개선 | **✓ 완료** (65-75% 생존) |
-| **M3** | **28K+ 뉴런, Replay-driven Replanning** | **✓ 완료** (detour +14.7pp) |
+| **M3** | **28K+ 뉴런, Replay-driven Replanning** | **부분** (env+ACh✓, detour 미증명) |
 | M4 | 50K+ 뉴런, Active Dendrites + 다중 과제 | 계획 |
 
 ---
