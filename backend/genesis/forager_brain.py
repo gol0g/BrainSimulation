@@ -1262,6 +1262,14 @@ class ForagerBrainConfig:
     curiosity_to_d1_weight: float = 0.8     # 대칭적 approach bias
     curiosity_to_d1_sparsity: float = 0.03
 
+    # === M4: Context-Gated Value Learning (zone-dependent food rules) ===
+    context_gate_enabled: bool = True
+    n_ctx_a: int = 4                        # Zone A context neurons
+    n_ctx_b: int = 4                        # Zone B context neurons
+    ctx_place_weight: float = 3.0           # place → ctx (biased initialization)
+    ctx_wta_weight: float = -8.0            # CtxA ↔ CtxB mutual inhibition
+    ctx_recurrent_weight: float = 2.0       # self-excitation (winner stability)
+
     # === M3: ACh Uncertainty Gate (환경 변화 감지 → 학습률 조절) ===
     uncertainty_gate_enabled: bool = True
     n_surprise_accum: int = 20            # 놀라움 축적 뉴런 (slow integration)
@@ -1396,6 +1404,8 @@ class ForagerBrainConfig:
             base += self.n_surprise_accum + self.n_stability_detector  # 20 + 10 = 30
         if self.place_transition_enabled and self.hippocampus_enabled:
             base += self.n_place_value  # 20
+        if self.context_gate_enabled:
+            base += self.n_ctx_a + self.n_ctx_b  # 4 + 4 = 8
         return base
 
 
@@ -1510,8 +1520,12 @@ class ForagerBrain:
         self.uncertainty_eta_mod = 1.0  # learning rate multiplier (1.0=normal, >1=fast learn)
 
         # M3: Place transition + revaluation state
-        self.prev_place_activation = None  # 이전 스텝의 place cell 활성화
-        self.transition_buffer = []        # [(PC_t indices, PC_t+1 indices, reward)]
+        self.prev_place_activation = None
+        self.transition_buffer = []
+
+        # M4: Context gate state
+        self.last_ctx_a_rate = 0.0
+        self.last_ctx_b_rate = 0.0
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
