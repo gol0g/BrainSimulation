@@ -1526,6 +1526,8 @@ class ForagerBrain:
         # M4: Context gate state
         self.last_ctx_a_rate = 0.0
         self.last_ctx_b_rate = 0.0
+        self._ctx_weights_initialized = False  # KC→D1 dual weights 초기화 플래그
+        self._current_ctx = "a"  # 현재 활성 context
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -10602,6 +10604,10 @@ class ForagerBrain:
 
             self.last_ctx_a_rate = ctx_a_spikes / max(self.config.n_ctx_a * 10, 1)
             self.last_ctx_b_rate = ctx_b_spikes / max(self.config.n_ctx_b * 10, 1)
+
+            # Context tracking (실제 weight swap은 R-STDP update에서 처리)
+            if self._ctx_weights_initialized:
+                self._current_ctx = "a" if pos_x < 0.5 else "b"
 
         # M3: Uncertainty Gate rate → eta modulation
         if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):
