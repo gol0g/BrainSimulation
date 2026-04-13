@@ -1405,7 +1405,7 @@ class ForagerBrainConfig:
         if self.place_transition_enabled and self.hippocampus_enabled:
             base += self.n_place_value  # 20
         if self.context_gate_enabled:
-            base += self.n_ctx_a + self.n_ctx_b  # 4 + 4 = 8
+            base += self.n_ctx_a + self.n_ctx_b + 16  # 4+4 ctx + 4×4 ctxval = 24
         return base
 
 
@@ -9137,9 +9137,53 @@ class ForagerBrain:
             "ctx_b_recurrent", self.ctx_b, self.ctx_b,
             cfg.ctx_recurrent_weight, sparsity=0.5)
 
+        # === Context-specific value populations (별도 D1 없이 Motor 직접) ===
+        val_params = {
+            "C": 30.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        val_init = {"V": -65.0, "RefracTime": 0.0}
+        # Zone A value (좌/우)
+        self.ctx_val_a_l = self.model.add_neuron_population(
+            "ctx_val_a_l", 4, "LIF", val_params, val_init)
+        self.ctx_val_a_r = self.model.add_neuron_population(
+            "ctx_val_a_r", 4, "LIF", val_params, val_init)
+        # Zone B value (좌/우)
+        self.ctx_val_b_l = self.model.add_neuron_population(
+            "ctx_val_b_l", 4, "LIF", val_params, val_init)
+        self.ctx_val_b_r = self.model.add_neuron_population(
+            "ctx_val_b_r", 4, "LIF", val_params, val_init)
+
+        # Food eye → CtxVal (static, 음식 감지)
+        for side, eye, val_a, val_b in [
+            ("l", self.food_eye_left, self.ctx_val_a_l, self.ctx_val_b_l),
+            ("r", self.food_eye_right, self.ctx_val_a_r, self.ctx_val_b_r),
+        ]:
+            self._create_static_synapse(f"food_to_ctxval_a_{side}", eye, val_a, 3.0, sparsity=0.1)
+            self._create_static_synapse(f"food_to_ctxval_b_{side}", eye, val_b, 3.0, sparsity=0.1)
+
+        # Context gating: CtxA → CtxVal_A 흥분, CtxVal_B 억제 (그리고 반대)
+        self._create_static_synapse("ctx_a_excite_val_a_l", self.ctx_a, self.ctx_val_a_l, 8.0, sparsity=0.5)
+        self._create_static_synapse("ctx_a_excite_val_a_r", self.ctx_a, self.ctx_val_a_r, 8.0, sparsity=0.5)
+        self._create_static_synapse("ctx_a_inhibit_val_b_l", self.ctx_a, self.ctx_val_b_l, -10.0, sparsity=0.5)
+        self._create_static_synapse("ctx_a_inhibit_val_b_r", self.ctx_a, self.ctx_val_b_r, -10.0, sparsity=0.5)
+        self._create_static_synapse("ctx_b_excite_val_b_l", self.ctx_b, self.ctx_val_b_l, 8.0, sparsity=0.5)
+        self._create_static_synapse("ctx_b_excite_val_b_r", self.ctx_b, self.ctx_val_b_r, 8.0, sparsity=0.5)
+        self._create_static_synapse("ctx_b_inhibit_val_a_l", self.ctx_b, self.ctx_val_a_l, -10.0, sparsity=0.5)
+        self._create_static_synapse("ctx_b_inhibit_val_a_r", self.ctx_b, self.ctx_val_a_r, -10.0, sparsity=0.5)
+
+        # CtxVal → Motor (gentle push-pull — 기존 D1 경로와 병렬)
+        for side, val_a, val_b, motor_push, motor_pull in [
+            ("l", self.ctx_val_a_l, self.ctx_val_b_l, self.motor_left, self.motor_right),
+            ("r", self.ctx_val_a_r, self.ctx_val_b_r, self.motor_right, self.motor_left),
+        ]:
+            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 2.0, sparsity=0.1)
+            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 2.0, sparsity=0.1)
+
         print(f"    CtxA: {cfg.n_ctx_a} (SensoryLIF), CtxB: {cfg.n_ctx_b}")
-        print(f"    WTA: {cfg.ctx_wta_weight}, Recurrent: {cfg.ctx_recurrent_weight}")
-        print(f"    I_input driven by agent x-coordinate (same as place cell principle)")
+        print(f"    CtxVal: 4×4=16 neurons (A_L/R + B_L/R)")
+        print(f"    Context gating: excite matched(8.0), inhibit mismatched(-10.0)")
+        print(f"    CtxVal→Motor: push 2.0 (gentle, parallel to existing D1)")
 
     def _build_place_transition_circuit(self):
         """M3: Place→Place transition graph + Value population
