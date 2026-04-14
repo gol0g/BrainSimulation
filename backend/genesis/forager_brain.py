@@ -1405,7 +1405,7 @@ class ForagerBrainConfig:
         if self.place_transition_enabled and self.hippocampus_enabled:
             base += self.n_place_value  # 20
         if self.context_gate_enabled:
-            base += self.n_ctx_a + self.n_ctx_b + 16  # 4+4 ctx + 4×4 ctxval = 24
+            base += self.n_ctx_a + self.n_ctx_b + 16 + 32  # ctx(8) + ctxval(16) + d1_ctx(32) = 56
         return base
 
 
@@ -9227,10 +9227,53 @@ class ForagerBrain:
             self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 15.0, sparsity=0.2)
             self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 15.0, sparsity=0.2)
 
+        # === Context-specific D1 populations (GPT design: separate D1 per zone) ===
+        msn_params = {
+            "C": 30.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+        }
+        msn_init = {"V": -65.0, "RefracTime": 0.0}
+        n_ctx_d1 = 8  # per population (bigger than GPT's 4 for signal strength)
+
+        # 8 populations: D1_A_L/R, D2_A_L/R, D1_B_L/R, D2_B_L/R
+        self.d1_ctx_a_l = self.model.add_neuron_population("d1_ctx_a_l", n_ctx_d1, "LIF", msn_params, msn_init)
+        self.d1_ctx_a_r = self.model.add_neuron_population("d1_ctx_a_r", n_ctx_d1, "LIF", msn_params, msn_init)
+        self.d1_ctx_b_l = self.model.add_neuron_population("d1_ctx_b_l", n_ctx_d1, "LIF", msn_params, msn_init)
+        self.d1_ctx_b_r = self.model.add_neuron_population("d1_ctx_b_r", n_ctx_d1, "LIF", msn_params, msn_init)
+
+        # Food eye → D1_ctx (same input as original D1, but context-gated)
+        for side, eye_l, eye_r, d1a, d1b in [
+            ("l", self.food_eye_left, self.food_eye_right, self.d1_ctx_a_l, self.d1_ctx_b_l),
+            ("r", self.food_eye_right, self.food_eye_left, self.d1_ctx_a_r, self.d1_ctx_b_r),
+        ]:
+            self._create_static_synapse(f"food_to_d1ctx_a_{side}", eye_l, d1a, 5.0, sparsity=0.1)
+            self._create_static_synapse(f"food_to_d1ctx_b_{side}", eye_l, d1b, 5.0, sparsity=0.1)
+
+        # Context gating: CtxA excites D1_A, inhibits D1_B (and vice versa)
+        for d1a, d1b in [(self.d1_ctx_a_l, self.d1_ctx_b_l), (self.d1_ctx_a_r, self.d1_ctx_b_r)]:
+            self._create_static_synapse(f"ctx_a_exc_{d1a.name}", self.ctx_a, d1a, 12.0, sparsity=0.5)
+            self._create_static_synapse(f"ctx_a_inh_{d1b.name}", self.ctx_a, d1b, -15.0, sparsity=0.5)
+            self._create_static_synapse(f"ctx_b_exc_{d1b.name}", self.ctx_b, d1b, 12.0, sparsity=0.5)
+            self._create_static_synapse(f"ctx_b_inh_{d1a.name}", self.ctx_b, d1a, -15.0, sparsity=0.5)
+
+        # Dopamine → D1_ctx (same as original D1)
+        for d1_ctx in [self.d1_ctx_a_l, self.d1_ctx_a_r, self.d1_ctx_b_l, self.d1_ctx_b_r]:
+            self._create_static_synapse(f"da_to_{d1_ctx.name}", self.dopamine_neurons, d1_ctx, 10.0, sparsity=0.1)
+
+        # D1_ctx → Motor (Push-Pull, same pattern as Direct→Motor)
+        self._create_static_synapse("d1ctx_a_l_push", self.d1_ctx_a_l, self.motor_left, 10.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_a_l_pull", self.d1_ctx_a_l, self.motor_right, -4.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_a_r_push", self.d1_ctx_a_r, self.motor_right, 10.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_a_r_pull", self.d1_ctx_a_r, self.motor_left, -4.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_b_l_push", self.d1_ctx_b_l, self.motor_left, 10.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_b_l_pull", self.d1_ctx_b_l, self.motor_right, -4.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_b_r_push", self.d1_ctx_b_r, self.motor_right, 10.0, sparsity=0.1)
+        self._create_static_synapse("d1ctx_b_r_pull", self.d1_ctx_b_r, self.motor_left, -4.0, sparsity=0.1)
+
         print(f"    CtxA: {cfg.n_ctx_a} (SensoryLIF), CtxB: {cfg.n_ctx_b}")
-        print(f"    CtxVal: 4×4=16 neurons (A_L/R + B_L/R)")
-        print(f"    Context gating: excite matched(8.0), inhibit mismatched(-10.0)")
-        print(f"    CtxVal→Motor: push 2.0 (gentle, parallel to existing D1)")
+        print(f"    D1_ctx: 4×{n_ctx_d1}={4*n_ctx_d1} neurons (A_L/R + B_L/R)")
+        print(f"    Context gating: excite(12.0), inhibit(-15.0)")
+        print(f"    D1_ctx→Motor: Push-Pull 10.0/-4.0")
 
     def _build_place_transition_circuit(self):
         """M3: Place→Place transition graph + Value population

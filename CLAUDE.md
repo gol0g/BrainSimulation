@@ -437,6 +437,8 @@ gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 42. **Phase 12-20은 dead weight 아님**: 일괄 비활성화 시 60%→30% 생존 (-30pp). Motor 직접 연결 0.0이어도 간접 경로(Hippo/Amygdala/BG)로 중요 기여. GPT 진단 틀림 — 항상 실험 검증 필수
 43. **SWR replay는 contingency change 후 maladaptive**: 환경 변화 후 replay(consolidation이든 revaluation이든) = stale memory 강화 → old zone에 갇힘. 5-seed 검증 확인. 초기 3-seed +14.7pp는 노이즈. **small sample로 결론 내지 말 것**
 44. **GPU DENSE 대형 시냅스는 BSOD 유발**: W_pp 400×400 DENSE on GPU → CUDA error 999 → 드라이버 크래시. CPU numpy로 전환하면 해결. SNN 시뮬레이션에 불필요한 시냅스는 GPU에 올리지 말 것
+45. **SensoryLIF C=1은 발화율 포화**: C=1이면 I_input 10이나 40이나 비슷한 발화 → L/R 차이 소멸. 방향 구분 필요한 감각은 C=5+ 사용
+46. **context-dependent rules는 별도 D1 population 필수**: 같은 D1에 weight swap/CtxVal 병렬/trace gating 전부 실패 (6회 시도 sel 0.50). 단일 population은 상반된 context value를 동시 표상 불가. GPT 설계대로 D1_A/D1_B 분리 + KC→D1_ctx R-STDP(context-gated 4-factor) 필요
 
 ---
 
