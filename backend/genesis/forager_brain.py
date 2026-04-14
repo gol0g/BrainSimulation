@@ -1526,8 +1526,16 @@ class ForagerBrain:
         # M4: Context gate state
         self.last_ctx_a_rate = 0.0
         self.last_ctx_b_rate = 0.0
-        self._ctx_weights_initialized = False  # KC→D1 dual weights 초기화 플래그
-        self._current_ctx = "a"  # 현재 활성 context
+        self._current_ctx = "a"
+        # Context-specific food→ctxval weights (CPU managed, DA-gated)
+        # Shape: n_food_eye × 4 (ctxval neurons per side)
+        n_food = self.config.n_food_eye // 2  # 400 per side
+        self._ctxval_w = {
+            "a_l": np.ones(n_food, dtype=np.float32) * 3.0,
+            "a_r": np.ones(n_food, dtype=np.float32) * 3.0,
+            "b_l": np.ones(n_food, dtype=np.float32) * 3.0,
+            "b_r": np.ones(n_food, dtype=np.float32) * 3.0,
+        }  # 초기 3.0 = food_to_ctxval static weight와 동일
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -9139,28 +9147,20 @@ class ForagerBrain:
 
         # === Context-specific value populations (별도 D1 없이 Motor 직접) ===
         val_params = {
-            "C": 30.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
-            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
+            "C": 5.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "TauRefrac": 2.0
         }
-        val_init = {"V": -65.0, "RefracTime": 0.0}
-        # Zone A value (좌/우)
+        val_init = {"V": -65.0, "RefracTime": 0.0, "I_input": 0.0}
+        # SensoryLIF — I_input으로 food×context weight 직접 주입 (GPU synapse 불필요)
         self.ctx_val_a_l = self.model.add_neuron_population(
-            "ctx_val_a_l", 4, "LIF", val_params, val_init)
+            "ctx_val_a_l", 4, sensory_lif_model, val_params, val_init)
         self.ctx_val_a_r = self.model.add_neuron_population(
-            "ctx_val_a_r", 4, "LIF", val_params, val_init)
-        # Zone B value (좌/우)
+            "ctx_val_a_r", 4, sensory_lif_model, val_params, val_init)
         self.ctx_val_b_l = self.model.add_neuron_population(
-            "ctx_val_b_l", 4, "LIF", val_params, val_init)
+            "ctx_val_b_l", 4, sensory_lif_model, val_params, val_init)
         self.ctx_val_b_r = self.model.add_neuron_population(
-            "ctx_val_b_r", 4, "LIF", val_params, val_init)
-
-        # Food eye → CtxVal (static, 음식 감지)
-        for side, eye, val_a, val_b in [
-            ("l", self.food_eye_left, self.ctx_val_a_l, self.ctx_val_b_l),
-            ("r", self.food_eye_right, self.ctx_val_a_r, self.ctx_val_b_r),
-        ]:
-            self._create_static_synapse(f"food_to_ctxval_a_{side}", eye, val_a, 3.0, sparsity=0.1)
-            self._create_static_synapse(f"food_to_ctxval_b_{side}", eye, val_b, 3.0, sparsity=0.1)
+            "ctx_val_b_r", 4, sensory_lif_model, val_params, val_init)
+        # food_eye → CtxVal 시냅스 없음 — I_input으로 직접 주입 (process()에서)
 
         # Context gating: CtxA → CtxVal_A 흥분, CtxVal_B 억제 (그리고 반대)
         self._create_static_synapse("ctx_a_excite_val_a_l", self.ctx_a, self.ctx_val_a_l, 8.0, sparsity=0.5)
@@ -9177,8 +9177,8 @@ class ForagerBrain:
             ("l", self.ctx_val_a_l, self.ctx_val_b_l, self.motor_left, self.motor_right),
             ("r", self.ctx_val_a_r, self.ctx_val_b_r, self.motor_right, self.motor_left),
         ]:
-            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 2.0, sparsity=0.1)
-            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 2.0, sparsity=0.1)
+            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 6.0, sparsity=0.15)
+            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 6.0, sparsity=0.15)
 
         print(f"    CtxA: {cfg.n_ctx_a} (SensoryLIF), CtxB: {cfg.n_ctx_b}")
         print(f"    CtxVal: 4×4=16 neurons (A_L/R + B_L/R)")
@@ -10649,9 +10649,44 @@ class ForagerBrain:
             self.last_ctx_a_rate = ctx_a_spikes / max(self.config.n_ctx_a * 10, 1)
             self.last_ctx_b_rate = ctx_b_spikes / max(self.config.n_ctx_b * 10, 1)
 
-            # Context tracking (실제 weight swap은 R-STDP update에서 처리)
-            if self._ctx_weights_initialized:
-                self._current_ctx = "a" if pos_x < 0.5 else "b"
+            # Context tracking + DA-gated ctxval learning
+            self._current_ctx = "a" if pos_x < 0.5 else "b"
+
+            # Food eye × context weight → CtxVal I_input (CPU computation)
+            food_l = np.mean(observation.get("food_rays_left", np.zeros(8)))
+            food_r = np.mean(observation.get("food_rays_right", np.zeros(8)))
+            ctx = self._current_ctx
+            # 현재 context의 CtxVal만 food signal 받음 (반대쪽은 0)
+            ctx_a_gate = 1.0 if ctx == "a" else 0.0
+            ctx_b_gate = 1.0 if ctx == "b" else 0.0
+            w_a_l = float(np.mean(self._ctxval_w["a_l"]))
+            w_a_r = float(np.mean(self._ctxval_w["a_r"]))
+            w_b_l = float(np.mean(self._ctxval_w["b_l"]))
+            w_b_r = float(np.mean(self._ctxval_w["b_r"]))
+            self.ctx_val_a_l.vars["I_input"].view[:] = food_l * w_a_l * ctx_a_gate
+            self.ctx_val_a_l.vars["I_input"].push_to_device()
+            self.ctx_val_a_r.vars["I_input"].view[:] = food_r * w_a_r * ctx_a_gate
+            self.ctx_val_a_r.vars["I_input"].push_to_device()
+            self.ctx_val_b_l.vars["I_input"].view[:] = food_l * w_b_l * ctx_b_gate
+            self.ctx_val_b_l.vars["I_input"].push_to_device()
+            self.ctx_val_b_r.vars["I_input"].view[:] = food_r * w_b_r * ctx_b_gate
+            self.ctx_val_b_r.vars["I_input"].push_to_device()
+
+            # Context-specific food value learning (food 근처에서 매 스텝)
+            # 좋은 음식 근처(good_food_rays 높음) → weight 증가
+            # 나쁜 음식 근처(bad_food_rays 높음) → weight 감소
+            good_l = np.mean(observation.get("good_food_rays_left", np.zeros(8)))
+            good_r = np.mean(observation.get("good_food_rays_right", np.zeros(8)))
+            bad_l = np.mean(observation.get("bad_food_rays_left", np.zeros(8)))
+            bad_r = np.mean(observation.get("bad_food_rays_right", np.zeros(8)))
+            eta_ctx = 0.0005  # 느린 학습 (매 스텝)
+            food_signal_l = good_l - bad_l  # +면 좋은 음식 우세, -면 나쁜 음식 우세
+            food_signal_r = good_r - bad_r
+            if abs(food_signal_l) > 0.05 or abs(food_signal_r) > 0.05:
+                self._ctxval_w[f"{ctx}_l"] += eta_ctx * food_signal_l
+                self._ctxval_w[f"{ctx}_r"] += eta_ctx * food_signal_r
+                np.clip(self._ctxval_w[f"{ctx}_l"], 0.1, 8.0, out=self._ctxval_w[f"{ctx}_l"])
+                np.clip(self._ctxval_w[f"{ctx}_r"], 0.1, 8.0, out=self._ctxval_w[f"{ctx}_r"])
 
         # M3: Uncertainty Gate rate → eta modulation
         if self.config.uncertainty_gate_enabled and hasattr(self, 'surprise_accum'):

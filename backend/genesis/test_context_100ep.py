@@ -31,7 +31,7 @@ for batch in range(5):
         if brain_config.swr_replay_enabled:
             brain.replay_swr()
     sel = total_good / max(total_good + total_bad, 1)
-    wa = getattr(brain, '_ctx_a_kc_to_d1_l', np.array([0]))
-    wb = getattr(brain, '_ctx_b_kc_to_d1_l', np.array([0]))
+    wa = brain._ctxval_w.get("a_l", np.array([3.0]))
+    wb = brain._ctxval_w.get("b_l", np.array([3.0]))
     diff = float(np.mean(np.abs(wa - wb)))
     print(f"ep {(batch+1)*20}: sel={sel:.3f} divergence={diff:.4f}")
