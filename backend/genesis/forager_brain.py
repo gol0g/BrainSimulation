@@ -2091,6 +2091,18 @@ class ForagerBrain:
             self.pred_to_d1_l.pull_connectivity_from_device()
             self.pred_to_d1_r.pull_connectivity_from_device()
 
+        # M4: KC→D1/D2 context weights initialization (양쪽 동일 시작)
+        if (self.config.context_gate_enabled
+                and self.config.sparse_expansion_enabled
+                and hasattr(self, 'kc_to_d1_l')):
+            for syn_name in ['kc_to_d1_l', 'kc_to_d1_r', 'kc_to_d2_l', 'kc_to_d2_r']:
+                syn = getattr(self, syn_name)
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values.copy()
+                setattr(self, f'_ctx_a_{syn_name}', w.copy())
+                setattr(self, f'_ctx_b_{syn_name}', w.copy())
+            self._last_rstdp_ctx = "a"  # 마지막 R-STDP 업데이트 시의 context
+
         n_total = self.config.total_neurons
         print(f"Model ready! Total: {n_total:,} neurons")
 
@@ -5102,7 +5114,7 @@ class ForagerBrain:
                     syn.vars["g"].push_to_device()
                 results[f"it_food_d2_{label}"] = float(np.nanmean(w))
 
-        # === Phase L16: KC → D1/D2 (single KC) ===
+        # === Phase L16: KC → D1/D2 (single KC, M4 context-separated) ===
         if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
             kc_w_max = self.config.kc_rstdp_w_max
             kc_w_rest = self.config.kc_rstdp_w_rest
@@ -5110,44 +5122,79 @@ class ForagerBrain:
             eta_d1 = self.config.kc_rstdp_eta
             eta_d2 = self.config.kc_d2_eta
 
+            # M4: context swap (50스텝마다만 = GPU safe)
+            ctx = self._current_ctx
+            ctx_initialized = hasattr(self, '_ctx_a_kc_to_d1_l')
+            last_ctx = getattr(self, '_last_rstdp_ctx', ctx)
+
+            # Context 변경됐으면 weights swap
+            if ctx_initialized and self.config.context_gate_enabled and ctx != last_ctx:
+                for sn in ['kc_to_d1_l', 'kc_to_d1_r', 'kc_to_d2_l', 'kc_to_d2_r']:
+                    syn = getattr(self, sn)
+                    # 이전 ctx weights 저장
+                    syn.vars["g"].pull_from_device()
+                    setattr(self, f'_ctx_{last_ctx}_{sn}', syn.vars["g"].values.copy())
+                    # 새 ctx weights 로드
+                    syn.vars["g"].values = getattr(self, f'_ctx_{ctx}_{sn}')
+                    syn.vars["g"].push_to_device()
+                self._last_rstdp_ctx = ctx
+
             for side, d1_syn, d2_syn in [
                 ("l", self.kc_to_d1_l, self.kc_to_d2_l),
                 ("r", self.kc_to_d1_r, self.kc_to_d2_r),
             ]:
                 d1_trace = getattr(self, f'kc_d1_trace_{side}')
                 d2_trace = getattr(self, f'kc_d2_trace_{side}')
+                d1_name = f'kc_to_d1_{side}'
+                d2_name = f'kc_to_d2_{side}'
 
-                # KC→D1 R-STDP
-                need_update = False
+                # Step 1: GPU에서 현재 weights pull
                 d1_syn.vars["g"].pull_from_device()
-                w = d1_syn.vars["g"].values.copy()
-                if apply_decay:
-                    w -= (decay * 50) * (w - kc_w_rest)
-                    need_update = True
-                if has_dopamine and d1_trace > 0.01:
-                    w += eta_d1 * d1_trace * self.dopamine_level
-                    need_update = True
-                if need_update:
-                    np.clip(w, 0.0, kc_w_max, out=w)
-                    d1_syn.vars["g"].values = w
-                    d1_syn.vars["g"].push_to_device()
-                results[f"kc_d1_{side}"] = float(np.nanmean(w))
-
-                # KC→D2 Anti-Hebbian
-                need_update = False
+                w_d1 = d1_syn.vars["g"].values.copy()
                 d2_syn.vars["g"].pull_from_device()
-                w = d2_syn.vars["g"].values.copy()
+                w_d2 = d2_syn.vars["g"].values.copy()
+
+                # M4: 현재 GPU weights를 현재 ctx에 저장
+                if ctx_initialized and self.config.context_gate_enabled:
+                    setattr(self, f'_ctx_{ctx}_{d1_name}', w_d1.copy())
+                    setattr(self, f'_ctx_{ctx}_{d2_name}', w_d2.copy())
+
+                # Step 2: R-STDP update (현재 context의 weights에만 적용)
+                need_d1 = False
                 if apply_decay:
-                    w -= (decay * 50) * (w - kc_w_rest)
-                    need_update = True
+                    w_d1 -= (decay * 50) * (w_d1 - kc_w_rest)
+                    need_d1 = True
+                if has_dopamine and d1_trace > 0.01:
+                    w_d1 += eta_d1 * d1_trace * self.dopamine_level
+                    need_d1 = True
+                if need_d1:
+                    np.clip(w_d1, 0.0, kc_w_max, out=w_d1)
+
+                need_d2 = False
+                if apply_decay:
+                    w_d2 -= (decay * 50) * (w_d2 - kc_w_rest)
+                    need_d2 = True
                 if has_dopamine and d2_trace > 0.01:
-                    w -= eta_d2 * d2_trace * self.dopamine_level
-                    need_update = True
-                if need_update:
-                    np.clip(w, kc_w_min, kc_w_max, out=w)
-                    d2_syn.vars["g"].values = w
+                    w_d2 -= eta_d2 * d2_trace * self.dopamine_level
+                    need_d2 = True
+                if need_d2:
+                    np.clip(w_d2, kc_w_min, kc_w_max, out=w_d2)
+
+                # M4: 업데이트된 weights를 현재 ctx CPU에 저장
+                if ctx_initialized and self.config.context_gate_enabled:
+                    setattr(self, f'_ctx_{ctx}_{d1_name}', w_d1.copy())
+                    setattr(self, f'_ctx_{ctx}_{d2_name}', w_d2.copy())
+
+                # Step 3: GPU push
+                if need_d1:
+                    d1_syn.vars["g"].values = w_d1
+                    d1_syn.vars["g"].push_to_device()
+                if need_d2:
+                    d2_syn.vars["g"].values = w_d2
                     d2_syn.vars["g"].push_to_device()
-                results[f"kc_d2_{side}"] = float(np.nanmean(w))
+
+                results[f"kc_d1_{side}"] = float(np.nanmean(w_d1))
+                results[f"kc_d2_{side}"] = float(np.nanmean(w_d2))
 
         # === Food Approach R-STDP (good_food_eye → Motor, 학습 기반 접근) ===
         if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
