@@ -9177,8 +9177,8 @@ class ForagerBrain:
             ("l", self.ctx_val_a_l, self.ctx_val_b_l, self.motor_left, self.motor_right),
             ("r", self.ctx_val_a_r, self.ctx_val_b_r, self.motor_right, self.motor_left),
         ]:
-            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 6.0, sparsity=0.15)
-            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 6.0, sparsity=0.15)
+            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 15.0, sparsity=0.2)
+            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 15.0, sparsity=0.2)
 
         print(f"    CtxA: {cfg.n_ctx_a} (SensoryLIF), CtxB: {cfg.n_ctx_b}")
         print(f"    CtxVal: 4×4=16 neurons (A_L/R + B_L/R)")
@@ -11871,6 +11871,16 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 wm_ctx_learn = None
                 meta_learn = None
                 sm_learn = None
+
+                # M4: Context-specific food value update (reward-time)
+                if brain_config.context_gate_enabled and hasattr(brain, '_ctxval_w'):
+                    ctx = brain._current_ctx
+                    reward_sign = 1.0 if eaten_food_type == 0 else -1.0  # good=+1, bad=-1
+                    eta_ctx = 0.15  # 매우 강한 학습 (음식 먹은 순간)
+                    for side in ["l", "r"]:
+                        key = f"{ctx}_{side}"
+                        brain._ctxval_w[key] += eta_ctx * reward_sign
+                        np.clip(brain._ctxval_w[key], 0.1, 8.0, out=brain._ctxval_w[key])
 
                 if eaten_food_type == 0:  # === 좋은 음식: 도파민 + 기존 학습 ===
                     # Phase 3b/3c: Hebbian 학습 실행

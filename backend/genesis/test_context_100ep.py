@@ -20,12 +20,24 @@ for batch in range(5):
         obs = env.reset()
         done = False
         step_count = 0
+        prev_food = 0
         while not done:
             angle, info = brain.process(obs)
             step_count += 1
-            if step_count % 10 == 0:  # 매 10스텝마다 (GPU 부하 절감)
+            if step_count % 10 == 0:
                 brain.decay_dopamine()
             obs, reward, done, step_info = env.step((angle,))
+            # M4: food 이벤트 시 context-specific value update
+            curr_food = env.total_food_eaten
+            if curr_food > prev_food and brain_config.context_gate_enabled:
+                ctx = brain._current_ctx
+                food_type = env._food_eaten_types[-1] if env._food_eaten_types else 0
+                reward_sign = 1.0 if food_type == 0 else -1.0
+                for side in ["l", "r"]:
+                    key = f"{ctx}_{side}"
+                    brain._ctxval_w[key] += 0.15 * reward_sign
+                    np.clip(brain._ctxval_w[key], 0.1, 8.0, out=brain._ctxval_w[key])
+            prev_food = curr_food
         total_good += env.good_food_eaten
         total_bad += env.bad_food_eaten
         if brain_config.swr_replay_enabled:
