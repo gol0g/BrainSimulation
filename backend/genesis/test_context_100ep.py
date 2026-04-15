@@ -13,6 +13,16 @@ brain_config = ForagerBrainConfig()
 env = ForagerGym(env_config, render_mode="none")
 brain = ForagerBrain(brain_config)
 
+# M4: 기존 food_eye→D1 R-STDP를 약화 (D1_ctx가 주 경로가 되도록)
+if brain_config.context_gate_enabled:
+    for syn in [brain.food_to_d1_l, brain.food_to_d1_r]:
+        syn.vars["g"].pull_from_device()
+        w = syn.vars["g"].values
+        w[:] = 0.1  # 거의 0으로
+        syn.vars["g"].values = w
+        syn.vars["g"].push_to_device()
+    print("  [M4] food_eye→D1 weights reduced to 0.1 (D1_ctx takes over)")
+
 for batch in range(5):
     total_good = 0
     total_bad = 0
