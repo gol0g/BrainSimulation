@@ -1527,6 +1527,8 @@ class ForagerBrain:
         self.last_ctx_a_rate = 0.0
         self.last_ctx_b_rate = 0.0
         self._current_ctx = "a"
+        # D1_ctx R-STDP traces (4-factor: pre×post×ctx×DA)
+        self._d1ctx_trace = {"a_l": 0.0, "a_r": 0.0, "b_l": 0.0, "b_r": 0.0}
         # Context-specific food→ctxval weights (CPU managed, DA-gated)
         # Shape: n_food_eye × 4 (ctxval neurons per side)
         n_food = self.config.n_food_eye // 2  # 400 per side
@@ -2090,6 +2092,12 @@ class ForagerBrain:
         if self.config.contextual_prediction_enabled and hasattr(self, 'pred_to_d1_l'):
             self.pred_to_d1_l.pull_connectivity_from_device()
             self.pred_to_d1_r.pull_connectivity_from_device()
+
+        # M4: KC→D1_ctx SPARSE connectivity pull
+        if self.config.context_gate_enabled and hasattr(self, 'kc_to_d1ctx_a_l'):
+            for syn in [self.kc_to_d1ctx_a_l, self.kc_to_d1ctx_a_r,
+                        self.kc_to_d1ctx_b_l, self.kc_to_d1ctx_b_r]:
+                syn.pull_connectivity_from_device()
 
         # M4: KC→D1/D2 context weights initialization (양쪽 동일 시작)
         if (self.config.context_gate_enabled
@@ -5195,6 +5203,34 @@ class ForagerBrain:
 
                 results[f"kc_d1_{side}"] = float(np.nanmean(w_d1))
                 results[f"kc_d2_{side}"] = float(np.nanmean(w_d2))
+
+        # === M4: KC → D1_ctx R-STDP (context-gated 4-factor) ===
+        if (self.config.context_gate_enabled
+                and hasattr(self, 'kc_to_d1ctx_a_l')):
+            ctx_eta = self.config.kc_rstdp_eta * 2  # 더 빠른 학습 (작은 population)
+            ctx_w_max = self.config.kc_rstdp_w_max
+
+            for key, syn in [
+                ("a_l", self.kc_to_d1ctx_a_l),
+                ("a_r", self.kc_to_d1ctx_a_r),
+                ("b_l", self.kc_to_d1ctx_b_l),
+                ("b_r", self.kc_to_d1ctx_b_r),
+            ]:
+                trace = self._d1ctx_trace[key]
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values.copy()
+                if apply_decay:
+                    w -= (decay * 50) * (w - kc_w_rest)
+                    need_update = True
+                if has_dopamine and trace > 0.01:
+                    w += ctx_eta * trace * self.dopamine_level
+                    need_update = True
+                if need_update:
+                    np.clip(w, 0.0, ctx_w_max, out=w)
+                    syn.vars["g"].values = w
+                    syn.vars["g"].push_to_device()
+                results[f"d1ctx_{key}"] = float(np.nanmean(w))
 
         # === Food Approach R-STDP (good_food_eye → Motor, 학습 기반 접근) ===
         if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
@@ -9241,13 +9277,29 @@ class ForagerBrain:
         self.d1_ctx_b_l = self.model.add_neuron_population("d1_ctx_b_l", n_ctx_d1, "LIF", msn_params, msn_init)
         self.d1_ctx_b_r = self.model.add_neuron_population("d1_ctx_b_r", n_ctx_d1, "LIF", msn_params, msn_init)
 
-        # Food eye → D1_ctx (same input as original D1, but context-gated)
-        for side, eye_l, eye_r, d1a, d1b in [
-            ("l", self.food_eye_left, self.food_eye_right, self.d1_ctx_a_l, self.d1_ctx_b_l),
-            ("r", self.food_eye_right, self.food_eye_left, self.d1_ctx_a_r, self.d1_ctx_b_r),
-        ]:
-            self._create_static_synapse(f"food_to_d1ctx_a_{side}", eye_l, d1a, 5.0, sparsity=0.1)
-            self._create_static_synapse(f"food_to_d1ctx_b_{side}", eye_l, d1b, 5.0, sparsity=0.1)
+        # KC → D1_ctx (SPARSE R-STDP — context-gated learning)
+        kc_d1_w = self.config.kc_to_d1_init_w  # 0.5
+        kc_sp = self.config.kc_to_d1_sparsity   # 0.05
+        self.kc_to_d1ctx_a_l = self.model.add_synapse_population(
+            "kc_l_to_d1ctx_a_l", "SPARSE", self.kc_left, self.d1_ctx_a_l,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_to_d1ctx_a_r = self.model.add_synapse_population(
+            "kc_r_to_d1ctx_a_r", "SPARSE", self.kc_right, self.d1_ctx_a_r,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_to_d1ctx_b_l = self.model.add_synapse_population(
+            "kc_l_to_d1ctx_b_l", "SPARSE", self.kc_left, self.d1_ctx_b_l,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        self.kc_to_d1ctx_b_r = self.model.add_synapse_population(
+            "kc_r_to_d1ctx_b_r", "SPARSE", self.kc_right, self.d1_ctx_b_r,
+            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
 
         # Context gating: CtxA excites D1_A, inhibits D1_B (and vice versa)
         for d1a, d1b in [(self.d1_ctx_a_l, self.d1_ctx_b_l), (self.d1_ctx_a_r, self.d1_ctx_b_r)]:
@@ -10738,6 +10790,21 @@ class ForagerBrain:
 
             self.last_ctx_a_rate = ctx_a_spikes / max(self.config.n_ctx_a * 10, 1)
             self.last_ctx_b_rate = ctx_b_spikes / max(self.config.n_ctx_b * 10, 1)
+
+            # D1_ctx trace accumulation (4-factor: pre×post×CTX×DA)
+            ctx = self._current_ctx
+            trace_decay = self.config.rstdp_trace_decay
+            trace_max = self.config.rstdp_trace_max
+            # 현재 context의 D1_ctx만 trace 누적 (반대쪽은 decay만)
+            for key in self._d1ctx_trace:
+                if key.startswith(ctx):  # 현재 context
+                    kc_side = "l" if key.endswith("_l") else "r"
+                    kc_rate = self.last_kc_l_rate if kc_side == "l" else self.last_kc_r_rate
+                    kc_active = 1.0 if kc_rate > 0.03 else 0.0
+                    self._d1ctx_trace[key] = min(
+                        self._d1ctx_trace[key] * trace_decay + kc_active, trace_max)
+                else:  # 반대 context — decay only
+                    self._d1ctx_trace[key] *= trace_decay
 
             # Context tracking + DA-gated ctxval learning
             self._current_ctx = "a" if pos_x < 0.5 else "b"
