@@ -748,7 +748,7 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 | **M2** | 28K 뉴런, 개념 형성 C0-C5 + 품질 개선 | **✓ 완료** (65-75% 생존) |
 | **M3** | **28K+ 뉴런, Replay-driven Replanning** | **부분** (env+ACh✓, detour 미증명) |
 | **M4-test** | **환경 스트레스 → context-dependent에서 실패 (0.51)** | **✓ 한계 발견** |
-| **M4-ctx** | **Context gate (CtxA/B separated) + D1_ctx populations** | **진행 중** | sel 0.50 |
+| **M4-ctx** | **Context gate: 8회 실패 → GPT 자문 → v9 hard gate 구현** | **진행 중** (v9 테스트 중) |
 
 ---
 
@@ -778,4 +778,4 @@ GPT 자문 기반 novelty-gated, uncertainty-reduction-seeking curiosity.
 
 ---
 
-*최종 업데이트: 2026-04-14 (M4 context-dependent 진행 중, 28,091 뉴런, 6회 시도 sel 0.50, D1_ctx R-STDP 필요)*
+*최종 업데이트: 2026-04-13 (M4 v9 context hard gate 구현 중, 28,139 뉴런, GPT 자문: additive→gating 전환)*

@@ -1264,8 +1264,10 @@ class ForagerBrainConfig:
 
     # === M4: Context-Gated Value Learning (zone-dependent food rules) ===
     context_gate_enabled: bool = True
+    context_hard_gate_enabled: bool = False  # v9: suppress context-blind D1, D1_ctx sole policy
     n_ctx_a: int = 4                        # Zone A context neurons
     n_ctx_b: int = 4                        # Zone B context neurons
+    n_ctx_d1: int = 20                      # v9: D1_ctx neurons per bank (was 8)
     ctx_place_weight: float = 1.0            # place → ctx (약하게 — WTA 경쟁 여지)
     ctx_wta_weight: float = -15.0           # CtxA ↔ CtxB strong WTA
     ctx_recurrent_weight: float = 3.0       # self-excitation (winner stability)
@@ -1405,7 +1407,7 @@ class ForagerBrainConfig:
         if self.place_transition_enabled and self.hippocampus_enabled:
             base += self.n_place_value  # 20
         if self.context_gate_enabled:
-            base += self.n_ctx_a + self.n_ctx_b + 16 + 32  # ctx(8) + ctxval(16) + d1_ctx(32) = 56
+            base += self.n_ctx_a + self.n_ctx_b + 200 + self.n_ctx_d1 * 4  # ctx(8) + ctxval(50×4=200) + d1_ctx(n×4)
         return base
 
 
@@ -1527,17 +1529,27 @@ class ForagerBrain:
         self.last_ctx_a_rate = 0.0
         self.last_ctx_b_rate = 0.0
         self._current_ctx = "a"
+        self._prev_ctx = "a"  # v9: zone transition detection
+        self._context_hard_gate_active = False  # v9: set True by _activate_context_hard_gate()
+        self._ctx_plasticity_freeze = 0  # v9: steps to freeze after zone transition
         # D1_ctx R-STDP traces (4-factor: pre×post×ctx×DA)
         self._d1ctx_trace = {"a_l": 0.0, "a_r": 0.0, "b_l": 0.0, "b_r": 0.0}
         # Context-specific food→ctxval weights (CPU managed, DA-gated)
-        # Shape: n_food_eye × 4 (ctxval neurons per side)
         n_food = self.config.n_food_eye // 2  # 400 per side
         self._ctxval_w = {
             "a_l": np.ones(n_food, dtype=np.float32) * 3.0,
             "a_r": np.ones(n_food, dtype=np.float32) * 3.0,
             "b_l": np.ones(n_food, dtype=np.float32) * 3.0,
             "b_r": np.ones(n_food, dtype=np.float32) * 3.0,
-        }  # 초기 3.0 = food_to_ctxval static weight와 동일
+        }
+        # v9b: Context-specific TYPED food scales (good/bad → D1_ctx I_input)
+        # Each context bank has separate approach weights for good_food and bad_food
+        # Both start identical; DA-driven learning makes them diverge by zone
+        # Scale must be large enough to be THE dominant D1_ctx input
+        self._ctx_food_scale = {
+            "a_good": 40.0, "a_bad": 40.0,  # Zone A: both start with strong approach
+            "b_good": 40.0, "b_bad": 40.0,  # Zone B: starts same, learns to flip
+        }
 
         # Phase L2: D1/D2 MSN rate defaults
         self.last_d1_l_rate = 0.0
@@ -2062,6 +2074,9 @@ class ForagerBrain:
         if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
             self.good_food_to_motor_l.pull_connectivity_from_device()
             self.good_food_to_motor_r.pull_connectivity_from_device()
+        if hasattr(self, 'food_explore_motor_l'):
+            self.food_explore_motor_l.pull_connectivity_from_device()
+            self.food_explore_motor_r.pull_connectivity_from_device()
 
         # Phase L16: KC→D1/D2 SPARSE connectivity pull (single KC)
         if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
@@ -2111,11 +2126,121 @@ class ForagerBrain:
                 setattr(self, f'_ctx_b_{syn_name}', w.copy())
             self._last_rstdp_ctx = "a"  # 마지막 R-STDP 업데이트 시의 context
 
+        # M4 v9: Suppress context-blind food→D1 pathways (D1_ctx takes over)
+        if self.config.context_hard_gate_enabled:
+            self._activate_context_hard_gate()
+
         n_total = self.config.total_neurons
         print(f"Model ready! Total: {n_total:,} neurons")
 
         # 스파이크 카운팅용
         self.spike_threshold = self.config.tau_refrac - 0.5
+
+    def update_context_food_scales(self, food_type: int, da_magnitude: float):
+        """M4 v9b: Update context-specific food approach scales based on DA.
+
+        Called at food-eating time. Updates the approach weight for the
+        current context bank's good/bad food scale based on reward signal.
+
+        food_type: 0=visually "good" food, 1=visually "bad" food
+        da_magnitude: positive=reward, negative=punishment (already context-adjusted)
+        """
+        ctx = self._current_ctx
+        eta = 0.5  # fast learning (food eating is rare, signal is clear)
+        if food_type == 0:  # visually "good" food was eaten
+            self._ctx_food_scale[f"{ctx}_good"] += eta * da_magnitude
+        else:  # visually "bad" food was eaten
+            self._ctx_food_scale[f"{ctx}_bad"] += eta * da_magnitude
+        # Clamp scales — wide range needed to overcome other D1_ctx excitatory inputs
+        for key in self._ctx_food_scale:
+            self._ctx_food_scale[key] = max(-80.0, min(120.0, self._ctx_food_scale[key]))
+
+    def _activate_context_hard_gate(self):
+        """M4 v9: Suppress ALL context-blind food→D1 pathways.
+
+        GPT consultation (2026-04-13): "context-blind food actor를 차단 대상으로"
+        Zero all food→D1 inputs so D1_ctx is the sole food approach pathway.
+        Only called when context_hard_gate_enabled=True.
+        """
+        print("  [M4 v9] Activating context hard gate — suppressing context-blind D1...")
+        suppressed = []
+
+        # 1. food_eye → D1 (main R-STDP)
+        for syn in [self.food_to_d1_l, self.food_to_d1_r]:
+            syn.vars["g"].pull_from_device()
+            syn.vars["g"].values[:] = 0.0
+            syn.vars["g"].push_to_device()
+        suppressed.append("food_eye→D1")
+
+        # 2. good/bad_food_eye → D1 (discriminative R-STDP)
+        if hasattr(self, 'good_food_to_d1_l'):
+            for syn in [self.good_food_to_d1_l, self.good_food_to_d1_r,
+                        self.bad_food_to_d1_l, self.bad_food_to_d1_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("good/bad_food→D1")
+
+        # 3. good/bad_food_eye → D2 (Anti-Hebbian)
+        if hasattr(self, 'good_food_to_d2_l'):
+            for syn in [self.good_food_to_d2_l, self.good_food_to_d2_r,
+                        self.bad_food_to_d2_l, self.bad_food_to_d2_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("good/bad_food→D2")
+
+        # 4. KC → D1/D2 (sparse expansion — context-blind)
+        if hasattr(self, 'kc_to_d1_l'):
+            for syn in [self.kc_to_d1_l, self.kc_to_d1_r,
+                        self.kc_to_d2_l, self.kc_to_d2_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("KC→D1/D2")
+
+        # 5. IT_food → D1/D2 (category)
+        if hasattr(self, 'it_food_to_d1_l'):
+            for syn in [self.it_food_to_d1_l, self.it_food_to_d1_r,
+                        self.it_food_to_d2_l, self.it_food_to_d2_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("IT→D1/D2")
+
+        # 6. KC → D1_ctx (context-blind food approach via KC is redundant)
+        # v9b: I_input is the sole food signal; KC excitation interferes with scale gating
+        if hasattr(self, 'kc_to_d1ctx_a_l'):
+            for syn in [self.kc_to_d1ctx_a_l, self.kc_to_d1ctx_a_r,
+                        self.kc_to_d1ctx_b_l, self.kc_to_d1ctx_b_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("KC→D1_ctx")
+
+        # 7. food_eye → Motor (sensory reflex — context-blind approach)
+        if hasattr(self, 'food_explore_motor_l'):
+            for syn in [self.food_explore_motor_l, self.food_explore_motor_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("food_eye→Motor")
+
+        # 8. good_food_eye → Motor (learned approach — context-blind)
+        if hasattr(self, 'good_food_to_motor_l'):
+            for syn in [self.good_food_to_motor_l, self.good_food_to_motor_r]:
+                syn.vars["g"].pull_from_device()
+                syn.vars["g"].values[:] = 0.0
+                syn.vars["g"].push_to_device()
+            suppressed.append("good_food→Motor")
+
+        # State flag for R-STDP gating
+        self._context_hard_gate_active = True
+        # Zone transition plasticity freeze counter
+        self._ctx_plasticity_freeze = 0
+
+        print(f"    Suppressed: {', '.join(suppressed)}")
+        print(f"    D1_ctx is now sole food approach pathway (I_input only)")
 
     def _enable_spike_recording(self):
         """모든 스파이크 카운팅 대상 population에 spike_recording_enabled 설정.
@@ -2416,10 +2541,10 @@ class ForagerBrain:
         if self.config.perceptual_learning_enabled:
             # food_eye: 약한 무차별 탐색 (모든 음식 방향으로 약간 끌림)
             food_explore_w = 10.0
-            self._create_static_synapse(
+            self.food_explore_motor_l = self._create_static_synapse(
                 "food_left_motor_left", self.food_eye_left, self.motor_left,
                 food_explore_w, sparsity=0.15)
-            self._create_static_synapse(
+            self.food_explore_motor_r = self._create_static_synapse(
                 "food_right_motor_right", self.food_eye_right, self.motor_right,
                 food_explore_w, sparsity=0.15)
             # good_food_eye: 학습 기반 접근 (도파민으로 강화)
@@ -4978,62 +5103,68 @@ class ForagerBrain:
         results = {}
         results["eta_mod"] = self.uncertainty_eta_mod
 
+        # M4 v9: Skip context-blind R-STDP when hard gate is active
+        # D1_ctx R-STDP (at the end) is always active
+        _skip_blind = self._context_hard_gate_active
+
         # === D1: R-STDP 강화 (보상 시 가중치 증가) ===
-        for side, trace, syn in [
-            ("left", self.rstdp_trace_l, self.food_to_d1_l),
-            ("right", self.rstdp_trace_r, self.food_to_d1_r)
-        ]:
-            need_update = False
-            syn.vars["g"].pull_from_device()
-            w = syn.vars["g"].values  # SPARSE → .values (not .view)
+        if not _skip_blind:
+            for side, trace, syn in [
+                ("left", self.rstdp_trace_l, self.food_to_d1_l),
+                ("right", self.rstdp_trace_r, self.food_to_d1_r)
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values  # SPARSE → .values (not .view)
 
-            # 항상성 감쇠: w → w_rest 방향으로 서서히 감쇠 (50 스텝분 배치)
-            if apply_decay:
-                w[:] -= (decay * 50) * (w - w_rest)
-                need_update = True
+                # 항상성 감쇠: w → w_rest 방향으로 서서히 감쇠 (50 스텝분 배치)
+                if apply_decay:
+                    w[:] -= (decay * 50) * (w - w_rest)
+                    need_update = True
 
-            # R-STDP 강화: 도파민 + 적격 추적 기반 (3-factor rule)
-            if has_dopamine and trace > 0.01:
-                delta_w = eta * trace * self.dopamine_level
-                w[:] += delta_w
-                need_update = True
+                # R-STDP 강화: 도파민 + 적격 추적 기반 (3-factor rule)
+                if has_dopamine and trace > 0.01:
+                    delta_w = eta * trace * self.dopamine_level
+                    w[:] += delta_w
+                    need_update = True
 
-            if need_update:
-                w[:] = np.clip(w, 0.0, w_max)
-                syn.vars["g"].values = w  # write back
-                syn.vars["g"].push_to_device()
-            results[f"rstdp_avg_w_{side}"] = float(np.nanmean(w))
+                if need_update:
+                    w[:] = np.clip(w, 0.0, w_max)
+                    syn.vars["g"].values = w  # write back
+                    syn.vars["g"].push_to_device()
+                results[f"rstdp_avg_w_{side}"] = float(np.nanmean(w))
 
         # === D2: Anti-Hebbian 약화 (보상 시 가중치 감소) ===
         eta_d2 = self.config.rstdp_d2_eta
         w_min_d2 = self.config.rstdp_d2_w_min
-        for side, trace, syn in [
-            ("left", self.rstdp_d2_trace_l, self.food_to_d2_l),
-            ("right", self.rstdp_d2_trace_r, self.food_to_d2_r)
-        ]:
-            need_update = False
-            syn.vars["g"].pull_from_device()
-            w = syn.vars["g"].values  # SPARSE → .values
+        if not _skip_blind:
+            for side, trace, syn in [
+                ("left", self.rstdp_d2_trace_l, self.food_to_d2_l),
+                ("right", self.rstdp_d2_trace_r, self.food_to_d2_r)
+            ]:
+                need_update = False
+                syn.vars["g"].pull_from_device()
+                w = syn.vars["g"].values  # SPARSE → .values
 
-            # 항상성 감쇠: D2도 w_rest 방향으로 감쇠 (D1과 동일)
-            if apply_decay:
-                w[:] -= (decay * 50) * (w - w_rest)
-                need_update = True
+                # 항상성 감쇠: D2도 w_rest 방향으로 감쇠 (D1과 동일)
+                if apply_decay:
+                    w[:] -= (decay * 50) * (w - w_rest)
+                    need_update = True
 
-            # Anti-Hebbian: 도파민 + 적격 추적 → 가중치 감소 (부호 반전)
-            if has_dopamine and trace > 0.01:
-                delta_w = eta_d2 * trace * self.dopamine_level
-                w[:] -= delta_w  # 감소 (Anti-Hebbian)
-                need_update = True
+                # Anti-Hebbian: 도파민 + 적격 추적 → 가중치 감소 (부호 반전)
+                if has_dopamine and trace > 0.01:
+                    delta_w = eta_d2 * trace * self.dopamine_level
+                    w[:] -= delta_w  # 감소 (Anti-Hebbian)
+                    need_update = True
 
-            if need_update:
-                w[:] = np.clip(w, w_min_d2, w_max)
-                syn.vars["g"].values = w  # write back
-                syn.vars["g"].push_to_device()
+                if need_update:
+                    w[:] = np.clip(w, w_min_d2, w_max)
+                    syn.vars["g"].values = w  # write back
+                    syn.vars["g"].push_to_device()
             results[f"rstdp_d2_avg_w_{side}"] = float(np.nanmean(w))
 
         # === Phase L7: Discriminative BG (good/bad food → D1/D2) ===
-        if self.config.discriminative_bg_enabled and self.config.perceptual_learning_enabled:
+        if self.config.discriminative_bg_enabled and self.config.perceptual_learning_enabled and not _skip_blind:
             # D1: good/bad food → D1 (R-STDP 강화, 기존 D1과 동일 규칙)
             for label, trace, syn in [
                 ("good_l", self.typed_d1_trace_good_l, self.good_food_to_d1_l),
@@ -5079,7 +5210,7 @@ class ForagerBrain:
                 results[f"typed_d2_{label}"] = float(np.nanmean(w))
 
         # === Phase L9: IT_Food → D1/D2 (피질 하향 연결) ===
-        if self.config.it_bg_enabled and self.config.it_enabled:
+        if self.config.it_bg_enabled and self.config.it_enabled and not _skip_blind:
             it_w_max = 3.0  # 피질은 모듈레이터 → food_eye(5.0)보다 낮게
 
             # IT_Food → D1 (R-STDP)
@@ -5123,7 +5254,7 @@ class ForagerBrain:
                 results[f"it_food_d2_{label}"] = float(np.nanmean(w))
 
         # === Phase L16: KC → D1/D2 (single KC, M4 context-separated) ===
-        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l'):
+        if self.config.sparse_expansion_enabled and hasattr(self, 'kc_to_d1_l') and not _skip_blind:
             kc_w_max = self.config.kc_rstdp_w_max
             kc_w_rest = self.config.kc_rstdp_w_rest
             kc_w_min = self.config.kc_d2_w_min
@@ -5205,10 +5336,14 @@ class ForagerBrain:
                 results[f"kc_d2_{side}"] = float(np.nanmean(w_d2))
 
         # === M4: KC → D1_ctx R-STDP (context-gated 4-factor) ===
+        # This section is ALWAYS active (even in hard gate mode — this IS the policy)
         if (self.config.context_gate_enabled
                 and hasattr(self, 'kc_to_d1ctx_a_l')):
             ctx_eta = self.config.kc_rstdp_eta * 2  # 더 빠른 학습 (작은 population)
             ctx_w_max = self.config.kc_rstdp_w_max
+            ctx_w_rest = self.config.kc_rstdp_w_rest
+            # v9: plasticity freeze after zone transition
+            plasticity_ok = self._ctx_plasticity_freeze <= 0
 
             for key, syn in [
                 ("a_l", self.kc_to_d1ctx_a_l),
@@ -5221,9 +5356,9 @@ class ForagerBrain:
                 syn.vars["g"].pull_from_device()
                 w = syn.vars["g"].values.copy()
                 if apply_decay:
-                    w -= (decay * 50) * (w - kc_w_rest)
+                    w -= (decay * 50) * (w - ctx_w_rest)
                     need_update = True
-                if has_dopamine and trace > 0.01:
+                if plasticity_ok and has_dopamine and trace > 0.01:
                     w += ctx_eta * trace * self.dopamine_level
                     need_update = True
                 if need_update:
@@ -5233,7 +5368,7 @@ class ForagerBrain:
                 results[f"d1ctx_{key}"] = float(np.nanmean(w))
 
         # === Food Approach R-STDP (good_food_eye → Motor, 학습 기반 접근) ===
-        if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l'):
+        if self.config.perceptual_learning_enabled and hasattr(self, 'good_food_to_motor_l') and not _skip_blind:
             fa_eta = self.config.food_approach_eta
             fa_w_max = self.config.food_approach_w_max
             fa_w_rest = self.config.food_approach_init_w
@@ -5261,7 +5396,7 @@ class ForagerBrain:
                 results[f"food_approach_{side}"] = float(np.nanmean(w))
 
         # === C1: Sound_Food → D1 R-STDP (eligibility bridge trace 사용) ===
-        if self.config.auditory_enabled and hasattr(self, 'sound_food_to_d1_l'):
+        if self.config.auditory_enabled and hasattr(self, 'sound_food_to_d1_l') and not _skip_blind:
             sf_eta = 0.001
             sf_w_max = 5.0
             sf_w_rest = 0.5
@@ -9234,15 +9369,17 @@ class ForagerBrain:
             "Vthresh": -50.0, "TauRefrac": 2.0
         }
         val_init = {"V": -65.0, "RefracTime": 0.0, "I_input": 0.0}
-        # SensoryLIF — I_input으로 food×context weight 직접 주입 (GPU synapse 불필요)
+        # SensoryLIF — I_input으로 food×context scale 직접 주입
+        # v9f: 50 neurons (was 4) — must be strong enough to drive Motor(C=300)
+        n_ctxval = 50
         self.ctx_val_a_l = self.model.add_neuron_population(
-            "ctx_val_a_l", 4, sensory_lif_model, val_params, val_init)
+            "ctx_val_a_l", n_ctxval, sensory_lif_model, val_params, val_init)
         self.ctx_val_a_r = self.model.add_neuron_population(
-            "ctx_val_a_r", 4, sensory_lif_model, val_params, val_init)
+            "ctx_val_a_r", n_ctxval, sensory_lif_model, val_params, val_init)
         self.ctx_val_b_l = self.model.add_neuron_population(
-            "ctx_val_b_l", 4, sensory_lif_model, val_params, val_init)
+            "ctx_val_b_l", n_ctxval, sensory_lif_model, val_params, val_init)
         self.ctx_val_b_r = self.model.add_neuron_population(
-            "ctx_val_b_r", 4, sensory_lif_model, val_params, val_init)
+            "ctx_val_b_r", n_ctxval, sensory_lif_model, val_params, val_init)
         # food_eye → CtxVal 시냅스 없음 — I_input으로 직접 주입 (process()에서)
 
         # Context gating: CtxA → CtxVal_A 흥분, CtxVal_B 억제 (그리고 반대)
@@ -9255,27 +9392,35 @@ class ForagerBrain:
         self._create_static_synapse("ctx_b_inhibit_val_a_l", self.ctx_b, self.ctx_val_a_l, -10.0, sparsity=0.5)
         self._create_static_synapse("ctx_b_inhibit_val_a_r", self.ctx_b, self.ctx_val_a_r, -10.0, sparsity=0.5)
 
-        # CtxVal → Motor (gentle push-pull — 기존 D1 경로와 병렬)
+        # CtxVal → Motor (v9f: STRONG push-pull — sole food approach when hard gate)
+        # 50 neurons × 0.3 × 20 = 300 current > Motor threshold (225)
+        ctxval_push = 20.0
+        ctxval_pull = -8.0
+        ctxval_sp = 0.3
         for side, val_a, val_b, motor_push, motor_pull in [
             ("l", self.ctx_val_a_l, self.ctx_val_b_l, self.motor_left, self.motor_right),
             ("r", self.ctx_val_a_r, self.ctx_val_b_r, self.motor_right, self.motor_left),
         ]:
-            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, 15.0, sparsity=0.2)
-            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, 15.0, sparsity=0.2)
+            self._create_static_synapse(f"ctxval_a_{side}_push", val_a, motor_push, ctxval_push, sparsity=ctxval_sp)
+            self._create_static_synapse(f"ctxval_a_{side}_pull", val_a, motor_pull, ctxval_pull, sparsity=ctxval_sp)
+            self._create_static_synapse(f"ctxval_b_{side}_push", val_b, motor_push, ctxval_push, sparsity=ctxval_sp)
+            self._create_static_synapse(f"ctxval_b_{side}_pull", val_b, motor_pull, ctxval_pull, sparsity=ctxval_sp)
 
-        # === Context-specific D1 populations (GPT design: separate D1 per zone) ===
-        msn_params = {
-            "C": 30.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
-            "Vthresh": -50.0, "Ioffset": 0.0, "TauRefrac": 2.0
-        }
-        msn_init = {"V": -65.0, "RefracTime": 0.0}
-        n_ctx_d1 = 8  # per population (bigger than GPT's 4 for signal strength)
+        # === Context-specific D1 populations (M4 v9: SensoryLIF for food_eye I_input) ===
+        # SensoryLIF so we can inject food_eye signal directly via I_input
+        # This replaces the context-blind food→D1 pathway entirely
+        d1ctx_params = {
+            "C": 10.0, "TauM": 20.0, "Vrest": -65.0, "Vreset": -65.0,
+            "Vthresh": -50.0, "TauRefrac": 2.0
+        }  # v9e: C=10 (was 30) — lower threshold for food signal sensitivity
+        d1ctx_init = {"V": -65.0, "RefracTime": 0.0, "I_input": 0.0}
+        n_ctx_d1 = cfg.n_ctx_d1  # v9: configurable, default 20
 
-        # 8 populations: D1_A_L/R, D2_A_L/R, D1_B_L/R, D2_B_L/R
-        self.d1_ctx_a_l = self.model.add_neuron_population("d1_ctx_a_l", n_ctx_d1, "LIF", msn_params, msn_init)
-        self.d1_ctx_a_r = self.model.add_neuron_population("d1_ctx_a_r", n_ctx_d1, "LIF", msn_params, msn_init)
-        self.d1_ctx_b_l = self.model.add_neuron_population("d1_ctx_b_l", n_ctx_d1, "LIF", msn_params, msn_init)
-        self.d1_ctx_b_r = self.model.add_neuron_population("d1_ctx_b_r", n_ctx_d1, "LIF", msn_params, msn_init)
+        # 4 populations: D1_A_L/R, D1_B_L/R (SensoryLIF for I_input gating)
+        self.d1_ctx_a_l = self.model.add_neuron_population("d1_ctx_a_l", n_ctx_d1, sensory_lif_model, d1ctx_params, d1ctx_init)
+        self.d1_ctx_a_r = self.model.add_neuron_population("d1_ctx_a_r", n_ctx_d1, sensory_lif_model, d1ctx_params, d1ctx_init)
+        self.d1_ctx_b_l = self.model.add_neuron_population("d1_ctx_b_l", n_ctx_d1, sensory_lif_model, d1ctx_params, d1ctx_init)
+        self.d1_ctx_b_r = self.model.add_neuron_population("d1_ctx_b_r", n_ctx_d1, sensory_lif_model, d1ctx_params, d1ctx_init)
 
         # KC → D1_ctx (SPARSE R-STDP — context-gated learning)
         kc_d1_w = self.config.kc_to_d1_init_w  # 0.5
@@ -9312,20 +9457,25 @@ class ForagerBrain:
         for d1_ctx in [self.d1_ctx_a_l, self.d1_ctx_a_r, self.d1_ctx_b_l, self.d1_ctx_b_r]:
             self._create_static_synapse(f"da_to_{d1_ctx.name}", self.dopamine_neurons, d1_ctx, 10.0, sparsity=0.1)
 
-        # D1_ctx → Motor (Push-Pull, same pattern as Direct→Motor)
-        self._create_static_synapse("d1ctx_a_l_push", self.d1_ctx_a_l, self.motor_left, 10.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_a_l_pull", self.d1_ctx_a_l, self.motor_right, -4.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_a_r_push", self.d1_ctx_a_r, self.motor_right, 10.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_a_r_pull", self.d1_ctx_a_r, self.motor_left, -4.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_b_l_push", self.d1_ctx_b_l, self.motor_left, 10.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_b_l_pull", self.d1_ctx_b_l, self.motor_right, -4.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_b_r_push", self.d1_ctx_b_r, self.motor_right, 10.0, sparsity=0.1)
-        self._create_static_synapse("d1ctx_b_r_pull", self.d1_ctx_b_r, self.motor_left, -4.0, sparsity=0.1)
+        # D1_ctx → Motor (Push-Pull, v9e: MUST be strong enough for Motor C=300)
+        # Motor threshold ~225. Need 20 neurons × sparsity × weight > 225
+        # 20 × 0.3 × 50 = 300 > 225 ✓
+        d1ctx_push = 50.0   # v9e: strong enough to drive Motor(C=300) alone
+        d1ctx_pull = -20.0  # v9e: strong pull for clear lateralization
+        d1ctx_sp = 0.3      # v9e: higher connectivity for signal strength
+        self._create_static_synapse("d1ctx_a_l_push", self.d1_ctx_a_l, self.motor_left, d1ctx_push, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_a_l_pull", self.d1_ctx_a_l, self.motor_right, d1ctx_pull, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_a_r_push", self.d1_ctx_a_r, self.motor_right, d1ctx_push, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_a_r_pull", self.d1_ctx_a_r, self.motor_left, d1ctx_pull, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_b_l_push", self.d1_ctx_b_l, self.motor_left, d1ctx_push, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_b_l_pull", self.d1_ctx_b_l, self.motor_right, d1ctx_pull, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_b_r_push", self.d1_ctx_b_r, self.motor_right, d1ctx_push, sparsity=d1ctx_sp)
+        self._create_static_synapse("d1ctx_b_r_pull", self.d1_ctx_b_r, self.motor_left, d1ctx_pull, sparsity=d1ctx_sp)
 
         print(f"    CtxA: {cfg.n_ctx_a} (SensoryLIF), CtxB: {cfg.n_ctx_b}")
-        print(f"    D1_ctx: 4×{n_ctx_d1}={4*n_ctx_d1} neurons (A_L/R + B_L/R)")
+        print(f"    D1_ctx: 4×{n_ctx_d1}={4*n_ctx_d1} neurons (A_L/R + B_L/R, SensoryLIF)")
         print(f"    Context gating: excite(12.0), inhibit(-15.0)")
-        print(f"    D1_ctx→Motor: Push-Pull 10.0/-4.0")
+        print(f"    D1_ctx→Motor: Push-Pull {d1ctx_push}/{d1ctx_pull} sp={d1ctx_sp} (v9e: sole food pathway)")
 
     def _build_place_transition_circuit(self):
         """M3: Place→Place transition graph + Value population
@@ -10791,57 +10941,100 @@ class ForagerBrain:
             self.last_ctx_a_rate = ctx_a_spikes / max(self.config.n_ctx_a * 10, 1)
             self.last_ctx_b_rate = ctx_b_spikes / max(self.config.n_ctx_b * 10, 1)
 
-            # D1_ctx trace accumulation (4-factor: pre×post×CTX×DA)
+            # Context tracking + zone transition detection
+            self._prev_ctx = self._current_ctx
+            self._current_ctx = "a" if pos_x < 0.5 else "b"
             ctx = self._current_ctx
+
+            # v9: Zone transition → plasticity freeze (5 steps)
+            if ctx != self._prev_ctx:
+                self._ctx_plasticity_freeze = 5
+
+            # v9f: TYPED food → CtxVal I_input (direct to Motor via CtxVal→Motor 15.0)
+            # CtxVal(SensoryLIF C=5) responds well to food signal without saturation
+            # With all other food→Motor suppressed, this is the SOLE food approach pathway
+            if self._context_hard_gate_active:
+                good_l = np.mean(observation.get("good_food_rays_left", np.zeros(8)))
+                good_r = np.mean(observation.get("good_food_rays_right", np.zeros(8)))
+                bad_l = np.mean(observation.get("bad_food_rays_left", np.zeros(8)))
+                bad_r = np.mean(observation.get("bad_food_rays_right", np.zeros(8)))
+                s = self._ctx_food_scale
+                if ctx == "a":
+                    self.ctx_val_a_l.vars["I_input"].view[:] = good_l * s["a_good"] + bad_l * s["a_bad"]
+                    self.ctx_val_a_l.vars["I_input"].push_to_device()
+                    self.ctx_val_a_r.vars["I_input"].view[:] = good_r * s["a_good"] + bad_r * s["a_bad"]
+                    self.ctx_val_a_r.vars["I_input"].push_to_device()
+                    self.ctx_val_b_l.vars["I_input"].view[:] = 0.0
+                    self.ctx_val_b_l.vars["I_input"].push_to_device()
+                    self.ctx_val_b_r.vars["I_input"].view[:] = 0.0
+                    self.ctx_val_b_r.vars["I_input"].push_to_device()
+                else:
+                    self.ctx_val_a_l.vars["I_input"].view[:] = 0.0
+                    self.ctx_val_a_l.vars["I_input"].push_to_device()
+                    self.ctx_val_a_r.vars["I_input"].view[:] = 0.0
+                    self.ctx_val_a_r.vars["I_input"].push_to_device()
+                    self.ctx_val_b_l.vars["I_input"].view[:] = good_l * s["b_good"] + bad_l * s["b_bad"]
+                    self.ctx_val_b_l.vars["I_input"].push_to_device()
+                    self.ctx_val_b_r.vars["I_input"].view[:] = good_r * s["b_good"] + bad_r * s["b_bad"]
+                    self.ctx_val_b_r.vars["I_input"].push_to_device()
+                # D1_ctx also gets signal (secondary, for future R-STDP)
+                for pop in [self.d1_ctx_a_l, self.d1_ctx_a_r, self.d1_ctx_b_l, self.d1_ctx_b_r]:
+                    pop.vars["I_input"].view[:] = 0.0
+                    pop.vars["I_input"].push_to_device()
+
+            # D1_ctx trace accumulation (4-factor: pre×post×CTX×DA)
             trace_decay = self.config.rstdp_trace_decay
             trace_max = self.config.rstdp_trace_max
-            # 현재 context의 D1_ctx만 trace 누적 (반대쪽은 decay만)
-            for key in self._d1ctx_trace:
-                if key.startswith(ctx):  # 현재 context
-                    kc_side = "l" if key.endswith("_l") else "r"
-                    kc_rate = self.last_kc_l_rate if kc_side == "l" else self.last_kc_r_rate
-                    kc_active = 1.0 if kc_rate > 0.03 else 0.0
-                    self._d1ctx_trace[key] = min(
-                        self._d1ctx_trace[key] * trace_decay + kc_active, trace_max)
-                else:  # 반대 context — decay only
-                    self._d1ctx_trace[key] *= trace_decay
-
-            # Context tracking + DA-gated ctxval learning
-            self._current_ctx = "a" if pos_x < 0.5 else "b"
+            # v9: plasticity freeze — no trace accumulation after zone transition
+            if self._ctx_plasticity_freeze > 0:
+                self._ctx_plasticity_freeze -= 1
+                for key in self._d1ctx_trace:
+                    self._d1ctx_trace[key] *= trace_decay  # decay only
+            else:
+                # 현재 context의 D1_ctx만 trace 누적 (반대쪽은 decay만)
+                for key in self._d1ctx_trace:
+                    if key.startswith(ctx):  # 현재 context
+                        kc_side = "l" if key.endswith("_l") else "r"
+                        kc_rate = self.last_kc_l_rate if kc_side == "l" else self.last_kc_r_rate
+                        kc_active = 1.0 if kc_rate > 0.03 else 0.0
+                        self._d1ctx_trace[key] = min(
+                            self._d1ctx_trace[key] * trace_decay + kc_active, trace_max)
+                    else:  # 반대 context — decay only
+                        self._d1ctx_trace[key] *= trace_decay
 
             # Food eye × context weight → CtxVal I_input (CPU computation)
-            food_l = np.mean(observation.get("food_rays_left", np.zeros(8)))
-            food_r = np.mean(observation.get("food_rays_right", np.zeros(8)))
-            ctx = self._current_ctx
-            # 현재 context의 CtxVal만 food signal 받음 (반대쪽은 0)
-            ctx_a_gate = 1.0 if ctx == "a" else 0.0
-            ctx_b_gate = 1.0 if ctx == "b" else 0.0
-            w_a_l = float(np.mean(self._ctxval_w["a_l"]))
-            w_a_r = float(np.mean(self._ctxval_w["a_r"]))
-            w_b_l = float(np.mean(self._ctxval_w["b_l"]))
-            w_b_r = float(np.mean(self._ctxval_w["b_r"]))
-            self.ctx_val_a_l.vars["I_input"].view[:] = food_l * w_a_l * ctx_a_gate
-            self.ctx_val_a_l.vars["I_input"].push_to_device()
-            self.ctx_val_a_r.vars["I_input"].view[:] = food_r * w_a_r * ctx_a_gate
-            self.ctx_val_a_r.vars["I_input"].push_to_device()
-            self.ctx_val_b_l.vars["I_input"].view[:] = food_l * w_b_l * ctx_b_gate
-            self.ctx_val_b_l.vars["I_input"].push_to_device()
-            self.ctx_val_b_r.vars["I_input"].view[:] = food_r * w_b_r * ctx_b_gate
-            self.ctx_val_b_r.vars["I_input"].push_to_device()
+            if not self._context_hard_gate_active:
+                # Legacy path: CtxVal additive correction (disabled in v9 hard gate mode)
+                food_l = np.mean(observation.get("food_rays_left", np.zeros(8)))
+                food_r = np.mean(observation.get("food_rays_right", np.zeros(8)))
+                ctx_a_gate = 1.0 if ctx == "a" else 0.0
+                ctx_b_gate = 1.0 if ctx == "b" else 0.0
+                w_a_l = float(np.mean(self._ctxval_w["a_l"]))
+                w_a_r = float(np.mean(self._ctxval_w["a_r"]))
+                w_b_l = float(np.mean(self._ctxval_w["b_l"]))
+                w_b_r = float(np.mean(self._ctxval_w["b_r"]))
+                self.ctx_val_a_l.vars["I_input"].view[:] = food_l * w_a_l * ctx_a_gate
+                self.ctx_val_a_l.vars["I_input"].push_to_device()
+                self.ctx_val_a_r.vars["I_input"].view[:] = food_r * w_a_r * ctx_a_gate
+                self.ctx_val_a_r.vars["I_input"].push_to_device()
+                self.ctx_val_b_l.vars["I_input"].view[:] = food_l * w_b_l * ctx_b_gate
+                self.ctx_val_b_l.vars["I_input"].push_to_device()
+                self.ctx_val_b_r.vars["I_input"].view[:] = food_r * w_b_r * ctx_b_gate
+                self.ctx_val_b_r.vars["I_input"].push_to_device()
 
             # Context-specific food value learning (food 근처에서 매 스텝)
-            # 좋은 음식 근처(good_food_rays 높음) → weight 증가
-            # 나쁜 음식 근처(bad_food_rays 높음) → weight 감소
-            good_l = np.mean(observation.get("good_food_rays_left", np.zeros(8)))
-            good_r = np.mean(observation.get("good_food_rays_right", np.zeros(8)))
-            bad_l = np.mean(observation.get("bad_food_rays_left", np.zeros(8)))
-            bad_r = np.mean(observation.get("bad_food_rays_right", np.zeros(8)))
-            eta_ctx = 0.0005  # 느린 학습 (매 스텝)
-            food_signal_l = good_l - bad_l  # +면 좋은 음식 우세, -면 나쁜 음식 우세
-            food_signal_r = good_r - bad_r
-            if abs(food_signal_l) > 0.05 or abs(food_signal_r) > 0.05:
-                self._ctxval_w[f"{ctx}_l"] += eta_ctx * food_signal_l
-                self._ctxval_w[f"{ctx}_r"] += eta_ctx * food_signal_r
+            # v9b: Skip per-step learning in hard gate mode (good/bad rays are context-blind)
+            if not self._context_hard_gate_active:
+                good_l = np.mean(observation.get("good_food_rays_left", np.zeros(8)))
+                good_r = np.mean(observation.get("good_food_rays_right", np.zeros(8)))
+                bad_l = np.mean(observation.get("bad_food_rays_left", np.zeros(8)))
+                bad_r = np.mean(observation.get("bad_food_rays_right", np.zeros(8)))
+                eta_ctx = 0.0005  # 느린 학습 (매 스텝)
+                food_signal_l = good_l - bad_l
+                food_signal_r = good_r - bad_r
+                if abs(food_signal_l) > 0.05 or abs(food_signal_r) > 0.05:
+                    self._ctxval_w[f"{ctx}_l"] += eta_ctx * food_signal_l
+                    self._ctxval_w[f"{ctx}_r"] += eta_ctx * food_signal_r
                 np.clip(self._ctxval_w[f"{ctx}_l"], 0.1, 8.0, out=self._ctxval_w[f"{ctx}_l"])
                 np.clip(self._ctxval_w[f"{ctx}_r"], 0.1, 8.0, out=self._ctxval_w[f"{ctx}_r"])
 

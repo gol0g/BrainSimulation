@@ -360,16 +360,16 @@ R-STDP 기반 실험 시 아래 조건을 만족하는지 사전 검토:
 
 > **전체 Phase 히스토리**: [docs/ROADMAP.md](docs/ROADMAP.md) 참조
 
-### 현재 상태: M3 완료, 다음 방향 설정 중 (28,035 뉴런, 800×800 맵)
+### 현재 상태: M4 v9 Context Hard Gate 구현 중 (28,139 뉴런, 800×800 맵)
 
 ```
 ╔═══════════════════════════════════════════════════════════════╗
-║  M3 Replay-Driven Replanning ✓ 완료 (2026-04-11)                ║
+║  M4 Context-Dependent Food Rules — v9 Hard Gate (2026-04-13)    ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  C0-C5 + C3 + Q1-Q3 + M3 전부 완료                              ║
-║  Revaluation SWR: place transition + reverse value backup       ║
-║  Detour PASS: +14.7pp new zone, 14x food (replanning 작동)     ║
-║  동적 환경 70% 생존, 28,035 뉴런                                ║
+║  8회 additive correction 실패 → GPT 자문 → fundamental 전환     ║
+║  v9: context-blind D1 suppressed, D1_ctx(SensoryLIF) sole path  ║
+║  food_eye I_input → active bank only, plasticity freeze on zone  ║
+║  28,139 뉴런 (D1_ctx 20×4=80, was 8×4=32)                      ║
 ║                                                               ║
 ║  하네스 프로세스: Sprint Contract→Evaluator→GPT Review           ║
 ║  스킬: /search-papers, /youtube-analyze, /ask-gpt              ║
@@ -438,7 +438,8 @@ gpu_monitor.ps1        # GPU 모니터링 + 자동 kill
 43. **SWR replay는 contingency change 후 maladaptive**: 환경 변화 후 replay(consolidation이든 revaluation이든) = stale memory 강화 → old zone에 갇힘. 5-seed 검증 확인. 초기 3-seed +14.7pp는 노이즈. **small sample로 결론 내지 말 것**
 44. **GPU DENSE 대형 시냅스는 BSOD 유발**: W_pp 400×400 DENSE on GPU → CUDA error 999 → 드라이버 크래시. CPU numpy로 전환하면 해결. SNN 시뮬레이션에 불필요한 시냅스는 GPU에 올리지 말 것
 45. **SensoryLIF C=1은 발화율 포화**: C=1이면 I_input 10이나 40이나 비슷한 발화 → L/R 차이 소멸. 방향 구분 필요한 감각은 C=5+ 사용
-46. **context-dependent rules는 별도 D1 population 필수**: 같은 D1에 weight swap/CtxVal 병렬/trace gating 전부 실패 (6회 시도 sel 0.50). 단일 population은 상반된 context value를 동시 표상 불가. GPT 설계대로 D1_A/D1_B 분리 + KC→D1_ctx R-STDP(context-gated 4-factor) 필요
+46. **context additive correction은 절대 불가**: 8회 시도 (weight swap, CtxVal 병렬, D1_ctx 병렬, trace gating 등) 전부 sel 0.50. 근본 원인: context-blind D1→Direct→Motor(25.0)가 "food 접근" 정책 지배 → 옆에 뭘 더해도 보정만. GPT 자문(2026-04-13): "context는 additive correction이 아니라 which policy bank speaks를 선택하는 gating signal". 해결: context-blind 경로 완전 차단(hard gate) + D1_ctx를 sole food approach pathway로
+47. **D1_ctx는 SensoryLIF + food_eye I_input 필수**: D1_ctx가 KC→D1_ctx(SPARSE 0.05)만으로는 food approach 부족 → chicken-and-egg. SensoryLIF로 변경 + food_eye I_input 직접 주입 → bootstrap 해결
 
 ---
 
