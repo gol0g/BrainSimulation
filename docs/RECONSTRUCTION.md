@@ -138,12 +138,36 @@ python -u run_v2_tasks.py --task integrated --context-select --seq-task --seq-wm
 **단, 성공하지 못한 상태에서 끊겼다.** 유일 생존 결과(7/12 01:05, integrated, 30ep 중 21ep):
 `performance_index` 평균 ~0.03, good 94 / bad 83 → 사실상 무선택. 재건 후 이 지점부터 다시 붙어야 한다.
 
+## 소실 규모 정정: 러너만이 아니다
+
+4월판 `ForagerBrainConfig`(L77~1414)를 실측한 결과 **`zone_circle`·`thermal`·`biletaxis`·
+`klino`·`seq_*`·`context_compositional` 필드가 하나도 없다.**
+즉 소실분은 `run_v2_tasks.py` 하나가 아니라 **뇌 본체의 5~7월 기능 전체**(687KB→766KB, 79KB 델타)다.
+러너만 복원해도 구동할 대상이 없다. 브레인 측 기능을 함께 재구현해야 한다.
+
+## ⚠️ 실행 환경 소실 (BLOCKER)
+
+2026-07-20 실측:
+
+| 항목 | 상태 |
+|---|---|
+| GPU | ✓ RTX 3070, driver 591.86, 8GB |
+| WSL 배포판 | ✗ **0개** — Ubuntu-24.04 소실 |
+| `~/pygenn_wsl` venv | ✗ 소실 |
+| CUDA 12.3 (WSL 내) | ✗ 소실 |
+
+CLAUDE.md 명시: **Windows Python으로 PyGeNN 실행 불가.** WSL 재구축 전에는 단 한 줄도 실행 검증할 수 없다.
+
 ## 재건 순서
 
+0. **환경 재구축 (BLOCKER)** — WSL Ubuntu-24.04 → CUDA 12.3 → `~/pygenn_wsl` venv → PyGeNN 5.4.0
 1. ~~GitHub 4월판 clone~~ ✓
 2. ~~생존 자산 38개 통합~~ ✓
 3. ~~인터페이스 명세 역산~~ ✓ (이 문서)
-4. `run_v2_tasks.py` 재구현 — 위 CLI/마커/스키마 준수
-5. `m5_smoke.sh`로 M5 경로 검증 (`sel=` 회복 확인)
-6. `comp_wm2.sh` 재현 → 7/11 지점 복귀
-7. 조합 컨텍스트 + 창발 WM 재도전
+4. 4월판 baseline 재검증 — `forager_brain.py --episodes 20`, 생존율 >40% 확인 (회귀 기준점 확보)
+5. 브레인 기능 재구현 — 스크립트 타임스탬프가 알려주는 실제 개발 순서대로:
+   `biletaxis`(7/1~4) → `multicap`/`v3-olf`(7/5~6) → `seq_*`(7/7~10) → `context_compositional`+`seq_wm`(7/10~11)
+6. `run_v2_tasks.py` 재구현 — 위 CLI/마커/스키마 준수
+7. `m5_smoke.sh`로 M5 경로 검증 (`sel=` 회복 확인)
+8. `comp_wm2.sh` 재현 → 7/11 지점 복귀
+9. 조합 컨텍스트 + 창발 WM 재도전 (7/12 시점 미해결 상태에서 이어감)
