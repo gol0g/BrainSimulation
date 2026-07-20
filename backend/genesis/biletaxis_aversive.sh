@@ -9,7 +9,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64
 export PYTHONUNBUFFERED=1
 source ~/pygenn_wsl/bin/activate
 cd ~/pygenn_test
-S=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation/backend/genesis/run_v2_tasks.py
+S=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/backend/genesis/run_v2_tasks.py
 # aversive: --appetitive-place 없음(열 구역=나쁨). --start-far로 멀리서 출발.
 B="--task place_pref --zone-circle --v3-klino --start-far --replay-to-klino --n-food 0 --episodes 40"
 for seed in 0 1 2; do

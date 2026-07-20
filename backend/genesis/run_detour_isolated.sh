@@ -2,7 +2,7 @@
 # M3 Detour Test — subprocess isolation per seed×condition
 # Prevents GPU memory leak from multiple PyGeNN model builds
 
-SCRIPT="/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation/backend/genesis/test_detour.py"
+SCRIPT="/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/backend/genesis/test_detour.py"
 LEARNING_EPS=${1:-5}
 SEEDS=${2:-5}
 RESULTS_FILE="/tmp/detour_results.txt"

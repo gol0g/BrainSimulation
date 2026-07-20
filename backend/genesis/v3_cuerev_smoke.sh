@@ -1,6 +1,6 @@
 #!/bin/bash
 set -u
-SD="/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation/backend/genesis"
+SD="/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/backend/genesis"
 cd ~/pygenn_test && rm -rf forager_brain_CODE
 echo "=== cue-reversal smoke (olfactory, flip@10) ==="
 PYTHONUNBUFFERED=1 stdbuf -oL python -u "$SD/run_v2_tasks.py" \

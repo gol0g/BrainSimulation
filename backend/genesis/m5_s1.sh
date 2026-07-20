@@ -7,5 +7,5 @@ export PYTHONUNBUFFERED=1
 source ~/pygenn_wsl/bin/activate
 cd ~/pygenn_test && rm -rf forager_brain_CODE CODE
 export M5_SHUNT=1 M5_SEED=1 M5_EP=15
-python -u /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation/backend/genesis/test_context_m5_smoke.py 2>&1 | grep -iE "M5 smoke|sel=|shunt:|DONE" | head
+python -u /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/backend/genesis/test_context_m5_smoke.py 2>&1 | grep -iE "M5 smoke|sel=|shunt:|DONE" | head
 echo "=== END ==="

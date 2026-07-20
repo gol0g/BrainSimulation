@@ -7,7 +7,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64
 export PYTHONUNBUFFERED=1
 source ~/pygenn_wsl/bin/activate
 cd ~/pygenn_test
-S=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation/backend/genesis/run_v2_tasks.py
+S=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/backend/genesis/run_v2_tasks.py
 B="--task integrated --zone-circle --appetitive-place --v3-klino --sparse-reward --start-far --replay-to-klino --biletaxis --biletaxis-gain 0.5 --biletaxis-brake --biletaxis-hunger-gate --episodes 25"
 for seed in 2 3 4; do
   rm -rf forager_brain_CODE CODE
