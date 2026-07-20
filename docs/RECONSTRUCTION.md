@@ -112,6 +112,23 @@ NAV="$B --place-value-food-exclude --episodes 30"
 
 파일명 규칙: `v2_{task}_{ablation}_seed{N}.json` → `docs/research/v2_results/`
 
+### 지표 정의 (생존 데이터에서 역산, 21/21 에피소드 검증 완료)
+
+```python
+n_choices         = good_eaten + bad_eaten
+performance_index = (good_eaten - bad_eaten) / n_choices
+```
+
+생존본 21개 에피소드 전부에서 부동소수점 오차 1e-12 이내로 일치 확인.
+예: ep0 (94-83)/177 = 0.062146892655367235 (기록값과 완전 일치),
+ep20 (97-98)/195 = -0.005128205128205128 (일치).
+
+→ PI는 **좋은/나쁜 음식 선택의 정규화된 편향도**. 0 = 무선택(우연), 1 = 완벽 변별, 음수 = 역선택.
+7월 최종 결과가 ~0.03이었다는 것은 사실상 변별 실패를 뜻한다.
+
+`cool_dwell_ratio`, `thermal_entries`는 thermal/zone 과제 지표이며 생존본에서는 각각 1.0, 0으로
+상수라 공식 역산 불가 — 재구현 시 정의를 새로 정해야 한다.
+
 ## 2순위: `test_context_m5_smoke.py`
 
 M5 스모크 테스트. 출력 마커: `=== M5 smoke`, `sel=`, `shunt_good`, `shunt_bad`, `shunt:`, `DONE`.
@@ -144,6 +161,22 @@ python -u run_v2_tasks.py --task integrated --context-select --seq-task --seq-wm
 `klino`·`seq_*`·`context_compositional` 필드가 하나도 없다.**
 즉 소실분은 `run_v2_tasks.py` 하나가 아니라 **뇌 본체의 5~7월 기능 전체**(687KB→766KB, 79KB 델타)다.
 러너만 복원해도 구동할 대상이 없다. 브레인 측 기능을 함께 재구현해야 한다.
+
+## 좋은 소식: M4 토대는 온전하다
+
+4월판을 실측한 결과 조합적 컨텍스트가 딛고 설 기반이 살아 있다:
+
+| 위치 | 내용 |
+|---|---|
+| `forager_gym.py:179` | `context_rules_enabled` — Zone A(정상)/Zone B(good↔bad 반전) |
+| `forager_gym.py:778` | `agent_x > width/2` 이면 `effective_type = 1 - food_type` |
+| `forager_brain.py:1266` | `context_gate_enabled` |
+| `forager_brain.py:2031` | `_build_context_gate_circuit()` |
+| `forager_brain.py:12225` | `_ctxval_w[ctx_side]` 보상시점 컨텍스트별 가치 갱신 (eta 0.15) |
+
+주석에 명시: *"같은 시각 자극이지만 위치에 따라 다른 행동 — WM + PFC + hippocampal context가 필수인 과제."*
+즉 `--context-select`는 재구현 불필요, 4월 코드로 바로 구동 가능하다.
+소실분은 이 위에 얹혔던 **조합(compositional) 확장 + 창발 WM + biletaxis/v3 계열**이다.
 
 ## ⚠️ 실행 환경 소실 (BLOCKER)
 
