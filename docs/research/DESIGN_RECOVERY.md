@@ -135,6 +135,16 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 - 🔴 **미상**: 좌/우 value 추정을 SNN 내부에서(별도 뉴런 집단) vs 러너에서(place_cells read-out) 했는지.
   원본 아키텍처상 조향은 뇌 기능이나, 최소 재유도는 러너 read-out으로 시작해 align>0.5 확인 후 회로화.
 
+### D2-검증. biletaxis 1차 실험 실패 (2026-07-21) — 디버깅 대기
+OFF vs ON 25ep 실측 (`docs/research/rebuild_baseline/a2_{off,on}_seed0.json`):
+- `biletaxis-align: 0.0000`, dwell ON 0.077 ≈ OFF 0.084 → **조향이 작동 안 함**.
+- 원인: align 0.0000은 |Δturn|>1e-6 스텝이 0 = **V_L≈V_R 항상**(value 지도가 평평).
+  = place→value 지도가 zone을 학습 못 함.
+- 🔴 디버깅 순서(다음 세션): ① sparse-reward가 실제 DA 방출/learn_food_location을
+  호출하는지(zone 진입 카운트 확인) ② place_to_value 가중치가 에피소드 경과로 변하는지
+  (평평하면 학습률/보상강도 문제) ③ value read 스케일(가우시안 sigma 0.08이 20×20 격자에서
+  적절한지). 널 0.07 못 넘으면 gain/look 튜닝은 무의미 — 지도 학습부터.
+
 ## 재구현 순서 (설계 확정 후)
 
 증거 등급 = 재구현 안전도. A(🟢)부터 바텀업이 정석이나, 사용자 선택은 **설계 문서 우선 복구**.
