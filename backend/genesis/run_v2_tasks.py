@@ -192,8 +192,27 @@ class PlacePrefTask:
             else:
                 brain.release_dopamine(reward_magnitude=-0.5)
                 brain.add_experience(self.cx, self.cy, 1, env.steps, -5.0)
+            # A2 재유도: zone=보상 랜드마크 → 전이 버퍼 기록.
+            # 원본 transition_buffer.append는 "음식 가시성"에 게이팅(10918)돼
+            # n_food 0에선 안 채워짐 → value 역backup 스킵 → 지도 평평.
+            # v3 place_pref는 트리거를 zone 근접으로 대체. 여기서 복제.
+            self._record_transition(brain)
             self._zone_rewards += 1
         self._was_in = in_zone
+
+    @staticmethod
+    def _record_transition(brain):
+        import numpy as np
+        prev = getattr(brain, "prev_place_activation", None)
+        curr = getattr(brain, "last_active_place_cells", None)
+        if prev is None or curr is None:
+            return
+        pa = np.where(np.asarray(prev) > 0.1)[0].tolist()
+        ca = np.where(np.asarray(curr) > 0.1)[0].tolist()
+        if pa and ca:
+            brain.transition_buffer.append((pa, ca, 1.0))
+            if len(brain.transition_buffer) > 100:
+                brain.transition_buffer = brain.transition_buffer[-100:]
 
     def episode_metrics(self):
         n = self._steps or 1
@@ -247,25 +266,32 @@ class BiletaxisSteering:
         return float((wr * self._v_per_cell).sum() / s) if s > 1e-9 else 0.0
 
     def bias(self, env, place):
-        """조향 보정량 반환 + align 누적. place: goal 방향 판정용."""
+        """조향 보정량 반환 + align 누적. place: goal 방향 판정용.
+
+        부호 규약 (A2b 디버깅으로 확정):
+        gym은 `agent_angle += angle_delta`, 이동은 cos/sin(angle) →
+        **angle_delta>0 = 반시계(CCW) = heading+δ 방향으로 회전.**
+        따라서 CCW쪽(θ+δ) value가 높으면 +방향으로 틀어야 그쪽으로 간다.
+        """
         import numpy as np
         ax = env.agent_x / env.config.width
         ay = env.agent_y / env.config.height
         th = env.agent_angle
-        xl = ax + self.look * np.cos(th - self.delta)
-        yl = ay + self.look * np.sin(th - self.delta)
-        xr = ax + self.look * np.cos(th + self.delta)
-        yr = ay + self.look * np.sin(th + self.delta)
-        vl = self._value_at(xl, yl)
-        vr = self._value_at(xr, yr)
-        d_turn = self.gain * (vl - vr)
+        # CCW(왼쪽, angle_delta>0 방향) = θ+δ, CW(오른쪽) = θ-δ
+        x_ccw = ax + self.look * np.cos(th + self.delta)
+        y_ccw = ay + self.look * np.sin(th + self.delta)
+        x_cw = ax + self.look * np.cos(th - self.delta)
+        y_cw = ay + self.look * np.sin(th - self.delta)
+        v_ccw = self._value_at(x_ccw, y_ccw)
+        v_cw = self._value_at(x_cw, y_cw)
+        d_turn = self.gain * (v_ccw - v_cw)   # CCW value 높으면 +(CCW로 조향)
 
         # align: 조향 부호가 실제 목표방향 부호와 일치하나
         if place is not None and abs(d_turn) > 1e-6:
             goal_ang = np.arctan2(place.cy - ay, place.cx - ax)
             rel = (goal_ang - th + np.pi) % (2 * np.pi) - np.pi  # [-π,π]
-            # 목표가 왼쪽(rel<0)이면 좌회전(d_turn<0)이 정답 — 부호 규약: angle_delta>0=우
-            correct = (d_turn < 0) == (rel < 0)
+            # rel>0 = 목표가 CCW(왼쪽) → +조향(d_turn>0)이 정답
+            correct = (d_turn > 0) == (rel > 0)
             self._align_hit += int(correct)
             self._align_tot += 1
         return d_turn
