@@ -28,8 +28,6 @@ RUNNER_VERSION = "1.0"
 # ---------------------------------------------------------------------------
 NOT_YET_IMPLEMENTED = {
     # biletaxis 계열 (7/1~7/4)
-    "biletaxis": "양측 주행 회로",
-    "biletaxis_gain": "양측 주행 이득",
     "biletaxis_brake": "양측 주행 제동",
     "biletaxis_hunger_gate": "허기 게이팅",
     "biletaxis_settle": "정착 궤적 덤프",
@@ -43,7 +41,8 @@ NOT_YET_IMPLEMENTED = {
     "place_value_food_exclude": "장소가치 음식분리(factored)",
     "value_max": "가치 상한",
     # zone_circle/appetitive_place/start_far: place_pref 과제 레이어로 재구현됨 (D1)
-    "sparse_reward": "희소 보상",
+    # sparse_reward: zone 진입→DA로 재구현됨 (D3)
+    # biletaxis/biletaxis_gain: 학습 value 지도 양측 read-out으로 재구현됨 (D2)
     "thermal_reversal": "온도 역전",
     "cue_reversal": "단서 역전",
     "cue_reversal_period": "단서 역전 주기",
@@ -145,18 +144,21 @@ class PlacePrefTask:
     좌표는 obs의 정규화(0~1) 위치를 쓴다. zone 중심/반경도 정규화.
     """
 
-    def __init__(self, cx=0.5, cy=0.5, radius=0.12, appetitive=True, start_far=False):
+    def __init__(self, cx=0.5, cy=0.5, radius=0.12, appetitive=True,
+                 start_far=False, sparse_reward=False):
         self.cx = cx
         self.cy = cy
         self.radius = radius
         self.appetitive = appetitive   # False = aversive(회피 과제)
         self.start_far = start_far
+        self.sparse_reward = sparse_reward  # zone 진입 → DA (D3, place→value 학습 구동)
         self._reset_accum()
 
     def _reset_accum(self):
         self._dist_sum = 0.0
         self._in_zone = 0
         self._steps = 0
+        self._was_in = False
 
     def on_reset(self, env):
         self._reset_accum()
@@ -167,14 +169,25 @@ class PlacePrefTask:
             env.agent_x = fx * env.config.width
             env.agent_y = fy * env.config.height
 
-    def on_step(self, env, action_delta):
+    def on_step(self, env, action_delta, brain=None):
         px = env.agent_x / env.config.width
         py = env.agent_y / env.config.height
         dist = ((px - self.cx) ** 2 + (py - self.cy) ** 2) ** 0.5
         self._dist_sum += dist
-        if dist < self.radius:
+        in_zone = dist < self.radius
+        if in_zone:
             self._in_zone += 1
         self._steps += 1
+
+        # D3 sparse-reward: zone 진입 순간 DA + place→value 학습 구동.
+        # place→value는 DA-gated 3-factor라 보상 없으면 지도가 안 생긴다.
+        # n_food 0에선 zone 도달이 유일 보상원 → biletaxis가 읽을 지도의 원천.
+        if self.sparse_reward and brain is not None and in_zone and not self._was_in:
+            sign = 1.0 if self.appetitive else -1.0
+            brain.release_dopamine(reward_magnitude=1.0 * sign, primary_reward=True)
+            brain.learn_food_location(food_position=(self.cx, self.cy),
+                                      anti_learn=not self.appetitive)
+        self._was_in = in_zone
 
     def episode_metrics(self):
         n = self._steps or 1
@@ -184,7 +197,75 @@ class PlacePrefTask:
         }
 
 
-def run_episode(brain, env, ep_idx, task, place=None):
+class BiletaxisSteering:
+    """biletaxis 양측 조향 — 원본 소실, 증거 기반 재유도 (DESIGN_RECOVERY §D2).
+
+    학습된 place→value 지도를 좌/우 heading으로 읽어 높은 쪽으로 조향.
+    ground-truth 목표가 아니라 뇌가 학습한 value를 쓴다 — align은 학습 지도가
+    목표를 실제로 가리키는지를 측정하므로 반드시 학습 지도여야 한다.
+
+    러너 레벨(brain.place_to_value / brain.place_cell_centers 속성 read).
+    원본 아키텍처(하네스가 gym/brain 위) 유지. value 지도는 에피소드 내 안정 →
+    reset 때 1회 pull (매 스텝 GPU pull 회피).
+    """
+
+    def __init__(self, gain=0.5, look=0.10, delta=0.6, sigma=0.08):
+        self.gain = gain
+        self.look = look      # 전방 샘플 거리(정규화)
+        self.delta = delta    # 좌/우 각 오프셋(rad)
+        self.sigma = sigma    # place-cell 가우시안 read 폭
+        self._v_per_cell = None
+        self._centers = None
+        self._align_hit = 0
+        self._align_tot = 0
+
+    def on_reset(self, brain):
+        import numpy as np
+        self._align_hit = 0
+        self._align_tot = 0
+        # 학습된 value 지도 pull (place_to_value: place_cells → place_value)
+        brain.place_to_value.vars["g"].pull_from_device()
+        w = brain.place_to_value.vars["g"].view.copy()
+        n_pc = brain.config.n_place_cells
+        self._v_per_cell = w.reshape(n_pc, -1).mean(axis=1)   # 셀당 value
+        self._centers = np.asarray(brain.place_cell_centers)   # (n_pc, 2) 정규화
+
+    def _value_at(self, x, y):
+        import numpy as np
+        d2 = ((self._centers[:, 0] - x) ** 2 + (self._centers[:, 1] - y) ** 2)
+        wr = np.exp(-d2 / (2 * self.sigma ** 2))
+        s = wr.sum()
+        return float((wr * self._v_per_cell).sum() / s) if s > 1e-9 else 0.0
+
+    def bias(self, env, place):
+        """조향 보정량 반환 + align 누적. place: goal 방향 판정용."""
+        import numpy as np
+        ax = env.agent_x / env.config.width
+        ay = env.agent_y / env.config.height
+        th = env.agent_angle
+        xl = ax + self.look * np.cos(th - self.delta)
+        yl = ay + self.look * np.sin(th - self.delta)
+        xr = ax + self.look * np.cos(th + self.delta)
+        yr = ay + self.look * np.sin(th + self.delta)
+        vl = self._value_at(xl, yl)
+        vr = self._value_at(xr, yr)
+        d_turn = self.gain * (vl - vr)
+
+        # align: 조향 부호가 실제 목표방향 부호와 일치하나
+        if place is not None and abs(d_turn) > 1e-6:
+            goal_ang = np.arctan2(place.cy - ay, place.cx - ax)
+            rel = (goal_ang - th + np.pi) % (2 * np.pi) - np.pi  # [-π,π]
+            # 목표가 왼쪽(rel<0)이면 좌회전(d_turn<0)이 정답 — 부호 규약: angle_delta>0=우
+            correct = (d_turn < 0) == (rel < 0)
+            self._align_hit += int(correct)
+            self._align_tot += 1
+        return d_turn
+
+    def align_ratio(self):
+        return self._align_hit / self._align_tot if self._align_tot else 0.0
+
+
+def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
     """단일 에피소드. 4월 run_training 루프의 최소 경로를 따른다.
 
     place: PlacePrefTask 또는 None. 주어지면 goal-zone 항법 계측을 얹는다.
@@ -193,6 +274,8 @@ def run_episode(brain, env, ep_idx, task, place=None):
     brain.reset()
     if place is not None:
         place.on_reset(env)
+    if biletaxis is not None:
+        biletaxis.on_reset(brain)
     done = False
     good_eaten = 0
     bad_eaten = 0
@@ -202,11 +285,14 @@ def run_episode(brain, env, ep_idx, task, place=None):
     while not done:
         action_delta, info = brain.process(obs)
         brain.decay_dopamine()
+        # biletaxis: 학습 value 지도 기반 조향 보정 (env.step 전에 heading 반영)
+        if biletaxis is not None:
+            action_delta = action_delta + biletaxis.bias(env, place)
         env.set_brain_info(info)
         obs, reward, done, env_info = env.step((action_delta,))
 
         if place is not None:
-            place.on_step(env, action_delta)
+            place.on_step(env, action_delta, brain=brain)
 
         if env_info.get("food_eaten"):
             ftype = env_info.get("food_type", 0)
@@ -239,6 +325,8 @@ def run_episode(brain, env, ep_idx, task, place=None):
         rec["cool_dwell_ratio"] = rec["dwell_ratio"]
     else:
         rec["cool_dwell_ratio"] = (cool_steps / steps) if steps else 0.0
+    if biletaxis is not None:
+        rec["biletaxis_align"] = biletaxis.align_ratio()
     return rec
 
 
@@ -267,7 +355,7 @@ def main():
         brain_config.context_gate_enabled = True
         print("[context] Zone A/B 의미반전 활성 — context hard gate ON")
 
-    # place_pref 과제 레이어 (v3, 증거 기반 재유도 — DESIGN_RECOVERY §D1)
+    # place_pref 과제 레이어 (v3, 증거 기반 재유도 — DESIGN_RECOVERY §D1/D3)
     place = None
     if args.task == "place_pref" or args.zone_circle:
         place = PlacePrefTask(
@@ -275,10 +363,20 @@ def main():
             cy=args.zone_cy if args.zone_cy is not None else 0.5,
             appetitive=args.appetitive_place,
             start_far=args.start_far,
+            sparse_reward=args.sparse_reward,
         )
         kind = "appetitive" if args.appetitive_place else "aversive"
         print(f"[place_pref] goal-zone ({place.cx},{place.cy}) r={place.radius} "
-              f"{kind} start_far={args.start_far}")
+              f"{kind} start_far={args.start_far} sparse_reward={args.sparse_reward}")
+
+    # biletaxis 양측 조향 (증거 기반 재유도 — DESIGN_RECOVERY §D2)
+    biletaxis = None
+    if args.biletaxis:
+        biletaxis = BiletaxisSteering(
+            gain=args.biletaxis_gain if args.biletaxis_gain is not None else 0.5,
+        )
+        print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain} "
+              f"(학습 value 지도 read-out)")
 
     env = ForagerGym(config=env_config, render_mode="none")
     brain = ForagerBrain(config=brain_config)
@@ -286,11 +384,13 @@ def main():
     t0 = time.time()
     episodes = []
     for ep in range(args.episodes):
-        rec = run_episode(brain, env, ep, args.task, place=place)
+        rec = run_episode(brain, env, ep, args.task, place=place, biletaxis=biletaxis)
         episodes.append(rec)
         extra = ""
         if place is not None:
-            extra = f" goal-dist={rec['goal_dist']:.4f} dwell={rec['dwell_ratio']:.4f}"
+            extra += f" goal-dist={rec['goal_dist']:.4f} dwell={rec['dwell_ratio']:.4f}"
+        if biletaxis is not None:
+            extra += f" align={rec['biletaxis_align']:.4f}"
         print(f"[ep {ep:3d}] PI={rec['performance_index']:+.4f} "
               f"good={rec['good_eaten']} bad={rec['bad_eaten']} "
               f"steps={rec['steps_taken']}{extra}")
@@ -312,6 +412,10 @@ def main():
     if place is not None:
         gd = [e["goal_dist"] for e in episodes]
         print(f"goal-dist: {sum(gd)/len(gd):.4f}")
+    if biletaxis is not None:
+        al = [e["biletaxis_align"] for e in episodes]
+        print(f"biletaxis-align: {sum(al)/len(al):.4f}")
+        print(f"last_5_align: {sum(al[-5:])/len(al[-5:]):.4f}")
 
     result = {
         "v2_runner_version": RUNNER_VERSION,
