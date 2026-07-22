@@ -66,6 +66,12 @@ biletaxis는 독립 기능이 아니라 **v3 place_pref 과제 스택 위의 최
 
 ---
 
+> **설계 권한 (2026-07-21 확정)**: 이 회로들은 원래 **어시스턴트(이전 세션의 Claude)가 설계·구현**했다.
+> 사용자는 목표·방향을 정하는 연구 디렉터이지 회로 내부 설계자가 아니다. 따라서 🔴 항목은
+> **사용자 문답으로 메우지 않는다** — 증거(스크립트 주석·4월판 코드·생물학적 제약·최종 목표)로
+> 이전 인스턴스가 했던 대로 **어시스턴트가 재유도**한다. 사용자 확인: "니가 다 설계하고 진행했는데".
+> 재유도한 설계는 이 문서에 근거와 함께 기록해 다음 세션이 이어받게 한다.
+
 ## C. 시퀀스 / 조합 프런티어 🔴 — 증거 희박, 재유도 핵심
 
 CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **여기가 7/12 미해결로 끊긴 최전선.**
@@ -88,6 +94,26 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 - **`--thermal-reversal` / `--v3-recovery`**: 열 반전 후 회피 회복(value 재학습).
 
 ---
+
+## 재유도 설계 로그 (어시스턴트, 증거 기반)
+
+### D1. v3 place_pref 과제 스택 — 러너 레이어로 재구현 (2026-07-21)
+**근거**: 4월판 gym에 task_mode 개념 없음 + 원본 run_v2_tasks가 gym 위 별도 하네스였음(엔트리포인트 증거).
+→ 163KB gym을 건드리지 않고 러너에 과제 레이어를 얹는다. gym이 제공하는 것: obs `position_x/y`(정규화),
+`env.agent_x/y`, `env.width/height`, `env.steps`.
+
+**설계**:
+- **goal zone**: 원형, 중심 `(zone_cx, zone_cy)`(정규화 0~1, 기본 0.5/0.5), 반경 `zone_r`(기본 0.12 = rich_zone_radius/width 근사).
+- **`--start-far`**: 에피소드 시작 시 zone 반대편 코너에 배치 (reset 후 `env.agent_x/y` 오버라이드).
+- **`--n-food 0`**: `env_config.n_food=0`으로 순수 항법.
+- **`--appetitive-place`**: zone=목표(양성). 없으면 aversive(회피, dwell 낮을수록 좋음).
+- **지표 (매 스텝 계산)**:
+  - `goal-dist`: 정규화 거리 `hypot(px-cx, py-cy)`, 에피소드 평균.
+  - `cool_dwell_ratio`: zone 내부 스텝 비율 (`dist < zone_r`). aversive면 "회피율" 해석.
+  - `biletaxis-align`: 명령 turn 부호 vs 목표방향 부호 일치율 → **brain steering 필요**, biletaxis 구현 시.
+- 출력 마커: `goal-dist:`, `mean_cool_dwell_ratio:`, `biletaxis-align:`(biletaxis ON일 때만).
+
+이 레이어는 신경 회로가 아니라 과제 계측이므로 🟢 안전. biletaxis(조향 회로)는 이 위에서 별도.
 
 ## 재구현 순서 (설계 확정 후)
 

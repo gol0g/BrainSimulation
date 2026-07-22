@@ -42,9 +42,7 @@ NOT_YET_IMPLEMENTED = {
     "replay_to_klino": "리플레이→klino 투사",
     "place_value_food_exclude": "장소가치 음식분리(factored)",
     "value_max": "가치 상한",
-    "zone_circle": "원형 존",
-    "appetitive_place": "식욕성 장소선호",
-    "start_far": "원거리 시작",
+    # zone_circle/appetitive_place/start_far: place_pref 과제 레이어로 재구현됨 (D1)
     "sparse_reward": "희소 보상",
     "thermal_reversal": "온도 역전",
     "cue_reversal": "단서 역전",
@@ -138,10 +136,63 @@ def check_unimplemented(args):
         sys.exit(2)
 
 
-def run_episode(brain, env, ep_idx, task):
-    """단일 에피소드. 4월 run_training 루프의 최소 경로를 따른다."""
+class PlacePrefTask:
+    """v3 place_pref 과제 레이어 — 원본 소실, 증거 기반 재유도 (docs/research/DESIGN_RECOVERY.md §D1).
+
+    4월판 gym에는 task_mode가 없고, 원본 run_v2_tasks는 gym 위의 별도 하네스였다.
+    → gym을 건드리지 않고 러너에서 goal-zone 항법을 계측한다.
+
+    좌표는 obs의 정규화(0~1) 위치를 쓴다. zone 중심/반경도 정규화.
+    """
+
+    def __init__(self, cx=0.5, cy=0.5, radius=0.12, appetitive=True, start_far=False):
+        self.cx = cx
+        self.cy = cy
+        self.radius = radius
+        self.appetitive = appetitive   # False = aversive(회피 과제)
+        self.start_far = start_far
+        self._reset_accum()
+
+    def _reset_accum(self):
+        self._dist_sum = 0.0
+        self._in_zone = 0
+        self._steps = 0
+
+    def on_reset(self, env):
+        self._reset_accum()
+        if self.start_far:
+            # zone 반대편 코너에 배치 (정규화 → 픽셀)
+            fx = 0.1 if self.cx > 0.5 else 0.9
+            fy = 0.1 if self.cy > 0.5 else 0.9
+            env.agent_x = fx * env.config.width
+            env.agent_y = fy * env.config.height
+
+    def on_step(self, env, action_delta):
+        px = env.agent_x / env.config.width
+        py = env.agent_y / env.config.height
+        dist = ((px - self.cx) ** 2 + (py - self.cy) ** 2) ** 0.5
+        self._dist_sum += dist
+        if dist < self.radius:
+            self._in_zone += 1
+        self._steps += 1
+
+    def episode_metrics(self):
+        n = self._steps or 1
+        return {
+            "goal_dist": self._dist_sum / n,
+            "dwell_ratio": self._in_zone / n,
+        }
+
+
+def run_episode(brain, env, ep_idx, task, place=None):
+    """단일 에피소드. 4월 run_training 루프의 최소 경로를 따른다.
+
+    place: PlacePrefTask 또는 None. 주어지면 goal-zone 항법 계측을 얹는다.
+    """
     obs = env.reset()
     brain.reset()
+    if place is not None:
+        place.on_reset(env)
     done = False
     good_eaten = 0
     bad_eaten = 0
@@ -153,6 +204,9 @@ def run_episode(brain, env, ep_idx, task):
         brain.decay_dopamine()
         env.set_brain_info(info)
         obs, reward, done, env_info = env.step((action_delta,))
+
+        if place is not None:
+            place.on_step(env, action_delta)
 
         if env_info.get("food_eaten"):
             ftype = env_info.get("food_type", 0)
@@ -168,12 +222,10 @@ def run_episode(brain, env, ep_idx, task):
     # 생존 데이터에서 역산, 21/21 에피소드 검증된 공식
     performance_index = (good_eaten - bad_eaten) / n_choices if n_choices else 0.0
     steps = env.steps
-    cool_dwell_ratio = (cool_steps / steps) if steps else 0.0
 
-    return {
+    rec = {
         "task_mode": task,
         "steps": steps,
-        "cool_dwell_ratio": cool_dwell_ratio,
         "performance_index": performance_index,
         "good_eaten": good_eaten,
         "bad_eaten": bad_eaten,
@@ -182,11 +234,20 @@ def run_episode(brain, env, ep_idx, task):
         "episode": ep_idx,
         "steps_taken": steps,
     }
+    if place is not None:
+        rec.update(place.episode_metrics())
+        rec["cool_dwell_ratio"] = rec["dwell_ratio"]
+    else:
+        rec["cool_dwell_ratio"] = (cool_steps / steps) if steps else 0.0
+    return rec
 
 
 def main():
     args = build_parser().parse_args()
     check_unimplemented(args)
+    if args.episodes < 1:
+        print("--episodes must be >= 1", file=sys.stderr)
+        sys.exit(2)
 
     import numpy as np
     from forager_gym import ForagerGym, ForagerConfig
@@ -206,17 +267,33 @@ def main():
         brain_config.context_gate_enabled = True
         print("[context] Zone A/B 의미반전 활성 — context hard gate ON")
 
+    # place_pref 과제 레이어 (v3, 증거 기반 재유도 — DESIGN_RECOVERY §D1)
+    place = None
+    if args.task == "place_pref" or args.zone_circle:
+        place = PlacePrefTask(
+            cx=args.zone_cx if args.zone_cx is not None else 0.5,
+            cy=args.zone_cy if args.zone_cy is not None else 0.5,
+            appetitive=args.appetitive_place,
+            start_far=args.start_far,
+        )
+        kind = "appetitive" if args.appetitive_place else "aversive"
+        print(f"[place_pref] goal-zone ({place.cx},{place.cy}) r={place.radius} "
+              f"{kind} start_far={args.start_far}")
+
     env = ForagerGym(config=env_config, render_mode="none")
     brain = ForagerBrain(config=brain_config)
 
     t0 = time.time()
     episodes = []
     for ep in range(args.episodes):
-        rec = run_episode(brain, env, ep, args.task)
+        rec = run_episode(brain, env, ep, args.task, place=place)
         episodes.append(rec)
+        extra = ""
+        if place is not None:
+            extra = f" goal-dist={rec['goal_dist']:.4f} dwell={rec['dwell_ratio']:.4f}"
         print(f"[ep {ep:3d}] PI={rec['performance_index']:+.4f} "
               f"good={rec['good_eaten']} bad={rec['bad_eaten']} "
-              f"steps={rec['steps_taken']}")
+              f"steps={rec['steps_taken']}{extra}")
 
     elapsed = time.time() - t0
 
@@ -232,6 +309,9 @@ def main():
     print(f"mean_cool_dwell_ratio: {sum(dwell)/len(dwell):.4f}")
     if len(dwell) >= 5:
         print(f"last_5_mean_dwell: {sum(dwell[-5:])/5:.4f}")
+    if place is not None:
+        gd = [e["goal_dist"] for e in episodes]
+        print(f"goal-dist: {sum(gd)/len(gd):.4f}")
 
     result = {
         "v2_runner_version": RUNNER_VERSION,
