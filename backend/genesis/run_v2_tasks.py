@@ -28,8 +28,7 @@ RUNNER_VERSION = "1.0"
 # ---------------------------------------------------------------------------
 NOT_YET_IMPLEMENTED = {
     # biletaxis 계열 (7/1~7/4)
-    "biletaxis_hunger_gate": "허기 게이팅",
-    # biletaxis/gain: D2 재구현. brake/settle: D4 재구현(고value 게이팅 정착).
+    # biletaxis/gain: D2. brake/settle: D4. hunger_gate: D5(satiety 게이팅 arbitration).
     # v3 회로 (7/5~7/6)
     "v3_klino": "klinotaxis 회로",
     "v3_olf": "후각 변별",
@@ -235,13 +234,14 @@ class BiletaxisSteering:
     """
 
     def __init__(self, gain=0.5, look=0.10, delta=0.6, sigma=0.08,
-                 brake=False, settle=False):
+                 brake=False, settle=False, hunger_gate=False):
         self.gain = gain
         self.look = look      # 전방 샘플 거리(정규화)
         self.delta = delta    # 좌/우 각 오프셋(rad)
         self.sigma = sigma    # place-cell 가우시안 read 폭
         self.brake = brake    # D4: 고value 구역서 감속 → 정착 (#43/#49)
         self.settle = settle  # D4: 목표 근처 조향 감쇠 → orbit 방지
+        self.hunger_gate = hunger_gate  # D5: 배부를때만 목표항법 (forage 우선, #61)
         self._vmax = 1e-9     # 현재 지도 최대 value (정규화용)
         self._v_per_cell = None
         self._centers = None
@@ -268,12 +268,22 @@ class BiletaxisSteering:
         ay = env.agent_y / env.config.height
         return self._value_at(ax, ay) / self._vmax
 
-    def brake_factor(self, env):
-        """brake ON이면 고value 구역서 속도 배율 반환 (1=정상, →0.3 감속)."""
+    def satiety_gate(self, satiety):
+        """D5 hunger-gate: 배부를때만 목표항법. 0(허기)→게이트닫힘, 1(포만)→열림.
+        허기시 biletaxis 억제 → forage 반사 우선. hunger_gate OFF면 항상 1."""
+        if not self.hunger_gate:
+            return 1.0
+        # satiety_rate(0~1) 소프트 임계: 0.2 미만 닫힘, 0.5+ 완전 열림
+        return max(0.0, min(1.0, (satiety - 0.2) / 0.3))
+
+    def brake_factor(self, env, satiety=1.0):
+        """brake ON이면 고value 구역서 속도 배율 반환 (1=정상, →0.3 감속).
+        hunger-gate시 허기땐 brake도 해제(forage 이동 방해 금지)."""
         if not self.brake:
             return 1.0
         vn = max(0.0, min(1.0, self.value_here_norm(env)))
-        return 1.0 - 0.7 * vn   # v_norm 1 → 0.3배속 (완전정지 아님)
+        g = self.satiety_gate(satiety)
+        return 1.0 - 0.7 * vn * g   # 허기(g=0)면 감속 없음
 
     def _value_at(self, x, y):
         import numpy as np
@@ -282,7 +292,7 @@ class BiletaxisSteering:
         s = wr.sum()
         return float((wr * self._v_per_cell).sum() / s) if s > 1e-9 else 0.0
 
-    def bias(self, env, place):
+    def bias(self, env, place, satiety=1.0):
         """조향 보정량 반환 + align 누적. place: goal 방향 판정용.
 
         부호 규약 (A2b 디버깅으로 확정):
@@ -307,6 +317,9 @@ class BiletaxisSteering:
         if self.settle:
             vn = max(0.0, min(1.0, self._value_at(ax, ay) / self._vmax))
             d_turn *= (1.0 - 0.8 * vn)   # 중심 근처일수록 조향 약화
+
+        # D5 hunger-gate: 허기시 목표항법 억제 → forage 반사 우선.
+        d_turn *= self.satiety_gate(satiety)
 
         # align: 조향 부호가 실제 목표방향 부호와 일치하나
         if place is not None and abs(d_turn) > 1e-6:
@@ -339,18 +352,21 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
     thermal_entries = 0
     cool_steps = 0
 
+    satiety_sum = 0.0
     while not done:
         action_delta, info = brain.process(obs)
         brain.decay_dopamine()
+        satiety = info.get("satiety_rate", 1.0)
+        satiety_sum += satiety
         # biletaxis: 학습 value 지도 기반 조향 보정 (env.step 전에 heading 반영)
         if biletaxis is not None:
-            action_delta = action_delta + biletaxis.bias(env, place)
+            action_delta = action_delta + biletaxis.bias(env, place, satiety=satiety)
         env.set_brain_info(info)
         # D4 brake: 고value 구역서 전진속도 축소 (env.step 동안만 config 변경 후 복원)
         _spd0 = None
         if biletaxis is not None and biletaxis.brake:
             _spd0 = env.config.agent_speed
-            env.config.agent_speed = _spd0 * biletaxis.brake_factor(env)
+            env.config.agent_speed = _spd0 * biletaxis.brake_factor(env, satiety=satiety)
         obs, reward, done, env_info = env.step((action_delta,))
         if _spd0 is not None:
             env.config.agent_speed = _spd0
@@ -384,6 +400,7 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
     rec = {
         "task_mode": task,
         "steps": steps,
+        "mean_satiety": satiety_sum / steps if steps else 0.0,
         "performance_index": performance_index,
         "good_eaten": good_eaten,
         "bad_eaten": bad_eaten,
@@ -448,12 +465,15 @@ def main():
             gain=args.biletaxis_gain if args.biletaxis_gain is not None else 0.5,
             brake=args.biletaxis_brake,
             settle=args.biletaxis_settle,
+            hunger_gate=args.biletaxis_hunger_gate,
         )
         extras = []
         if biletaxis.brake:
             extras.append("brake")
         if biletaxis.settle:
             extras.append("settle")
+        if biletaxis.hunger_gate:
+            extras.append("hunger-gate")
         print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain}"
               f"{(' +' + '+'.join(extras)) if extras else ''} (학습 value 지도 read-out)")
 
@@ -468,7 +488,7 @@ def main():
         extra = ""
         if place is not None:
             extra += (f" goal-dist={rec['goal_dist']:.4f} dwell={rec['dwell_ratio']:.4f}"
-                      f" zrew={rec.get('zone_rewards', 0)}")
+                      f" zrew={rec.get('zone_rewards', 0)} sat={rec.get('mean_satiety', 0):.2f}")
         if biletaxis is not None:
             extra += f" align={rec['biletaxis_align']:.4f} vmap_std={biletaxis.vmap_std:.4f}"
         print(f"[ep {ep:3d}] PI={rec['performance_index']:+.4f} "
