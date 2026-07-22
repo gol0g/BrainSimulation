@@ -191,16 +191,36 @@ python -u run_v2_tasks.py --task integrated --context-select --seq-task --seq-wm
 
 CLAUDE.md 명시: **Windows Python으로 PyGeNN 실행 불가.** WSL 재구축 전에는 단 한 줄도 실행 검증할 수 없다.
 
+## 재건 기준점 (2026-07-21 확보)
+
+재건 환경에서 4월판 baseline 20ep 실행 → **CLAUDE.md 기준 통과**:
+
+| 지표 | 결과 | 기준 |
+|---|---|---|
+| Survival Rate | **55.0%** ✓ | >40% |
+| Reward Freq | **2.63%** ✓ | >2.5% |
+| Pain Composite | ✓ PASS | 전 항목 |
+| 뇌 규모 | 28,323 뉴런 | — |
+
+README 기록(400ep 61%/2.62%)과 정합적 → **재건 환경이 4월판을 정확히 재현.**
+로그: `docs/research/rebuild_baseline/baseline_20ep_20260721.log`.
+이후 브레인 기능 재구현 시 이 수치가 회귀 판정 기준.
+
+환경 구축에서 걸린 것 4가지(전부 Ubuntu 24.04발, 커밋 메시지에 상술):
+cuda-toolkit 메타패키지 libtinfo5 / PyGeNN PyPI 부재(소스빌드) /
+pkg-config·libffi-dev 누락 / **CUDA 12.3 vs gcc 13/14** → `-ccbin g++-12` 필수.
+
 ## 재건 순서
 
-0. **환경 재구축 (BLOCKER)** — WSL Ubuntu-24.04 → CUDA 12.3 → `~/pygenn_wsl` venv → PyGeNN 5.4.0
+0. ~~환경 재구축~~ ✓ (Ubuntu 24.04 + CUDA 12.3 + PyGeNN 5.4.0 소스빌드)
 1. ~~GitHub 4월판 clone~~ ✓
 2. ~~생존 자산 38개 통합~~ ✓
 3. ~~인터페이스 명세 역산~~ ✓ (이 문서)
-4. 4월판 baseline 재검증 — `forager_brain.py --episodes 20`, 생존율 >40% 확인 (회귀 기준점 확보)
-5. 브레인 기능 재구현 — 스크립트 타임스탬프가 알려주는 실제 개발 순서대로:
+4. ~~4월판 baseline 재검증~~ ✓ (55%/2.63%, 기준점 확보)
+5. ~~`run_v2_tasks.py` 재작성~~ ✓ (CLI/마커/스키마, 미구현 플래그 exit 2)
+6. **[진행중]** `--context-select` 첫 실행 검증 (4월 M4 토대로 구동)
+7. 브레인 기능 재구현 — 스크립트 타임스탬프가 알려주는 실제 개발 순서대로:
    `biletaxis`(7/1~4) → `multicap`/`v3-olf`(7/5~6) → `seq_*`(7/7~10) → `context_compositional`+`seq_wm`(7/10~11)
-6. `run_v2_tasks.py` 재구현 — 위 CLI/마커/스키마 준수
-7. `m5_smoke.sh`로 M5 경로 검증 (`sel=` 회복 확인)
-8. `comp_wm2.sh` 재현 → 7/11 지점 복귀
-9. 조합 컨텍스트 + 창발 WM 재도전 (7/12 시점 미해결 상태에서 이어감)
+8. `test_context_m5_smoke.py` 재작성 → `m5_smoke.sh`로 `sel=` 회복 확인
+9. `comp_wm2.sh` 재현 → 7/11 지점 복귀
+10. 조합 컨텍스트 + 창발 WM 재도전 (7/12 시점 미해결 상태에서 이어감)
