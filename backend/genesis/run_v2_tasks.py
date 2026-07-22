@@ -159,6 +159,7 @@ class PlacePrefTask:
         self._in_zone = 0
         self._steps = 0
         self._was_in = False
+        self._zone_rewards = 0   # 진단: zone 진입 보상 횟수 (0이면 학습 원천 없음)
 
     def on_reset(self, env):
         self._reset_accum()
@@ -179,14 +180,19 @@ class PlacePrefTask:
             self._in_zone += 1
         self._steps += 1
 
-        # D3 sparse-reward: zone 진입 순간 DA + place→value 학습 구동.
-        # place→value는 DA-gated 3-factor라 보상 없으면 지도가 안 생긴다.
-        # n_food 0에선 zone 도달이 유일 보상원 → biletaxis가 읽을 지도의 원천.
+        # D3 sparse-reward: zone 진입 순간 DA + 경험 버퍼링.
+        # place→value는 replay_swr()에서 갱신된다(A2 디버깅으로 확정: 4월
+        # run_training은 보상시 add_experience → 에피소드끝 replay_swr).
+        # 1차 실험 실패 원인 = 이 경로 미호출. add_experience로 버퍼링하고
+        # 에피소드 끝에서 run_episode가 replay_swr 호출.
         if self.sparse_reward and brain is not None and in_zone and not self._was_in:
-            sign = 1.0 if self.appetitive else -1.0
-            brain.release_dopamine(reward_magnitude=1.0 * sign, primary_reward=True)
-            brain.learn_food_location(food_position=(self.cx, self.cy),
-                                      anti_learn=not self.appetitive)
+            if self.appetitive:
+                brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+                brain.add_experience(self.cx, self.cy, 0, env.steps, 25.0)
+            else:
+                brain.release_dopamine(reward_magnitude=-0.5)
+                brain.add_experience(self.cx, self.cy, 1, env.steps, -5.0)
+            self._zone_rewards += 1
         self._was_in = in_zone
 
     def episode_metrics(self):
@@ -194,6 +200,7 @@ class PlacePrefTask:
         return {
             "goal_dist": self._dist_sum / n,
             "dwell_ratio": self._in_zone / n,
+            "zone_rewards": self._zone_rewards,
         }
 
 
@@ -229,6 +236,8 @@ class BiletaxisSteering:
         n_pc = brain.config.n_place_cells
         self._v_per_cell = w.reshape(n_pc, -1).mean(axis=1)   # 셀당 value
         self._centers = np.asarray(brain.place_cell_centers)   # (n_pc, 2) 정규화
+        # 진단: value 지도 분산 (0이면 평평 = 미학습, align 0의 원인)
+        self.vmap_std = float(self._v_per_cell.std())
 
     def _value_at(self, x, y):
         import numpy as np
@@ -303,6 +312,14 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
             else:
                 bad_eaten += 1
                 brain.release_dopamine(reward_magnitude=-0.5)
+
+    # 에피소드 끝 SWR 리플레이 → place_to_value 갱신 (4월 run_training과 동일).
+    # A2 디버깅: 이 호출 누락이 value 지도가 평평했던 근본 원인.
+    if place is not None and place.sparse_reward:
+        try:
+            brain.replay_swr()
+        except Exception as e:
+            print(f"  [warn] replay_swr 실패: {e}", file=sys.stderr)
 
     n_choices = good_eaten + bad_eaten
     # 생존 데이터에서 역산, 21/21 에피소드 검증된 공식
@@ -388,9 +405,10 @@ def main():
         episodes.append(rec)
         extra = ""
         if place is not None:
-            extra += f" goal-dist={rec['goal_dist']:.4f} dwell={rec['dwell_ratio']:.4f}"
+            extra += (f" goal-dist={rec['goal_dist']:.4f} dwell={rec['dwell_ratio']:.4f}"
+                      f" zrew={rec.get('zone_rewards', 0)}")
         if biletaxis is not None:
-            extra += f" align={rec['biletaxis_align']:.4f}"
+            extra += f" align={rec['biletaxis_align']:.4f} vmap_std={biletaxis.vmap_std:.4f}"
         print(f"[ep {ep:3d}] PI={rec['performance_index']:+.4f} "
               f"good={rec['good_eaten']} bad={rec['bad_eaten']} "
               f"steps={rec['steps_taken']}{extra}")
