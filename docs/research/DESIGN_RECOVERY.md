@@ -135,7 +135,29 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 - 🔴 **미상**: 좌/우 value 추정을 SNN 내부에서(별도 뉴런 집단) vs 러너에서(place_cells read-out) 했는지.
   원본 아키텍처상 조향은 뇌 기능이나, 최소 재유도는 러너 read-out으로 시작해 align>0.5 확인 후 회로화.
 
-### D2-검증. biletaxis 1차 실험 실패 (2026-07-21) — 디버깅 대기
+### D2-성공. biletaxis 재유도 완료 (2026-07-23) ✅
+2겹 버그 수정 후 성공 (`a2b_on_seed0.json`):
+- **align: 0.75** (last_5 0.76), 널 0.5 확실히 돌파. ep1 0.38→ep5 0.91 학습 곡선.
+- **vmap_std: 0.004→0.347** 단조 상승 (value 지도 학습). align과 동반 상승 = 지도가
+  zone 공간구조 인코딩 → 양측 read-out이 올바른 조향으로 변환. lesson #66 재현.
+- zrew/dwell 후반에도 유지(부호 오류 땐 0으로 붕괴) = 조향이 zone 도달을 실제로 도움.
+**첫 소실 신경 회로 복원 완료.** 수정 2건은 아래 D2-디버깅 참조.
+
+### D2-디버깅 기록 (2026-07-21~23) — 재유도 함정 2건
+진단 계측(zrew=zone보상수, vmap_std=지도분산)이 병목을 순차 지목:
+1. **1차 실패**: align 0.00, 지도 평평. 원인=SWR 학습경로 미호출.
+   → 보상시 `add_experience`, 에피소드끝 `replay_swr` 배선. 그래도 vmap_std 0.
+2. **2차**: zrew>0(보상O)인데 vmap_std=0(학습X). 원인=`transition_buffer`가
+   "음식 가시성"에 게이팅(forager_brain 10918)돼 n_food 0에선 안 채워짐 →
+   value 역backup(replay_swr 9817, `len(transition_buffer)>0` 게이트) 스킵.
+   → **v3 place_pref는 전이 트리거를 zone 근접으로 대체**. zone 보상시 `_record_transition`
+   으로 복제. vmap_std 상승 시작.
+3. **3차**: vmap_std↑(학습O)인데 align 0.13<<0.5(방향X). 원인=조향 부호 반전.
+   gym `angle_delta>0=CCW=θ+δ`인데 왼쪽 샘플을 θ-δ서 뽑음. → CCW=θ+δ 정정.
+**교훈**: 최소 러너로 13k줄 뇌를 구동할 때, 학습이 내부 기전(SWR replay+transition graph)에
+숨어 있어 명시 배선 필요. 진단 계측 없이는 "align 왜 0"에서 못 벗어남.
+
+### D2-폐기. biletaxis 1차 실험 실패 (2026-07-21)
 OFF vs ON 25ep 실측 (`docs/research/rebuild_baseline/a2_{off,on}_seed0.json`):
 - `biletaxis-align: 0.0000`, dwell ON 0.077 ≈ OFF 0.084 → **조향이 작동 안 함**.
 - 원인: align 0.0000은 |Δturn|>1e-6 스텝이 0 = **V_L≈V_R 항상**(value 지도가 평평).
