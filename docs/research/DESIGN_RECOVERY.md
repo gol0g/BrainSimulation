@@ -97,6 +97,24 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 ## 재유도 설계 로그 (어시스턴트, 증거 기반)
 
+### D4. 정착 brake/settle (2026-07-23) — brake ✅ #43/#49 재현
+현재 위치 value(zone 근접도, D2 지도)로 게이팅. 25ep seed0 비교
+(`a3_{bare,settle,brake}.json`):
+
+| 조건 | dwell mean | dwell last_5 | goal-dist | align |
+|---|---|---|---|---|
+| bare biletaxis | 0.112 | 0.139 | 0.307 | 0.69 |
+| +settle | 0.067 | 0.083 | 0.329 | 0.74 |
+| **+brake** | **0.214** | **0.256** | **0.289** | 0.69 |
+
+- **brake ✅**: 고value서 전진속도 0.3배. 판정기준(brake<OFF 거리 & brake>OFF 체류) 충족.
+  3단계 개선: 널 0.07 → biletaxis 0.14 → +brake 0.26. #43/#49 "브레이크 돌파" 재현.
+- **settle ✗**: 목표 근처 조향 감쇠(0.2배) → 교정 조향까지 죽어 dwell↓. 재유도 미흡.
+  주석상 settle은 탐색적 "fix", brake가 "돌파 확정"이므로 brake로 목적 달성, settle 보류.
+- 구현: brake는 env.step 동안 agent_speed 스케일 후 복원(러너 레벨), settle은 d_turn 감쇠.
+
+
+
 ### D1. v3 place_pref 과제 스택 — 러너 레이어로 재구현 (2026-07-21)
 **근거**: 4월판 gym에 task_mode 개념 없음 + 원본 run_v2_tasks가 gym 위 별도 하네스였음(엔트리포인트 증거).
 → 163KB gym을 건드리지 않고 러너에 과제 레이어를 얹는다. gym이 제공하는 것: obs `position_x/y`(정규화),
