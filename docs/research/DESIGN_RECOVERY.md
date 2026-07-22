@@ -115,6 +115,26 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 이 레이어는 신경 회로가 아니라 과제 계측이므로 🟢 안전. biletaxis(조향 회로)는 이 위에서 별도.
 
+### D1-검증. place_pref 널 baseline 확보 (2026-07-21)
+항법 회로 전무(klino/biletaxis 없음) 상태 2ep 실측:
+- `goal-dist: 0.3427`, `dwell 0.0745`.
+- 무작위 보행 기대 체류 ≈ π·r²/맵 ≈ π·0.12² ≈ 0.045. → **0.07은 우연 수준**(항법 없음 확인).
+- 이 값이 biletaxis/klino가 넘어서야 할 **널 baseline**. (원칙: [[measure-null-variance-before-separation]])
+- 주: `--n-food 0`은 에피소드가 step~450에서 조기 종료(에너지 고갈). OFF-vs-ON 상대 비교엔 무방.
+
+### D2. biletaxis 양측 조향 — 설계 (근거: 4월판 place→value 생존)
+**생존 기질** (4월 forager_brain.py):
+- `place_cells` 400뉴런(20×20) + `place_to_value_eta`(DA-gated 3-factor) + `place_to_value_w_max`.
+  → **place→value 지도는 이미 학습된다.** 소실된 건 read-out.
+**소실 = 양측 read-out**: 학습된 value 지도에서 현재 위치 기준 좌/우 방향의 value를 비교 → 높은 쪽으로 조향.
+**설계 (재유도)**:
+- 매 스텝 에이전트 heading 기준 좌/우 약간 회전한 지점의 place-value를 추정(place_cells 활성 또는 value pop read).
+- `Δturn = gain · (V_left − V_right)`, `gain=0.5`(gain 1.0은 과조향으로 dwell 붕괴 — A2 증거).
+- `align`: sign(Δturn)이 실제 목표방향 부호와 일치하는 스텝 비율. >0.5 = 지도가 목표 가리킴.
+- brake: |V_gradient| 작고 V 높으면(=목표 근처) 감속. settle: 목표 근처 gain 감쇠.
+- 🔴 **미상**: 좌/우 value 추정을 SNN 내부에서(별도 뉴런 집단) vs 러너에서(place_cells read-out) 했는지.
+  원본 아키텍처상 조향은 뇌 기능이나, 최소 재유도는 러너 read-out으로 시작해 align>0.5 확인 후 회로화.
+
 ## 재구현 순서 (설계 확정 후)
 
 증거 등급 = 재구현 안전도. A(🟢)부터 바텀업이 정석이나, 사용자 선택은 **설계 문서 우선 복구**.
