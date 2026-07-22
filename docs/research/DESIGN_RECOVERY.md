@@ -1,0 +1,96 @@
+# 설계 복원 — 소실된 5~7월 회로 (2026-07-21)
+
+디스크 사고로 소실된 브레인 기능(79KB 델타)의 **설계 의도**를 코드 재구현 전에 복원한다.
+증거 등급을 3단계로 구분한다:
+
+- 🟢 **증거 확실** — 생존 스크립트 주석이 메커니즘·목표·결과를 직접 서술
+- 🟡 **생존 구현** — 4월판 코드에 구현이 남아 있음 (읽어서 확정)
+- 🔴 **증거 희박** — CLI 플래그명 + 빈 실험 스크립트뿐. 사용자 기억 필요
+
+---
+
+## A. biletaxis / v3 항법 스택 🟢
+
+biletaxis는 독립 기능이 아니라 **v3 place_pref 과제 스택 위의 최상층**이다.
+선행 스택(전부 소실): `place_pref` 과제 + `zone-circle` 환경 + `v3-klino` 항법.
+
+### A1. 과제 환경 (v3 place_pref)
+- **`--task place_pref`**: 원형 goal zone으로 항법해 그 안에 체류하는 과제. 지표 = `goal-dist`(목표까지 거리), `mean_cool_dwell_ratio`(zone 내 체류율).
+- **`--zone-circle`**: 원형 구역 (기본 rich zone 대신).
+- **`--appetitive-place`**: 구역이 유인성(좋음). 없으면 aversive(열 구역=나쁨) → 회피 과제.
+- **`--start-far`**: 목표에서 멀리 출발.
+- **`--sparse-reward`**: 희소 보상.
+- **`--replay-to-klino`**: SWR 리플레이가 klinotaxis로 투사.
+- **`--n-food 0`**: 순수 항법 과제 (음식 없음). `--n-food 10`: forage 반사와 공존 테스트.
+
+### A2. biletaxis 핵심 메커니즘 🟢
+> "biletaxis = 고value(안전)쪽 조향. align = 명령 turn 부호가 실제 목표방향과 맞는 비율."
+
+- **양측 비교 조향(bilateral taxis)**: 학습된 value 지도의 좌/우 차이로 조향 방향 결정. klinotaxis 계열.
+- **`biletaxis-align` 지표**: 명령한 turn 부호가 실제 목표방향과 일치하는 스텝 비율. **>0.5 견고 = value 지도가 목표를 실제로 가리킴**(방향 신호가 진짜). ≈0.5 = 신호 없음(깨끗한 음성). lesson #66.
+- **`--biletaxis-gain 0.5`**: 조향 이득. gain 1.0은 과조향 → orbit/dwell 붕괴(seed0). 0.5로 낮춰 과조향 제거.
+
+### A3. 정착(settle) 메커니즘 🟢 — lesson #43/#49 돌파
+목표에 도달해도 orbit(공전)/오버슈트하는 문제. 두 해법:
+- **`--biletaxis-brake`**: 고value 구역에서 감속 → 정착. 결과: brake<OFF(거리) & brake>OFF(체류), 5-seed 3/3~5/5 승. "read-out 행동수준 돌파 확정".
+- **`--biletaxis-settle`**: 목표 근처에서 조향 감쇠 → orbit 대신 정착. brake의 대안/보완.
+
+### A4. Arbitration (forage vs 목표항법 공존) 🟢 — lesson #56/#59/#61
+- 문제: brake 감속이 forage(음식 반사)를 방해 → step수 급감 (`biletaxis_nobrake_food.sh` 진단).
+- **`--biletaxis-hunger-gate`**: 목표항법을 satiety로 게이팅(배부를 때만) → forage(반사)와 목표항법(planning)을 상태별로 분리. lesson #61 arbitration.
+
+### A5. Factored value 🟢 — confound 제거
+- 문제: place-value가 음식 DA에 오염 → 목표 gradient가 food-baseline에 묻힘.
+- **`--place-value-food-exclude`**: place-value가 음식 DA 제외(장소고정 보상만) → goal-gradient 회복. align 회복하면 factoring 작동.
+- **`--value-max` (vmax)**: 천장 포화 가설. vmax↑ → 값이 퍼져 goal이 food-baseline 위로. 1/2/3 스캔.
+
+### A6. 다능력 통합 🟢 — lesson #64/#65
+- **`multicap`**: 한 뇌가 냄새변별(`--v3-olf`) + 목표항법(biletaxis+factored) 동시. PI(변별)>0 + align(항법) 높음 둘 다 서면 코히어런트 다능력 뇌.
+- 대조(항법만): align 0.821, PI -0.16, good 336 — 이미 확보된 수치.
+
+### A7. 접근/회피 통합 🟢 — lesson #67
+- 같은 메커니즘(지도→방향→brake)이 접근(appetitive)과 회피(aversive/열) 둘 다. aversive는 `--appetitive-place` 빼고 `--start-far`.
+
+---
+
+## B. M4 컨텍스트 게이트 🟡 — 4월판 생존, 프런티어의 토대
+
+`forager_brain.py`에 온전히 구현됨. GitHub 마지막 커밋 = "M4 v9: Context hard gate — first context-dependent selectivity breakthrough".
+
+- **KC → D1_ctx**: Kenyon Cell sparse expansion → 컨텍스트별 D1 선조체 집단. 컨텍스트 a/b 각각 별도 (`kc_to_d1ctx_a_l/r`, `kc_to_d1ctx_b_l/r`).
+- **컨텍스트별 가중치 스냅샷**: `_ctx_a_*` / `_ctx_b_*` — 컨텍스트 전환 시 스왑.
+- **Hard gate** (`_activate_context_hard_gate`, `context_hard_gate_enabled`): 컨텍스트-무관 food→D1 경로를 억제 → D1_ctx가 인계. M4 v9 돌파의 핵심.
+- **`update_context_food_scales(food_type, da_magnitude)`** (v9b): 음식 먹는 순간 컨텍스트별 접근 가중치 갱신.
+- 환경: `forager_gym.py` `context_rules_enabled` — Zone A(정상)/Zone B(good↔bad 반전), `agent_x > width/2`에서 `effective_type = 1 - food_type`.
+- **한계**: 4월 시점 M4 selectivity가 0.50(우연)에 6회 막힘 → v9 hard gate로 첫 돌파. `--context-select`는 이 위에서 바로 구동(재구현 불필요, 검증 완료: 2ep PI 0.17→0.25).
+
+---
+
+## C. 시퀀스 / 조합 프런티어 🔴 — 증거 희박, 재유도 핵심
+
+CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **여기가 7/12 미해결로 끊긴 최전선.**
+
+### C1. 시퀀스 학습/WM
+- **`--seq-task`**: A→B 순서 학습 과제. 마커 `최종순서율`, `in-order B 비율`(초기 0.25에서 상승 = 순서 학습). ablation: `--v3-value-eta 0`으로 place→value 학습 OFF.
+- **`--seq-nav`**: 시퀀스 항법. 마커 `seq-nav 정렬`.
+- **`--seq-wm`**: 창발 워킹메모리. 마커 `WM latch`. ← **잃어버린 핵심**.
+- **`--seq-gain`**: 시퀀스 조향 이득.
+- 🔴 **미상**: WM latch의 신경 기질(어느 집단이 latch? 4월판 `working_memory` 200뉴런 재사용?), seq-nav 정렬 계산법, 순서율 정의.
+
+### C2. 조합적 컨텍스트
+- **`--context-compositional`**: M4 컨텍스트를 조합(compositional)으로 확장. `--zone-cx 0.3 --zone-cy 0.3`로 2D 구역.
+- 마지막 온전한 커맨드(comp_wm2.sh): `--task integrated --context-select --seq-task --seq-wm --context-compositional --zone-cx 0.3 --zone-cy 0.3`. 주석 "조합+창발WM(seq-nav 없이)".
+- 🔴 **미상**: "조합"이 정확히 무엇인가 — 컨텍스트 2개 초과? 요인 분해(zone x cue)? M4의 a/b 게이트를 어떻게 조합으로 일반화? 7/12 결과 PI~0.03(무선택)에서 무엇이 실패했나.
+
+### C3. 중재/기타 🔴
+- **`--wta-arbitration` / `--wta-cue-bid`**: WTA 기반 중재, 단서 입찰. `serial_rev`(8ep마다 cue 반전)에서 사용. 마커 `serial-cv`.
+- **`--cue-reversal` / `--cue-reversal-period`**: 단서 역전.
+- **`--thermal-reversal` / `--v3-recovery`**: 열 반전 후 회피 회복(value 재학습).
+
+---
+
+## 재구현 순서 (설계 확정 후)
+
+증거 등급 = 재구현 안전도. A(🟢)부터 바텀업이 정석이나, 사용자 선택은 **설계 문서 우선 복구**.
+→ 이 문서의 🔴 항목을 사용자 문답으로 메운 뒤, A2~A5 (biletaxis 코어) 부터 착수.
+각 단계는 baseline 55%/2.63%에 대해 회귀 검증.
