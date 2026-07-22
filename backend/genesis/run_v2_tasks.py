@@ -28,9 +28,8 @@ RUNNER_VERSION = "1.0"
 # ---------------------------------------------------------------------------
 NOT_YET_IMPLEMENTED = {
     # biletaxis 계열 (7/1~7/4)
-    "biletaxis_brake": "양측 주행 제동",
     "biletaxis_hunger_gate": "허기 게이팅",
-    "biletaxis_settle": "정착 궤적 덤프",
+    # biletaxis/gain: D2 재구현. brake/settle: D4 재구현(고value 게이팅 정착).
     # v3 회로 (7/5~7/6)
     "v3_klino": "klinotaxis 회로",
     "v3_olf": "후각 변별",
@@ -86,7 +85,7 @@ def build_parser():
     p.add_argument("--biletaxis-gain", type=float, default=None)
     p.add_argument("--biletaxis-brake", action="store_true")
     p.add_argument("--biletaxis-hunger-gate", action="store_true")
-    p.add_argument("--biletaxis-settle", default=None)
+    p.add_argument("--biletaxis-settle", action="store_true")
 
     # v3
     p.add_argument("--v3-klino", action="store_true")
@@ -235,11 +234,15 @@ class BiletaxisSteering:
     reset 때 1회 pull (매 스텝 GPU pull 회피).
     """
 
-    def __init__(self, gain=0.5, look=0.10, delta=0.6, sigma=0.08):
+    def __init__(self, gain=0.5, look=0.10, delta=0.6, sigma=0.08,
+                 brake=False, settle=False):
         self.gain = gain
         self.look = look      # 전방 샘플 거리(정규화)
         self.delta = delta    # 좌/우 각 오프셋(rad)
         self.sigma = sigma    # place-cell 가우시안 read 폭
+        self.brake = brake    # D4: 고value 구역서 감속 → 정착 (#43/#49)
+        self.settle = settle  # D4: 목표 근처 조향 감쇠 → orbit 방지
+        self._vmax = 1e-9     # 현재 지도 최대 value (정규화용)
         self._v_per_cell = None
         self._centers = None
         self._align_hit = 0
@@ -255,8 +258,22 @@ class BiletaxisSteering:
         n_pc = brain.config.n_place_cells
         self._v_per_cell = w.reshape(n_pc, -1).mean(axis=1)   # 셀당 value
         self._centers = np.asarray(brain.place_cell_centers)   # (n_pc, 2) 정규화
+        self._vmax = float(self._v_per_cell.max()) + 1e-9      # 정규화 기준
         # 진단: value 지도 분산 (0이면 평평 = 미학습, align 0의 원인)
         self.vmap_std = float(self._v_per_cell.std())
+
+    def value_here_norm(self, env):
+        """현재 위치의 학습 value를 [0,1]로 정규화. 1 = 지도 최댓값(=zone 중심)."""
+        ax = env.agent_x / env.config.width
+        ay = env.agent_y / env.config.height
+        return self._value_at(ax, ay) / self._vmax
+
+    def brake_factor(self, env):
+        """brake ON이면 고value 구역서 속도 배율 반환 (1=정상, →0.3 감속)."""
+        if not self.brake:
+            return 1.0
+        vn = max(0.0, min(1.0, self.value_here_norm(env)))
+        return 1.0 - 0.7 * vn   # v_norm 1 → 0.3배속 (완전정지 아님)
 
     def _value_at(self, x, y):
         import numpy as np
@@ -285,6 +302,11 @@ class BiletaxisSteering:
         v_ccw = self._value_at(x_ccw, y_ccw)
         v_cw = self._value_at(x_cw, y_cw)
         d_turn = self.gain * (v_ccw - v_cw)   # CCW value 높으면 +(CCW로 조향)
+
+        # D4 settle: 목표 근처(고value)서 조향 감쇠 → orbit 대신 정착.
+        if self.settle:
+            vn = max(0.0, min(1.0, self._value_at(ax, ay) / self._vmax))
+            d_turn *= (1.0 - 0.8 * vn)   # 중심 근처일수록 조향 약화
 
         # align: 조향 부호가 실제 목표방향 부호와 일치하나
         if place is not None and abs(d_turn) > 1e-6:
@@ -324,7 +346,14 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
         if biletaxis is not None:
             action_delta = action_delta + biletaxis.bias(env, place)
         env.set_brain_info(info)
+        # D4 brake: 고value 구역서 전진속도 축소 (env.step 동안만 config 변경 후 복원)
+        _spd0 = None
+        if biletaxis is not None and biletaxis.brake:
+            _spd0 = env.config.agent_speed
+            env.config.agent_speed = _spd0 * biletaxis.brake_factor(env)
         obs, reward, done, env_info = env.step((action_delta,))
+        if _spd0 is not None:
+            env.config.agent_speed = _spd0
 
         if place is not None:
             place.on_step(env, action_delta, brain=brain)
@@ -417,9 +446,16 @@ def main():
     if args.biletaxis:
         biletaxis = BiletaxisSteering(
             gain=args.biletaxis_gain if args.biletaxis_gain is not None else 0.5,
+            brake=args.biletaxis_brake,
+            settle=args.biletaxis_settle,
         )
-        print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain} "
-              f"(학습 value 지도 read-out)")
+        extras = []
+        if biletaxis.brake:
+            extras.append("brake")
+        if biletaxis.settle:
+            extras.append("settle")
+        print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain}"
+              f"{(' +' + '+'.join(extras)) if extras else ''} (학습 value 지도 read-out)")
 
     env = ForagerGym(config=env_config, render_mode="none")
     brain = ForagerBrain(config=brain_config)
