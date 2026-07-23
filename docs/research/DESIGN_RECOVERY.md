@@ -97,6 +97,21 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 ## 재유도 설계 로그 (어시스턴트, 증거 기반)
 
+### D7. klinotaxis (2026-07-24) ✅ — 증거 全소실, 교과서 원리로 재유도
+klino 증거 완전 소실(4월 코드·스크립트·결과 全손상, 단독 마커 없음). 텍스트북 원리로 재유도:
+biletaxis=공간 좌우비교, klino=시간축("가까워지나 멀어지나"). biletaxis 방향 위에 klino가 크기 변조.
+value_here 시간비교 → 멀어지면(하락) 재조향 ×(1+2·하락폭), 가까워지면 현 조향 신뢰.
+25ep seed0, biletaxis+brake 기준 (`a7_{noklino,klino}.json`):
+
+| 조건 | align | last5 align | goal-dist | last5 dwell |
+|---|---|---|---|---|
+| biletaxis+brake | 0.623 | 0.570 | 0.316 | 0.249 |
+| **+klino** | 0.672 | **0.728** | **0.299** | **0.266** |
+
+- **klino ✅**: last5 align 0.57→0.73, 원본 nav 0.82 근접. 전 지표 개선. 두 항법원리 상보 확인.
+- replay-to-klino: replay_swr→value지도→biletaxis read로 이미 충족(no-op 수용).
+- klino 단독(biletaxis 없이)은 변조대상 없어 미지원 명시(조용한 no-op 회피).
+
 ### D6. factored value (2026-07-23) — 구조적으로 이미 충족 (no-op)
 측정: align이 음식0=0.75 → 음식10+gate=0.55로 저하(널 0.5 근접). 음식이 항법 방해.
 **그러나 코드 인스펙션 확정**: 러너의 `add_experience`/`_record_transition`는 zone 보상
