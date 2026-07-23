@@ -36,7 +36,7 @@ NOT_YET_IMPLEMENTED = {
     "v3_value_eta": "가치 학습률",
     "v3_cue_eta": "단서 학습률",
     "replay_to_klino": "리플레이→klino 투사",
-    "place_value_food_exclude": "장소가치 음식분리(factored)",
+    # place_value_food_exclude: 구조적으로 이미 factored (D6, no-op). 아래 수용.
     "value_max": "가치 상한",
     # zone_circle/appetitive_place/start_far: place_pref 과제 레이어로 재구현됨 (D1)
     # sparse_reward: zone 진입→DA로 재구현됨 (D3)
@@ -443,6 +443,12 @@ def main():
         env_config.context_rules_enabled = True
         brain_config.context_gate_enabled = True
         print("[context] Zone A/B 의미반전 활성 — context hard gate ON")
+
+    # D6 factored value: 이 러너는 place-value를 zone 보상만으로 학습(음식은
+    # add_experience 대상 아님) → 구조적으로 이미 factored. 플래그는 no-op이나
+    # 스크립트 호환 위해 수용. (원본은 음식이 place-value 오염 → 이 플래그로 제외)
+    if args.place_value_food_exclude:
+        print("[factored] place-value는 이미 zone-only 학습 (구조적 factored, no-op)")
 
     # place_pref 과제 레이어 (v3, 증거 기반 재유도 — DESIGN_RECOVERY §D1/D3)
     place = None

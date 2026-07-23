@@ -97,6 +97,15 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 ## 재유도 설계 로그 (어시스턴트, 증거 기반)
 
+### D6. factored value (2026-07-23) — 구조적으로 이미 충족 (no-op)
+측정: align이 음식0=0.75 → 음식10+gate=0.55로 저하(널 0.5 근접). 음식이 항법 방해.
+**그러나 코드 인스펙션 확정**: 러너의 `add_experience`/`_record_transition`는 zone 보상
+(189/192/197행)에서만 호출, 음식 먹을때(381~382)는 learn_food_location+release_dopamine뿐.
+place_to_value는 replay_swr가 experience_buffer(zone-only)로만 갱신 → **음식은 value 지도에
+안 들어감**. 즉 `--place-value-food-exclude`는 **no-op** — 이미 zone-only로 factored.
+align 저하는 value 오염 아니라 **행동적**(forage하느라 zone 도달 덜 깨끗) → exclude로 못 고침.
+원본과 정직한 구조 분기(원본은 음식이 place-value 오염 → 이 플래그로 제외). 플래그 수용만.
+
 ### D5. hunger-gate arbitration (2026-07-23) ✅ #61 재현
 satiety로 biletaxis 게이팅. 음식10, 25ep seed0 (`a4_{off,brake,gated}.json`):
 
