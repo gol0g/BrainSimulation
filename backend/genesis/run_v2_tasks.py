@@ -32,7 +32,7 @@ NOT_YET_IMPLEMENTED = {
     # v3 회로 (7/5~7/6)
     # v3_klino: 시간적 gradient 변조로 재구현 (D7). replay_to_klino: 이미 replay_swr가
     #   value 지도 만들고 biletaxis가 읽음 = 구조적 충족(D7, 아래 수용).
-    "v3_olf": "후각 변별",
+    # v3_olf: 피질 R-STDP 변별학습 게이팅으로 재구현 (D8).
     "v3_recovery": "회복 과제",
     "v3_value_eta": "가치 학습률",
     "v3_cue_eta": "단서 학습률",
@@ -350,7 +350,21 @@ class BiletaxisSteering:
         return self._align_hit / self._align_tot if self._align_tot else 0.0
 
 
-def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
+def _discriminate(brain, reward_type):
+    """D8 v3-olf: 먹이 먹은 순간 피질/예측오차 R-STDP 변별학습.
+    run_training과 동일 (good_food/bad_food). config/pathway 없으면 조용히 skip.
+    소리단서→좋음/나쁨 연합을 도파민 게이팅으로 학습 — 하드코딩 아닌 창발."""
+    cfg = brain.config
+    try:
+        if getattr(cfg, "perceptual_learning_enabled", False) and getattr(cfg, "it_enabled", False):
+            brain.update_cortical_rstdp(reward_type)
+        if reward_type == "good_food" and getattr(cfg, "prediction_error_enabled", False):
+            brain.update_prediction_error_rstdp("food")
+    except Exception as e:
+        print(f"  [warn] _discriminate({reward_type}) 실패: {e}", file=sys.stderr)
+
+
+def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False):
     """단일 에피소드. 4월 run_training 루프의 최소 경로를 따른다.
 
     place: PlacePrefTask 또는 None. 주어지면 goal-zone 항법 계측을 얹는다.
@@ -395,9 +409,15 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None):
                 good_eaten += 1
                 brain.learn_food_location(food_position=(obs["position_x"], obs["position_y"]))
                 brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+                # D8 v3-olf: 피질 R-STDP 변별학습. 소리단서(good=고음)→접근 연합을
+                # 도파민으로 학습(하드코딩 아님, 창발). run_training과 동일 호출.
+                if olf:
+                    _discriminate(brain, "good_food")
             else:
                 bad_eaten += 1
                 brain.release_dopamine(reward_magnitude=-0.5)
+                if olf:
+                    _discriminate(brain, "bad_food")
 
     # 에피소드 끝 SWR 리플레이 → place_to_value 갱신 (4월 run_training과 동일).
     # A2 디버깅: 이 호출 누락이 value 지도가 평평했던 근본 원인.
@@ -516,7 +536,8 @@ def main():
     t0 = time.time()
     episodes = []
     for ep in range(args.episodes):
-        rec = run_episode(brain, env, ep, args.task, place=place, biletaxis=biletaxis)
+        rec = run_episode(brain, env, ep, args.task, place=place,
+                          biletaxis=biletaxis, olf=args.v3_olf)
         episodes.append(rec)
         extra = ""
         if place is not None:
