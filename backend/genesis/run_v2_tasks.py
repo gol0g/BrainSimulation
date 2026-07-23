@@ -30,12 +30,12 @@ NOT_YET_IMPLEMENTED = {
     # biletaxis 계열 (7/1~7/4)
     # biletaxis/gain: D2. brake/settle: D4. hunger_gate: D5(satiety 게이팅 arbitration).
     # v3 회로 (7/5~7/6)
-    "v3_klino": "klinotaxis 회로",
+    # v3_klino: 시간적 gradient 변조로 재구현 (D7). replay_to_klino: 이미 replay_swr가
+    #   value 지도 만들고 biletaxis가 읽음 = 구조적 충족(D7, 아래 수용).
     "v3_olf": "후각 변별",
     "v3_recovery": "회복 과제",
     "v3_value_eta": "가치 학습률",
     "v3_cue_eta": "단서 학습률",
-    "replay_to_klino": "리플레이→klino 투사",
     # place_value_food_exclude: 구조적으로 이미 factored (D6, no-op). 아래 수용.
     "value_max": "가치 상한",
     # zone_circle/appetitive_place/start_far: place_pref 과제 레이어로 재구현됨 (D1)
@@ -234,7 +234,7 @@ class BiletaxisSteering:
     """
 
     def __init__(self, gain=0.5, look=0.10, delta=0.6, sigma=0.08,
-                 brake=False, settle=False, hunger_gate=False):
+                 brake=False, settle=False, hunger_gate=False, klino=False):
         self.gain = gain
         self.look = look      # 전방 샘플 거리(정규화)
         self.delta = delta    # 좌/우 각 오프셋(rad)
@@ -242,6 +242,8 @@ class BiletaxisSteering:
         self.brake = brake    # D4: 고value 구역서 감속 → 정착 (#43/#49)
         self.settle = settle  # D4: 목표 근처 조향 감쇠 → orbit 방지
         self.hunger_gate = hunger_gate  # D5: 배부를때만 목표항법 (forage 우선, #61)
+        self.klino = klino    # D7: 시간적 gradient — 멀어지면 재조향 강화, 가까워지면 직진
+        self._vhere_prev = None  # klino: 직전 value_here (시간 비교)
         self._vmax = 1e-9     # 현재 지도 최대 value (정규화용)
         self._v_per_cell = None
         self._centers = None
@@ -252,6 +254,7 @@ class BiletaxisSteering:
         import numpy as np
         self._align_hit = 0
         self._align_tot = 0
+        self._vhere_prev = None   # klino 시간 히스토리 리셋
         # 학습된 value 지도 pull (place_to_value: place_cells → place_value)
         brain.place_to_value.vars["g"].pull_from_device()
         w = brain.place_to_value.vars["g"].view.copy()
@@ -317,6 +320,18 @@ class BiletaxisSteering:
         if self.settle:
             vn = max(0.0, min(1.0, self._value_at(ax, ay) / self._vmax))
             d_turn *= (1.0 - 0.8 * vn)   # 중심 근처일수록 조향 약화
+
+        # D7 klinotaxis: 시간적 gradient. 현재 위치 value가 직전보다 떨어지면
+        # (멀어지는 중) 재조향을 강화, 오르면(가까워지는 중) 현 조향 신뢰.
+        # biletaxis(공간 좌우비교)의 시간축 보완. 방향은 biletaxis가, klino는 크기 변조.
+        if self.klino:
+            v_here = self._value_at(ax, ay)
+            if self._vhere_prev is not None:
+                trend = v_here - self._vhere_prev          # >0 가까워짐, <0 멀어짐
+                tn = trend / (self._vmax + 1e-9)           # 정규화
+                # 멀어질수록(tn<0) 조향 증폭, 가까워지면 1.0 유지
+                d_turn *= (1.0 + 2.0 * max(0.0, -tn))
+            self._vhere_prev = v_here
 
         # D5 hunger-gate: 허기시 목표항법 억제 → forage 반사 우선.
         d_turn *= self.satiety_gate(satiety)
@@ -450,6 +465,15 @@ def main():
     if args.place_value_food_exclude:
         print("[factored] place-value는 이미 zone-only 학습 (구조적 factored, no-op)")
 
+    # D7 replay-to-klino: 이미 replay_swr가 value 지도 만들고 biletaxis가 그걸 읽어
+    # 항법 → 구조적 충족. 플래그 수용(no-op).
+    if args.replay_to_klino:
+        print("[replay-to-klino] replay_swr→value지도→biletaxis read = 이미 충족 (no-op)")
+    # D7 klino는 biletaxis 조향을 시간축으로 변조 → biletaxis 없으면 의미 없음.
+    if args.v3_klino and not args.biletaxis:
+        print("[klino] biletaxis 없이 단독 klino는 이 재구현서 미지원 (변조 대상 없음) — 무시",
+              file=sys.stderr)
+
     # place_pref 과제 레이어 (v3, 증거 기반 재유도 — DESIGN_RECOVERY §D1/D3)
     place = None
     if args.task == "place_pref" or args.zone_circle:
@@ -472,6 +496,7 @@ def main():
             brake=args.biletaxis_brake,
             settle=args.biletaxis_settle,
             hunger_gate=args.biletaxis_hunger_gate,
+            klino=args.v3_klino,
         )
         extras = []
         if biletaxis.brake:
@@ -480,6 +505,8 @@ def main():
             extras.append("settle")
         if biletaxis.hunger_gate:
             extras.append("hunger-gate")
+        if biletaxis.klino:
+            extras.append("klino")
         print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain}"
               f"{(' +' + '+'.join(extras)) if extras else ''} (학습 value 지도 read-out)")
 
