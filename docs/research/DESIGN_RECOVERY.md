@@ -97,6 +97,20 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 ## 재유도 설계 로그 (어시스턴트, 증거 기반)
 
+### D9. A6 multicap 캡스톤 (2026-07-25) ✅ — A-트랙 완결
+풀스택(klino+biletaxis+brake+hunger-gate 항법 + olf 변별) 통합world 음식15, 30ep seed0
+(`a6_multicap.json`):
+- **항법**: align 0.593 (last5 **0.739**, 원본 0.82 근접), 조향 작동.
+- **변별**: PI 0.227 (last5 **0.383**), good 435 vs bad 222 (~2:1), 좋은먹이 선별.
+- 생존 2614 steps.
+- **다능력 공존 ✅**: 원본 참조(항법만 align 0.821, PI −0.16=변별X) 대비 항법 유지(0.74)
+  + 변별 획득(−0.16→+0.38). 두 능력 상호 파괴 없이 공존 = #64/#65 코히어런트 다능력 뇌.
+
+**A-트랙(🟢) 재유도 완결**: A1 place_pref / A2 biletaxis(align 0.75) / A3 brake(dwell 2배) /
+A4 hunger-gate(#61) / A5 factored(구조충족) / A7 klino(align 0.73) / A8 olf(PI 0.24) /
+A6 multicap(공존). 3패턴: 증거역산 · 학습호출누락발견(A2/A8) · 구조충족(A5/replay-klino).
+**남음**: 프런티어(🔴 §C) — seq-task/seq-wm(WM latch), context-compositional. 7/12 미해결 지점.
+
 ### D8. v3-olf 변별학습 (2026-07-25) ✅ — A2 패턴(학습호출 누락) 재발견
 최소 러너가 먹이 먹을때 변별 R-STDP를 빠뜨림(run_training은 good_food→
 update_cortical_rstdp+update_prediction_error_rstdp, bad_food→update_cortical_rstdp).
