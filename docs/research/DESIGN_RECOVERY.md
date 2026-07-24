@@ -97,6 +97,21 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 ## 재유도 설계 로그 (어시스턴트, 증거 기반)
 
+### D8. v3-olf 변별학습 (2026-07-25) ✅ — A2 패턴(학습호출 누락) 재발견
+최소 러너가 먹이 먹을때 변별 R-STDP를 빠뜨림(run_training은 good_food→
+update_cortical_rstdp+update_prediction_error_rstdp, bad_food→update_cortical_rstdp).
+→ PI~0. --v3-olf로 게이팅해 `_discriminate()` 배선. 통합과제 음식20, 25ep seed0
+(`a8_{off,olf}.json`):
+
+| 조건 | PI mean | **PI last5** | good | bad | steps |
+|---|---|---|---|---|---|
+| olf OFF | 0.170 | **0.009** | 604 | 326 | 2726 |
+| olf ON | 0.199 | **0.238** | 618 | 335 | 2953 |
+
+- **olf ✅**: last5 PI 0.009(우연 붕괴)→0.238(변별 유지). 학습 곡선 뚜렷. steps↑(생존).
+- **창발 준수**: "고음=좋음" 하드코딩 아님. 도파민(good +/bad −) R-STDP가 단서→가치
+  연합 자가학습. 프로젝트 원칙(하드코딩 금지, 학습 창발) 충족.
+
 ### D7. klinotaxis (2026-07-24) ✅ — 증거 全소실, 교과서 원리로 재유도
 klino 증거 완전 소실(4월 코드·스크립트·결과 全손상, 단독 마커 없음). 텍스트북 원리로 재유도:
 biletaxis=공간 좌우비교, klino=시간축("가까워지나 멀어지나"). biletaxis 방향 위에 klino가 크기 변조.
