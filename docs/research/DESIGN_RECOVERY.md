@@ -103,6 +103,21 @@ CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **�
 
 ## 재유도 설계 로그 (어시스턴트, 증거 기반)
 
+### D10. seq-task/seq-wm (2026-07-25) — WM 래치 작동 ✅, 순서완성 부트스트랩 병목 🔶
+seq-wm OFF vs ON, 통합world 음식0, 30ep seed0 (`c1_{nowm,wm}.json`):
+
+| 조건 | order_rate | WM_latch | correct | wrong |
+|---|---|---|---|---|
+| seq-wm OFF | 0.000 | **+0.42** | 0 | 0 |
+| seq-wm ON | 0.000 | **+0.53** | 0 | 0 |
+
+- **WM 래치 작동 ✅**: A 방문 후 working_memory_rate가 방문 전 대비 +0.42~0.53 상승·지속.
+  4월판 wm_recurrent 되먹임이 "A완료"를 보유 = **창발 워킹메모리 확인**. seq-wm 핵심 답.
+- **순서완성 병목 🔶**: order_rate 0, correct 0 — B에 도달 못함(30ep 내내). 콜드스타트:
+  biletaxis는 학습된 value로 조향하는데 B는 미방문→value 0→조향 없음→헤매다 굶음(음식0).
+  A는 무작위로 우연히 닿아 부트스트랩(래치 걸림)됐으나 B는 못 받음. "A→B 첫 완성이
+  안 일어나 경로 value 미생성"의 닭-달걀. → 부트스트랩 실험(음식+40ep) 진행중.
+
 ### D9. A6 multicap 캡스톤 (2026-07-25) ✅ — A-트랙 완결
 풀스택(klino+biletaxis+brake+hunger-gate 항법 + olf 변별) 통합world 음식15, 30ep seed0
 (`a6_multicap.json`):
