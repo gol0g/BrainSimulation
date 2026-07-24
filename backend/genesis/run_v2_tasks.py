@@ -44,8 +44,7 @@ NOT_YET_IMPLEMENTED = {
     "thermal_reversal": "온도 역전",
     "cue_reversal": "단서 역전",
     "cue_reversal_period": "단서 역전 주기",
-    # 시퀀스 (7/7~7/10): seq_task/seq_wm/seq_nav → SeqTask 레이어로 재구현 (D10).
-    "seq_gain": "시퀀스 이득",
+    # 시퀀스 (7/7~7/10): seq_task/seq_wm/seq_nav → SeqTask(D10). seq_gain → WM 되먹임 스케일(D10b).
     # 조합 컨텍스트 (7/10~7/11, 최전선)
     "context_compositional": "조합적 컨텍스트",
     # 중재
@@ -631,6 +630,13 @@ def main():
             extras.append("klino")
         print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain}"
               f"{(' +' + '+'.join(extras)) if extras else ''} (학습 value 지도 read-out)")
+
+    # D10b seq-gain: WM 되먹임 가중치 스케일 (bistable 래치 강도 실험).
+    # 하드코딩 아님 — 생물학적 파라미터(되먹임 흥분 강도) 조정. 기본 8.0.
+    if args.seq_gain is not None:
+        base = brain_config.working_memory_recurrent_weight
+        brain_config.working_memory_recurrent_weight = base * args.seq_gain
+        print(f"[seq-gain] WM 되먹임 {base} → {base * args.seq_gain} (×{args.seq_gain})")
 
     # D10 seq-task: A→B 순서 과제 + WM 래치
     seq = None
