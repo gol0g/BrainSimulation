@@ -76,12 +76,18 @@ biletaxis는 독립 기능이 아니라 **v3 place_pref 과제 스택 위의 최
 
 CLI 플래그명 + grep 마커 + 빈 실험 스크립트뿐. 주석 없음. **여기가 7/12 미해결로 끊긴 최전선.**
 
-### C1. 시퀀스 학습/WM
+### C1. 시퀀스 학습/WM  🟡 — WM latch 기질 발견 (2026-07-25)
 - **`--seq-task`**: A→B 순서 학습 과제. 마커 `최종순서율`, `in-order B 비율`(초기 0.25에서 상승 = 순서 학습). ablation: `--v3-value-eta 0`으로 place→value 학습 OFF.
 - **`--seq-nav`**: 시퀀스 항법. 마커 `seq-nav 정렬`.
-- **`--seq-wm`**: 창발 워킹메모리. 마커 `WM latch`. ← **잃어버린 핵심**.
+- **`--seq-wm`**: 창발 워킹메모리. 마커 `WM latch`.
 - **`--seq-gain`**: 시퀀스 조향 이득.
-- 🔴 **미상**: WM latch의 신경 기질(어느 집단이 latch? 4월판 `working_memory` 200뉴런 재사용?), seq-nav 정렬 계산법, 순서율 정의.
+- **WM latch 기질 = 4월판 생존** (이전 🔴 미상 → 확인): `working_memory` 200뉴런(3016) +
+  `wm_recurrent` SPARSE 자기→자기 되먹임(3071, weight 8.0) + `working_memory_decay 0.98`
+  = bistable 래치(상태 지속). `wm_to_goal_food`(3080)로 목표 구동. 읽기: `info["working_memory_rate"]`(11569).
+  → 기억 기계는 존재. 소실된 건 그걸 쓰는 **순서 과제(A→B)**.
+- **재유도 설계**: 존 2개(A/B), 정순 A→B. A 방문시 WM 래치 "A완료" 보유 → 목표 B 전환.
+  러너가 working_memory_rate 읽어 목표 게이팅(biletaxis의 place_to_value read와 동형).
+  지표: 최종순서율(A→B 정순 비율), WM latch(A후 wm_rate 상승·지속).
 
 ### C2. 조합적 컨텍스트
 - **`--context-compositional`**: M4 컨텍스트를 조합(compositional)으로 확장. `--zone-cx 0.3 --zone-cy 0.3`로 2D 구역.

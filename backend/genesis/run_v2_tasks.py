@@ -44,10 +44,7 @@ NOT_YET_IMPLEMENTED = {
     "thermal_reversal": "온도 역전",
     "cue_reversal": "단서 역전",
     "cue_reversal_period": "단서 역전 주기",
-    # 시퀀스 (7/7~7/10)
-    "seq_task": "시퀀스 과제",
-    "seq_nav": "시퀀스 항법",
-    "seq_wm": "창발 워킹메모리",
+    # 시퀀스 (7/7~7/10): seq_task/seq_wm/seq_nav → SeqTask 레이어로 재구현 (D10).
     "seq_gain": "시퀀스 이득",
     # 조합 컨텍스트 (7/10~7/11, 최전선)
     "context_compositional": "조합적 컨텍스트",
@@ -221,6 +218,90 @@ class PlacePrefTask:
         }
 
 
+class SeqTask:
+    """D10 시퀀스 과제 (A→B 순서) + WM 래치. 원본 소실, 4월판 WM 기질 위 재유도.
+
+    존 2개(A/B). 정순 = A 먼저→B 나중. A 방문시 WM 래치가 "A완료" 보유(4월판
+    working_memory 되먹임) → 목표를 B로 전환. 러너는 info["working_memory_rate"]로
+    래치 상태를 읽어 현재 목표 존을 정한다(biletaxis가 place_to_value 읽던 것과 동형).
+
+    지표:
+      - 최종순서율: 에피소드에서 A→B 정순 완료 비율(후반 상승 = 순서 학습).
+      - WM latch: A 방문 후 wm_rate가 baseline 대비 상승·지속하는가.
+    """
+
+    def __init__(self, ax=0.3, ay=0.3, bx=0.7, by=0.7, radius=0.12,
+                 use_wm=False):
+        self.ax, self.ay = ax, ay       # 존 A
+        self.bx, self.by = bx, by       # 존 B
+        self.radius = radius
+        self.use_wm = use_wm            # seq-wm: WM 래치로 목표 게이팅
+        self._reset()
+
+    def _reset(self):
+        self.visited_a = False
+        self.correct_seq = 0            # A→B 정순 완료 횟수
+        self.wrong_seq = 0              # B를 A보다 먼저(역순)
+        self._wm_pre = []               # A 방문 전 wm_rate
+        self._wm_post = []              # A 방문 후 wm_rate
+        self._latched = False
+
+    def on_reset(self, env):
+        self._reset()
+
+    def target(self):
+        """현재 목표 존 (정규화 중심). WM 래치 걸리면 B, 아니면 A."""
+        go_b = self.visited_a
+        if self.use_wm:
+            # 래치 상태(working_memory 지속)로 목표 전환 — 창발 WM 사용
+            go_b = self._latched
+        return (self.bx, self.by) if go_b else (self.ax, self.ay)
+
+    def on_step(self, env, brain, wm_rate):
+        px = env.agent_x / env.config.width
+        py = env.agent_y / env.config.height
+        in_a = ((px - self.ax) ** 2 + (py - self.ay) ** 2) ** 0.5 < self.radius
+        in_b = ((px - self.bx) ** 2 + (py - self.by) ** 2) ** 0.5 < self.radius
+
+        # WM 래치 계측: A 방문 전/후 wm_rate 수집
+        if not self.visited_a:
+            self._wm_pre.append(wm_rate)
+        else:
+            self._wm_post.append(wm_rate)
+            # 래치 판정: A 후 wm_rate가 A 전 평균보다 유의히 높으면 latched
+            if not self._latched and self._wm_pre:
+                base = sum(self._wm_pre) / len(self._wm_pre)
+                if wm_rate > base * 1.5 + 0.01:
+                    self._latched = True
+
+        if in_a and not self.visited_a:
+            self.visited_a = True
+            brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+            brain.add_experience(self.ax, self.ay, 0, env.steps, 25.0)
+        elif in_b:
+            if self.visited_a:
+                self.correct_seq += 1
+                brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+                brain.add_experience(self.bx, self.by, 0, env.steps, 25.0)
+                self.visited_a = False   # 다음 사이클
+                self._latched = False
+            else:
+                self.wrong_seq += 1      # 역순(B 먼저)
+
+    def episode_metrics(self):
+        total = self.correct_seq + self.wrong_seq
+        order_rate = self.correct_seq / total if total else 0.0
+        wm_pre = sum(self._wm_pre) / len(self._wm_pre) if self._wm_pre else 0.0
+        wm_post = sum(self._wm_post) / len(self._wm_post) if self._wm_post else 0.0
+        return {
+            "order_rate": order_rate,
+            "correct_seq": self.correct_seq,
+            "wm_pre": wm_pre,
+            "wm_post": wm_post,
+            "wm_latch": wm_post - wm_pre,   # >0 = A후 WM 상승(래치)
+        }
+
+
 class BiletaxisSteering:
     """biletaxis 양측 조향 — 원본 소실, 증거 기반 재유도 (DESIGN_RECOVERY §D2).
 
@@ -288,15 +369,25 @@ class BiletaxisSteering:
         g = self.satiety_gate(satiety)
         return 1.0 - 0.7 * vn * g   # 허기(g=0)면 감속 없음
 
-    def _value_at(self, x, y):
+    def _value_at(self, x, y, target=None):
         import numpy as np
         d2 = ((self._centers[:, 0] - x) ** 2 + (self._centers[:, 1] - y) ** 2)
         wr = np.exp(-d2 / (2 * self.sigma ** 2))
+        vpc = self._v_per_cell
+        if target is not None:
+            # seq-nav: value를 목표 존 근방으로 마스킹 → 그 목표로만 climb
+            tx, ty = target
+            dt2 = ((self._centers[:, 0] - tx) ** 2 + (self._centers[:, 1] - ty) ** 2)
+            mask = np.exp(-dt2 / (2 * (self.radius_mask ** 2)))
+            vpc = vpc * mask
         s = wr.sum()
-        return float((wr * self._v_per_cell).sum() / s) if s > 1e-9 else 0.0
+        return float((wr * vpc).sum() / s) if s > 1e-9 else 0.0
 
-    def bias(self, env, place, satiety=1.0):
+    radius_mask = 0.18   # seq-nav 목표 마스킹 반경
+
+    def bias(self, env, place, satiety=1.0, target=None):
         """조향 보정량 반환 + align 누적. place: goal 방향 판정용.
+        target: seq-nav용 목표 존(정규화 중심). 주면 value를 그 근방 마스킹해 조향.
 
         부호 규약 (A2b 디버깅으로 확정):
         gym은 `agent_angle += angle_delta`, 이동은 cos/sin(angle) →
@@ -312,8 +403,8 @@ class BiletaxisSteering:
         y_ccw = ay + self.look * np.sin(th + self.delta)
         x_cw = ax + self.look * np.cos(th - self.delta)
         y_cw = ay + self.look * np.sin(th - self.delta)
-        v_ccw = self._value_at(x_ccw, y_ccw)
-        v_cw = self._value_at(x_cw, y_cw)
+        v_ccw = self._value_at(x_ccw, y_ccw, target=target)
+        v_cw = self._value_at(x_cw, y_cw, target=target)
         d_turn = self.gain * (v_ccw - v_cw)   # CCW value 높으면 +(CCW로 조향)
 
         # D4 settle: 목표 근처(고value)서 조향 감쇠 → orbit 대신 정착.
@@ -364,7 +455,7 @@ def _discriminate(brain, reward_type):
         print(f"  [warn] _discriminate({reward_type}) 실패: {e}", file=sys.stderr)
 
 
-def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False):
+def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False, seq=None):
     """단일 에피소드. 4월 run_training 루프의 최소 경로를 따른다.
 
     place: PlacePrefTask 또는 None. 주어지면 goal-zone 항법 계측을 얹는다.
@@ -373,6 +464,8 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False)
     brain.reset()
     if place is not None:
         place.on_reset(env)
+    if seq is not None:
+        seq.on_reset(env)
     if biletaxis is not None:
         biletaxis.on_reset(brain)
     done = False
@@ -387,9 +480,12 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False)
         brain.decay_dopamine()
         satiety = info.get("satiety_rate", 1.0)
         satiety_sum += satiety
+        wm_rate = info.get("working_memory_rate", 0.0)
         # biletaxis: 학습 value 지도 기반 조향 보정 (env.step 전에 heading 반영)
         if biletaxis is not None:
-            action_delta = action_delta + biletaxis.bias(env, place, satiety=satiety)
+            seq_target = seq.target() if seq is not None else None
+            action_delta = action_delta + biletaxis.bias(env, place, satiety=satiety,
+                                                          target=seq_target)
         env.set_brain_info(info)
         # D4 brake: 고value 구역서 전진속도 축소 (env.step 동안만 config 변경 후 복원)
         _spd0 = None
@@ -402,6 +498,8 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False)
 
         if place is not None:
             place.on_step(env, action_delta, brain=brain)
+        if seq is not None:
+            seq.on_step(env, brain, wm_rate)
 
         if env_info.get("food_eaten"):
             ftype = env_info.get("food_type", 0)
@@ -451,6 +549,8 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False)
         rec["cool_dwell_ratio"] = (cool_steps / steps) if steps else 0.0
     if biletaxis is not None:
         rec["biletaxis_align"] = biletaxis.align_ratio()
+    if seq is not None:
+        rec.update(seq.episode_metrics())
     return rec
 
 
@@ -530,6 +630,16 @@ def main():
         print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain}"
               f"{(' +' + '+'.join(extras)) if extras else ''} (학습 value 지도 read-out)")
 
+    # D10 seq-task: A→B 순서 과제 + WM 래치
+    seq = None
+    if args.seq_task:
+        acx = args.zone_cx if args.zone_cx is not None else 0.3
+        acy = args.zone_cy if args.zone_cy is not None else 0.3
+        seq = SeqTask(ax=acx, ay=acy, bx=1.0 - acx, by=1.0 - acy,
+                      use_wm=args.seq_wm)
+        print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
+              f"use_wm={args.seq_wm} seq_nav={args.seq_nav}")
+
     env = ForagerGym(config=env_config, render_mode="none")
     brain = ForagerBrain(config=brain_config)
 
@@ -537,7 +647,7 @@ def main():
     episodes = []
     for ep in range(args.episodes):
         rec = run_episode(brain, env, ep, args.task, place=place,
-                          biletaxis=biletaxis, olf=args.v3_olf)
+                          biletaxis=biletaxis, olf=args.v3_olf, seq=seq)
         episodes.append(rec)
         extra = ""
         if place is not None:
@@ -545,6 +655,9 @@ def main():
                       f" zrew={rec.get('zone_rewards', 0)} sat={rec.get('mean_satiety', 0):.2f}")
         if biletaxis is not None:
             extra += f" align={rec['biletaxis_align']:.4f} vmap_std={biletaxis.vmap_std:.4f}"
+        if seq is not None:
+            extra += (f" 최종순서율={rec['order_rate']:.3f} correct={rec['correct_seq']}"
+                      f" WM_latch={rec['wm_latch']:+.4f}")
         print(f"[ep {ep:3d}] PI={rec['performance_index']:+.4f} "
               f"good={rec['good_eaten']} bad={rec['bad_eaten']} "
               f"steps={rec['steps_taken']}{extra}")
@@ -570,6 +683,12 @@ def main():
         al = [e["biletaxis_align"] for e in episodes]
         print(f"biletaxis-align: {sum(al)/len(al):.4f}")
         print(f"last_5_align: {sum(al[-5:])/len(al[-5:]):.4f}")
+    if seq is not None:
+        orr = [e["order_rate"] for e in episodes]
+        lat = [e["wm_latch"] for e in episodes]
+        print(f"최종순서율: {sum(orr)/len(orr):.4f}")
+        print(f"last_5_최종순서율: {sum(orr[-5:])/len(orr[-5:]):.4f}")
+        print(f"WM latch: {sum(lat)/len(lat):+.4f}")
 
     result = {
         "v2_runner_version": RUNNER_VERSION,
