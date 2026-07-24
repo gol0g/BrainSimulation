@@ -346,11 +346,12 @@ class BiletaxisSteering:
         # 진단: value 지도 분산 (0이면 평평 = 미학습, align 0의 원인)
         self.vmap_std = float(self._v_per_cell.std())
 
-    def value_here_norm(self, env):
-        """현재 위치의 학습 value를 [0,1]로 정규화. 1 = 지도 최댓값(=zone 중심)."""
+    def value_here_norm(self, env, target=None):
+        """현재 위치의 학습 value를 [0,1]로 정규화. 1 = 지도 최댓값(=zone 중심).
+        target 주면 그 목표 근방 마스킹 — seq A트랩 방지(현 목표서만 감속)."""
         ax = env.agent_x / env.config.width
         ay = env.agent_y / env.config.height
-        return self._value_at(ax, ay) / self._vmax
+        return self._value_at(ax, ay, target=target) / self._vmax
 
     def satiety_gate(self, satiety):
         """D5 hunger-gate: 배부를때만 목표항법. 0(허기)→게이트닫힘, 1(포만)→열림.
@@ -360,12 +361,12 @@ class BiletaxisSteering:
         # satiety_rate(0~1) 소프트 임계: 0.2 미만 닫힘, 0.5+ 완전 열림
         return max(0.0, min(1.0, (satiety - 0.2) / 0.3))
 
-    def brake_factor(self, env, satiety=1.0):
+    def brake_factor(self, env, satiety=1.0, target=None):
         """brake ON이면 고value 구역서 속도 배율 반환 (1=정상, →0.3 감속).
-        hunger-gate시 허기땐 brake도 해제(forage 이동 방해 금지)."""
+        hunger-gate시 허기땐 brake도 해제. target 주면 현 목표 근방서만 감속."""
         if not self.brake:
             return 1.0
-        vn = max(0.0, min(1.0, self.value_here_norm(env)))
+        vn = max(0.0, min(1.0, self.value_here_norm(env, target=target)))
         g = self.satiety_gate(satiety)
         return 1.0 - 0.7 * vn * g   # 허기(g=0)면 감속 없음
 
@@ -491,7 +492,8 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False,
         _spd0 = None
         if biletaxis is not None and biletaxis.brake:
             _spd0 = env.config.agent_speed
-            env.config.agent_speed = _spd0 * biletaxis.brake_factor(env, satiety=satiety)
+            env.config.agent_speed = _spd0 * biletaxis.brake_factor(
+                env, satiety=satiety, target=seq_target)
         obs, reward, done, env_info = env.step((action_delta,))
         if _spd0 is not None:
             env.config.agent_speed = _spd0
