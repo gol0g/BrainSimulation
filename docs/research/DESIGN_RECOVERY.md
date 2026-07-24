@@ -124,9 +124,26 @@ seq-wm OFF vs ON, 통합world 음식0, 30ep seed0 (`c1_{nowm,wm}.json`).
 - **교훈**: 과장 주장(1차)을 후속 실험(트랩 수정)이 반증. 진짜 검증엔 교란요인(brake 트랩)
   제거가 필수. 이 프로젝트가 "하드코딩 금지·창발" 하드룰을 두는 이유의 실례.
 
-**진짜 프런티어 문제 (미해결, 7/12 원본 끊긴 지점과 동일 계열)**:
-① WM 되먹임을 bistable 래치로 만들 강도/구조(현 8.0 부족). ② 미방문 B 부트스트랩(콜드스타트).
-둘 다 미해결. ground-truth seek는 창발 위반이라 금지 — 정직하게 열린 문제로 남김.
+### D10b. WM 되먹임 강도 스캔 (2026-07-25) — 강도 무효, 근본원인 규명
+seq-wm ON, target-aware brake, 되먹임 weight ×1/4/8 (`d10b_g{4,8}.json`):
+
+| gain | WM 되먹임 | WM_latch | correct |
+|---|---|---|---|
+| ×1 | 8.0 | −0.36 | 0 |
+| ×4 | 32 | −0.24 | 4 |
+| ×8 | 64 | −0.37 | 2 |
+
+- **강도 무효**: ×8까지 WM_latch 계속 음수. bistable 래치 안 생김. 되먹임 강도가 원인 아님.
+- **근본원인 규명**: `place_to_working_memory`(weight 10.0)가 매 스텝 **현재 위치** place cell로
+  WM을 덮어씀 → WM은 "갔었던 곳"(유지)이 아니라 **"지금 있는 곳"(현재)** 추적. A 떠나면
+  그곳 place cell이 A 기억 밀어냄. 되먹임이 강해도 이 현재-위치 입력에 짐.
+- **다음 접근 (미구현)**: 순서 기억 = **입력 게이팅** 필요. A 보상 순간에만 WM 쓰고 이후
+  place 덮어쓰기 차단(write-protect). 4월 코드에 기계 존재: `wm_gate`, `dopamine_to_wm_gate_weight`
+  (도파민 게이팅 쓰기), `wm_update_gate`. 러너가 이걸 engage 안 함. → dopamine-gated WM 쓰기로
+  A-state 래치·보호가 seq-wm의 진짜 재구현. **7/12 원본 끊긴 지점의 유력 후보.**
+
+**프런티어 미해결 (정직한 열린 문제)**: ① dopamine-gated WM write(위 D10b 다음 접근).
+② 미방문 B 부트스트랩(콜드스타트). ground-truth seek는 창발 위반이라 금지.
 
 ### D9. A6 multicap 캡스톤 (2026-07-25) ✅ — A-트랙 완결
 풀스택(klino+biletaxis+brake+hunger-gate 항법 + olf 변별) 통합world 음식15, 30ep seed0
