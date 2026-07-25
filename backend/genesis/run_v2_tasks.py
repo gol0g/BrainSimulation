@@ -244,6 +244,23 @@ class SeqTask:
         self._wm_pre = []               # A 방문 전 wm_rate
         self._wm_post = []              # A 방문 후 wm_rate
         self._latched = False
+        self._a_pattern = None          # A 방문 시점 WM 막전위 패턴
+        self._pat_corr = []             # A 이후 패턴 상관 (유지=높음)
+
+    @staticmethod
+    def _wm_v(brain):
+        """working_memory 막전위 벡터 (패턴 readout, 스파이크버퍼 무관)."""
+        import numpy as np
+        v = brain.working_memory.vars["V"]
+        v.pull_from_device()
+        return np.array(v.view, dtype=np.float32).copy()
+
+    @staticmethod
+    def _corr(a, b):
+        import numpy as np
+        a = a - a.mean(); b = b - b.mean()
+        d = (np.linalg.norm(a) * np.linalg.norm(b))
+        return float((a @ b) / d) if d > 1e-9 else 0.0
 
     def on_reset(self, env):
         self._reset()
@@ -273,11 +290,17 @@ class SeqTask:
                 if wm_rate > base * 1.5 + 0.01:
                     self._latched = True
 
+        # 패턴 readout: A 방문 후 WM 막전위 패턴이 A시점 패턴과 유지되나(상관).
+        # 집단 발화율(confound) 아닌 특정 패턴 유지 = 진짜 래치 판정.
+        if self.visited_a and self._a_pattern is not None:
+            self._pat_corr.append(self._corr(self._wm_v(brain), self._a_pattern))
+
         if in_a and not self.visited_a:
             self.visited_a = True
             brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
             brain.add_experience(self.ax, self.ay, 0, env.steps, 25.0)
             self._restore_energy(env)   # 존=자원: 생존 → 탐색 시간
+            self._a_pattern = self._wm_v(brain)   # A 시점 WM 패턴 캡처
         elif in_b:
             if self.visited_a:
                 self.correct_seq += 1
@@ -300,12 +323,14 @@ class SeqTask:
         order_rate = self.correct_seq / total if total else 0.0
         wm_pre = sum(self._wm_pre) / len(self._wm_pre) if self._wm_pre else 0.0
         wm_post = sum(self._wm_post) / len(self._wm_post) if self._wm_post else 0.0
+        pat = (sum(self._pat_corr) / len(self._pat_corr)) if self._pat_corr else 0.0
         return {
             "order_rate": order_rate,
             "correct_seq": self.correct_seq,
             "wm_pre": wm_pre,
             "wm_post": wm_post,
             "wm_latch": wm_post - wm_pre,   # >0 = A후 WM 상승(래치)
+            "wm_pattern_corr": pat,          # A패턴 유지 상관 (>0.5=진짜 래치)
         }
 
 
@@ -722,9 +747,12 @@ def main():
     if seq is not None:
         orr = [e["order_rate"] for e in episodes]
         lat = [e["wm_latch"] for e in episodes]
+        pc = [e.get("wm_pattern_corr", 0.0) for e in episodes]
         print(f"최종순서율: {sum(orr)/len(orr):.4f}")
         print(f"last_5_최종순서율: {sum(orr[-5:])/len(orr[-5:]):.4f}")
         print(f"WM latch: {sum(lat)/len(lat):+.4f}")
+        print(f"WM pattern_corr: {sum(pc)/len(pc):.4f}")
+        print(f"last_5_pattern_corr: {sum(pc[-5:])/len(pc[-5:]):.4f}")
 
     result = {
         "v2_runner_version": RUNNER_VERSION,
