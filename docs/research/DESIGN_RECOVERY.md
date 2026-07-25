@@ -142,8 +142,22 @@ seq-wm ON, target-aware brake, 되먹임 weight ×1/4/8 (`d10b_g{4,8}.json`):
   (도파민 게이팅 쓰기), `wm_update_gate`. 러너가 이걸 engage 안 함. → dopamine-gated WM 쓰기로
   A-state 래치·보호가 seq-wm의 진짜 재구현. **7/12 원본 끊긴 지점의 유력 후보.**
 
-**프런티어 미해결 (정직한 열린 문제)**: ① dopamine-gated WM write(위 D10b 다음 접근).
-② 미방문 B 부트스트랩(콜드스타트). ground-truth seek는 창발 위반이라 금지.
+### D10c. WM 균형 스캔 + 측정 결함 발견 (2026-07-25)
+되먹임×g & place드라이브÷g 양방향(g=3,6). WM_latch 여전히 음수(-0.13~-0.40).
+**측정 결함 발견**: wm_pre=0.667(A 닿기 전에도 WM 높음). working_memory 집단이 탐색 내내
+광범위 발화 = "A 기억"이 아니라 지나가는 place field 반응. **집단 발화율(wm_rate)로는
+순서기억 격리 불가** — WM이 늘 켜져 있음. WM_latch 지표 자체가 confound.
+
+**seq-wm 진짜 재구현에 필요한 것 (3실험 D10/b/c로 규명)**:
+① **패턴 수준 WM 읽기**: A 담당 특정 뉴런들이 유지되나(집단율 아님). working_memory
+   spike 벡터를 A시점 패턴과 상관으로 측정. GPU pull 필요, 큰 구현.
+② **dopamine-gated write**: A 보상시만 그 패턴 쓰고 place 덮어쓰기 차단. wm_update_gate
+   (도파민 구동, wm_thalamic 억제) engage. 직접 place→WM(10.0) 경로 게이팅 필요.
+파라미터 튜닝(D10b/c)으론 불가. 근본적으로 다른 측정+회로 접근.
+
+**프런티어 미해결 (정직한 열린 문제, 7/12 원본 끊긴 지점)**:
+① seq-wm 진짜 재구현 = 패턴읽기+gated write(위). ② 미방문 B 부트스트랩(콜드스타트).
+ground-truth seek는 창발 위반이라 금지. A-트랙(🟢) 완결과 달리 프런티어(🔴)는 열린 채.
 
 ### D9. A6 multicap 캡스톤 (2026-07-25) ✅ — A-트랙 완결
 풀스택(klino+biletaxis+brake+hunger-gate 항법 + olf 변별) 통합world 음식15, 30ep seed0
