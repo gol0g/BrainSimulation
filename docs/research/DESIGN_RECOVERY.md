@@ -155,9 +155,23 @@ seq-wm ON, target-aware brake, 되먹임 weight ×1/4/8 (`d10b_g{4,8}.json`):
    (도파민 구동, wm_thalamic 억제) engage. 직접 place→WM(10.0) 경로 게이팅 필요.
 파라미터 튜닝(D10b/c)으론 불가. 근본적으로 다른 측정+회로 접근.
 
-**프런티어 미해결 (정직한 열린 문제, 7/12 원본 끊긴 지점)**:
-① seq-wm 진짜 재구현 = 패턴읽기+gated write(위). ② 미방문 B 부트스트랩(콜드스타트).
-ground-truth seek는 창발 위반이라 금지. A-트랙(🟢) 완결과 달리 프런티어(🔴)는 열린 채.
+### D10d. PBWM dopamine-gated write 구현 (2026-07-25) — 기전 배선됨, 측정으로 판정불가
+D10c의 "gated write" 다음접근을 실제 구현. place→WM을 뇌 자기 도파민([-1,1])으로 게이팅
+(보상시 열림→적재, 감쇠→닫힘→유지). forager_brain: place_to_working_memory 핸들 저장 +
+`gate_wm_input(open_frac)`. runner: seq-wm시 매 스텝 dopamine_level로 게이팅. baseline 무영향.
+
+**구현 함정(정직 기록)**: 1차 ON==OFF 동일 → SPARSE 시냅스에 `.view` 써서 GeNN 무효
+(API 오용, 과학적 실패 아님). `pull→.values[:]→push`로 수정 후 작동.
+
+작동 후 (`c1_{nowm,wm}.json` 음식0 30ep): OFF wm_post=0.267 / ON(PBWM) 0.422 — 게이팅이
+post-A WM 상승시킴(기전 작동 ✅). **그러나 wm_pre 게이팅 무관 0.667 고정** = WM가 place 아닌
+소스(되먹임/thalamic/tonic dopa)로 늘 켜짐 → **집단율로는 판정 불가**(D10c 확증). correct 6→2.
+
+**결론(내 판단, 튜닝 거부·떠넘김 거부)**: PBWM은 올바른 기전이고 배선됐으나, 성공/실패를
+현 측정으로 결론 못 냄. 남은 것:
+① 패턴수준 readout(working_memory spike_recording_data 10543, 뇌 spike읽기와 타이밍 충돌 위험).
+② 부트스트랩(B 미방문). ground-truth seek 금지.
+7/12 원본 끊긴 지점 그대로. **A-트랙(🟢) 완결과 달리 프런티어는 정직하게 열린 채.**
 
 ### D9. A6 multicap 캡스톤 (2026-07-25) ✅ — A-트랙 완결
 풀스택(klino+biletaxis+brake+hunger-gate 항법 + olf 변별) 통합world 음식15, 30ep seed0
