@@ -3044,24 +3044,26 @@ class ForagerBrain:
                 "place_to_working_memory", self.place_cells, self.working_memory,
                 self.config.place_to_working_memory_weight, sparsity=0.05)
 
-            # Food Memory → Working Memory (음식 위치 기억)
+            # Food Memory → Working Memory (음식 위치 기억) — PBWM: 핸들 저장(게이팅 대상)
+            self._wm_sensory_syns = getattr(self, "_wm_sensory_syns", [])
             if self.config.directional_food_memory:
-                self._create_static_synapse(
+                self._wm_sensory_syns.append(self._create_static_synapse(
                     "food_memory_left_to_wm", self.food_memory_left, self.working_memory,
-                    self.config.food_memory_to_working_memory_weight, sparsity=0.08)
-                self._create_static_synapse(
+                    self.config.food_memory_to_working_memory_weight, sparsity=0.08))
+                self._wm_sensory_syns.append(self._create_static_synapse(
                     "food_memory_right_to_wm", self.food_memory_right, self.working_memory,
-                    self.config.food_memory_to_working_memory_weight, sparsity=0.08)
+                    self.config.food_memory_to_working_memory_weight, sparsity=0.08))
             elif hasattr(self, 'food_memory') and self.food_memory is not None:
-                self._create_static_synapse(
+                self._wm_sensory_syns.append(self._create_static_synapse(
                     "food_memory_to_wm", self.food_memory, self.working_memory,
-                    self.config.food_memory_to_working_memory_weight, sparsity=0.08)
+                    self.config.food_memory_to_working_memory_weight, sparsity=0.08))
 
-        # Amygdala → Working Memory (위험 기억)
+        # Amygdala → Working Memory (위험 기억) — PBWM 게이팅 대상
         if self.config.amygdala_enabled:
-            self._create_static_synapse(
+            self._wm_sensory_syns = getattr(self, "_wm_sensory_syns", [])
+            self._wm_sensory_syns.append(self._create_static_synapse(
                 "fear_to_working_memory", self.fear_response, self.working_memory,
-                self.config.fear_to_working_memory_weight, sparsity=0.08)
+                self.config.fear_to_working_memory_weight, sparsity=0.08))
 
         print(f"    Input→WM: place={self.config.place_to_working_memory_weight}, "
               f"food_mem={self.config.food_memory_to_working_memory_weight}, "
@@ -9736,15 +9738,18 @@ class ForagerBrain:
         """
         if not hasattr(self, "place_to_working_memory"):
             return
-        syn = self.place_to_working_memory
-        g = syn.vars["g"]
-        # 최초 1회: 기본 가중치 배열 확보 (SPARSE → .values, .view 아님)
-        if not hasattr(self, "_wm_g_base"):
-            g.pull_from_device()
-            self._wm_g_base = np.array(g.values, dtype=np.float32).copy()
         frac = float(max(0.0, min(1.0, open_frac)))
-        g.values[:] = self._wm_g_base * frac
-        g.push_to_device()
+        # 감각→WM 전부 게이팅(place + food_memory + fear). 보상 없을땐 전부 닫혀
+        # 되먹임만 남음 → A 패턴 유지 가능. (place만 막으면 다른 입력이 덮어씀)
+        syns = [self.place_to_working_memory] + getattr(self, "_wm_sensory_syns", [])
+        if not hasattr(self, "_wm_g_bases"):
+            self._wm_g_bases = []
+            for s in syns:
+                s.vars["g"].pull_from_device()
+                self._wm_g_bases.append(np.array(s.vars["g"].values, dtype=np.float32).copy())
+        for s, base in zip(syns, self._wm_g_bases):
+            s.vars["g"].values[:] = base * frac
+            s.vars["g"].push_to_device()
 
     def add_experience(self, pos_x: float, pos_y: float, food_type: int,
                        step: int, reward: float, tagged: bool = False):

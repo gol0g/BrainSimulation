@@ -290,17 +290,22 @@ class SeqTask:
                 if wm_rate > base * 1.5 + 0.01:
                     self._latched = True
 
-        # 패턴 readout: A 방문 후 WM 막전위 패턴이 A시점 패턴과 유지되나(상관).
-        # 집단 발화율(confound) 아닌 특정 패턴 유지 = 진짜 래치 판정.
-        if self.visited_a and self._a_pattern is not None:
-            self._pat_corr.append(self._corr(self._wm_v(brain), self._a_pattern))
+        # 패턴 readout: A 적재 후 WM 막전위 패턴이 유지되나(상관).
+        # 캡처는 게이트가 열려 WM이 실제 적재된 뒤(분산>0)로 지연 — 보상 스텝엔 아직 rest.
+        if self.visited_a:
+            import numpy as _np
+            v = self._wm_v(brain)
+            if self._a_pattern is None:
+                if float(_np.std(v)) > 1e-4:      # 적재됨 = 패턴 생김
+                    self._a_pattern = v            # 이제 캡처
+            else:
+                self._pat_corr.append(self._corr(v, self._a_pattern))
 
         if in_a and not self.visited_a:
             self.visited_a = True
             brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
             brain.add_experience(self.ax, self.ay, 0, env.steps, 25.0)
             self._restore_energy(env)   # 존=자원: 생존 → 탐색 시간
-            self._a_pattern = self._wm_v(brain)   # A 시점 WM 패턴 캡처
         elif in_b:
             if self.visited_a:
                 self.correct_seq += 1
