@@ -631,12 +631,17 @@ def main():
         print(f"[biletaxis] 양측 조향 ON gain={biletaxis.gain}"
               f"{(' +' + '+'.join(extras)) if extras else ''} (학습 value 지도 read-out)")
 
-    # D10b seq-gain: WM 되먹임 가중치 스케일 (bistable 래치 강도 실험).
-    # 하드코딩 아님 — 생물학적 파라미터(되먹임 흥분 강도) 조정. 기본 8.0.
+    # D10b seq-gain: WM 되먹임/입력 균형 스케일 (bistable 래치 실험).
+    # 근본원인(D10b): place_to_working_memory(10.0)가 현재위치로 WM 덮어써 유지 못함.
+    # 되먹임만 키우면(seq-gain 스캔) place 드라이브에 짐 → place 드라이브도 낮춰 균형 이동.
+    # 하드코딩 아님 — 생물 파라미터(감각 드라이브 vs 되먹임 유지)의 상대 강도.
     if args.seq_gain is not None:
-        base = brain_config.working_memory_recurrent_weight
-        brain_config.working_memory_recurrent_weight = base * args.seq_gain
-        print(f"[seq-gain] WM 되먹임 {base} → {base * args.seq_gain} (×{args.seq_gain})")
+        g = args.seq_gain
+        rec0 = brain_config.working_memory_recurrent_weight
+        plc0 = brain_config.place_to_working_memory_weight
+        brain_config.working_memory_recurrent_weight = rec0 * g
+        brain_config.place_to_working_memory_weight = plc0 / g   # 현재위치 덮어쓰기 완화
+        print(f"[seq-gain ×{g}] WM 되먹임 {rec0}→{rec0*g}, place드라이브 {plc0}→{plc0/g}")
 
     # D10 seq-task: A→B 순서 과제 + WM 래치
     seq = None
