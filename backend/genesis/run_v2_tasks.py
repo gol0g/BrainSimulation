@@ -277,15 +277,23 @@ class SeqTask:
             self.visited_a = True
             brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
             brain.add_experience(self.ax, self.ay, 0, env.steps, 25.0)
+            self._restore_energy(env)   # 존=자원: 생존 → 탐색 시간
         elif in_b:
             if self.visited_a:
                 self.correct_seq += 1
                 brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
                 brain.add_experience(self.bx, self.by, 0, env.steps, 25.0)
+                self._restore_energy(env)
                 self.visited_a = False   # 다음 사이클
                 self._latched = False
             else:
                 self.wrong_seq += 1      # 역순(B 먼저)
+
+    @staticmethod
+    def _restore_energy(env):
+        # 존 도달이 에너지 회복 = 순서 완성이 생존과 직결(내재적 보상).
+        cap = getattr(env.config, "max_energy", 100.0)
+        env.energy = min(cap, env.energy + 40.0)
 
     def episode_metrics(self):
         total = self.correct_seq + self.wrong_seq
@@ -487,6 +495,15 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False,
         satiety = info.get("satiety_rate", 1.0)
         satiety_sum += satiety
         wm_rate = info.get("working_memory_rate", 0.0)
+        # 탐색: 뇌의 curiosity_rate(신규성/불확실성 구동)로 분산 탐색.
+        # 미방문 B 부트스트랩용. B로 조향(ground-truth) 아님 — 친숙한 곳 이탈(무방향).
+        # 뇌가 언제 탐색할지 결정(curiosity), 러너는 움직임으로 번역(biletaxis와 동형).
+        if seq is not None:
+            cur = info.get("curiosity_rate", 0.0)
+            if cur > 0.0:
+                import numpy as _np
+                action_delta = action_delta + _np.random.uniform(-1, 1) * cur * 1.5
+
         # biletaxis: 학습 value 지도 기반 조향 보정 (env.step 전에 heading 반영)
         if biletaxis is not None:
             seq_target = seq.target() if seq is not None else None
