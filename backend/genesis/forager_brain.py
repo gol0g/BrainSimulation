@@ -3039,7 +3039,8 @@ class ForagerBrain:
         # === 입력 연결: 다른 영역 → Working Memory ===
         # Hippocampus → Working Memory (공간 정보)
         if self.config.hippocampus_enabled:
-            self._create_static_synapse(
+            # PBWM: 핸들 저장 → 감각→WM 입력을 도파민으로 게이팅 가능하게(gate_wm_input).
+            self.place_to_working_memory = self._create_static_synapse(
                 "place_to_working_memory", self.place_cells, self.working_memory,
                 self.config.place_to_working_memory_weight, sparsity=0.05)
 
@@ -9726,6 +9727,19 @@ class ForagerBrain:
         self._last_garcia_avg_w = (avg_left + avg_right) / 2.0
 
         return results
+
+    def gate_wm_input(self, open_frac: float):
+        """PBWM 입력 게이트: 감각(place)→WM 입력을 도파민으로 조절.
+        open_frac 1=적재(현재 place를 WM에 쓰기), 0=유지(되먹임만, 덮어쓰기 차단).
+        보상시 도파민↑→열림→현재 위치 적재, 이후 도파민 감쇠→닫힘→상태 유지.
+        이게 순서 상태를 붙잡는 정본 기전(O'Reilly PBWM). 학습은 여전히 창발.
+        """
+        if not hasattr(self, "place_to_working_memory"):
+            return
+        base = self.config.place_to_working_memory_weight
+        syn = self.place_to_working_memory
+        syn.vars["g"].view[:] = base * float(max(0.0, min(1.0, open_frac)))
+        syn.vars["g"].push_to_device()
 
     def add_experience(self, pos_x: float, pos_y: float, food_type: int,
                        step: int, reward: float, tagged: bool = False):

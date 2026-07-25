@@ -475,7 +475,13 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False,
     cool_steps = 0
 
     satiety_sum = 0.0
+    seq_wm_gated = seq is not None and getattr(seq, "use_wm", False)
     while not done:
+        # PBWM: seq-wm이면 감각→WM 입력을 뇌 자신의 도파민으로 게이팅.
+        # 도파민(보상시↑, 이후 감쇠) = 게이트 신호. 임계 튜닝 없이 연속값 사용.
+        # 보상 없을땐 게이트 닫혀 현재위치가 WM 덮어쓰기 못함 → 되먹임이 상태 유지.
+        if seq_wm_gated:
+            brain.gate_wm_input(getattr(brain, "dopamine_level", 0.0))
         action_delta, info = brain.process(obs)
         brain.decay_dopamine()
         satiety = info.get("satiety_rate", 1.0)
