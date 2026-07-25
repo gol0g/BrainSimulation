@@ -9736,10 +9736,15 @@ class ForagerBrain:
         """
         if not hasattr(self, "place_to_working_memory"):
             return
-        base = self.config.place_to_working_memory_weight
         syn = self.place_to_working_memory
-        syn.vars["g"].view[:] = base * float(max(0.0, min(1.0, open_frac)))
-        syn.vars["g"].push_to_device()
+        g = syn.vars["g"]
+        # 최초 1회: 기본 가중치 배열 확보 (SPARSE → .values, .view 아님)
+        if not hasattr(self, "_wm_g_base"):
+            g.pull_from_device()
+            self._wm_g_base = np.array(g.values, dtype=np.float32).copy()
+        frac = float(max(0.0, min(1.0, open_frac)))
+        g.values[:] = self._wm_g_base * frac
+        g.push_to_device()
 
     def add_experience(self, pos_x: float, pos_y: float, food_type: int,
                        step: int, reward: float, tagged: bool = False):
