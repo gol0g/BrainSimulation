@@ -11961,6 +11961,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_sparse_expansion: bool = False,
                 no_prediction: bool = False,
                 no_curiosity: bool = False,
+                d2_eta: float = None, dip_mag: float = None,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -11979,6 +11980,15 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     # 환경 및 뇌 생성
     env_config = ForagerConfig()
     brain_config = ForagerBrainConfig()
+
+    # 회피 학습 강화 실험(먹이 변별): D2 학습률 / 도파민 dip 강도 override.
+    # 하드코딩 아님 — 생물 파라미터(벌 민감도·D2 가소성). 뇌는 여전히 경험으로 학습.
+    if d2_eta is not None:
+        brain_config.rstdp_d2_eta = d2_eta
+        print(f"  [C2] rstdp_d2_eta → {d2_eta} (회피 학습 강화)")
+    if dip_mag is not None:
+        brain_config.dopamine_dip_magnitude = dip_mag
+        print(f"  [C2] dopamine_dip_magnitude → {dip_mag} (나쁜먹이 벌 강화)")
 
     # 옵션 처리
     if no_pain:
@@ -13007,6 +13017,10 @@ if __name__ == "__main__":
                        help="Disable Pain Zone (Phase 2a mode)")
     parser.add_argument("--persist-learning", action="store_true",
                        help="Save/load Hippocampus weights between episodes (cumulative learning)")
+    parser.add_argument("--d2-eta", type=float, default=None,
+                       help="C2: D2 회피 학습률 override (기본 0.0003)")
+    parser.add_argument("--dip-mag", type=float, default=None,
+                       help="C2: 나쁜먹이 도파민 dip 강도 override (기본 0.5)")
     parser.add_argument("--save-weights", type=str, default=None,
                        help="Save all Hebbian weights after training (e.g. brain_20ep.npz)")
     parser.add_argument("--load-weights", type=str, default=None,
@@ -13091,6 +13105,7 @@ if __name__ == "__main__":
         no_sparse_expansion=args.no_sparse_expansion,
         no_prediction=args.no_prediction,
         no_curiosity=args.no_curiosity,
+        d2_eta=args.d2_eta, dip_mag=args.dip_mag,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
