@@ -4,7 +4,7 @@ set -uo pipefail
 source "$(dirname "$0")/cuda_env.sh"
 source ~/pygenn_wsl/bin/activate
 REPO=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild
-W=$REPO/checkpoints/brain_concepts_50ep.npz
+W=$REPO/checkpoints/brain_concepts_${1:-50}ep.npz
 cd ~/pygenn_test && rm -rf forager_brain_CODE CODE
 echo "=== 개념 평가 (baseline) ==="
 python -u $REPO/backend/genesis/evaluate_concepts.py --load-weights "$W" --test all 2>&1 | tail -40
