@@ -414,10 +414,15 @@ if __name__ == "__main__":
                        choices=["all", "call_semantics", "selectivity", "spatial",
                                 "diagnose_auditory", "npc_call"],
                        help="Which test to run")
+    parser.add_argument("--flip-audio", action="store_true",
+                       help="C1 수리: sound→d1 좌/우 반전 테스트")
     args = parser.parse_args()
 
     # Brain 생성 + 가중치 로드
     config = ForagerBrainConfig()
+    if args.flip_audio:
+        config.sound_food_flip = True
+        print("[C1] sound_food_flip=True (좌/우 반전 실험)")
     brain = ForagerBrain(config)
     brain.load_all_weights(args.load_weights)
     print(f"Loaded weights from {args.load_weights}")

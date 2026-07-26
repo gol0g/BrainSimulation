@@ -532,6 +532,7 @@ class ForagerBrainConfig:
 
     # A1 → Motor (청각 유도 행동) — C1: Push-Pull 활성화
     a1_to_motor_weight: float = 0.0                 # danger sound (유지: 0.0)
+    sound_food_flip: bool = False                   # C1 수리 실험: sound→d1 좌/우 반전
     sound_food_push_weight: float = 8.0             # sound_food ipsi (접근)
     sound_food_pull_weight: float = -4.0            # sound_food contra (억제)
 
@@ -1922,13 +1923,16 @@ class ForagerBrain:
             if self.config.basal_ganglia_enabled and hasattr(self, 'sound_food_left'):
                 sf_init_w = 0.5
                 sf_sp = 0.10
+                # C1 수리 실험: flip이면 sound_left→d1_right, sound_right→d1_left (방향 반전)
+                _d1_for_l = self.d1_right if self.config.sound_food_flip else self.d1_left
+                _d1_for_r = self.d1_left if self.config.sound_food_flip else self.d1_right
                 self.sound_food_to_d1_l = self.model.add_synapse_population(
-                    "sound_food_l_to_d1_l", "SPARSE", self.sound_food_left, self.d1_left,
+                    "sound_food_l_to_d1_l", "SPARSE", self.sound_food_left, _d1_for_l,
                     init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": sf_init_w})}),
                     init_postsynaptic("ExpCurr", {"tau": 5.0}),
                     init_sparse_connectivity("FixedProbability", {"prob": sf_sp}))
                 self.sound_food_to_d1_r = self.model.add_synapse_population(
-                    "sound_food_r_to_d1_r", "SPARSE", self.sound_food_right, self.d1_right,
+                    "sound_food_r_to_d1_r", "SPARSE", self.sound_food_right, _d1_for_r,
                     init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": sf_init_w})}),
                     init_postsynaptic("ExpCurr", {"tau": 5.0}),
                     init_sparse_connectivity("FixedProbability", {"prob": sf_sp}))
