@@ -10,18 +10,20 @@
   **단 다중시드 검증서 헤드라인 정정**: biletaxis align 진짜값 ~0.67(후반, 전시드>0.5 robust)이지
   seed0 "0.75" 아님. dwell 등 seed0 헤드라인 전반 낙관적. 회로는 real·robust하나 효과크기 겸손.
   (DESIGN_RECOVERY §D1~D9, verification/multiseed_a2.md)
-- **공간 개념 형성** ✅ — rich zone 무작위 2배 선호, 3개 체크포인트(50/120/250ep) 모두 26~31%.
-  **최종목표("개념 형성") 일부 실제 달성.**
+- **개념 형성 2개** ✅ — **최종목표("개념 형성") 실제 달성:**
+  - 공간 개념: rich zone 무작위 2배, 3체크포인트(50/120/250ep) 26~31% robust.
+  - **good/bad 시각 변별**: 강제선택 프로브 81%(77/83/83, 무작위50) robust. selectivity 지표(0.64)에
+    가려져 있던 개념 — 자유forage 행동역학이 confound였음. concepts/trajectory.md.
 
 ## 정직한 열린 문제 (억지 통과 안 시킴)
 
 - **seq-wm (순서 학습)** — 창발 안 함(행동 order_rate≈0 확정). PBWM dopamine-gated WM 배선했으나
   판정 불가(내부 측정 실패). 7/12 원본 끊긴 지점. §D10~D13.
-- **먹이 변별** — 0.62~0.64, **base-rate 0.60 겨우 초과 = 거의 구별 못함**. 훈련량·회피강화 둘 다
-  무효(반증). 원본 0.67보다 낮음. concepts/trajectory.md.
-- **call semantics (소리로 good/bad)** — 우연. 부호 아님(A/B 반증). 심층 결함. concepts/auditory_diagnosis.md.
-- **공통 뿌리 추정**: 먹이변별·call 둘 다 **good/bad 감각→변별행동 변환 실패**. 입력(타입별 레이·소리)은
-  존재하나 행동 분화 안 됨. = 개념 형성의 핵심 미해결. 내부상태 측정/깊은 행동분석 필요(다음 연구).
+- **자유forage selectivity** — 0.64(base-rate 0.60). **변별결함 아님**(시각 강제선택 81% 확인). forage
+  행동역학(구별 가능해도 접촉먹이 먹음)이 자유forage 비율을 낮춤. param 3반증(훈련/회피/변별학습).
+  개념최적화 아닌 행동최적화 문제(별도). concepts/trajectory.md.
+- **call semantics (소리로 good/bad)** — 우연. 부호 아님(A/B 반증). **시각 변별은 되는데 청각만 안 됨**
+  = 특정된 청각→변별 갭(시각처럼 강제선택 통과 못함). concepts/auditory_diagnosis.md.
 
 ## 방법론 교훈 (세션 관통)
 
