@@ -131,6 +131,55 @@ def test_food_selectivity_baseline(brain, n_episodes=20):
     }
 
 
+def test_visual_discrim(brain, n_trials=100):
+    """
+    시각 강제선택: good food 한쪽, bad food 반대쪽 (시각 typed rays로 명확 구분).
+    측정: 에이전트가 good food 쪽으로 조향하는가.
+    목적: selectivity 캡(0.64)이 "구별 capacity 부족"인지 "구별하나 자유forage서 안드러남"인지 구분.
+    기준: >60% (random 50%). call_semantics 템플릿과 동형(소리 대신 시각).
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    correct = 0
+    total = 0
+    for trial in range(n_trials):
+        good_side = "left" if np.random.random() > 0.5 else "right"
+        t = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        # 양쪽에 음식(food_rays), 한쪽 good-typed 한쪽 bad-typed
+        t["food_rays_left"] = np.ones(8) * 0.7
+        t["food_rays_right"] = np.ones(8) * 0.7
+        if good_side == "left":
+            t["good_food_rays_left"] = np.ones(8) * 0.8; t["good_food_rays_right"] = np.zeros(8)
+            t["bad_food_rays_left"] = np.zeros(8);        t["bad_food_rays_right"] = np.ones(8) * 0.8
+        else:
+            t["good_food_rays_left"] = np.zeros(8);        t["good_food_rays_right"] = np.ones(8) * 0.8
+            t["bad_food_rays_left"] = np.ones(8) * 0.8;    t["bad_food_rays_right"] = np.zeros(8)
+
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(t)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset(); break
+        if good_side == "left" and total_angle < -0.02:
+            correct += 1
+        elif good_side == "right" and total_angle > 0.02:
+            correct += 1
+        total += 1
+
+    score = correct / max(total, 1) * 100
+    return {"test": "visual_discrim", "score": score, "correct": correct,
+            "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
+
+
 def test_spatial_memory(brain, n_trials=50):
     """
     Baseline: 공간 기억 — Rich Zone 방향으로 더 많이 이동하는가
@@ -412,7 +461,7 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call"],
+                                "diagnose_auditory", "npc_call", "visual_discrim"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
@@ -429,6 +478,10 @@ if __name__ == "__main__":
 
     if args.test == "all":
         run_all_tests(brain)
+    elif args.test == "visual_discrim":
+        r = test_visual_discrim(brain)
+        print(f"Visual Discrim: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
+              f"[{'PASS' if r['pass'] else 'FAIL'}]")
     elif args.test == "call_semantics":
         r = test_call_semantics(brain)
         print(f"Call Semantics: {r['score']:.1f}% ({'PASS' if r['pass'] else 'FAIL'})")
