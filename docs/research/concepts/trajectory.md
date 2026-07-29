@@ -37,3 +37,9 @@ evaluate_concepts.py --test all. 각 ep는 forager_brain 훈련량.
 훈련량(50→250 정체)·회피강화 둘 다 무효 → 학습파라미터 문제 아님.
 원본 0.67(base+7)보다 낮음 = 재구현 격차 or 근본한계. **깊은 원인: good/bad 감각 표현.**
 call semantics 실패(소리로 good/bad 구별X)와 같은 뿌리 가능성. → 공통 root 진단 다음.
+
+## selectivity 분포 (250ep, eval 5회, 2026-07-28)
+0.64 / 0.63 / 0.65 / 0.64 / 0.63 = 평균 0.638, 좁음. **안정된 캡, variance draw 아님.**
+우연 통과 안 함. base+4(약하지만 안정적 구별). 기준0.65·원본0.67에 살짝 못 미침.
+→ "거의 구별X"(과장) 철회. 정확히: **안정적 약한 변별, sub-threshold.**
+다음: 변별학습 자체 강도(cortical_rstdp_eta) — 회피/훈련량 아닌 "good/bad 보는법 학습" 레버.
