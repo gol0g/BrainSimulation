@@ -43,3 +43,9 @@ call semantics 실패(소리로 good/bad 구별X)와 같은 뿌리 가능성. �
 우연 통과 안 함. base+4(약하지만 안정적 구별). 기준0.65·원본0.67에 살짝 못 미침.
 → "거의 구별X"(과장) 철회. 정확히: **안정적 약한 변별, sub-threshold.**
 다음: 변별학습 자체 강도(cortical_rstdp_eta) — 회피/훈련량 아닌 "good/bad 보는법 학습" 레버.
+
+## C2 변별학습 강화 반증 (cortical_eta 2배, 2026-07-28)
+selectivity 0.62/0.62/0.64 = baseline과 동일. **3번째 param 반증.**
+훈련량·회피·변별학습 셋 다 무효 = **param 아닌 깊은 원인 확정. param 탐색 종료.**
+다음: param 아닌 행동프로브 — 강제선택 테스트(good/bad 양쪽 명확 배치, 접근 방향)로
+"구별 못함(capacity)" vs "구별하나 자유forage서 안드러남(behavioral)" 구분.
