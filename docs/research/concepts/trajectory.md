@@ -27,3 +27,13 @@ evaluate_concepts.py --test all. 각 ep는 forager_brain 훈련량.
 - 공간 개념 형성됨 ✅. 먹이변별 0.64(원본0.67로 아주 느림). call semantics 우연=실제 결함.
 **다음**: 훈련 escalation 종료. call semantics(청각→행동) 직접 진단(diagnose_auditory).
 교훈: 두 점 추세를 신호로 성급 선언(WM +0.42·ON==OFF와 동일 실수). n 작을 때 노이즈 경계.
+
+## C2 회피강화 파일럿 반증 + base-rate 재해석 (2026-07-28)
+회피 강화(d2_eta 0.0003→0.0006, dip 0.5→0.8) 50ep: selectivity 0.62 (baseline 0.64와 동일).
+**회피학습 강화 가설 반증**(파일럿 스크린, 다중시드 안 감).
+
+**base-rate 재해석(중요)**: 환경 good food 비율 0.6 → **무작위도 selectivity 0.60**.
+브레인 0.62~0.64 = base-rate 겨우 2~4점 초과 = **거의 구별 못 함**("부분 성공" 아님).
+훈련량(50→250 정체)·회피강화 둘 다 무효 → 학습파라미터 문제 아님.
+원본 0.67(base+7)보다 낮음 = 재구현 격차 or 근본한계. **깊은 원인: good/bad 감각 표현.**
+call semantics 실패(소리로 good/bad 구별X)와 같은 뿌리 가능성. → 공통 root 진단 다음.
