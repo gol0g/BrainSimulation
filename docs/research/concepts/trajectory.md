@@ -49,3 +49,16 @@ selectivity 0.62/0.62/0.64 = baseline과 동일. **3번째 param 반증.**
 훈련량·회피·변별학습 셋 다 무효 = **param 아닌 깊은 원인 확정. param 탐색 종료.**
 다음: param 아닌 행동프로브 — 강제선택 테스트(good/bad 양쪽 명확 배치, 접근 방향)로
 "구별 못함(capacity)" vs "구별하나 자유forage서 안드러남(behavioral)" 구분.
+
+## 시각 강제선택 프로브 = 2번째 개념 형성 발견 (2026-07-28)
+visual_discrim 3회: **77% / 83% / 83%** (기준60, 무작위50) = 전부 PASS, 평균 81% 안정.
+**뇌는 good/bad를 시각으로 강하게 구별함.** → selectivity 0.64 캡은 변별 capacity 부족
+아니라 **자유forage 행동역학**(구별 가능해도 접촉먹이 먹음). param 3반증이 이제 이해됨
+(학습으로 못 고친 건 변별이 이미 되고 있어서 — 문제는 forage 행동).
+
+**정정된 개념 형성 결과 (2개 형성됨)**:
+- 공간 개념 ✅ (rich zone 2배, 3체크포인트 robust)
+- **good/bad 시각 변별 ✅ (81% forced-choice, robust)** — selectivity 지표에 가려져 있던 개념
+- 자유forage selectivity 0.64 = 변별결함 아닌 forage역학(별도 행동최적화 문제)
+- call semantics(청각 good/bad) 실패 = 시각OK/청각만 안됨 = 특정된 청각→변별 갭
+교훈: param 크랭크 대신 근본가르는 프로브가 옳았음 — 개념은 있었고 confounded 지표가 가림.
