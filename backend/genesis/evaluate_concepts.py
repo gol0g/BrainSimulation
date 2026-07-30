@@ -180,6 +180,55 @@ def test_visual_discrim(brain, n_trials=100):
             "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
 
 
+def test_generalization(brain, n_trials=120):
+    """
+    Test 2 범주 일반화: 훈련 때 안 본 변형 good/bad 자극에도 변별 유지되나.
+    변형: 강도 무작위(0.3~0.9), per-ray 노이즈, 부분 패턴(일부 ray만). = 특정값 암기 아닌
+    추상개념이면 일반화돼야. 기준 >60%(무작위50). 진짜 개념 vs 암기 판별.
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    correct = 0; total = 0
+    for trial in range(n_trials):
+        good_side = "left" if np.random.random() > 0.5 else "right"
+        t = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        # 변형: 강도 무작위, 노이즈, 부분 마스크 (훈련 분포 밖)
+        gi = np.random.uniform(0.3, 0.9); bi = np.random.uniform(0.3, 0.9)
+        def noisy(v):  # per-ray 노이즈 + 부분 마스크
+            r = np.ones(8) * v + np.random.uniform(-0.15, 0.15, 8)
+            mask = np.random.random(8) > 0.3   # 30% ray 결측
+            return np.clip(r * mask, 0, 1)
+        t["food_rays_left"] = noisy(0.7); t["food_rays_right"] = noisy(0.7)
+        if good_side == "left":
+            t["good_food_rays_left"] = noisy(gi); t["good_food_rays_right"] = np.zeros(8)
+            t["bad_food_rays_left"] = np.zeros(8); t["bad_food_rays_right"] = noisy(bi)
+        else:
+            t["good_food_rays_left"] = np.zeros(8); t["good_food_rays_right"] = noisy(gi)
+            t["bad_food_rays_left"] = noisy(bi); t["bad_food_rays_right"] = np.zeros(8)
+
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(t)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset(); break
+        if good_side == "left" and total_angle < -0.02: correct += 1
+        elif good_side == "right" and total_angle > 0.02: correct += 1
+        total += 1
+
+    score = correct / max(total, 1) * 100
+    return {"test": "generalization", "score": score, "correct": correct,
+            "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
+
+
 def test_sound_discrim(brain, n_trials=100):
     """
     소리 강제선택: typed-directional sound(good_sound/bad_sound × 좌/우)로 good/bad 구별.
@@ -509,7 +558,7 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim"],
+                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
@@ -535,6 +584,10 @@ if __name__ == "__main__":
         r = test_visual_discrim(brain)
         print(f"Visual Discrim: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
               f"[{'PASS' if r['pass'] else 'FAIL'}]")
+    elif args.test == "generalization":
+        r = test_generalization(brain)
+        print(f"Generalization: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
+              f"({'PASS' if r['pass'] else 'FAIL'})")
     elif args.test == "sound_discrim":
         r = test_sound_discrim(brain)
         print(f"Sound Discrim: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
