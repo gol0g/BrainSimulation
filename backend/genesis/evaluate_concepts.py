@@ -180,6 +180,54 @@ def test_visual_discrim(brain, n_trials=100):
             "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
 
 
+def test_sound_discrim(brain, n_trials=100):
+    """
+    소리 강제선택: typed-directional sound(good_sound/bad_sound × 좌/우)로 good/bad 구별.
+    시각 없음. typed_sound_enabled + 시각훈련 가중치 → 소리가 시각변별경로 타면 구별돼야.
+    목적: call 실패가 인코딩한계였는지 확증(타입×방향 소리 주면 뇌가 소리로도 구별하나).
+    기준: >60%.
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    correct = 0
+    total = 0
+    for trial in range(n_trials):
+        good_side = "left" if np.random.random() > 0.5 else "right"
+        t = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        # 시각 제거 (소리만으로 판정)
+        for key in ["food_rays_left", "food_rays_right", "good_food_rays_left",
+                    "good_food_rays_right", "bad_food_rays_left", "bad_food_rays_right"]:
+            t[key] = np.zeros(8)
+        # 타입×방향 소리: good은 good_side, bad는 반대쪽
+        gl, gr, bl, br = (0.8, 0.0, 0.0, 0.8) if good_side == "left" else (0.0, 0.8, 0.8, 0.0)
+        t["good_sound_left"], t["good_sound_right"] = gl, gr
+        t["bad_sound_left"], t["bad_sound_right"] = bl, br
+
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(t)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset(); break
+        if good_side == "left" and total_angle < -0.02:
+            correct += 1
+        elif good_side == "right" and total_angle > 0.02:
+            correct += 1
+        total += 1
+
+    score = correct / max(total, 1) * 100
+    return {"test": "sound_discrim", "score": score, "correct": correct,
+            "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
+
+
 def test_spatial_memory(brain, n_trials=50):
     """
     Baseline: 공간 기억 — Rich Zone 방향으로 더 많이 이동하는가
@@ -461,10 +509,12 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call", "visual_discrim"],
+                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
+    parser.add_argument("--typed-sound", action="store_true",
+                       help="C1-fix: 타입×방향 소리를 시각변별경로 합류")
     args = parser.parse_args()
 
     # Brain 생성 + 가중치 로드
@@ -472,6 +522,9 @@ if __name__ == "__main__":
     if args.flip_audio:
         config.sound_food_flip = True
         print("[C1] sound_food_flip=True (좌/우 반전 실험)")
+    if args.typed_sound:
+        config.typed_sound_enabled = True
+        print("[C1-fix] typed_sound_enabled=True (타입×방향 소리)")
     brain = ForagerBrain(config)
     brain.load_all_weights(args.load_weights)
     print(f"Loaded weights from {args.load_weights}")
@@ -481,6 +534,10 @@ if __name__ == "__main__":
     elif args.test == "visual_discrim":
         r = test_visual_discrim(brain)
         print(f"Visual Discrim: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
+              f"[{'PASS' if r['pass'] else 'FAIL'}]")
+    elif args.test == "sound_discrim":
+        r = test_sound_discrim(brain)
+        print(f"Sound Discrim: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
               f"[{'PASS' if r['pass'] else 'FAIL'}]")
     elif args.test == "call_semantics":
         r = test_call_semantics(brain)

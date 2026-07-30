@@ -533,6 +533,7 @@ class ForagerBrainConfig:
     # A1 → Motor (청각 유도 행동) — C1: Push-Pull 활성화
     a1_to_motor_weight: float = 0.0                 # danger sound (유지: 0.0)
     sound_food_flip: bool = False                   # C1 수리 실험: sound→d1 좌/우 반전
+    typed_sound_enabled: bool = False               # C1-fix: 타입×방향 소리를 시각변별경로 합류
     sound_food_push_weight: float = 8.0             # sound_food ipsi (접근)
     sound_food_pull_weight: float = -4.0            # sound_food contra (억제)
 
@@ -9982,6 +9983,14 @@ class ForagerBrain:
             good_food_r = np.mean(observation.get("good_food_rays_right", np.zeros(8)))
             bad_food_l = np.mean(observation.get("bad_food_rays_left", np.zeros(8)))
             bad_food_r = np.mean(observation.get("bad_food_rays_right", np.zeros(8)))
+
+            # C1-fix: 타입×방향 결합 소리를 시각 변별 경로에 합류(시각 typed rays와 동형).
+            # 소리로 good/bad를 방향과 함께 받게 → 뇌의 기존 변별이 소리에도 적용되나 검증.
+            if getattr(self.config, "typed_sound_enabled", False):
+                good_food_l = max(good_food_l, observation.get("good_sound_left", 0.0))
+                good_food_r = max(good_food_r, observation.get("good_sound_right", 0.0))
+                bad_food_l = max(bad_food_l, observation.get("bad_sound_left", 0.0))
+                bad_food_r = max(bad_food_r, observation.get("bad_sound_right", 0.0))
 
             gs = self.config.good_food_eye_sensitivity
             self.good_food_eye_left.vars["I_input"].view[:] = good_food_l * gs

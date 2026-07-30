@@ -1523,15 +1523,26 @@ class ForagerGym:
         # C1: Food sound cues — 근처 음식의 소리 단서 (good=고음, bad=저음)
         food_sound_high = 0.0
         food_sound_low = 0.0
+        # C1-fix: 타입×방향 결합 소리 (typed-directional). 시각 typed rays 대응.
+        # 소리로 good/bad를 방향과 함께 받게 함(원래 인코딩 한계 보완).
+        good_sound_l = good_sound_r = bad_sound_l = bad_sound_r = 0.0
         if self.config.food_sound_cue_enabled:
             for fx, fy, ftype in self.foods:
                 dist = np.sqrt((self.agent_x - fx)**2 + (self.agent_y - fy)**2)
                 if dist < self.config.food_sound_range:
                     strength = 1.0 - dist / self.config.food_sound_range
+                    # 방향 분리 (agent heading 기준 좌/우)
+                    rel = (np.arctan2(fy - self.agent_y, fx - self.agent_x)
+                           - self.agent_angle + np.pi) % (2 * np.pi) - np.pi
+                    lf = max(0.0, -np.sin(rel)); rf = max(0.0, np.sin(rel))
                     if ftype == 0:  # good food
                         food_sound_high = max(food_sound_high, strength)
+                        good_sound_l = max(good_sound_l, strength * lf)
+                        good_sound_r = max(good_sound_r, strength * rf)
                     else:  # bad food
                         food_sound_low = max(food_sound_low, strength)
+                        bad_sound_l = max(bad_sound_l, strength * lf)
+                        bad_sound_r = max(bad_sound_r, strength * rf)
 
         return {
             # 외부 감각 (L/R 분리 - Phase 1 호환)
@@ -1606,6 +1617,11 @@ class ForagerGym:
             # C1: Food sound cues (음식별 소리 단서 — 접근 시 소리가 들림)
             "food_sound_high": food_sound_high,
             "food_sound_low": food_sound_low,
+            # C1-fix: 타입×방향 결합 소리 (good/bad × 좌/우)
+            "good_sound_left": good_sound_l,
+            "good_sound_right": good_sound_r,
+            "bad_sound_left": bad_sound_l,
+            "bad_sound_right": bad_sound_r,
         }
 
     def _cast_food_rays(self) -> Tuple[np.ndarray, np.ndarray]:
