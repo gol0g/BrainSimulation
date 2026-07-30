@@ -31,3 +31,11 @@ sound→d1 좌/우 반전 실험(sound_food_flip): call_semantics flip OFF 53% /
 - 먹이 변별: 부분 0.64 (훈련 거의 무반응).
 - call semantics: 실제 결함, 부호 아님(A/B 반증). 심층 원인 열린 조사.
 sound_food_flip 플래그는 반증된 실험 흔적으로 남김(기본 False, baseline 무영향).
+
+## call semantics 근본원인 확정 (2026-07-31) — 인코딩 한계, 뇌 결함 아님
+gym 확인: `_compute_food_sound`은 **타입무관** 방향소리(sound_food_left/right, 모든음식 합산).
+`food_sound_high/low`(타입)는 **방향없는 스칼라**(max). → **obs에 "good소리가 어느쪽" 없음.**
+타입×방향 결합 부재. 반면 시각 good_food_rays_left = 타입+방향 결합 → 뇌 구별 81%.
+**결론: call 실패 = 감각 인코딩 한계(소리로 방향+타입 못받음). 뇌/개념 결함 아님.**
+풀려면 gym에 typed-directional sound(good/bad_sound_left/right) 추가 필요(env+brain+재훈련).
+개념형성 완전 해결: 먹이변별=forage지표 confound(개념 형성됨), call=인코딩한계(뇌 정상).
