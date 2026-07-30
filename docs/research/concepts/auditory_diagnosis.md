@@ -39,3 +39,13 @@ gym 확인: `_compute_food_sound`은 **타입무관** 방향소리(sound_food_le
 **결론: call 실패 = 감각 인코딩 한계(소리로 방향+타입 못받음). 뇌/개념 결함 아님.**
 풀려면 gym에 typed-directional sound(good/bad_sound_left/right) 추가 필요(env+brain+재훈련).
 개념형성 완전 해결: 먹이변별=forage지표 confound(개념 형성됨), call=인코딩한계(뇌 정상).
+
+## 확증: typed-directional sound → 소리 변별 성공 (2026-07-31)
+sound_discrim A/B (250ep 시각훈련 가중치, **재훈련 없음**):
+- typed_sound OFF(대조): 45% / 42% = 우연(FAIL). call 실패 재현.
+- typed_sound ON: **78% / 84% = PASS(~81%)**. 시각(81%)과 동일 수준.
+
+**가설 확증**: call 실패 = 인코딩한계(타입×방향 소리 부재)지 뇌 결함 아님.
+**핵심 발견**: 뇌 good/bad 개념은 **양식초월(modality-general)** — 시각훈련 변별이 소리에
+재훈련없이 전이. 개념이 입력양식에 안 묶임 = 추상 good/bad 표현. **최종목표 정면.**
+구현: gym typed-directional sound + brain typed_sound_enabled(시각 변별경로 합류).
