@@ -10,10 +10,11 @@
   **단 다중시드 검증서 헤드라인 정정**: biletaxis align 진짜값 ~0.67(후반, 전시드>0.5 robust)이지
   seed0 "0.75" 아님. dwell 등 seed0 헤드라인 전반 낙관적. 회로는 real·robust하나 효과크기 겸손.
   (DESIGN_RECOVERY §D1~D9, verification/multiseed_a2.md)
-- **개념 형성 2개** ✅ — **최종목표("개념 형성") 실제 달성:**
+- **개념 형성** ✅ — **최종목표("개념 형성") 실제 달성:**
   - 공간 개념: rich zone 무작위 2배, 3체크포인트(50/120/250ep) 26~31% robust.
-  - **good/bad 시각 변별**: 강제선택 프로브 81%(77/83/83, 무작위50) robust. selectivity 지표(0.64)에
-    가려져 있던 개념 — 자유forage 행동역학이 confound였음. concepts/trajectory.md.
+  - **good/bad 변별 = 양식초월 추상개념**: 시각 강제선택 81%(77/83/83). **소리 강제선택도 81%
+    (78/84, typed-directional sound + 재훈련 없음)** — 시각훈련 변별이 소리에 전이. 개념이 입력양식에
+    안 묶인 추상 good/bad 표현. concepts/trajectory.md, auditory_diagnosis.md.
 
 ## 정직한 열린 문제 (억지 통과 안 시킴)
 
@@ -22,8 +23,9 @@
 - **자유forage selectivity** — 0.64(base-rate 0.60). **변별결함 아님**(시각 강제선택 81% 확인). forage
   행동역학(구별 가능해도 접촉먹이 먹음)이 자유forage 비율을 낮춤. param 3반증(훈련/회피/변별학습).
   개념최적화 아닌 행동최적화 문제(별도). concepts/trajectory.md.
-- **call semantics (소리로 good/bad)** — 우연. 부호 아님(A/B 반증). **시각 변별은 되는데 청각만 안 됨**
-  = 특정된 청각→변별 갭(시각처럼 강제선택 통과 못함). concepts/auditory_diagnosis.md.
+- ~~call semantics~~ **해결됨** — 원인=감각 인코딩 한계(타입×방향 소리 부재), 뇌 결함 아님.
+  gym에 typed-directional sound 추가하니 소리 변별 81% 달성(위). 남은 건 자유forage selectivity
+  행동최적화(개념 아닌 행동 문제, minor).
 
 ## 방법론 교훈 (세션 관통)
 
