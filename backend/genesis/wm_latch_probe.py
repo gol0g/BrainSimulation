@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""
+WM 래치 강제 프로브 (D14) — 개념 forced-choice 방법론을 WM에 적용.
+
+D13 블로커: 자유항법서 WM_latch 음수 = "래치 미작동" 추정이나, (a)에이전트가 A를 떠나는
+교란과 (b)막전위 V readout 깨짐(std=0)으로 기계적 규명 미검증.
+
+이 프로브가 둘 다 우회:
+  (a) 입력을 명시적으로 통제 — A 적재(게이트 open) 후 게이트 close + 중립관측 = 입력 0.
+      "에이전트가 A 떠남"이 아니라 "입력 끊은 뒤 recurrent가 유지하나"를 순수 격리.
+  (b) 깨진 V 대신 뉴런별 스파이크카운트 벡터로 WM 패턴 readout (신뢰 가능).
+
+측정: 적재군(A+) vs 대조군(A없음) 지연구간 발화율 궤적 + 적재패턴 유지 상관.
+  - A+ 발화율이 대조 위로 유지 → 래치 작동(bistable). D10 음성 반증.
+  - A+가 대조로 감쇠 → not-bistable 확정(이번엔 깨끗한 격리+신뢰 계측 위에서).
+"""
+import argparse
+import numpy as np
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from forager_brain import ForagerBrain, ForagerBrainConfig
+from forager_gym import ForagerGym, ForagerConfig
+
+
+def wm_vector(brain):
+    """working_memory 뉴런별 스파이크카운트 벡터 (이번 스텝)."""
+    ids = np.asarray(brain.working_memory.spike_recording_data[0][1], dtype=np.int64)
+    n = brain.config.n_working_memory
+    if ids.size == 0:
+        return np.zeros(n, dtype=np.float32)
+    return np.bincount(ids, minlength=n).astype(np.float32)
+
+
+def obs_at(env, nx, ny):
+    """정규화 좌표 (nx,ny)에 에이전트를 놓고 관측 생성 (place cells 위치 인코딩)."""
+    env.agent_x = nx * env.config.width
+    env.agent_y = ny * env.config.height
+    return env._get_observation()
+
+
+def _corr(a, b):
+    a = a - a.mean(); b = b - b.mean()
+    d = np.linalg.norm(a) * np.linalg.norm(b)
+    return float((a @ b) / d) if d > 1e-9 else 0.0
+
+
+def run_trial(brain, env, load, K=8, M=25, ax=0.3, ay=0.3, neutral=(0.5, 0.5)):
+    obs = env.reset()
+    brain.reset()
+    for _ in range(20):  # 워밍업
+        a, info = brain.process(obs)
+        obs, _, d, _ = env.step((a,))
+        if d:
+            obs = env.reset()
+
+    pat_load = None
+    if load:
+        oA = obs_at(env, ax, ay)
+        for _ in range(K):                       # 적재: 게이트 open + A + 도파민
+            brain.gate_wm_input(1.0)
+            a, info = brain.process(oA)
+            brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+        # 적재패턴 = 마지막 몇 스텝 누적 (단일스텝은 희소·잡음 → 창 누적)
+        acc = np.zeros(brain.config.n_working_memory, dtype=np.float32)
+        for _ in range(4):
+            brain.gate_wm_input(1.0)
+            a, info = brain.process(oA)
+            brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+            acc += wm_vector(brain)
+        pat_load = acc
+
+    oN = obs_at(env, *neutral)                   # 지연: 게이트 close + 중립(입력0)
+    rates, corrs = [], []
+    seg = np.zeros(brain.config.n_working_memory, dtype=np.float32)
+    for t in range(M):
+        brain.gate_wm_input(0.0)
+        a, info = brain.process(oN)
+        brain.decay_dopamine()
+        rates.append(info.get("working_memory_rate", 0.0))
+        seg += wm_vector(brain)
+        if (t + 1) % 4 == 0:                      # 4스텝 창 누적 패턴 상관
+            if pat_load is not None and pat_load.std() > 0 and seg.std() > 0:
+                corrs.append(_corr(seg, pat_load))
+            seg = np.zeros(brain.config.n_working_memory, dtype=np.float32)
+    return np.array(rates), np.array(corrs)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--load-weights", required=True)
+    ap.add_argument("--trials", type=int, default=8)
+    ap.add_argument("--delay", type=int, default=25)
+    args = ap.parse_args()
+
+    cfg = ForagerBrainConfig()
+    brain = ForagerBrain(cfg)
+    brain.load_all_weights(args.load_weights)
+    print(f"Loaded {args.load_weights}")
+    env = ForagerGym(ForagerConfig())
+
+    # --- 진단: WM 진짜 rest 발화율 + 벡터 구조 (포화/균일 여부) ---
+    obs = env.reset(); brain.reset()
+    rest_rates = []
+    for _ in range(15):
+        brain.gate_wm_input(0.0)
+        a, info = brain.process(obs)
+        rest_rates.append(info.get("working_memory_rate", 0.0))
+    v = wm_vector(brain)
+    nz = int((v > 0).sum())
+    print(f"[DIAG] true-rest WM rate (no warmup/load) mean={np.mean(rest_rates):.4f} "
+          f"last={rest_rates[-1]:.4f}")
+    print(f"[DIAG] WM vector: n={v.size} active_neurons={nz} std={v.std():.3f} "
+          f"max={v.max():.0f} (구조있으면 std>0·부분활성; 포화면 대다수활성)")
+
+    A_rates, C_rates, A_corrs = [], [], []
+    for i in range(args.trials):
+        ra, ca = run_trial(brain, env, load=True, M=args.delay)
+        rc, _ = run_trial(brain, env, load=False, M=args.delay)
+        A_rates.append(ra); C_rates.append(rc); A_corrs.append(ca)
+
+    A = np.array(A_rates); C = np.array(C_rates)     # (trials, M)
+    # 지연 초반/후반 평균
+    early = slice(0, max(1, args.delay // 5))
+    late = slice(args.delay - max(1, args.delay // 5), args.delay)
+    a_early, a_late = A[:, early].mean(), A[:, late].mean()
+    c_early, c_late = C[:, early].mean(), C[:, late].mean()
+    corr_mean = np.concatenate(A_corrs).mean() if any(len(x) for x in A_corrs) else 0.0
+
+    # 유지도: A+ 지연 발화율이 대조 위로 유지되나 (후반)
+    diff_late = a_late - c_late
+    sustain = diff_late > 0.02 and a_late > a_early * 0.6   # 대조초과 + 자체 붕괴X
+
+    print(f"\n=== WM Latch Forced Probe (D14) ===")
+    print(f"trials={args.trials} delay={args.delay}")
+    print(f"[A+ loaded]  rate early={a_early:.4f}  late={a_late:.4f}")
+    print(f"[control]    rate early={c_early:.4f}  late={c_late:.4f}")
+    print(f"delay-late A+ minus control = {diff_late:+.4f}")
+    print(f"load-pattern persistence corr (window) = {corr_mean:.3f}")
+    print(f"LATCH SUSTAINS: {'YES' if sustain else 'NO'} "
+          f"(A+ holds above control across delay)")
+
+
+if __name__ == "__main__":
+    main()
