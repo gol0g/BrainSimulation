@@ -179,6 +179,25 @@ biletaxis가 place_to_value 읽던 것과 동형 readout). SeqTask._wm_v도 깨�
 **다음(방법론 반복):** 개념을 푼 강제선택 프로브를 순차선택에 적용 — 중립지점 curiosity OFF,
 래치OFF→A로/래치ON→B로 향하나. confound 우회하고 "래치가 순차선택 구동하나" 직접 판정.
 
+### D18. 탐색 confound 반증 + navigation value-map 갭 노출 → seq-wm 정지 (2026-08-01)
+D17 가설(order confound=curiosity 탐색) 검증: `--seq-no-curiosity`로 무작위탐색 OFF, biletaxis
+방향조향만. 희소+패턴래치+curiosity OFF 40ep(d18_nocur.json).
+
+**결과:** 최종순서율 0.0076 (D17 0.006과 동일) — **탐색 confound 가설 반증.** 탐색 꺼도 순서 안 됨.
+**결정적 단서(내내 있던)**: **vmap_std=0.0000, align=0.0000** 전 에피소드. biletaxis는 학습된
+value map으로 조향 → **value map이 비어(std=0) 조향 자체가 작동 안 함.** "래치→target→biletaxis
+조향" 사슬의 마지막 고리 부재. curiosity 꺼도 조향할 gradient 없어 무작위 배회 → order 0.
+
+**블로커가 또 한 겹 후퇴**: WM 고쳤으나(포화·readout) 순차 존의 **navigation value-map + credit
+assignment가 재구성 하니스에서 co-adapt 안 됨.** 각 수정이 다음 갭 노출 = 여러 하위시스템 동시작동
+필요한 깊은 연구문제.
+
+**seq-wm 최종(D14~D18, 정직):** 지난세션 "래치 미작동·기계 미상"을 **3 하위블로커로 완전분해**:
+①WM 포화(D14 규명·해결:희소화) ②패턴래치 rate제어 미판독(D16→D17 해결:패턴readout, corr0.99)
+③순차 navigation value-map 미형성+credit assignment(D18 노출, 미해결·깊은연구).
+①②는 측정기반 실질해결 = 지난세션 대비 큰 전진. ③은 억지통과 안 시킴 — 진짜 열린 문제로 정확히 경계.
+**여기서 정지**(막힌 데 제자리돌기 금지 원칙). 딜리버러블: 개념형성 3개✅·A트랙✅ 확정.
+
 ### D13. WM 계측 재시도 실패 + 최종 확정 (2026-07-25)
 D12 결론을 자가의심 → WM 패턴 제대로 측정하려 재시도(전 감각→WM 게이팅 + 캡처타이밍 수정).
 결과: pattern_corr 여전히 0/20 — WM 막전위 readout(`vars["V"].view`)이 항상 균일(std=0).

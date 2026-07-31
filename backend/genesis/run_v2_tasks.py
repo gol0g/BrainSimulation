@@ -98,6 +98,8 @@ def build_parser():
     p.add_argument("--seq-wm", action="store_true")
     p.add_argument("--seq-pattern-latch", action="store_true",
                    help="D16후속: 래치 판정을 rate 아닌 A-패턴 상관으로(희소 WM 패턴래치 readout).")
+    p.add_argument("--seq-no-curiosity", action="store_true",
+                   help="D18: curiosity 무작위탐색 OFF — biletaxis 방향조향만. order confound 격리.")
     p.add_argument("--seq-gain", type=float, default=None)
     p.add_argument("--inhib-wm", type=float, default=None,
                    help="D15: wm_inhibitory→WM 억제강도 (희소코딩). 기본 -5.0(포화). -200 권장(활성~23%).")
@@ -552,7 +554,7 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False,
         # 탐색: 뇌의 curiosity_rate(신규성/불확실성 구동)로 분산 탐색.
         # 미방문 B 부트스트랩용. B로 조향(ground-truth) 아님 — 친숙한 곳 이탈(무방향).
         # 뇌가 언제 탐색할지 결정(curiosity), 러너는 움직임으로 번역(biletaxis와 동형).
-        if seq is not None:
+        if seq is not None and not getattr(seq, "no_curiosity", False):
             cur = info.get("curiosity_rate", 0.0)
             if cur > 0.0:
                 import numpy as _np
@@ -727,6 +729,7 @@ def main():
         acy = args.zone_cy if args.zone_cy is not None else 0.3
         seq = SeqTask(ax=acx, ay=acy, bx=1.0 - acx, by=1.0 - acy,
                       use_wm=args.seq_wm, pattern_latch=args.seq_pattern_latch)
+        seq.no_curiosity = args.seq_no_curiosity
         print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
               f"use_wm={args.seq_wm} seq_nav={args.seq_nav} "
               f"pattern_latch={args.seq_pattern_latch}")

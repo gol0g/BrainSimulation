@@ -21,8 +21,11 @@
 
 ## 정직한 열린 문제 (억지 통과 안 시킴)
 
-- **seq-wm (순서 학습)** — 창발 안 함(행동 order_rate≈0 확정). PBWM dopamine-gated WM 배선했으나
-  판정 불가(내부 측정 실패). 7/12 원본 끊긴 지점. §D10~D13.
+- **seq-wm (순서 학습)** — 창발 안 함(order_rate≈0). **단 D14~D18로 근본원인 분해·부분해결(전진):**
+  ①WM 포화(200/200 활성)가 래치 블로커 = **직접 측정 규명**(D14, 강제프로브+스파이크readout).
+  ②희소화(억제 −200)로 포화 해결 → A-특이 래치 출현(D15) + 패턴기반 readout 작동(D17, corr0.99).
+  ③남은 블로커 = 순차 navigation value-map 미형성(vmap_std=0)+credit assignment(D18) = 깊은연구.
+  지난 "판정불가·기계미상"에서 ①②측정해결. ③억지통과 안 시킴. §D14~D18. 내부측정 = wm_latch_probe.py.
 - **자유forage selectivity** — 0.64(base-rate 0.60). **변별결함 아님**(시각 강제선택 81% 확인). forage
   행동역학(구별 가능해도 접촉먹이 먹음)이 자유forage 비율을 낮춤. param 3반증(훈련/회피/변별학습).
   개념최적화 아닌 행동최적화 문제(별도). concepts/trajectory.md.
