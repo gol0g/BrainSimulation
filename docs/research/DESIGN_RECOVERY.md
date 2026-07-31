@@ -161,6 +161,24 @@ D15 처방을 훈련에 배선(`--inhib-wm`, run_v2_tasks). 동일 seq-wm 과제
   biletaxis가 place_to_value 읽던 것과 동형(하드코딩 아닌 창발상태 readout). 순서 창발하면 확증,
   아니면 남은 블로커=credit assignment(A래치→B선택→보상) = 심층 연구.
 
+### D17. 패턴래치 readout 작동, 순서는 탐색 confound (2026-07-31)
+D16 처방: 러너 래치감지를 rate→**패턴 상관**(A-적재 스파이크패턴)으로 교체(`--seq-pattern-latch`,
+biletaxis가 place_to_value 읽던 것과 동형 readout). SeqTask._wm_v도 깨진 V→스파이크벡터로.
+희소(-200)+패턴래치 40ep 재훈련(d17_patlatch.json).
+
+**결과:** 최종순서율 0.006, last_5 0.014 (D16과 동일) — 그러나 **last_5_pattern_corr=0.9986**.
+- **래치 readout은 이제 작동**(패턴 corr 0.99 = 현재 WM이 A-패턴과 강상관, 래치 감지 성공).
+- 그런데 순서율 여전 ~0. ep39 correct=6인데 order 0.014 → **wrong(B먼저)≈420회.**
+- **정체 규명**: 에이전트가 B탐색 위해 curiosity 무작위탐색 → A없이 B 반복 접촉 → order_rate 압도.
+  **래치는 작동하나 자유행동 order_rate가 탐색노이즈에 confound**(개념 selectivity 0.64가 forage에
+  가려진 것과 동형 구조 — D11 "explore/exploit 충돌"의 정체).
+
+**decomposition 최종(D14~D17):** seq-wm실패 = ①WM포화(D14, 해결:희소화) + ②패턴래치 rate제어에
+안읽힘(D16→D17, 해결:패턴readout) + ③자유 order_rate가 explore/exploit에 confound(남음). 
+①②는 실질 해결. 지난세션 "래치 미작동·기계미상"에서 크게 전진.
+**다음(방법론 반복):** 개념을 푼 강제선택 프로브를 순차선택에 적용 — 중립지점 curiosity OFF,
+래치OFF→A로/래치ON→B로 향하나. confound 우회하고 "래치가 순차선택 구동하나" 직접 판정.
+
 ### D13. WM 계측 재시도 실패 + 최종 확정 (2026-07-25)
 D12 결론을 자가의심 → WM 패턴 제대로 측정하려 재시도(전 감각→WM 게이팅 + 캡처타이밍 수정).
 결과: pattern_corr 여전히 0/20 — WM 막전위 readout(`vars["V"].view`)이 항상 균일(std=0).

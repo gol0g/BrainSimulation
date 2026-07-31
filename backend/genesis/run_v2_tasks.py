@@ -96,6 +96,8 @@ def build_parser():
     p.add_argument("--seq-task", action="store_true")
     p.add_argument("--seq-nav", action="store_true")
     p.add_argument("--seq-wm", action="store_true")
+    p.add_argument("--seq-pattern-latch", action="store_true",
+                   help="D16후속: 래치 판정을 rate 아닌 A-패턴 상관으로(희소 WM 패턴래치 readout).")
     p.add_argument("--seq-gain", type=float, default=None)
     p.add_argument("--inhib-wm", type=float, default=None,
                    help="D15: wm_inhibitory→WM 억제강도 (희소코딩). 기본 -5.0(포화). -200 권장(활성~23%).")
@@ -232,11 +234,12 @@ class SeqTask:
     """
 
     def __init__(self, ax=0.3, ay=0.3, bx=0.7, by=0.7, radius=0.12,
-                 use_wm=False):
+                 use_wm=False, pattern_latch=False):
         self.ax, self.ay = ax, ay       # 존 A
         self.bx, self.by = bx, by       # 존 B
         self.radius = radius
         self.use_wm = use_wm            # seq-wm: WM 래치로 목표 게이팅
+        self.pattern_latch = pattern_latch  # D16후속: rate 아닌 A-패턴 상관으로 래치 판정
         self._reset()
 
     def _reset(self):
@@ -246,16 +249,21 @@ class SeqTask:
         self._wm_pre = []               # A 방문 전 wm_rate
         self._wm_post = []              # A 방문 후 wm_rate
         self._latched = False
-        self._a_pattern = None          # A 방문 시점 WM 막전위 패턴
+        self._a_pattern = None          # A 방문 시점 WM 스파이크 패턴
         self._pat_corr = []             # A 이후 패턴 상관 (유지=높음)
+        self._wm_roll = None            # 최근 WM 벡터 롤링 누적 (패턴 판정용)
+        self._a_load = None             # A-적재 누적 (패턴 기준)
+        self._a_load_n = 0
 
     @staticmethod
     def _wm_v(brain):
-        """working_memory 막전위 벡터 (패턴 readout, 스파이크버퍼 무관)."""
+        """working_memory 뉴런별 스파이크카운트 벡터 (D14: 깨진 V 대신 신뢰 readout)."""
         import numpy as np
-        v = brain.working_memory.vars["V"]
-        v.pull_from_device()
-        return np.array(v.view, dtype=np.float32).copy()
+        ids = np.asarray(brain.working_memory.spike_recording_data[0][1], dtype=np.int64)
+        n = brain.config.n_working_memory
+        if ids.size == 0:
+            return np.zeros(n, dtype=np.float32)
+        return np.bincount(ids, minlength=n).astype(np.float32)
 
     @staticmethod
     def _corr(a, b):
@@ -281,27 +289,41 @@ class SeqTask:
         in_a = ((px - self.ax) ** 2 + (py - self.ay) ** 2) ** 0.5 < self.radius
         in_b = ((px - self.bx) ** 2 + (py - self.by) ** 2) ** 0.5 < self.radius
 
-        # WM 래치 계측: A 방문 전/후 wm_rate 수집
+        import numpy as _np
+        # WM 래치 계측: A 방문 전/후 wm_rate 수집 (지표용)
         if not self.visited_a:
             self._wm_pre.append(wm_rate)
         else:
             self._wm_post.append(wm_rate)
-            # 래치 판정: A 후 wm_rate가 A 전 평균보다 유의히 높으면 latched
-            if not self._latched and self._wm_pre:
+            # rate 기반 래치 (pattern_latch OFF일 때만 — 기존 동작)
+            if not self.pattern_latch and not self._latched and self._wm_pre:
                 base = sum(self._wm_pre) / len(self._wm_pre)
                 if wm_rate > base * 1.5 + 0.01:
                     self._latched = True
 
-        # 패턴 readout: A 적재 후 WM 막전위 패턴이 유지되나(상관).
-        # 캡처는 게이트가 열려 WM이 실제 적재된 뒤(분산>0)로 지연 — 보상 스텝엔 아직 rest.
+        # 패턴 기반 래치 (D16후속): A-적재 패턴을 기준으로, 현재 WM이 그 패턴과
+        # 상관 높으면 latched. rate 무관 — 희소 WM은 발화율 아닌 특정뉴런에 A를 담음(D15).
         if self.visited_a:
-            import numpy as _np
             v = self._wm_v(brain)
-            if self._a_pattern is None:
-                if float(_np.std(v)) > 1e-4:      # 적재됨 = 패턴 생김
-                    self._a_pattern = v            # 이제 캡처
-            else:
-                self._pat_corr.append(self._corr(v, self._a_pattern))
+            # A 적재 직후 몇 스텝 누적 = A 기준 패턴 (게이트 열려 적재된 상태)
+            if self._a_load_n < 4:
+                if self._a_load is None:
+                    self._a_load = v.copy()
+                else:
+                    self._a_load += v
+                self._a_load_n += 1
+                if self._a_load_n == 4 and self._a_load.std() > 1e-4:
+                    self._a_pattern = self._a_load
+            elif self._a_pattern is not None:
+                # 롤링 누적(최근 4스텝)으로 현재 WM 패턴 추정 → A기준과 상관
+                if self._wm_roll is None:
+                    self._wm_roll = v.copy()
+                else:
+                    self._wm_roll = 0.6 * self._wm_roll + v
+                c = self._corr(self._wm_roll, self._a_pattern)
+                self._pat_corr.append(c)
+                if self.pattern_latch and self._wm_roll.std() > 1e-4 and c > 0.5:
+                    self._latched = True
 
         if in_a and not self.visited_a:
             self.visited_a = True
@@ -704,9 +726,10 @@ def main():
         acx = args.zone_cx if args.zone_cx is not None else 0.3
         acy = args.zone_cy if args.zone_cy is not None else 0.3
         seq = SeqTask(ax=acx, ay=acy, bx=1.0 - acx, by=1.0 - acy,
-                      use_wm=args.seq_wm)
+                      use_wm=args.seq_wm, pattern_latch=args.seq_pattern_latch)
         print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
-              f"use_wm={args.seq_wm} seq_nav={args.seq_nav}")
+              f"use_wm={args.seq_wm} seq_nav={args.seq_nav} "
+              f"pattern_latch={args.seq_pattern_latch}")
 
     # D15: WM 희소코딩 — 포화 탈출. order_rate 아닌 희소성 목표로 보정된 값(용량 전제조건).
     if args.inhib_wm is not None:
