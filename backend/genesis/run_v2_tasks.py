@@ -97,6 +97,8 @@ def build_parser():
     p.add_argument("--seq-nav", action="store_true")
     p.add_argument("--seq-wm", action="store_true")
     p.add_argument("--seq-gain", type=float, default=None)
+    p.add_argument("--inhib-wm", type=float, default=None,
+                   help="D15: wm_inhibitory→WM 억제강도 (희소코딩). 기본 -5.0(포화). -200 권장(활성~23%).")
     p.add_argument("--context-select", action="store_true",
                    help="Zone A/B 의미반전 컨텍스트 과제 (4월 M4 기반, 구현됨)")
     p.add_argument("--context-compositional", action="store_true")
@@ -705,6 +707,11 @@ def main():
                       use_wm=args.seq_wm)
         print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
               f"use_wm={args.seq_wm} seq_nav={args.seq_nav}")
+
+    # D15: WM 희소코딩 — 포화 탈출. order_rate 아닌 희소성 목표로 보정된 값(용량 전제조건).
+    if args.inhib_wm is not None:
+        brain_config.inhibitory_to_wm_weight = args.inhib_wm
+        print(f"[inhib-wm] wm_inhibitory→WM = {args.inhib_wm} (희소코딩, D15)")
 
     env = ForagerGym(config=env_config, render_mode="none")
     brain = ForagerBrain(config=brain_config)
