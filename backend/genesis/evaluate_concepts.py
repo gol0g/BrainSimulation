@@ -180,6 +180,56 @@ def test_visual_discrim(brain, n_trials=100):
             "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
 
 
+def test_compositional(brain, n_trials=120):
+    """
+    합성/관계 개념 (C3): 학습된 원시개념(good/bad, 위험)이 조합돼 새 범주를 이루나.
+    강제선택: 양쪽 다 good food. 한쪽만 위험(predator/danger)과 결합.
+    올바른 선택 = (good∧safe) 접근, (good∧danger) 회피. = value가 맥락(위험)에 조건화되나.
+    기준 >60%(무작위50). 250ep(위험-가치 미훈련)엔 baseline(≈50 예상) — 합성훈련 필요성 문서화.
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    correct = 0; total = 0
+    for trial in range(n_trials):
+        safe_side = "left" if np.random.random() > 0.5 else "right"
+        t = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        # 양쪽 다 good food (동일 시각) — 차이는 오직 위험 결합
+        t["food_rays_left"] = np.ones(8) * 0.7;  t["food_rays_right"] = np.ones(8) * 0.7
+        t["good_food_rays_left"] = np.ones(8) * 0.8; t["good_food_rays_right"] = np.ones(8) * 0.8
+        t["bad_food_rays_left"] = np.zeros(8);   t["bad_food_rays_right"] = np.zeros(8)
+        # 위험을 unsafe 쪽에 결합 (predator + danger 신호)
+        if safe_side == "left":
+            t["predator_rays_left"] = np.zeros(8); t["predator_rays_right"] = np.ones(8) * 0.8
+            t["sound_danger_left"] = 0.0; t["sound_danger_right"] = 0.8
+        else:
+            t["predator_rays_left"] = np.ones(8) * 0.8; t["predator_rays_right"] = np.zeros(8)
+            t["sound_danger_left"] = 0.8; t["sound_danger_right"] = 0.0
+        t["danger_signal"] = 0.8
+
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(t)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset(); break
+        # 올바름 = safe(good∧safe) 쪽으로 조향
+        if safe_side == "left" and total_angle < -0.02: correct += 1
+        elif safe_side == "right" and total_angle > 0.02: correct += 1
+        total += 1
+
+    score = correct / max(total, 1) * 100
+    return {"test": "compositional", "score": score, "correct": correct,
+            "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
+
+
 def test_generalization(brain, n_trials=120):
     """
     Test 2 범주 일반화: 훈련 때 안 본 변형 good/bad 자극에도 변별 유지되나.
@@ -558,7 +608,7 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization"],
+                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
@@ -584,6 +634,10 @@ if __name__ == "__main__":
         r = test_visual_discrim(brain)
         print(f"Visual Discrim: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
               f"[{'PASS' if r['pass'] else 'FAIL'}]")
+    elif args.test == "compositional":
+        r = test_compositional(brain)
+        print(f"Compositional: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
+              f"({'PASS' if r['pass'] else 'FAIL'})")
     elif args.test == "generalization":
         r = test_generalization(brain)
         print(f"Generalization: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
