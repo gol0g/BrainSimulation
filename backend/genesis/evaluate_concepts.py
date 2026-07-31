@@ -204,13 +204,16 @@ def test_compositional(brain, n_trials=120):
         t["food_rays_left"] = np.ones(8) * 0.7;  t["food_rays_right"] = np.ones(8) * 0.7
         t["good_food_rays_left"] = np.ones(8) * 0.8; t["good_food_rays_right"] = np.ones(8) * 0.8
         t["bad_food_rays_left"] = np.zeros(8);   t["bad_food_rays_right"] = np.zeros(8)
-        # 위험을 unsafe 쪽에 결합 (predator + danger 신호)
+        # 위험을 unsafe 쪽에 결합. 훈련 위험양식(pain zone=pain_rays)과 일치시킴
+        # (predator/sound_danger는 훈련 danger_food와 다른 채널 → 양식 불일치, call_semantics 교훈).
         if safe_side == "left":
-            t["predator_rays_left"] = np.zeros(8); t["predator_rays_right"] = np.ones(8) * 0.8
-            t["sound_danger_left"] = 0.0; t["sound_danger_right"] = 0.8
+            t["pain_rays_left"] = np.zeros(8);       t["pain_rays_right"] = np.ones(8) * 0.8
+            t["predator_rays_left"] = np.zeros(8);   t["predator_rays_right"] = np.ones(8) * 0.8
+            t["sound_danger_left"] = 0.0;            t["sound_danger_right"] = 0.8
         else:
+            t["pain_rays_left"] = np.ones(8) * 0.8;  t["pain_rays_right"] = np.zeros(8)
             t["predator_rays_left"] = np.ones(8) * 0.8; t["predator_rays_right"] = np.zeros(8)
-            t["sound_danger_left"] = 0.8; t["sound_danger_right"] = 0.0
+            t["sound_danger_left"] = 0.8;            t["sound_danger_right"] = 0.0
         t["danger_signal"] = 0.8
 
         total_angle = 0.0
@@ -228,6 +231,57 @@ def test_compositional(brain, n_trials=120):
     score = correct / max(total, 1) * 100
     return {"test": "compositional", "score": score, "correct": correct,
             "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
+
+
+def test_compositional_conflict(brain, n_trials=120, food_on_danger="good"):
+    """
+    합성 확증 대조: value×danger 통합인가 vs 단순 위험회피 반사인가.
+    충돌 배치: 안전쪽에 (food_on_danger 반대), 위험쪽(pain)에 food_on_danger 음식.
+    측정: 위험 무릅쓰고 위험쪽 음식으로 가는 비율(danger-braving).
+      - 순수 위험회피면 good/bad 무관하게 braving 동일(둘 다 낮음).
+      - value×danger 통합이면 good 위해선 braving↑, bad 위해선 braving↓ = 차이가 합성 증거.
+    """
+    env_config = ForagerConfig()
+    env = ForagerGym(env_config)
+    obs = env.reset()
+    for _ in range(50):
+        angle, info = brain.process(obs)
+        obs, _, done, _ = env.step((angle,))
+        if done:
+            obs = env.reset()
+
+    brave = 0; total = 0
+    for trial in range(n_trials):
+        danger_side = "left" if np.random.random() > 0.5 else "right"
+        safe_side = "right" if danger_side == "left" else "left"
+        t = {k: (np.copy(v) if isinstance(v, np.ndarray) else v) for k, v in obs.items()}
+        t["food_rays_left"] = np.ones(8) * 0.7; t["food_rays_right"] = np.ones(8) * 0.7
+        def put(side, kind):
+            g = np.ones(8) * 0.8 if kind == "good" else np.zeros(8)
+            b = np.ones(8) * 0.8 if kind == "bad" else np.zeros(8)
+            t[f"good_food_rays_{side}"] = g; t[f"bad_food_rays_{side}"] = b
+        put(danger_side, food_on_danger)
+        put(safe_side, "bad" if food_on_danger == "good" else "good")
+        # 위험(pain)을 danger_side에
+        t[f"pain_rays_{danger_side}"] = np.ones(8) * 0.8
+        t[f"pain_rays_{safe_side}"] = np.zeros(8)
+        t["danger_signal"] = 0.8
+
+        total_angle = 0.0
+        for _ in range(5):
+            angle, info = brain.process(t)
+            total_angle += angle
+            obs, _, done, _ = env.step((angle,))
+            if done:
+                obs = env.reset(); break
+        # danger_side로 조향했나(위험 무릅씀)
+        if danger_side == "left" and total_angle < -0.02: brave += 1
+        elif danger_side == "right" and total_angle > 0.02: brave += 1
+        total += 1
+
+    rate = brave / max(total, 1) * 100
+    return {"test": f"compositional_conflict_{food_on_danger}", "brave_rate": rate,
+            "brave": brave, "total": total}
 
 
 def test_generalization(brain, n_trials=120):
@@ -608,7 +662,7 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional"],
+                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional", "compositional_conflict"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
@@ -638,6 +692,13 @@ if __name__ == "__main__":
         r = test_compositional(brain)
         print(f"Compositional: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
               f"({'PASS' if r['pass'] else 'FAIL'})")
+    elif args.test == "compositional_conflict":
+        rg = test_compositional_conflict(brain, food_on_danger="good")
+        rb = test_compositional_conflict(brain, food_on_danger="bad")
+        print(f"Conflict brave-for-GOOD (위험쪽 good) = {rg['brave_rate']:.1f}% ({rg['brave']}/{rg['total']})")
+        print(f"Conflict brave-for-BAD  (위험쪽 bad)  = {rb['brave_rate']:.1f}% ({rb['brave']}/{rb['total']})")
+        print(f"COMPOSITION (brave good - brave bad) = {rg['brave_rate']-rb['brave_rate']:+.1f}%pt "
+              f"({'INTEGRATED' if rg['brave_rate']-rb['brave_rate'] > 15 else 'danger-only reflex'})")
     elif args.test == "generalization":
         r = test_generalization(brain)
         print(f"Generalization: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
