@@ -11971,6 +11971,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_prediction: bool = False,
                 no_curiosity: bool = False,
                 d2_eta: float = None, dip_mag: float = None, cortical_eta: float = None,
+                danger_food_ratio: float = None,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12001,6 +12002,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if cortical_eta is not None:
         brain_config.cortical_rstdp_eta = cortical_eta
         print(f"  [C2] cortical_rstdp_eta → {cortical_eta} (변별 지각학습 강화)")
+    if danger_food_ratio is not None:
+        env_config.danger_food_ratio = danger_food_ratio
+        print(f"  [C3] danger_food_ratio → {danger_food_ratio} (위험-음식 결합 강화, graded 합성)")
 
     # 옵션 처리
     if no_pain:
@@ -13035,6 +13039,8 @@ if __name__ == "__main__":
                        help="C2: 나쁜먹이 도파민 dip 강도 override (기본 0.5)")
     parser.add_argument("--cortical-eta", type=float, default=None,
                        help="C2: 변별 지각학습률 override (기본 0.0008)")
+    parser.add_argument("--danger-food-ratio", type=float, default=None,
+                       help="C3: 위험-음식 결합 비율 override (기본 0.3, graded 합성 강화)")
     parser.add_argument("--save-weights", type=str, default=None,
                        help="Save all Hebbian weights after training (e.g. brain_20ep.npz)")
     parser.add_argument("--load-weights", type=str, default=None,
@@ -13120,6 +13126,7 @@ if __name__ == "__main__":
         no_prediction=args.no_prediction,
         no_curiosity=args.no_curiosity,
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
+        danger_food_ratio=args.danger_food_ratio,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
