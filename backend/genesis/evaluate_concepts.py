@@ -233,7 +233,7 @@ def test_compositional(brain, n_trials=120):
             "total": total, "pass": score > 60.0, "baseline": 50.0, "threshold": 60.0}
 
 
-def test_compositional_conflict(brain, n_trials=120, food_on_danger="good"):
+def test_compositional_conflict(brain, n_trials=120, food_on_danger="good", danger_intensity=0.8):
     """
     합성 확증 대조: value×danger 통합인가 vs 단순 위험회피 반사인가.
     충돌 배치: 안전쪽에 (food_on_danger 반대), 위험쪽(pain)에 food_on_danger 음식.
@@ -262,10 +262,10 @@ def test_compositional_conflict(brain, n_trials=120, food_on_danger="good"):
             t[f"good_food_rays_{side}"] = g; t[f"bad_food_rays_{side}"] = b
         put(danger_side, food_on_danger)
         put(safe_side, "bad" if food_on_danger == "good" else "good")
-        # 위험(pain)을 danger_side에
-        t[f"pain_rays_{danger_side}"] = np.ones(8) * 0.8
+        # 위험(pain)을 danger_side에 — 강도 변주(graded 합성 검증)
+        t[f"pain_rays_{danger_side}"] = np.ones(8) * danger_intensity
         t[f"pain_rays_{safe_side}"] = np.zeros(8)
-        t["danger_signal"] = 0.8
+        t["danger_signal"] = danger_intensity
 
         total_angle = 0.0
         for _ in range(5):
@@ -662,7 +662,7 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional", "compositional_conflict"],
+                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional", "compositional_conflict", "compositional_graded"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
@@ -699,6 +699,18 @@ if __name__ == "__main__":
         print(f"Conflict brave-for-BAD  (위험쪽 bad)  = {rb['brave_rate']:.1f}% ({rb['brave']}/{rb['total']})")
         print(f"COMPOSITION (brave good - brave bad) = {rg['brave_rate']-rb['brave_rate']:+.1f}%pt "
               f"({'INTEGRATED' if rg['brave_rate']-rb['brave_rate'] > 15 else 'danger-only reflex'})")
+    elif args.test == "compositional_graded":
+        print("위험강도 sweep — good 위해 무릅쓰기 vs bad 위해. graded value×danger 통합 검증.")
+        print(f"{'danger':>8} {'brave_GOOD':>11} {'brave_BAD':>10} {'diff(合成)':>10}")
+        maxdiff = 0.0
+        for di in [0.1, 0.25, 0.4, 0.55, 0.7]:
+            rg = test_compositional_conflict(brain, n_trials=100, food_on_danger="good", danger_intensity=di)
+            rb = test_compositional_conflict(brain, n_trials=100, food_on_danger="bad", danger_intensity=di)
+            d = rg['brave_rate'] - rb['brave_rate']
+            maxdiff = max(maxdiff, d)
+            print(f"{di:>8.2f} {rg['brave_rate']:>10.1f}% {rb['brave_rate']:>9.1f}% {d:>+9.1f}%pt")
+        print(f"MAX diff across danger = {maxdiff:+.1f}%pt "
+              f"({'GRADED INTEGRATION' if maxdiff > 15 else 'danger-dominant'})")
     elif args.test == "generalization":
         r = test_generalization(brain)
         print(f"Generalization: {r['score']:.1f}% ({r['correct']}/{r['total']}) (random=50%) "
