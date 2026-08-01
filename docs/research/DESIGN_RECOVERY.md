@@ -209,6 +209,25 @@ SeqTask가 A/B를 add_experience로 버퍼링해도 에피소드끝 consolidatio
 - value-map 생겼으나 biletaxis 조향정렬(align) 여전 0. 원인 후보: n-food 10이라 value-map이 A/B존
   아닌 음식으로 도배(순서존 신호 희석). → 다음: n-food 0(존만)로 세 fix 통합 검증.
 
+### D19b. n-food 0 통합검증 → 부트스트랩 knot 규명, seq-wm 최종 바운드 (2026-08-02)
+D19 후속(value-map이 음식 도배 추정) 검증: n-food 0(존만) + 세 fix(replay+희소WM+패턴래치) 25ep.
+**결과: vmap_std=0.0000 다시 내내, order 0.0019.** n-food 0이니 value-map 학습 경험(음식) 사라짐 →
+replay 돌아도 재생할 rewarded 경험 없음 + 존 거의 못닿아(order~0) 경험 소비도 없음 = **부트스트랩 knot**
+(존 닿으려면 value조향 필요 ↔ value 만들려면 존 닿아야, D11 재출현).
+
+**seq-wm 최종 decomposition (D14~D19b, 지난세션 대비 대전진):**
+| # | 블로커 | 상태 |
+|---|---|---|
+| ① | WM 포화(200/200) | ✅ 해결(D14규명·D15희소화 -200) |
+| ② | 패턴래치 rate제어 미판독 | ✅ 해결(D17 패턴readout, corr0.99) |
+| ③ | seq replay 미실행→value-map 빔 | ✅ 해결(D19 게이팅버그 수정, vmap 0→0.16) |
+| ④ | A→B 순서구조가 steerable value/credit로 미인코딩 | ❌ 남음(부트스트랩+credit knot) |
+
+①②③ 전부 **구체적 버그/원인 규명·수정**(측정기반). ④ = value-map이 음식으로 학습되거나(순서 아님)
+비거나(경험없음), **순서 credit이 zone value에 배정 안 됨** = 부트스트랩/credit 매듭. 깊은 연구.
+지난세션 "래치 미작동·기계 미상"에서 **3 블로커 실제 수정**까지 전진. ④는 억지통과 안 시킴 — 정밀 바운드.
+**seq-wm 여기서 확정 정지.** 딜리버러블: 개념형성 4층위✅(SCORECARD.md).
+
 ### D13. WM 계측 재시도 실패 + 최종 확정 (2026-07-25)
 D12 결론을 자가의심 → WM 패턴 제대로 측정하려 재시도(전 감각→WM 게이팅 + 캡처타이밍 수정).
 결과: pattern_corr 여전히 0/20 — WM 막전위 readout(`vars["V"].view`)이 항상 균일(std=0).

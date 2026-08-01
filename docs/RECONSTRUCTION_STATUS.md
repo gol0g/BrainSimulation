@@ -26,11 +26,13 @@
 
 ## 정직한 열린 문제 (억지 통과 안 시킴)
 
-- **seq-wm (순서 학습)** — 창발 안 함(order_rate≈0). **단 D14~D18로 근본원인 분해·부분해결(전진):**
-  ①WM 포화(200/200 활성)가 래치 블로커 = **직접 측정 규명**(D14, 강제프로브+스파이크readout).
-  ②희소화(억제 −200)로 포화 해결 → A-특이 래치 출현(D15) + 패턴기반 readout 작동(D17, corr0.99).
-  ③남은 블로커 = 순차 navigation value-map 미형성(vmap_std=0)+credit assignment(D18) = 깊은연구.
-  지난 "판정불가·기계미상"에서 ①②측정해결. ③억지통과 안 시킴. §D14~D18. 내부측정 = wm_latch_probe.py.
+- **seq-wm (순서 학습)** — 창발 안 함(order_rate≈0). **단 D14~D19b로 3 블로커 실제 수정(대전진):**
+  ①WM 포화(200/200) = 래치 블로커 → **규명·해결**(D14 강제프로브+스파이크readout, D15 희소화 −200).
+  ②패턴래치 rate제어 미판독 → **해결**(D17 패턴 readout, corr0.99).
+  ③seq replay 미실행(게이팅 버그)→value-map 빔 → **버그 수정**(D19, vmap_std 0→0.16 학습확인).
+  ④남은 블로커 = A→B 순서구조가 steerable value/credit로 미인코딩(부트스트랩+credit knot, D19b) = 깊은연구.
+  지난 "판정불가·기계미상"에서 **①②③ 구체 버그/원인 수정**. ④ 억지통과 안함·정밀바운드. §D14~D19b.
+  내부측정=wm_latch_probe.py. 러너플래그 --inhib-wm/--seq-pattern-latch/--seq-no-curiosity.
 - **자유forage selectivity** — 0.64(base-rate 0.60). **변별결함 아님**(시각 강제선택 81% 확인). forage
   행동역학(구별 가능해도 접촉먹이 먹음)이 자유forage 비율을 낮춤. param 3반증(훈련/회피/변별학습).
   개념최적화 아닌 행동최적화 문제(별도). concepts/trajectory.md.
