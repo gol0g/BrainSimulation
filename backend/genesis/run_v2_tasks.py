@@ -599,7 +599,10 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False,
 
     # 에피소드 끝 SWR 리플레이 → place_to_value 갱신 (4월 run_training과 동일).
     # A2 디버깅: 이 호출 누락이 value 지도가 평평했던 근본 원인.
-    if place is not None and place.sparse_reward:
+    # D19: seq 태스크도 A/B 존을 add_experience로 버퍼링하나 이 호출이 place에만
+    # 게이팅돼 seq는 replay 미실행 → vmap_std=0(D18) → biletaxis 조향불능 → 순서실패.
+    # seq에도 consolidation 배선(A트랙과 동일 기전, 하드코딩 아님).
+    if (place is not None and place.sparse_reward) or (seq is not None):
         try:
             brain.replay_swr()
         except Exception as e:

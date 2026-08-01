@@ -198,6 +198,17 @@ assignment가 재구성 하니스에서 co-adapt 안 됨.** 각 수정이 다음
 ①②는 측정기반 실질해결 = 지난세션 대비 큰 전진. ③은 억지통과 안 시킴 — 진짜 열린 문제로 정확히 경계.
 **여기서 정지**(막힌 데 제자리돌기 금지 원칙). 딜리버러블: 개념형성 3개✅·A트랙✅ 확정.
 
+### D19. replay 게이팅 버그 발견·수정 → value-map 학습됨 (2026-08-02)
+D18 "vmap_std=0(value-map 빔)"의 기계적 원인 규명: run_episode의 `replay_swr()` 호출이
+`place is not None and place.sparse_reward`에만 게이팅 → **seq 태스크(place=None)는 replay 미실행.**
+SeqTask가 A/B를 add_experience로 버퍼링해도 에피소드끝 consolidation 안 돌아 place_to_value 영영 평평.
+수정: `or (seq is not None)` 추가(A트랙과 동일 기전 배선, 하드코딩 아님).
+
+**검증(희소WM-200+패턴래치+fix, 25ep):** vmap_std ep0=0.0000→ep1=0.0199→단조상승→ep24=0.1599.
+**value-map 이제 학습됨 ✅(D18 블로커 해결).** 그러나 order_rate 여전 ~0, **align=0.0000 유지.**
+- value-map 생겼으나 biletaxis 조향정렬(align) 여전 0. 원인 후보: n-food 10이라 value-map이 A/B존
+  아닌 음식으로 도배(순서존 신호 희석). → 다음: n-food 0(존만)로 세 fix 통합 검증.
+
 ### D13. WM 계측 재시도 실패 + 최종 확정 (2026-07-25)
 D12 결론을 자가의심 → WM 패턴 제대로 측정하려 재시도(전 감각→WM 게이팅 + 캡처타이밍 수정).
 결과: pattern_corr 여전히 0/20 — WM 막전위 readout(`vars["V"].view`)이 항상 균일(std=0).
