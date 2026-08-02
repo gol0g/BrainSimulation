@@ -256,6 +256,7 @@ class SeqTask:
         self._wm_roll = None            # 최근 WM 벡터 롤링 누적 (패턴 판정용)
         self._a_load = None             # A-적재 누적 (패턴 기준)
         self._a_load_n = 0
+        self._prev_in_b = False         # B 진입 이벤트 감지 (order_rate 스텝당 집계 버그 수정)
 
     @staticmethod
     def _wm_v(brain):
@@ -327,12 +328,15 @@ class SeqTask:
                 if self.pattern_latch and self._wm_roll.std() > 1e-4 and c > 0.5:
                     self._latched = True
 
+        # order 집계는 존 진입 이벤트 기반(스텝당 아님) — 이전 스텝당 wrong++는
+        # correct 완성 후 B 체류를 계속 wrong으로 세어 order_rate를 무의미하게 만듦(D19c 규명).
+        entered_b = in_b and not self._prev_in_b
         if in_a and not self.visited_a:
             self.visited_a = True
             brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
             brain.add_experience(self.ax, self.ay, 0, env.steps, 25.0)
             self._restore_energy(env)   # 존=자원: 생존 → 탐색 시간
-        elif in_b:
+        elif entered_b:                 # B 진입 순간만 판정
             if self.visited_a:
                 self.correct_seq += 1
                 brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
@@ -341,7 +345,8 @@ class SeqTask:
                 self.visited_a = False   # 다음 사이클
                 self._latched = False
             else:
-                self.wrong_seq += 1      # 역순(B 먼저)
+                self.wrong_seq += 1      # 역순(B 먼저) — 진입 이벤트당 1회
+        self._prev_in_b = in_b
 
     @staticmethod
     def _restore_energy(env):
@@ -491,9 +496,15 @@ class BiletaxisSteering:
         # D5 hunger-gate: 허기시 목표항법 억제 → forage 반사 우선.
         d_turn *= self.satiety_gate(satiety)
 
-        # align: 조향 부호가 실제 목표방향 부호와 일치하나
-        if place is not None and abs(d_turn) > 1e-6:
-            goal_ang = np.arctan2(place.cy - ay, place.cx - ax)
+        # align: 조향 부호가 실제 목표방향 부호와 일치하나.
+        # D19c: place 없을 때(seq)도 target(seq 목표존)으로 계측 — 이전엔 seq align 미계측(항상0).
+        gx = gy = None
+        if place is not None:
+            gx, gy = place.cx, place.cy
+        elif target is not None:
+            gx, gy = target[0], target[1]   # seq 목표존(정규화 중심)
+        if gx is not None and abs(d_turn) > 1e-6:
+            goal_ang = np.arctan2(gy - ay, gx - ax)
             rel = (goal_ang - th + np.pi) % (2 * np.pi) - np.pi  # [-π,π]
             # rel>0 = 목표가 CCW(왼쪽) → +조향(d_turn>0)이 정답
             correct = (d_turn > 0) == (rel > 0)
