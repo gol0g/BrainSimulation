@@ -1,3 +1,5 @@
+> 📓 실험 실행로그(repo). **연구 지식·결론의 장기기억 정본 = llm_wiki 볼트 `sessions/brainsim/`.** 이 파일 = 무엇을 돌렸나·수치·런기록.
+
 # 개념 형성 baseline (50ep 훈련, 2026-07-25)
 
 훈련: forager_brain 50ep, Survival 66%/Reward 2.53%. 가중치 brain_concepts_50ep.npz.

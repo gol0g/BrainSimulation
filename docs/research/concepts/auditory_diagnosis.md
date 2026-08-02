@@ -1,3 +1,5 @@
+> 📓 실험 실행로그(repo). **연구 지식·결론의 장기기억 정본 = llm_wiki 볼트 `sessions/brainsim/`.** 이 파일 = 무엇을 돌렸나·수치·런기록.
+
 # call semantics 결함 진단 (250ep, 2026-07-26)
 
 evaluate_concepts.py --test diagnose_auditory:
