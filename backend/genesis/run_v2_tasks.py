@@ -100,6 +100,8 @@ def build_parser():
                    help="D16후속: 래치 판정을 rate 아닌 A-패턴 상관으로(희소 WM 패턴래치 readout).")
     p.add_argument("--seq-no-curiosity", action="store_true",
                    help="D18: curiosity 무작위탐색 OFF — biletaxis 방향조향만. order confound 격리.")
+    p.add_argument("--seq-random-target", action="store_true",
+                   help="대조: 목표 무작위(A→B 순서정책 없음) = chance floor 측정.")
     p.add_argument("--seq-gain", type=float, default=None)
     p.add_argument("--inhib-wm", type=float, default=None,
                    help="D15: wm_inhibitory→WM 억제강도 (희소코딩). 기본 -5.0(포화). -200 권장(활성~23%).")
@@ -242,6 +244,7 @@ class SeqTask:
         self.radius = radius
         self.use_wm = use_wm            # seq-wm: WM 래치로 목표 게이팅
         self.pattern_latch = pattern_latch  # D16후속: rate 아닌 A-패턴 상관으로 래치 판정
+        self.random_target = False      # 대조: 목표를 무작위(A→B 순서정책 없음) = chance floor
         self._reset()
 
     def _reset(self):
@@ -257,6 +260,8 @@ class SeqTask:
         self._a_load = None             # A-적재 누적 (패턴 기준)
         self._a_load_n = 0
         self._prev_in_b = False         # B 진입 이벤트 감지 (order_rate 스텝당 집계 버그 수정)
+        self._prev_in_a = False         # A 진입 이벤트 감지 (무작위 목표 재추첨용)
+        self._rand_goal = None          # 무작위 목표 대조의 현재 목표
 
     @staticmethod
     def _wm_v(brain):
@@ -280,6 +285,11 @@ class SeqTask:
 
     def target(self):
         """현재 목표 존 (정규화 중심). WM 래치 걸리면 B, 아니면 A."""
+        if self.random_target:
+            import numpy as _np
+            if getattr(self, "_rand_goal", None) is None:
+                self._rand_goal = (self.bx, self.by) if _np.random.random() < 0.5 else (self.ax, self.ay)
+            return self._rand_goal
         go_b = self.visited_a
         if self.use_wm:
             # 래치 상태(working_memory 지속)로 목표 전환 — 창발 WM 사용
@@ -346,7 +356,12 @@ class SeqTask:
                 self._latched = False
             else:
                 self.wrong_seq += 1      # 역순(B 먼저) — 진입 이벤트당 1회
+        # 무작위 목표 대조: 존 도달 시 다음 목표 재추첨(순서정책 없이 존 사이 방황) = chance floor
+        if self.random_target and ((in_a and not self._prev_in_a) or entered_b):
+            import numpy as _np
+            self._rand_goal = (self.bx, self.by) if _np.random.random() < 0.5 else (self.ax, self.ay)
         self._prev_in_b = in_b
+        self._prev_in_a = in_a
 
     @staticmethod
     def _restore_energy(env):
@@ -744,6 +759,7 @@ def main():
         seq = SeqTask(ax=acx, ay=acy, bx=1.0 - acx, by=1.0 - acy,
                       use_wm=args.seq_wm, pattern_latch=args.seq_pattern_latch)
         seq.no_curiosity = args.seq_no_curiosity
+        seq.random_target = args.seq_random_target
         print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
               f"use_wm={args.seq_wm} seq_nav={args.seq_nav} "
               f"pattern_latch={args.seq_pattern_latch}")

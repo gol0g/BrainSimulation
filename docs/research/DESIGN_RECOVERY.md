@@ -230,6 +230,32 @@ replay 돌아도 재생할 rewarded 경험 없음 + 존 거의 못닿아(order~0
 지난세션 "래치 미작동·기계 미상"에서 **3 블로커 실제 수정**까지 전진. ④는 억지통과 안 시킴 — 정밀 바운드.
 **seq-wm 여기서 확정 정지.** 딜리버러블: 개념형성 4층위✅(SCORECARD.md).
 
+### D19c~e. order 지표 버그 수정 + chance floor 대조 = 우연 확정 (2026-08-04)
+**측정 공백/버그 2개 규명·수정 (둘 다 계측, 행동 불변):**
+- **align 미계측**: align이 `place`에만 계산돼 seq는 항상 0(아티팩트). seq target 기준 계측 추가 →
+  **align 0.95~0.97** = biletaxis가 A/B로 실제 정확히 조향함 규명(D19c).
+- **order_rate 버그**: wrong++가 B 체류 매 스텝 집계(correct는 이벤트당) → correct 완성 후 B 체류가
+  wrong 폭증시켜 order_rate 무의미. 진입 이벤트 기반으로 수정 → order_rate 0.006→**0.25**(D19c).
+
+**성급결론 직전 chance floor 대조로 반증(중요):**
+| 조건 | overall | last_5 |
+|---|---|---|
+| floor (무작위 목표, 순서정책 없음) | 0.20 | 0.36 |
+| 뇌 WM (패턴래치) | 0.21~0.28 | 0.25~0.29 |
+| 상한 (bookkeeping 완벽 target 전환) | 0.32 | 0.52 |
+
+- **뇌 WM(0.25) ≈ 무작위 floor(0.20~0.36) = 우연 넘지 못함.** 지표수정으로 드러난 0.25는 학습 아닌 우연.
+- bookkeeping(0.32~0.52)만 floor 위 = **환경은 완벽 target전환 시 above-chance 순서 지원**하나,
+  뇌 WM 래치는(corr 0.99로 A 읽어도) target전환을 bookkeeping만큼 못 구동 → 순서 우연 머묾.
+- **결론(정직)**: 지표 아티팩트 제거는 real·필수였으나, seq-wm 순서는 **뇌 WM으로 above-chance 창발 안 함.**
+  갭 정밀 규명: 래치가 A를 읽지만 **timely·효과적 target전환으로 번역 안 됨**(bookkeeping과의 차이).
+- **교훈(5번째 성급결론 차단)**: 지표수정 0.006→0.25에서 "해결" 선언할 뻔 → floor 대조가 우연임을 폭로.
+  단일 지표 개선을 성과로 오인 금지, chance floor 필수. 개념 selectivity 규율의 연장.
+
+**seq-wm 최종(D14~D19e):** ①WM포화(해결) ②패턴readout(해결) ③replay버그(해결) ④order지표버그(해결)
++ **⑤남음: 래치→timely target전환 미번역 = 순서 우연.** 4개 구체 수정 + 정밀 바운드. 억지통과 안 함.
+러너 플래그: --seq-random-target(floor 대조), --inhib-wm/--seq-pattern-latch/--seq-no-curiosity.
+
 ### D13. WM 계측 재시도 실패 + 최종 확정 (2026-07-25)
 D12 결론을 자가의심 → WM 패턴 제대로 측정하려 재시도(전 감각→WM 게이팅 + 캡처타이밍 수정).
 결과: pattern_corr 여전히 0/20 — WM 막전위 readout(`vars["V"].view`)이 항상 균일(std=0).
