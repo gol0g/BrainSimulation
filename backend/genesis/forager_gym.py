@@ -127,6 +127,7 @@ class ForagerConfig:
     food_cluster_radius: float = 120.0        # 클러스터 반경 (400: 80 → 800: 120)
 
     # === Phase L12: Danger-Adjacent Food (위험 근접 고보상 음식) ===
+    food_hidden: bool = False                 # 사회 개념 훈련: 음식 직접시각 차단(NPC 단서로만 찾기)
     danger_food_enabled: bool = True          # 위험 근접 음식 활성화
     danger_food_ratio: float = 0.3            # 30% 음식이 pain zone 가장자리에 생성
     danger_food_bonus: float = 0.5            # 위험 근접 음식 에너지 +50% 보너스
@@ -1444,6 +1445,13 @@ class ForagerGym:
             good_food_rays_r = np.zeros(n_half)
             bad_food_rays_l = np.zeros(n_half)
             bad_food_rays_r = np.zeros(n_half)
+
+        # 사회 개념 훈련: food_hidden이면 직접 음식 시각 차단 → NPC 단서로만 음식 찾게 강제.
+        # 음식은 여전히 접촉시 먹힘(보상) → NPC 따라가 먹으면 사회경로 학습(관찰학습).
+        if getattr(self.config, "food_hidden", False):
+            food_rays_l = np.zeros_like(food_rays_l); food_rays_r = np.zeros_like(food_rays_r)
+            good_food_rays_l = np.zeros_like(good_food_rays_l); good_food_rays_r = np.zeros_like(good_food_rays_r)
+            bad_food_rays_l = np.zeros_like(bad_food_rays_l); bad_food_rays_r = np.zeros_like(bad_food_rays_r)
 
         # Phase 2b: Pain 관련 관찰
         if self.config.pain_zone_enabled:
