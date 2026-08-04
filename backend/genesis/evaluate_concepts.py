@@ -575,7 +575,7 @@ def diagnose_auditory(brain, n_trials=20):
     }
 
 
-def test_npc_call_response(brain, n_trials=60):
+def test_npc_call_response(brain, n_trials=60, rich_social=False):
     """
     Test C3: NPC Call Response — NPC food call만으로 행동이 바뀌는가
 
@@ -627,6 +627,15 @@ def test_npc_call_response(brain, n_trials=60):
         test_obs["npc_call_danger_left"] = 0.0
         test_obs["npc_call_danger_right"] = 0.0
 
+        # rich_social: 관찰학습 단서 양식 일치(먹이방향·의도·먹는모습·근접) — call 쪽에 함께.
+        # compositional 위험양식 교훈: 프로브 단서를 뇌가 훈련서 쓴 채널과 맞춰야.
+        if rich_social:
+            hi, lo = (call_side == "left") and 0.8 or 0.1, (call_side == "left") and 0.1 or 0.8
+            test_obs["npc_food_direction_left"] = hi;  test_obs["npc_food_direction_right"] = lo
+            test_obs["npc_eating_left"] = hi;          test_obs["npc_eating_right"] = lo
+            test_obs["npc_intention_food"] = 0.8
+            test_obs["npc_near_food"] = 0.8
+
         # 5스텝 누적 반응 측정
         total_angle = 0.0
         for _ in range(5):
@@ -662,7 +671,7 @@ if __name__ == "__main__":
                        help="Trained weights file to evaluate")
     parser.add_argument("--test", type=str, default="all",
                        choices=["all", "call_semantics", "selectivity", "spatial",
-                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional", "compositional_conflict", "compositional_graded"],
+                                "diagnose_auditory", "npc_call", "visual_discrim", "sound_discrim", "generalization", "compositional", "compositional_conflict", "compositional_graded", "npc_social_rich"],
                        help="Which test to run")
     parser.add_argument("--flip-audio", action="store_true",
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
@@ -733,3 +742,6 @@ if __name__ == "__main__":
     elif args.test == "npc_call":
         r = test_npc_call_response(brain)
         print(f"NPC Call Response: {r['score']:.1f}% ({'PASS' if r['pass'] else 'FAIL'})")
+    elif args.test == "npc_social_rich":
+        r = test_npc_call_response(brain, rich_social=True)
+        print(f"NPC Social (rich channels): {r['score']:.1f}% ({r['correct']}/{r['total']}) ({'PASS' if r['pass'] else 'FAIL'})")
