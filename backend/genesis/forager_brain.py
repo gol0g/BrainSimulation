@@ -11972,6 +11972,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_curiosity: bool = False,
                 d2_eta: float = None, dip_mag: float = None, cortical_eta: float = None,
                 danger_food_ratio: float = None, food_hidden: bool = False,
+                food_hidden_curriculum: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12123,6 +12124,11 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     all_angle_std = []              # 에피소드별 angle_delta 표준편차
 
     for ep in range(episodes):
+        # C4 커리큘럼: 음식 은닉을 점진 램프(초반 가시=부트스트랩 먹기+NPC-음식 상관 학습,
+        # 후반 은닉=NPC 의존 강제). 부트스트랩 교착 우회 시도.
+        if food_hidden_curriculum:
+            frac = ep / max(1, episodes - 1)
+            env_config.food_hidden = (np.random.random() < frac)
         obs = env.reset()
         brain.reset()
         done = False
@@ -13046,6 +13052,8 @@ if __name__ == "__main__":
                        help="C3: 위험-음식 결합 비율 override (기본 0.3, graded 합성 강화)")
     parser.add_argument("--food-hidden", action="store_true",
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
+    parser.add_argument("--food-hidden-curriculum", action="store_true",
+                       help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
     parser.add_argument("--save-weights", type=str, default=None,
                        help="Save all Hebbian weights after training (e.g. brain_20ep.npz)")
     parser.add_argument("--load-weights", type=str, default=None,
@@ -13132,6 +13140,7 @@ if __name__ == "__main__":
         no_curiosity=args.no_curiosity,
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
+        food_hidden_curriculum=args.food_hidden_curriculum,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
