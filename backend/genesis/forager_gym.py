@@ -128,6 +128,7 @@ class ForagerConfig:
 
     # === Phase L12: Danger-Adjacent Food (위험 근접 고보상 음식) ===
     food_hidden: bool = False                 # 사회 개념 훈련: 음식 직접시각 차단(NPC 단서로만 찾기)
+    social_drive: bool = False                # 사회 개념 훈련: NPC 근접 자체를 소량 내재보상(사회 incentive salience)
     danger_food_enabled: bool = True          # 위험 근접 음식 활성화
     danger_food_ratio: float = 0.3            # 30% 음식이 pain zone 가장자리에 생성
     danger_food_bonus: float = 0.5            # 위험 근접 음식 에너지 +50% 보너스

@@ -11972,7 +11972,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 no_curiosity: bool = False,
                 d2_eta: float = None, dip_mag: float = None, cortical_eta: float = None,
                 danger_food_ratio: float = None, food_hidden: bool = False,
-                food_hidden_curriculum: bool = False,
+                food_hidden_curriculum: bool = False, social_drive: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12009,6 +12009,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if food_hidden:
         env_config.food_hidden = True
         print(f"  [C4] food_hidden=True (음식 직접시각 차단 → NPC 단서로만 찾기, 사회 개념 훈련)")
+    if social_drive:
+        env_config.social_drive = True
+        print(f"  [C4] social_drive=True (NPC 근접 내재보상 → 사회 지향 드라이브, 부트스트랩)")
 
     # 옵션 처리
     if no_pain:
@@ -12194,6 +12197,15 @@ def run_training(episodes: int = 20, render_mode: str = "none",
             food_sound_high = obs.get("food_sound_high", 0.0)
             if food_sound_high > 0.3 and brain_config.basal_ganglia_enabled:
                 brain.release_dopamine(reward_magnitude=0.05 * food_sound_high)  # 보조만, 메인 해법 아님
+
+            # C4: 사회 드라이브 — social_proximity(NPC 근접) 자체를 소량 내재보상.
+            # 생물학적 근거: 사회종의 사회적 incentive salience(동종 근접이 도파민 유발).
+            # 부트스트랩 해법: NPC 지향을 내재적으로 보상 → NPC(음식 근처)로 접근 학습 → 사회→음식 연합 형성.
+            # 하드코딩 아님: 음식-찾기 아닌 사회 드라이브(hunger/curiosity 동형). 뇌가 활용법 학습.
+            if getattr(env_config, "social_drive", False) and brain_config.basal_ganglia_enabled:
+                sp = obs.get("social_proximity", 0.0)
+                if sp > 0.2:
+                    brain.release_dopamine(reward_magnitude=0.08 * sp)
 
             # 통계 수집
             ep_hunger_rates.append(info["hunger_rate"])
@@ -13054,6 +13066,8 @@ if __name__ == "__main__":
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
     parser.add_argument("--food-hidden-curriculum", action="store_true",
                        help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
+    parser.add_argument("--social-drive", action="store_true",
+                       help="C4: NPC 근접 내재보상(사회 incentive salience). 부트스트랩 사회 드라이브.")
     parser.add_argument("--save-weights", type=str, default=None,
                        help="Save all Hebbian weights after training (e.g. brain_20ep.npz)")
     parser.add_argument("--load-weights", type=str, default=None,
@@ -13140,7 +13154,7 @@ if __name__ == "__main__":
         no_curiosity=args.no_curiosity,
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
-        food_hidden_curriculum=args.food_hidden_curriculum,
+        food_hidden_curriculum=args.food_hidden_curriculum, social_drive=args.social_drive,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
