@@ -103,6 +103,8 @@ def build_parser():
     p.add_argument("--seq-random-target", action="store_true",
                    help="대조: 목표 무작위(A→B 순서정책 없음) = chance floor 측정.")
     p.add_argument("--seq-gain", type=float, default=None)
+    p.add_argument("--trace-decay", type=float, default=None,
+                   help="D20: eligibility trace 감쇠 override(기본 0.95 τ≈20). 0.99↑=긴 credit창(부트스트랩).")
     p.add_argument("--inhib-wm", type=float, default=None,
                    help="D15: wm_inhibitory→WM 억제강도 (희소코딩). 기본 -5.0(포화). -200 권장(활성~23%).")
     p.add_argument("--context-select", action="store_true",
@@ -765,6 +767,13 @@ def main():
               f"pattern_latch={args.seq_pattern_latch}")
 
     # D15: WM 희소코딩 — 포화 탈출. order_rate 아닌 희소성 목표로 보정된 값(용량 전제조건).
+    if args.trace_decay is not None:
+        brain_config.rstdp_trace_decay = args.trace_decay
+        brain_config.cortical_rstdp_trace_decay = args.trace_decay
+        if hasattr(brain_config, "pe_trace_decay"):
+            brain_config.pe_trace_decay = args.trace_decay
+        tau = -1.0 / max(1e-6, (1.0 - args.trace_decay)) if args.trace_decay < 1 else 999
+        print(f"[trace-decay] eligibility trace → {args.trace_decay} (τ≈{1/(1-args.trace_decay):.0f} steps, D20 긴 credit창)")
     if args.inhib_wm is not None:
         brain_config.inhibitory_to_wm_weight = args.inhib_wm
         print(f"[inhib-wm] wm_inhibitory→WM = {args.inhib_wm} (희소코딩, D15)")
