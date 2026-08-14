@@ -106,6 +106,8 @@ def build_parser():
                    help="D21fix: seq target을 egocentric 감각으로 제시 → 뇌 접근정책+WM이 항법(biletaxis 대신).")
     p.add_argument("--seq-brain-nav", action="store_true",
                    help="D23: 뇌 내부 목표항법(학습 value map 좌우gradient→motor). biletaxis 내부화.")
+    p.add_argument("--easy-survival", action="store_true",
+                   help="D24: 에너지감쇠0+predator off. 사망/교란 제거로 순서완성 시간 최대(환경 한계 검증).")
     p.add_argument("--seq-gain", type=float, default=None)
     p.add_argument("--trace-decay", type=float, default=None,
                    help="D20: eligibility trace 감쇠 override(기본 0.95 τ≈20). 0.99↑=긴 credit창(부트스트랩).")
@@ -708,6 +710,15 @@ def main():
 
     if args.n_food is not None:
         env_config.n_food = args.n_food
+
+    # D24: 생존 쉽게(에너지 감쇠 0 + predator off) → 사망/교란 제거, 순서 완성 시간 최대.
+    # D23 발견 검증: 환경/생존이 order 한계였나(뇌 항법은 correct6로 됨).
+    if args.easy_survival:
+        env_config.energy_decay_field = 0.0
+        env_config.energy_decay_nest = 0.0
+        env_config.energy_start = env_config.energy_max
+        env_config.predator_enabled = False
+        print("[easy-survival] 에너지감쇠0 + predator off (D24: 환경 한계 검증)")
 
     # --context-select: Zone A/B 의미반전 (4월 M4 기반)
     if args.context_select:
