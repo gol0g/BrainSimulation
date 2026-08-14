@@ -5075,6 +5075,45 @@ class ForagerBrain:
             "rpe_prediction": rpe_prediction,
         }
 
+    def set_goal_direction(self, pos_x, pos_y, heading, target=None):
+        """D23: 뇌 내부 목표항법용 상태 설정(러너가 proprioception 제공: 위치·heading·목표존).
+        방향 결정·motor 구동은 뇌가 학습 value map으로 수행(biletaxis 내부화)."""
+        self._goal_dir = (float(pos_x), float(pos_y), float(heading), target)
+
+    def clear_goal_direction(self):
+        self._goal_dir = None
+
+    def _inject_goal_direction_current(self, look=0.14, delta=0.6, gain=45.0):
+        """학습된 place_to_value의 egocentric 좌/우 look-ahead value 차이 → motor 차등전류.
+        규약: angle_delta=(motor_right-motor_left)*0.5, >0=CCW(왼쪽). 왼쪽 value↑ → motor_right 구동."""
+        if not hasattr(self, "place_to_value") or self._goal_dir is None:
+            return
+        px, py, th, target = self._goal_dir
+        self.place_to_value.vars["g"].pull_from_device()
+        w = np.array(self.place_to_value.vars["g"].view, dtype=np.float32)
+        npc = self.config.n_place_cells
+        vpc = w.reshape(npc, -1).mean(axis=1)
+        centers = np.asarray(self.place_cell_centers, dtype=np.float32)  # (npc,2)
+        sig2 = 2.0 * (self.config.place_cell_sigma ** 2)
+
+        def value_at(x, y):
+            d2 = (centers[:, 0] - x) ** 2 + (centers[:, 1] - y) ** 2
+            return float(np.exp(-d2 / sig2) @ vpc)
+
+        xl, yl = px + look * np.cos(th + delta), py + look * np.sin(th + delta)
+        xr, yr = px + look * np.cos(th - delta), py + look * np.sin(th - delta)
+        vl, vr = value_at(xl, yl), value_at(xr, yr)
+        vmax = max(1e-6, float(np.abs(vpc).max()))
+        # 막전위 편향(빌트인 LIF는 I_input 없음 → V 직접 nudge로 발화 편향).
+        vspan = self.config.v_thresh - self.config.v_rest
+        drive = gain * (vl - vr) / vmax   # >0 = 왼쪽 value↑ → CCW로 틀어야
+        db = float(np.clip(drive, -1.0, 1.0)) * 0.35 * vspan   # 임계폭의 최대 35% nudge
+        # CCW(왼쪽 회전) = motor_right 강화; CW = motor_left 강화
+        for pop, amt in ((self.motor_right, max(0.0, db)), (self.motor_left, max(0.0, -db))):
+            v = pop.vars["V"]; v.pull_from_device()
+            v.view[:] = np.minimum(v.view + amt, self.config.v_thresh - 0.5)
+            v.push_to_device()
+
     def decay_dopamine(self):
         """Dopamine 레벨 감쇠 + R-STDP 가중치 업데이트"""
         if not self.config.basal_ganglia_enabled:
@@ -10481,6 +10520,11 @@ class ForagerBrain:
                 self.a1_food.vars["I_input"].push_to_device()
                 self.a1_danger.vars["I_input"].view[:] += food_sound_low * food_sound_sens
                 self.a1_danger.vars["I_input"].push_to_device()
+
+        # ★ 뇌 내부 목표항법(D23): 학습된 value map의 좌/우 gradient → motor 차등전류.
+        # biletaxis(러너 Python 조향, motor 우회)를 뇌 motor 뉴런+학습 value map으로 내부화.
+        if getattr(self, "_goal_dir", None) is not None:
+            self._inject_goal_direction_current()
 
         # === 시뮬레이션 10스텝 실행 (spike_recording으로 배치 수집) ===
         for _ in range(10):

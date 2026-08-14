@@ -104,6 +104,8 @@ def build_parser():
                    help="대조: 목표 무작위(A→B 순서정책 없음) = chance floor 측정.")
     p.add_argument("--seq-goal-beacon", action="store_true",
                    help="D21fix: seq target을 egocentric 감각으로 제시 → 뇌 접근정책+WM이 항법(biletaxis 대신).")
+    p.add_argument("--seq-brain-nav", action="store_true",
+                   help="D23: 뇌 내부 목표항법(학습 value map 좌우gradient→motor). biletaxis 내부화.")
     p.add_argument("--seq-gain", type=float, default=None)
     p.add_argument("--trace-decay", type=float, default=None,
                    help="D20: eligibility trace 감쇠 override(기본 0.95 τ≈20). 0.99↑=긴 credit창(부트스트랩).")
@@ -576,6 +578,12 @@ def run_episode(brain, env, ep_idx, task, place=None, biletaxis=None, olf=False,
         # 보상 없을땐 게이트 닫혀 현재위치가 WM 덮어쓰기 못함 → 되먹임이 상태 유지.
         if seq_wm_gated:
             brain.gate_wm_input(getattr(brain, "dopamine_level", 0.0))
+        # D23: 뇌 내부 목표항법 — 러너는 proprioception(위치·heading·목표존)만 제공,
+        # 방향결정·motor구동은 뇌가 학습 value map으로 수행(biletaxis 내부화, motor 우회 안함).
+        if seq is not None and getattr(seq, "brain_nav", False):
+            brain.set_goal_direction(env.agent_x / env.config.width,
+                                     env.agent_y / env.config.height,
+                                     env.agent_angle, seq.target())
         # D21후속: 목표 beacon — seq target을 egocentric 감각(good_food_rays)으로 제시해
         # 뇌 자체 접근정책+WM래치가 항법(biletaxis 러너-조향 대신 뇌-구동). 아키텍처 fix 1차.
         if seq is not None and getattr(seq, "goal_beacon", False):
@@ -780,6 +788,7 @@ def main():
         seq.no_curiosity = args.seq_no_curiosity
         seq.random_target = args.seq_random_target
         seq.goal_beacon = args.seq_goal_beacon
+        seq.brain_nav = args.seq_brain_nav
         print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
               f"use_wm={args.seq_wm} seq_nav={args.seq_nav} "
               f"pattern_latch={args.seq_pattern_latch}")
