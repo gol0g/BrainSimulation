@@ -62,6 +62,7 @@ def build_parser():
     p.add_argument("--episodes", type=int, default=20)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--output", default=None, help="결과 JSON 경로")
+    p.add_argument("--save-weights", default=None, help="D25: 훈련후 가중치 저장(seq-특화 브레인).")
     p.add_argument("--n-food", type=int, default=None)
 
     # 환경/과제
@@ -886,6 +887,11 @@ def main():
         with open(args.output, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         print(f"[output] {args.output}")
+
+    if getattr(args, "save_weights", None):
+        os.makedirs(os.path.dirname(os.path.abspath(args.save_weights)), exist_ok=True)
+        brain.save_all_weights(args.save_weights)
+        print(f"[save-weights] {args.save_weights}")
 
 
 if __name__ == "__main__":
