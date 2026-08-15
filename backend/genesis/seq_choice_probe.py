@@ -21,7 +21,9 @@ def _side_rays(nh, left_val, right_val):
     return np.ones(nh) * left_val, np.ones(nh) * right_val
 
 
-def run_choice(brain, env, n_trials=100, inhib=-200):
+def run_choice(brain, env, n_trials=100, inhib=-200, train=False, block=None):
+    """train=True면 올바른 선택에 도파민 보상 → 유효 목표(WM-gated 선택) 직접 학습.
+    block: (start,end) 슬라이스로 초반/후반 정확도 비교용(학습곡선)."""
     obs = env.reset()
     brain.reset()
     for _ in range(30):
@@ -34,6 +36,7 @@ def run_choice(brain, env, n_trials=100, inhib=-200):
     correct_empty = 0   # WM 빔 → A 선택
     correct_loaded = 0  # WM에 A 적재 → B 선택
     n = 0
+    late_e = [0]; late_l = [0]; late_n = [0]   # 후반 정확도(학습곡선)
     for t in range(n_trials):
         a_side = "left" if np.random.random() > 0.5 else "right"  # A가 어느 쪽
         # --- 조건 1: WM 비움 → A로 가야 ---
@@ -47,8 +50,12 @@ def run_choice(brain, env, n_trials=100, inhib=-200):
             ang, info = brain.process(base)
             tot += ang
         # A가 왼쪽이면 왼쪽(음수)으로 가야 정답
-        if (a_side == "left" and tot < -0.02) or (a_side == "right" and tot > 0.02):
+        ok_e = (a_side == "left" and tot < -0.02) or (a_side == "right" and tot > 0.02)
+        if ok_e:
             correct_empty += 1
+        if train:
+            brain.release_dopamine(reward_magnitude=1.0 if ok_e else -0.5, primary_reward=ok_e)
+            brain.decay_dopamine()
 
         # --- 조건 2: A를 WM에 적재 → B로 가야 ---
         brain.reset();
@@ -75,11 +82,21 @@ def run_choice(brain, env, n_trials=100, inhib=-200):
         for _ in range(5):
             ang, info = brain.process(base2)
             tot2 += ang
-        if (b_side == "left" and tot2 < -0.02) or (b_side == "right" and tot2 > 0.02):
+        ok_l = (b_side == "left" and tot2 < -0.02) or (b_side == "right" and tot2 > 0.02)
+        if ok_l:
             correct_loaded += 1
+        if train:
+            brain.release_dopamine(reward_magnitude=1.0 if ok_l else -0.5, primary_reward=ok_l)
+            brain.decay_dopamine()
+        # 학습곡선용: 후반부 정확도 별도 집계
+        if block is not None and t >= block:
+            late_e[0] += int(ok_e); late_l[0] += int(ok_l); late_n[0] += 1
         n += 1
 
-    return correct_empty / max(n, 1) * 100, correct_loaded / max(n, 1) * 100, n
+    lc = None
+    if block is not None and late_n[0] > 0:
+        lc = (late_e[0] / late_n[0] * 100, late_l[0] / late_n[0] * 100, late_n[0])
+    return correct_empty / max(n, 1) * 100, correct_loaded / max(n, 1) * 100, n, lc
 
 
 def main():
@@ -87,6 +104,8 @@ def main():
     ap.add_argument("--load-weights", default=None)
     ap.add_argument("--inhib-wm", type=float, default=-200.0)
     ap.add_argument("--trials", type=int, default=100)
+    ap.add_argument("--train", action="store_true",
+                    help="올바른 선택에 도파민 보상 → 유효 목표 직접 학습. 초반vs후반 정확도로 학습 확인.")
     args = ap.parse_args()
     cfg = ForagerBrainConfig()
     cfg.inhibitory_to_wm_weight = args.inhib_wm
@@ -94,9 +113,14 @@ def main():
     if args.load_weights:
         brain.load_all_weights(args.load_weights)
     env = ForagerGym(ForagerConfig())
-    ce, cl, n = run_choice(brain, env, n_trials=args.trials)
-    print(f"SEQ-CHOICE: WM-empty→A {ce:.1f}% | WM-loaded→B {cl:.1f}% | combined {(ce+cl)/2:.1f}% "
+    blk = args.trials // 2 if args.train else None
+    ce, cl, n, lc = run_choice(brain, env, n_trials=args.trials, train=args.train, block=blk)
+    tag = "TRAIN" if args.train else "PROBE"
+    print(f"SEQ-CHOICE[{tag}]: WM-empty→A {ce:.1f}% | WM-loaded→B {cl:.1f}% | combined {(ce+cl)/2:.1f}% "
           f"(random=50, n={n}) [{'PASS' if (ce+cl)/2 > 60 else 'FAIL'}]")
+    if lc is not None:
+        print(f"  학습곡선 후반절반: WM-empty→A {lc[0]:.1f}% | WM-loaded→B {lc[1]:.1f}% | "
+              f"combined {(lc[0]+lc[1])/2:.1f}% (n={lc[2]}) — 후반>전반이면 학습중")
 
 
 if __name__ == "__main__":
