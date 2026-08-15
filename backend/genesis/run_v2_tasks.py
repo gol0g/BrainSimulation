@@ -107,6 +107,8 @@ def build_parser():
                    help="D21fix: seq target을 egocentric 감각으로 제시 → 뇌 접근정책+WM이 항법(biletaxis 대신).")
     p.add_argument("--seq-brain-nav", action="store_true",
                    help="D23: 뇌 내부 목표항법(학습 value map 좌우gradient→motor). biletaxis 내부화.")
+    p.add_argument("--seq-penalize-wrong", action="store_true",
+                   help="D27: 역순(B먼저)에 도파민 dip. 순서 지켜야 보상 → 순차-WM 학습 압력(무작위 페널티).")
     p.add_argument("--easy-survival", action="store_true",
                    help="D24: 에너지감쇠0+predator off. 사망/교란 제거로 순서완성 시간 최대(환경 한계 검증).")
     p.add_argument("--seq-gain", type=float, default=None)
@@ -365,6 +367,9 @@ class SeqTask:
                 self._latched = False
             else:
                 self.wrong_seq += 1      # 역순(B 먼저) — 진입 이벤트당 1회
+                # D27: 역순에 도파민 dip → 순서 지켜야 보상. 무작위(역순 많음)에 벌 = 순차-WM 학습 압력.
+                if getattr(self, "penalize_wrong", False):
+                    brain.release_dopamine(reward_magnitude=-0.6)
         # 무작위 목표 대조: 존 도달 시 다음 목표 재추첨(순서정책 없이 존 사이 방황) = chance floor
         if self.random_target and ((in_a and not self._prev_in_a) or entered_b):
             import numpy as _np
@@ -801,6 +806,7 @@ def main():
         seq.random_target = args.seq_random_target
         seq.goal_beacon = args.seq_goal_beacon
         seq.brain_nav = args.seq_brain_nav
+        seq.penalize_wrong = args.seq_penalize_wrong
         print(f"[seq] A({seq.ax},{seq.ay})→B({seq.bx},{seq.by}) "
               f"use_wm={args.seq_wm} seq_nav={args.seq_nav} "
               f"pattern_latch={args.seq_pattern_latch}")
