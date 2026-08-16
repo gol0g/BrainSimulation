@@ -129,6 +129,7 @@ class ForagerConfig:
     # === Phase L12: Danger-Adjacent Food (위험 근접 고보상 음식) ===
     food_hidden: bool = False                 # 사회 개념 훈련: 음식 직접시각 차단(NPC 단서로만 찾기)
     social_drive: bool = False                # 사회 개념 훈련: NPC 근접 자체를 소량 내재보상(사회 incentive salience)
+    social_task: bool = False                 # 사회 과제: NPC 먹은 자리에만 음식 리스폰(사회단서 필수화)
     danger_food_enabled: bool = True          # 위험 근접 음식 활성화
     danger_food_ratio: float = 0.3            # 30% 음식이 pain zone 가장자리에 생성
     danger_food_bonus: float = 0.5            # 위험 근접 음식 에너지 +50% 보너스
@@ -843,7 +844,21 @@ class ForagerGym:
                                             current_step=self.steps):
                     self.npc_food_stolen += 1
                     npc_eating_events.append((npc.x, npc.y, self.steps))
-                    self._spawn_foods(1)  # 새 음식 생성 (총 개수 유지)
+                    # social_task: NPC가 먹은 자리 근처에만 음식 리스폰 → NPC 관찰이 음식 발견의
+                    # 유일한 신뢰 경로(이전 food_hidden은 접촉 우회 가능했음). 사회 개념 필수화.
+                    if getattr(self.config, "social_task", False):
+                        for _ in range(30):
+                            ang = np.random.uniform(0, 2 * np.pi)
+                            r = np.random.uniform(20, 90)
+                            nx, ny = npc.x + r * np.cos(ang), npc.y + r * np.sin(ang)
+                            m = self.config.food_radius * 2
+                            if m <= nx <= self.config.width - m and m <= ny <= self.config.height - m:
+                                self.foods.append((nx, ny, self._assign_food_type()))
+                                break
+                        else:
+                            self._spawn_foods(1)
+                    else:
+                        self._spawn_foods(1)  # 새 음식 생성 (총 개수 유지)
                 # Phase 17: NPC 발성 상태 업데이트
                 if self.config.npc_vocalization_enabled:
                     npc.update_call_state(self.config, self.pain_zones)

@@ -12017,6 +12017,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 d2_eta: float = None, dip_mag: float = None, cortical_eta: float = None,
                 danger_food_ratio: float = None, food_hidden: bool = False,
                 food_hidden_curriculum: bool = False, social_drive: bool = False,
+                social_task: bool = False,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12056,6 +12057,10 @@ def run_training(episodes: int = 20, render_mode: str = "none",
     if social_drive:
         env_config.social_drive = True
         print(f"  [C4] social_drive=True (NPC 근접 내재보상 → 사회 지향 드라이브, 부트스트랩)")
+    if social_task:
+        env_config.social_task = True
+        env_config.food_hidden = True   # 직접 시각 차단 + NPC 자리 리스폰 = 사회단서 필수
+        print(f"  [C5] social_task=True (NPC 먹은자리 리스폰 + food_hidden → 사회단서 필수 과제)")
 
     # 옵션 처리
     if no_pain:
@@ -13110,6 +13115,8 @@ if __name__ == "__main__":
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
     parser.add_argument("--food-hidden-curriculum", action="store_true",
                        help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
+    parser.add_argument("--social-task", action="store_true",
+                       help="C5: NPC 먹은자리 리스폰+food_hidden → 사회단서 필수 과제(과제 재설계)")
     parser.add_argument("--social-drive", action="store_true",
                        help="C4: NPC 근접 내재보상(사회 incentive salience). 부트스트랩 사회 드라이브.")
     parser.add_argument("--save-weights", type=str, default=None,
@@ -13199,6 +13206,7 @@ if __name__ == "__main__":
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
         food_hidden_curriculum=args.food_hidden_curriculum, social_drive=args.social_drive,
+        social_task=args.social_task,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
