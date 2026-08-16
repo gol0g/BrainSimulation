@@ -12017,7 +12017,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 d2_eta: float = None, dip_mag: float = None, cortical_eta: float = None,
                 danger_food_ratio: float = None, food_hidden: bool = False,
                 food_hidden_curriculum: bool = False, social_drive: bool = False,
-                social_task: bool = False,
+                social_task: bool = False, mirror_motor: float = None,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12061,6 +12061,12 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         env_config.social_task = True
         env_config.food_hidden = True   # 직접 시각 차단 + NPC 자리 리스폰 = 사회단서 필수
         print(f"  [C5] social_task=True (NPC 먹은자리 리스폰 + food_hidden → 사회단서 필수 과제)")
+    if mirror_motor is not None:
+        # C6: 관찰학습 회로→motor 게인 활성화(기본 0.0=연결없음). 사회단서를 행동으로 옮길 경로.
+        # 하드코딩 아님 — 기존 회로 게인 개방(WM 희소화·brake와 동형). 무엇을 모방할지는 학습.
+        brain_config.mirror_to_motor_weight = mirror_motor
+        brain_config.tom_to_motor_weight = mirror_motor
+        print(f"  [C6] mirror/ToM→Motor = {mirror_motor} (관찰학습 회로 활성화, 기본 0.0)")
 
     # 옵션 처리
     if no_pain:
@@ -13115,6 +13121,8 @@ if __name__ == "__main__":
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
     parser.add_argument("--food-hidden-curriculum", action="store_true",
                        help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
+    parser.add_argument("--mirror-motor", type=float, default=None,
+                       help="C6: 관찰학습 회로(Mirror/ToM)→Motor 게인 활성화(기본 0.0=연결없음)")
     parser.add_argument("--social-task", action="store_true",
                        help="C5: NPC 먹은자리 리스폰+food_hidden → 사회단서 필수 과제(과제 재설계)")
     parser.add_argument("--social-drive", action="store_true",
@@ -13206,7 +13214,7 @@ if __name__ == "__main__":
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
         food_hidden_curriculum=args.food_hidden_curriculum, social_drive=args.social_drive,
-        social_task=args.social_task,
+        social_task=args.social_task, mirror_motor=args.mirror_motor,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
