@@ -24,5 +24,5 @@ for lvl in (0.0, 1.0):
     cnt = []
     for _ in range(4):
         b.process(o)
-        cnt.append(len(b.sts_social.spike_recording_data[0][0]))
-    print(f"RESULT agent_rays={lvl}: sts_social raw spikes/step = {cnt} (n={b.config.n_sts_social})")
+        cnt.append((len(b.agent_eye_left.spike_recording_data[0][0]), len(b.sts_social.spike_recording_data[0][0])))
+    print(f"RESULT agent_rays={lvl}: (agent_eye_L, sts_social) spikes/step = {cnt}")

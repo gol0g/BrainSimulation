@@ -684,6 +684,7 @@ class ForagerBrainConfig:
 
     # 시냅스 가중치
     agent_eye_to_sts_social_weight: float = 15.0       # Agent_Eye → STS_Social
+    sts_social_inhibition: float = 0.0                 # C9e: STS_Social 자기억제(E/I 균형, 0=비활성)
     agent_sound_to_sts_social_weight: float = 12.0     # Agent_Sound → STS_Social
     sts_social_recurrent_weight: float = 8.0           # STS_Social 자기 유지
     sts_social_to_tpj_weight: float = 12.0             # STS_Social → TPJ_Other
@@ -2365,7 +2366,9 @@ class ForagerBrain:
         if self.config.social_brain_enabled:
             for pop in [self.sts_social, self.tpj_self, self.tpj_other,
                         self.tpj_compare, self.acc_conflict, self.acc_monitor,
-                        self.social_approach, self.social_avoid]:
+                        self.social_approach, self.social_avoid,
+                        # C9c: 감각 1단계 진단용(사회 무반응이 감각서 끊겼는지 판별)
+                        self.agent_eye_left, self.agent_eye_right]:
                 pop.spike_recording_enabled = True
 
             # Phase 15b: Mirror Neurons
@@ -6269,6 +6272,25 @@ class ForagerBrain:
         self._create_static_synapse(
             "sts_social_recurrent", self.sts_social, self.sts_social,
             self.config.sts_social_recurrent_weight, sparsity=0.05)
+
+        # C9e: STS_Social E/I 균형 — 자기흥분+다중흥분입력에 억제가 전무해 포화(측정 확정: 입력
+        # 0.0/1.0에 스파이크 650 동일). WM 포화를 억제(-200)로 푼 것과 동형 처방. 하드코딩 아님:
+        # 생물학적 E/I 균형(용량 전제조건). 기본 0.0 = 기존 동작 유지, opt-in.
+        if getattr(self.config, "sts_social_inhibition", 0.0) != 0.0:
+            # WM의 wm_inhibitory와 동형: 별도 억제 인터뉴런 경유(같은 pre/post 중복 시냅스는 GeNN 충돌).
+            lif_p = {"C": 1.0, "TauM": self.config.tau_m,
+                     "Vrest": self.config.v_rest, "Vreset": self.config.v_reset,
+                     "Vthresh": self.config.v_thresh, "Ioffset": 0.0,
+                     "TauRefrac": self.config.tau_refrac}
+            lif_i = {"V": self.config.v_rest, "RefracTime": 0.0}
+            self.sts_inhibitory = self.model.add_neuron_population(
+                "sts_inhibitory", 100, "LIF", lif_p, lif_i)
+            self._create_static_synapse(
+                "sts_to_sts_inhib", self.sts_social, self.sts_inhibitory, 6.0, sparsity=0.10)
+            self._create_static_synapse(
+                "sts_inhib_to_sts", self.sts_inhibitory, self.sts_social,
+                self.config.sts_social_inhibition, sparsity=0.10)
+            print(f"    [C9e] STS_Social E/I 균형: 억제뉴런 100 → {self.config.sts_social_inhibition}")
 
         print(f"    Agent_Eye→STS_Social: {self.config.agent_eye_to_sts_social_weight}")
         print(f"    Agent_Sound→STS_Social: {self.config.agent_sound_to_sts_social_weight}")
@@ -12017,7 +12039,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 d2_eta: float = None, dip_mag: float = None, cortical_eta: float = None,
                 danger_food_ratio: float = None, food_hidden: bool = False,
                 food_hidden_curriculum: bool = False, social_drive: bool = False,
-                social_task: bool = False, mirror_motor: float = None,
+                social_task: bool = False, mirror_motor: float = None, sts_inhib: float = None,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12061,6 +12083,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         env_config.social_task = True
         env_config.food_hidden = True   # 직접 시각 차단 + NPC 자리 리스폰 = 사회단서 필수
         print(f"  [C5] social_task=True (NPC 먹은자리 리스폰 + food_hidden → 사회단서 필수 과제)")
+    if sts_inhib is not None:
+        brain_config.sts_social_inhibition = sts_inhib
+        print(f"  [C9e] sts_social_inhibition → {sts_inhib} (사회표상 포화 해소)")
     if mirror_motor is not None:
         # C6: 관찰학습 회로→motor 게인 활성화(기본 0.0=연결없음). 사회단서를 행동으로 옮길 경로.
         # 하드코딩 아님 — 기존 회로 게인 개방(WM 희소화·brake와 동형). 무엇을 모방할지는 학습.
@@ -13121,6 +13146,8 @@ if __name__ == "__main__":
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
     parser.add_argument("--food-hidden-curriculum", action="store_true",
                        help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
+    parser.add_argument("--sts-inhib", type=float, default=None,
+                       help="C9e: sts_social 억제(-30 권장). 사회표상 포화 해소")
     parser.add_argument("--mirror-motor", type=float, default=None,
                        help="C6: 관찰학습 회로(Mirror/ToM)→Motor 게인 활성화(기본 0.0=연결없음)")
     parser.add_argument("--social-task", action="store_true",
@@ -13214,7 +13241,7 @@ if __name__ == "__main__":
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
         food_hidden_curriculum=args.food_hidden_curriculum, social_drive=args.social_drive,
-        social_task=args.social_task, mirror_motor=args.mirror_motor,
+        social_task=args.social_task, mirror_motor=args.mirror_motor, sts_inhib=args.sts_inhib,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
