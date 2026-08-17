@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 
-POPS = ["mirror_food", "social_memory", "tom_intention", "vicarious_reward", "social_obs"]
+POPS = ["mirror_food", "social_memory", "tom_intention", "vicarious_reward", "social_observation", "sts_social"]
 
 
 def rate(brain, name):
@@ -51,6 +51,9 @@ def run(brain, env, trials=40):
             o["npc_eating_right"] = 0.8 if cond == "right" else 0.0
             o["npc_near_food"] = 0.0 if cond == "none" else 0.8
             o["social_proximity"] = 0.0 if cond == "none" else 0.7
+            # ★수정: agent_rays(NPC 시각)가 사회표상 주입력 — 초판 프로브가 빠뜨림
+            o["agent_rays_left"] = np.ones(nh) * (0.8 if cond == "left" else 0.0)
+            o["agent_rays_right"] = np.ones(nh) * (0.8 if cond == "right" else 0.0)
             for _ in range(3):
                 brain.process(o)
             for p in POPS:
