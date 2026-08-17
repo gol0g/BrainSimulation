@@ -90,3 +90,8 @@ NPC 단서(좌/우/없음) 주입 시 사회 표상 스파이크: mirror_food 4.
 tom_intention·vicarious_reward 3.000/3.000/3.000 = **cue-effect 정확히 0.000, 완전 무반응(고정 tonic).**
 뇌가 npc_call_food_*·npc_eating_*·social_proximity 읽는 것 확인(아티팩트 아님).
 **= 표상 단계 기능적 부재 = 사회 9접근 실패의 뿌리.** read-out 열어도 개념 불가(C6 해리 설명).
+
+### C8 측정 검증 (2026-08-17)
+프로브 결함 의심(agent_rays 누락) → 수정 후에도 사회표상 0.000 동일. **대조군 motor_left/right는
+좌우 차등(cue-effect +0.42/+0.31, LR-diff +0.91/-0.61) = 측정 정상 작동 증명.**
+사회표상 5개만 정확히 3.000/4.000 고정발화(tonic 포화) = 표상 부재 확증(측정+대조 검증).
