@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 
-POPS = ["mirror_food", "social_memory", "tom_intention", "social_observation", "sts_social", "motor_left", "motor_right", "good_food_eye_left", "good_food_eye_right"]
+POPS = ["agent_eye_left", "agent_eye_right", "sts_social", "social_observation", "mirror_food", "motor_left"]
 
 
 def rate(brain, name):

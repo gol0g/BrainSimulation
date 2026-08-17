@@ -9,6 +9,6 @@ for inh in -8 -50 -150; do
   cd ~/pygenn_test && rm -rf forager_brain_CODE CODE
   echo "===== sts_inhib = $inh ====="
   python -u $R/backend/genesis/social_repr_probe.py --load-weights "$W" --sts-inhib "$inh" --trials 15 2>&1 \
-    | grep -iE "mirror_food|social_memory|tom_intention|social_observation|sts_social|motor_left" | head -6
+    | grep -E "^ *(mirror_food|social_memory|tom_intention|social_observation|sts_social|motor_left|motor_right) +[0-9]"
 done
 echo "===== DONE ====="
