@@ -70,12 +70,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--load-weights", default=None)
     ap.add_argument("--mirror-motor", type=float, default=None)
+    ap.add_argument("--sts-inhib", type=float, default=None,
+                    help="C9: STS WTA 억제 강화(기본 -8). 사회표상 포화 해소 시도(WM 희소화와 동형).")
     ap.add_argument("--trials", type=int, default=40)
     args = ap.parse_args()
     cfg = ForagerBrainConfig()
     if args.mirror_motor is not None:
         cfg.mirror_to_motor_weight = args.mirror_motor
         cfg.tom_to_motor_weight = args.mirror_motor
+    if args.sts_inhib is not None:
+        cfg.sts_wta_inhibition = args.sts_inhib
+        cfg.social_wta_inhibition = args.sts_inhib
+        print(f"[C9] STS/social WTA 억제 → {args.sts_inhib} (포화 해소 시도)")
     brain = ForagerBrain(cfg)
     if args.load_weights:
         brain.load_all_weights(args.load_weights)
