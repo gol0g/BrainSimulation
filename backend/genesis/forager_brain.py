@@ -684,6 +684,7 @@ class ForagerBrainConfig:
 
     # 시냅스 가중치
     agent_eye_to_sts_social_weight: float = 15.0       # Agent_Eye → STS_Social
+    d1_inhibition: float = 0.0                         # C14: D1 E/I 균형(0=비활성)
     social_to_kc_weight: float = 1.5                   # C12: 사회→KC(학습경로) 게인
     social_to_kc_sparsity: float = 0.03                # C12: 사회→KC 연결밀도
     sts_social_inhibition: float = 0.0                 # C9e: STS_Social 자기억제(E/I 균형, 0=비활성)
@@ -1741,6 +1742,12 @@ class ForagerBrain:
                 "d1_left", n_d1_half, "LIF", msn_lif_params, lif_init)
             self.d1_right = self.model.add_neuron_population(
                 "d1_right", n_d1_half, "LIF", msn_lif_params, lif_init)
+            # C14: d1 E/I 균형 — 감사 결과 d1이 포화(입력 무관 고정발화)로 R-STDP 학습 손상.
+            # 억제 인터뉴런(WM·STS와 동형). 기본 0 = 기존 동작, opt-in.
+            if getattr(self.config, "d1_inhibition", 0.0) != 0.0:
+                self.d1_inhib = self.model.add_neuron_population(
+                    "d1_inhib", 60, "LIF", msn_lif_params, lif_init)
+                self._d1_inhib_pending = True
 
             # D2 MSN L/R: NoGo pathway (Static)
             self.d2_left = self.model.add_neuron_population(
@@ -2847,6 +2854,15 @@ class ForagerBrain:
             d1_init_w, sparsity=0.08)
 
         print(f"    FoodEye→D1 (R-STDP): init_w={d1_init_w}, w_max={self.config.rstdp_w_max}")
+
+        # C14: d1 E/I 균형 배선(포화 해소). d1→억제뉴런→d1 되먹임.
+        if getattr(self, "_d1_inhib_pending", False):
+            _di = self.config.d1_inhibition
+            self._create_static_synapse("d1l_to_d1inhib", self.d1_left, self.d1_inhib, 6.0, sparsity=0.10)
+            self._create_static_synapse("d1r_to_d1inhib", self.d1_right, self.d1_inhib, 6.0, sparsity=0.10)
+            self._create_static_synapse("d1inhib_to_d1l", self.d1_inhib, self.d1_left, _di, sparsity=0.10)
+            self._create_static_synapse("d1inhib_to_d1r", self.d1_inhib, self.d1_right, _di, sparsity=0.10)
+            print(f"    [C14] D1 E/I 균형: 억제뉴런 60 → {_di} (포화 해소)")
 
         # 2. Food_Eye → D2 MSN (Phase L4: Anti-Hebbian 학습 대상)
         self.food_to_d2_l = self._create_static_synapse(
@@ -12046,7 +12062,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 danger_food_ratio: float = None, food_hidden: bool = False,
                 food_hidden_curriculum: bool = False, social_drive: bool = False,
                 social_task: bool = False, mirror_motor: float = None, sts_inhib: float = None,
-                social_kc: float = None,
+                social_kc: float = None, d1_inhib: float = None,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12090,6 +12106,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         env_config.social_task = True
         env_config.food_hidden = True   # 직접 시각 차단 + NPC 자리 리스폰 = 사회단서 필수
         print(f"  [C5] social_task=True (NPC 먹은자리 리스폰 + food_hidden → 사회단서 필수 과제)")
+    if d1_inhib is not None:
+        brain_config.d1_inhibition = d1_inhib
+        print(f"  [C14] d1_inhibition → {d1_inhib} (선조체 포화 해소)")
     if social_kc is not None:
         brain_config.social_to_kc_weight = social_kc
         brain_config.social_to_kc_sparsity = 0.15
@@ -13157,6 +13176,8 @@ if __name__ == "__main__":
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
     parser.add_argument("--food-hidden-curriculum", action="store_true",
                        help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
+    parser.add_argument("--d1-inhib", type=float, default=None,
+                       help="C14: D1 E/I 균형(-60 권장). 선조체 포화 해소")
     parser.add_argument("--social-kc", type=float, default=None,
                        help="C12: 사회→KC 게인(기본1.5). 사회단서가 R-STDP 학습경로 구동")
     parser.add_argument("--sts-inhib", type=float, default=None,
@@ -13254,7 +13275,7 @@ if __name__ == "__main__":
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
         food_hidden_curriculum=args.food_hidden_curriculum, social_drive=args.social_drive,
-        social_task=args.social_task, mirror_motor=args.mirror_motor, sts_inhib=args.sts_inhib, social_kc=args.social_kc,
+        social_task=args.social_task, mirror_motor=args.mirror_motor, sts_inhib=args.sts_inhib, social_kc=args.social_kc, d1_inhib=args.d1_inhib,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
