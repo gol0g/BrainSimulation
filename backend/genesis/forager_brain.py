@@ -684,6 +684,7 @@ class ForagerBrainConfig:
 
     # 시냅스 가중치
     agent_eye_to_sts_social_weight: float = 15.0       # Agent_Eye → STS_Social
+    global_ei_inhibition: float = 0.0                  # C16: 전역 E/I 균형(핵심 경로 일괄, 0=비활성)
     d1_inhibition: float = 0.0                         # C14: D1 E/I 균형(0=비활성)
     social_to_kc_weight: float = 1.5                   # C12: 사회→KC(학습경로) 게인
     social_to_kc_sparsity: float = 0.03                # C12: 사회→KC 연결밀도
@@ -2049,6 +2050,28 @@ class ForagerBrain:
         if (self.config.place_transition_enabled
                 and self.config.hippocampus_enabled):
             self._build_place_transition_circuit()
+
+        # C16: 전역 E/I 균형 — 감사(C14)서 포화로 나온 핵심 정보경로 집단들에 억제 인터뉴런 일괄 적용.
+        # d1 단독(C15)은 개념 개선 없었으나, 감각→범주→기억 경로 전체를 풀면 다를 수 있음.
+        _gei = getattr(self.config, "global_ei_inhibition", 0.0)
+        if _gei != 0.0:
+            _targets = ["v1_food_left", "v1_food_right", "it_food_category", "it_danger_category",
+                        "food_memory_left", "food_memory_right", "lateral_amygdala",
+                        "assoc_valence", "assoc_binding", "goal_food"]
+            _lp = {"C": 1.0, "TauM": self.config.tau_m, "Vrest": self.config.v_rest,
+                   "Vreset": self.config.v_reset, "Vthresh": self.config.v_thresh,
+                   "Ioffset": 0.0, "TauRefrac": self.config.tau_refrac}
+            _li = {"V": self.config.v_rest, "RefracTime": 0.0}
+            _n = 0
+            for _t in _targets:
+                _pop = getattr(self, _t, None)
+                if _pop is None:
+                    continue
+                _inh = self.model.add_neuron_population(f"{_t}_ei", 50, "LIF", _lp, _li)
+                self._create_static_synapse(f"{_t}_to_ei", _pop, _inh, 6.0, sparsity=0.10)
+                self._create_static_synapse(f"ei_to_{_t}", _inh, _pop, _gei, sparsity=0.10)
+                _n += 1
+            print(f"  [C16] 전역 E/I 균형: {_n}개 집단에 억제 {_gei} 적용")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
@@ -12062,7 +12085,7 @@ def run_training(episodes: int = 20, render_mode: str = "none",
                 danger_food_ratio: float = None, food_hidden: bool = False,
                 food_hidden_curriculum: bool = False, social_drive: bool = False,
                 social_task: bool = False, mirror_motor: float = None, sts_inhib: float = None,
-                social_kc: float = None, d1_inhib: float = None,
+                social_kc: float = None, d1_inhib: float = None, global_ei: float = None,
                 log_data: bool = False, log_dir: str = None,
                 log_sample_rate: int = 5,
                 save_weights: str = None, load_weights: str = None):
@@ -12106,6 +12129,9 @@ def run_training(episodes: int = 20, render_mode: str = "none",
         env_config.social_task = True
         env_config.food_hidden = True   # 직접 시각 차단 + NPC 자리 리스폰 = 사회단서 필수
         print(f"  [C5] social_task=True (NPC 먹은자리 리스폰 + food_hidden → 사회단서 필수 과제)")
+    if global_ei is not None:
+        brain_config.global_ei_inhibition = global_ei
+        print(f"  [C16] global_ei_inhibition → {global_ei} (핵심 경로 일괄 E/I)")
     if d1_inhib is not None:
         brain_config.d1_inhibition = d1_inhib
         print(f"  [C14] d1_inhibition → {d1_inhib} (선조체 포화 해소)")
@@ -13176,6 +13202,8 @@ if __name__ == "__main__":
                        help="C4: 음식 직접시각 차단 → NPC 단서로만 찾기 (사회 개념 훈련)")
     parser.add_argument("--food-hidden-curriculum", action="store_true",
                        help="C4: 음식 은닉 점진 램프(초반 가시→후반 은닉). 부트스트랩 우회 커리큘럼.")
+    parser.add_argument("--global-ei", type=float, default=None,
+                       help="C16: 핵심 정보경로 집단 일괄 E/I 균형(-40 권장)")
     parser.add_argument("--d1-inhib", type=float, default=None,
                        help="C14: D1 E/I 균형(-60 권장). 선조체 포화 해소")
     parser.add_argument("--social-kc", type=float, default=None,
@@ -13275,7 +13303,7 @@ if __name__ == "__main__":
         d2_eta=args.d2_eta, dip_mag=args.dip_mag, cortical_eta=args.cortical_eta,
         danger_food_ratio=args.danger_food_ratio, food_hidden=args.food_hidden,
         food_hidden_curriculum=args.food_hidden_curriculum, social_drive=args.social_drive,
-        social_task=args.social_task, mirror_motor=args.mirror_motor, sts_inhib=args.sts_inhib, social_kc=args.social_kc, d1_inhib=args.d1_inhib,
+        social_task=args.social_task, mirror_motor=args.mirror_motor, sts_inhib=args.sts_inhib, social_kc=args.social_kc, d1_inhib=args.d1_inhib, global_ei=args.global_ei,
         log_data=args.log_data,
         log_dir=args.log_dir,
         log_sample_rate=args.log_sample_rate,
