@@ -75,11 +75,17 @@ def main():
     ap.add_argument("--trials", type=int, default=100)
     ap.add_argument("--reflex-w", type=float, default=None,
                     help="선천 반사 가중치(기본 25.0). 낮추면 학습이 이길 여지가 생기는지 시험.")
+    ap.add_argument("--real-rstdp", action="store_true",
+                    help="C36: food_to_d1을 시냅스별 자격흔적 R-STDP로(기본은 정적=학습불가).")
+    ap.add_argument("--rstdp-eta", type=float, default=0.02)
     args = ap.parse_args()
 
     cfg = ForagerBrainConfig()
     if args.reflex_w is not None:
         cfg.food_approach_init_w = args.reflex_w
+    if args.real_rstdp:
+        cfg.real_rstdp = True
+        cfg.real_rstdp_eta = args.rstdp_eta
     brain = ForagerBrain(cfg)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
@@ -90,6 +96,29 @@ def main():
             obs = env.reset()
     nh = env.config.n_rays // 2
 
+    def snap_d1():
+        """C36 진단: food_to_d1 가중치가 실제로 변하는가.
+        '학습이 안 일어남'과 '학습은 됐는데 행동에 안 닿음'을 분리한다."""
+        out = {}
+        for nm in ("food_to_d1_l", "food_to_d1_r"):
+            s = getattr(brain, nm, None)
+            if s is None:
+                continue
+            try:
+                try:
+                    s.pull_connectivity_from_device()
+                except Exception:
+                    pass
+                s.vars["g"].pull_from_device()
+                v = s.vars["g"].values
+                if v is None or (hasattr(v, "size") and v.size == 0):
+                    v = s.vars["g"].view
+                out[nm] = np.array(v, dtype=np.float64).copy()
+            except Exception:
+                pass
+        return out
+
+    d1_before = snap_d1()
     pre, off0 = evaluate(brain, obs, nh, args.trials)
     print("[사전] 오프셋 %+.3f | 반사역전 정답률 %.1f%% (우연=50)" % (off0, pre))
 
@@ -114,6 +143,14 @@ def main():
             else:
                 brain.release_dopamine(reward_magnitude=-0.5)
     print("[학습] %dep 완료, 보상 %d회" % (args.episodes, rew))
+
+    d1_after = snap_d1()
+    for nm in sorted(d1_before):
+        if nm in d1_after and d1_before[nm].shape == d1_after[nm].shape:
+            b_, a_ = d1_before[nm], d1_after[nm]
+            d = np.abs(a_ - b_)
+            print("[D1가중치] %-14s |Δ|평균=%.5f 변화율=%.1f%% | 평균 %.3f→%.3f | std %.4f→%.4f"
+                  % (nm, d.mean(), (d > 1e-9).mean() * 100, b_.mean(), a_.mean(), b_.std(), a_.std()))
 
     post, off1 = evaluate(brain, obs, nh, args.trials)
     print("[사후] 오프셋 %+.3f | 반사역전 정답률 %.1f%%" % (off1, post))

@@ -1300,6 +1300,8 @@ class ForagerBrainConfig:
 
     dt: float = 1.0
     genn_seed: int = 12345   # C24: SPARSE 연결 재현용 시드. None이면 비결정(가중치 로드 손상 재발)
+    real_rstdp: bool = False       # C36: food_to_d1을 시냅스별 자격흔적 R-STDP로 생성(기본은 정적)
+    real_rstdp_eta: float = 0.02   # C36 학습률
 
     @property
     def total_neurons(self) -> int:
@@ -2495,6 +2497,15 @@ class ForagerBrain:
 
         print("  Spike recording enabled for all monitored populations")
 
+    def _push_dopamine_to_rstdp(self):
+        """C36: 현재 도파민 레벨을 진짜 R-STDP 시냅스의 동적 파라미터로 전달.
+        release_dopamine/decay_dopamine 양쪽에서 호출해 보상·소거 모두 반영한다."""
+        for _syn in getattr(self, "_rstdp_synapses", []):
+            try:
+                _syn.set_dynamic_param_value("dopamine", float(self.dopamine_level))
+            except Exception:
+                pass
+
     def _create_static_synapse(self, name: str, pre, post, weight: float,
                                sparsity: Optional[float] = None):
         """고정 가중치 시냅스 생성"""
@@ -2880,14 +2891,43 @@ class ForagerBrain:
         d1_init_w = self.config.food_to_d1_init_weight
 
         # 1. Food_Eye → D1 MSN (R-STDP 학습 대상, SPARSE)
-        self.food_to_d1_l = self._create_static_synapse(
-            "food_eye_left_to_d1_l", self.food_eye_left, self.d1_left,
-            d1_init_w, sparsity=0.08)
-        self.food_to_d1_r = self._create_static_synapse(
-            "food_eye_right_to_d1_r", self.food_eye_right, self.d1_right,
-            d1_init_w, sparsity=0.08)
-
-        print(f"    FoodEye→D1 (R-STDP): init_w={d1_init_w}, w_max={self.config.rstdp_w_max}")
+        # C36: 기존 코드는 이 경로를 _create_static_synapse(=정적)로 만들면서 로그만 "R-STDP"라
+        # 출력했다. 정적이므로 보상 4832회에도 |Δ|=0(C30). real_rstdp=True면 **시냅스별 자격흔적**을
+        # 가진 진짜 R-STDP로 생성한다(자체검증 C36: std 0→7.5, 활동 시냅스만 50.3% 변화).
+        if getattr(self.config, "real_rstdp", False):
+            from rstdp_model import make_rstdp_model, DEFAULT_PARAMS
+            _p = dict(DEFAULT_PARAMS)
+            _p["w_max"] = float(getattr(self.config, "rstdp_w_max", 20.0))
+            _p["eta"] = float(getattr(self.config, "real_rstdp_eta", DEFAULT_PARAMS["eta"]))
+            _wu = make_rstdp_model()
+            self.food_to_d1_l = self.model.add_synapse_population(
+                "food_eye_left_to_d1_l", "SPARSE", self.food_eye_left, self.d1_left,
+                init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": d1_init_w}), "e": 0.0},
+                                   {"preTrace": 0.0}, {"postTrace": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+            self.food_to_d1_r = self.model.add_synapse_population(
+                "food_eye_right_to_d1_r", "SPARSE", self.food_eye_right, self.d1_right,
+                init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": d1_init_w}), "e": 0.0},
+                                   {"preTrace": 0.0}, {"postTrace": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+            # 도파민을 런타임에 바꿀 수 있게 동적 파라미터로 지정(빌드 전에 해야 함)
+            self.food_to_d1_l.set_wu_param_dynamic("dopamine")
+            self.food_to_d1_r.set_wu_param_dynamic("dopamine")
+            self._rstdp_synapses = [self.food_to_d1_l, self.food_to_d1_r]
+            print(f"    FoodEye→D1 [C36 진짜 R-STDP]: init_w={d1_init_w}, w_max={_p['w_max']}, "
+                  f"eta={_p['eta']}, tau_e={_p['tau_e']} (시냅스별 자격흔적)")
+        else:
+            self.food_to_d1_l = self._create_static_synapse(
+                "food_eye_left_to_d1_l", self.food_eye_left, self.d1_left,
+                d1_init_w, sparsity=0.08)
+            self.food_to_d1_r = self._create_static_synapse(
+                "food_eye_right_to_d1_r", self.food_eye_right, self.d1_right,
+                d1_init_w, sparsity=0.08)
+            # 정직한 로그: 이 경로는 정적이다(과거 로그는 "R-STDP"라 거짓 출력했음).
+            print(f"    FoodEye→D1 [정적 — 학습 불가]: init_w={d1_init_w} "
+                  f"(진짜 R-STDP를 쓰려면 --real-rstdp)")
 
         # C14: d1 E/I 균형 배선(포화 해소). d1→억제뉴런→d1 되먹임.
         if getattr(self, "_d1_inhib_pending", False):
@@ -5119,6 +5159,10 @@ class ForagerBrain:
         self.dopamine_level = float(np.clip(
             self.dopamine_level + effective_magnitude, -1.0, 1.0))
 
+        # C36: 진짜 R-STDP 시냅스에 도파민 전달(3요소 학습의 세 번째 요소).
+        # 이 배선이 없으면 모델이 있어도 자격흔적이 가중치로 굳지 않는다.
+        self._push_dopamine_to_rstdp()
+
         # Dopamine 뉴런에 입력 전류 주입 (L8: dip 시 뉴런 정지, 음수 전류 방지)
         dopamine_current = max(0.0, self.dopamine_level) * 80.0
         self.dopamine_neurons.vars["I_input"].view[:] = dopamine_current
@@ -5178,6 +5222,9 @@ class ForagerBrain:
         rstdp_res = self._update_rstdp_weights()
         if rstdp_res:
             self._last_rstdp_results = rstdp_res
+
+        # C36: 감쇠 후 도파민도 R-STDP 시냅스에 반영(보상 소거 시 학습 정지)
+        self._push_dopamine_to_rstdp()
 
         self.dopamine_level *= self.config.dopamine_decay
 
