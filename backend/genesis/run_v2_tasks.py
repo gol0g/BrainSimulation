@@ -119,6 +119,12 @@ def build_parser():
     p.add_argument("--context-select", action="store_true",
                    help="Zone A/B 의미반전 컨텍스트 과제 (4월 M4 기반, 구현됨)")
     p.add_argument("--context-compositional", action="store_true")
+    p.add_argument("--reflex-w", type=float, default=None,
+                   help="C33: 선천 접근반사 가중치(food_approach_init_w, 기본 25.0). "
+                        "C30에서 이 경로는 StaticPulse=학습불가로 확인(로그는 'R-STDP learnable'이라 거짓출력). "
+                        "낮추면 학습된 지식이 행동에 나타나는지 시험.")
+    p.add_argument("--memory-motor-w", type=float, default=None,
+                   help="C33: 학습된 먹이기억→운동 가중치(기본 5.0). 선천반사 25.0에 5대25로 압도됨.")
     p.add_argument("--typed-sound", action="store_true",
                    help="C23b: 타입×방향 소리를 시각변별경로 합류. 지금까지 **평가에서만** 켜져 있었음 "
                         "→ 소리개념 83.8%는 '훈련된 능력'이 아니라 '평가시 배선하면 나옴'. 훈련 검증용.")
@@ -733,6 +739,14 @@ def main():
         env_config.energy_start = env_config.energy_max
         env_config.predator_enabled = False
         print("[easy-survival] 에너지감쇠0 + predator off (D24: 환경 한계 검증)")
+
+    # C33: 선천반사 vs 학습경로 비율 조정 (C30: 학습은 해마에서만, 기저핵은 전부 동결)
+    if args.reflex_w is not None:
+        brain_config.food_approach_init_w = args.reflex_w
+        print(f"[C33] 선천 접근반사 가중치 {args.reflex_w} (기본 25.0)")
+    if args.memory_motor_w is not None:
+        brain_config.food_memory_to_motor_weight = args.memory_motor_w
+        print(f"[C33] 학습 먹이기억→운동 가중치 {args.memory_motor_w} (기본 5.0)")
 
     # C23b: 평가전용이던 소리경로 스위치를 훈련에도 배선
     if args.typed_sound:
