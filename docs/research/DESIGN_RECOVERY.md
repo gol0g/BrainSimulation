@@ -529,3 +529,17 @@ OFF vs ON 25ep 실측 (`docs/research/rebuild_baseline/a2_{off,on}_seed0.json`):
 증거 등급 = 재구현 안전도. A(🟢)부터 바텀업이 정석이나, 사용자 선택은 **설계 문서 우선 복구**.
 → 이 문서의 🔴 항목을 사용자 문답으로 메운 뒤, A2~A5 (biletaxis 코어) 부터 착수.
 각 단계는 baseline 55%/2.63%에 대해 회귀 검증.
+
+### C21. "미구현" 항목 종결 — dopamine-gated WM 게이트 회로는 죽어 있음 (2026-08-26)
+333행에 "다음 접근(미구현): 4월 코드에 wm_gate/dopamine_to_wm_gate/wm_update_gate 기계 존재,
+러너가 engage 안 함 → **7/12 원본 끊긴 지점 유력 후보**"라 적어두고 검증하지 않았던 항목을 측정
+(`wm_gate_probe.py`). 배선 확인: `dopamine → wm_update_gate → wm_thalamic → working_memory` 전부 존재.
+
+**측정(도파민 OFF→ON):** dopamine_neurons 325→350(+25), **wm_update_gate 162→162(+0)**,
+wm_thalamic 126→134(+8), working_memory 690→650(−40). **VERDICT: 게이트 안 열림·전달 없음·WM쓰기 없음.**
+
+- **= 회로는 구조만 있고 기능하지 않음.** 도파민이 발화해도 게이트가 0만큼 반응(가중치 6.0·sparsity 0.05로
+  약하고, `wm_update_gate` 자체가 C14 포화 목록에 포함 = 162로 고정 발화).
+- **함의**: 내가 이 회로 대신 만든 우회(`gate_wm_input`, 시냅스 가중치 스케일)는 결과적으로 옳은 선택이었음
+  — 원 회로를 engage했어도 작동하지 않았을 것. 단 **검증 없이 "유력 후보"로 방치한 것은 잘못**이었고 이제 닫음.
+- **"7/12 원본 끊긴 지점" 후보에서 제외.**
