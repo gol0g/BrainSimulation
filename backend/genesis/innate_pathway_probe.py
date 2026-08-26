@@ -89,15 +89,21 @@ def main():
         res[label] = m
         print("  %-14s 조향 %+.3f ± %.3f" % (label, m, s))
 
-    print("\n=== 판정 ===")
-    good_ok = (res["good만 좌"] < -0.02) and (res["good만 우"] > 0.02)
-    bad_ok = (res["bad만 좌"] > 0.02) and (res["bad만 우"] < 0.02)
-    conf_ok = (res["good좌+bad우"] < -0.02) and (res["good우+bad좌"] > 0.02)
-    print("  good→접근 반사(학습 없이): %s" % ("YES" if good_ok else "NO"))
-    print("  bad→회피 반사(학습 없이):  %s" % ("YES" if bad_ok else "NO"))
-    print("  경합시 good 우선(학습 없이): %s" % ("YES" if conf_ok else "NO"))
-    if good_ok:
-        print("  → 개념 프로브 점수는 **선천 반사**로 설명됨(학습 불필요).")
+    print("\n=== 판정 (차이값 기반) ===")
+    # 절대 부호는 런마다 변하는 상수 오프셋에 지배된다(같은 뇌·같은 코드에서 부호가 뒤집힘을 관측).
+    # 재현되는 것은 **좌/우 단서에 의한 조향 차이**이므로 그것으로 판정한다.
+    offset = float(np.mean(list(res.values())))
+    d_good = res["good만 우"] - res["good만 좌"]      # 양수 = 단서 쪽으로 조향(접근)
+    d_bad = res["bad만 우"] - res["bad만 좌"]         # 접근이면 양수, 회피면 음수여야
+    d_conf = res["good우+bad좌"] - res["good좌+bad우"]
+    print("  런 상수 오프셋(무의미분): %+.3f  ← 런마다 변함, 판정에서 제외" % offset)
+    print("  good 단서 변조폭  Δ=%+.3f  → %s" % (d_good, "접근 반사 있음" if d_good > 0.1 else "없음"))
+    print("  bad  단서 변조폭  Δ=%+.3f  → %s" % (
+        d_bad, "회피 반사 있음" if d_bad < -0.1 else ("접근 방향(회피 아님)" if d_bad > 0.1 else "반응 미미")))
+    print("  경합(good vs bad)  Δ=%+.3f  → %s" % (d_conf, "good 우선" if d_conf > 0.1 else "불명"))
+    if d_good > 0.1:
+        print("  → good 단서가 학습 없이 조향을 구동 = **선천 반사 확인**"
+              " (good 변조폭이 bad의 %.1f배)" % (abs(d_good) / max(abs(d_bad), 1e-6)))
 
 
 if __name__ == "__main__":
