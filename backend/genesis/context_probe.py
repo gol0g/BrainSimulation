@@ -28,8 +28,14 @@ def run(brain, env, trials=60):
     ok_A = ok_B = n = 0
     for t in range(trials):
         good_side = "left" if np.random.random() > 0.5 else "right"
+        # 존 순서 카운터밸런싱(순서 잔효 제거)
+        zones = ["A", "B"] if (t % 2 == 0) else ["B", "A"]
 
-        for zone in ("A", "B"):
+        for zone in zones:
+            # 시행·존마다 상태 초기화 — 없으면 앞 시행이 뒤를 오염시킴(v1 불안정 원인)
+            brain.reset()
+            for _ in range(6):   # 짧은 중립 안정화
+                brain.process(obs)
             # 에이전트를 해당 zone에 배치(A=왼쪽 절반, B=오른쪽 절반)
             env.agent_x = (0.25 if zone == "A" else 0.75) * W
             env.agent_y = 0.5 * H
