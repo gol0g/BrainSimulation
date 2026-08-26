@@ -1299,6 +1299,7 @@ class ForagerBrainConfig:
     # (시냅스 출력 없음 — rate를 scalar로 읽어서 eta modulation)
 
     dt: float = 1.0
+    genn_seed: int = 12345   # C24: SPARSE 연결 재현용 시드. None이면 비결정(가중치 로드 손상 재발)
 
     @property
     def total_neurons(self) -> int:
@@ -1565,6 +1566,16 @@ class ForagerBrain:
         # GeNN 모델 생성
         self.model = GeNNModel("float", "forager_brain")
         self.model.dt = self.config.dt
+        # C24 수리: SPARSE 연결 생성 시드 고정.
+        # 시드가 없으면 연결이 매 런 새로 뽑혀 저장 가중치와 개수가 어긋나고,
+        # _load_sparse_weights가 학습 구조를 **평균 상수로 뭉개 버린다**(측정 결과 55개 중 35개=63.6% 파괴).
+        # 시드를 고정하면 연결이 재현되어 시냅스별 학습 구조가 그대로 복원된다.
+        _seed = getattr(self.config, "genn_seed", 12345)
+        if _seed is not None:
+            try:
+                self.model.seed = int(_seed)
+            except Exception as _e:
+                print(f"    [WARN] GeNN seed 설정 실패({_e}) — SPARSE 연결 재현 불가")
 
         # LIF 파라미터
         lif_params = {
