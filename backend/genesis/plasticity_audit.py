@@ -34,16 +34,30 @@ def all_synapses(b):
 
 
 def snap(syns):
-    out = {}
+    """SPARSE 시냅스는 **연결을 먼저 pull해야** values가 채워진다.
+    이 호출을 빠뜨리면 빈 배열이 돌아오고, 빈 배열의 평균은 nan → 'nan > 1e-9'가 False라
+    **조용히 '변화 없음'으로 오분류**된다(실제로 이 버그로 '기저핵 전체 동결' 오진 직전까지 감).
+    로더 `_load_sparse_weights`는 이 호출을 하고 있었다."""
+    out, empty = {}, []
     for name, syn in syns.items():
         try:
+            try:
+                syn.pull_connectivity_from_device()
+            except Exception:
+                pass          # DENSE는 연결 pull이 없음 — 정상
             syn.vars["g"].pull_from_device()
             v = syn.vars["g"].values
-            if v is None:
+            if v is None or (hasattr(v, "size") and v.size == 0):
                 v = syn.vars["g"].view
-            out[name] = np.array(v, dtype=np.float64).copy()
+            arr = np.array(v, dtype=np.float64).copy()
+            if arr.size == 0:
+                empty.append(name)
+                continue
+            out[name] = arr
         except Exception:
             pass
+    if empty:
+        print("[주의] 값이 비어 판정 불가한 시냅스 %d개: %s" % (len(empty), ", ".join(empty)))
     return out
 
 

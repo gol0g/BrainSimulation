@@ -56,12 +56,20 @@ def main():
             print("  %-30s 없음" % name)
             continue
         try:
+            # SPARSE는 연결을 먼저 pull해야 values가 채워진다(빠뜨리면 n=0으로 오독).
+            try:
+                syn.pull_connectivity_from_device()
+            except Exception:
+                pass
             syn.vars["g"].pull_from_device()
             v = syn.vars["g"].values
-            if v is None:
+            if v is None or (hasattr(v, "size") and v.size == 0):
                 v = syn.vars["g"].view
             v = np.array(v, dtype=np.float64)
-            print("  %-30s n=%-6d 평균g=%.3f" % (name, v.size, float(np.mean(v))))
+            if v.size == 0:
+                print("  %-30s n=0 (값 조회 불가 — 판정 보류)" % name)
+            else:
+                print("  %-30s n=%-6d 평균g=%.3f" % (name, v.size, float(np.mean(v))))
         except Exception as e:
             print("  %-30s 조회실패(%s)" % (name, e))
 
