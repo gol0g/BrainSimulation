@@ -119,6 +119,11 @@ def build_parser():
     p.add_argument("--context-select", action="store_true",
                    help="Zone A/B 의미반전 컨텍스트 과제 (4월 M4 기반, 구현됨)")
     p.add_argument("--context-compositional", action="store_true")
+    p.add_argument("--typed-sound", action="store_true",
+                   help="C23b: 타입×방향 소리를 시각변별경로 합류. 지금까지 **평가에서만** 켜져 있었음 "
+                        "→ 소리개념 83.8%는 '훈련된 능력'이 아니라 '평가시 배선하면 나옴'. 훈련 검증용.")
+    p.add_argument("--sound-flip", action="store_true",
+                   help="C23b: sound→d1 좌/우 반전(측성 가설 검증). 역시 평가전용이었음.")
     p.add_argument("--context-hard-gate", action="store_true",
                    help="C22: v9 hard gate(맥락-무관 D1 억제, D1_ctx 단독정책). "
                         "4월 '첫 맥락 선택성 돌파'의 핵심인데 러너가 켜지 않고 있었음(죽은 스위치).")
@@ -728,6 +733,14 @@ def main():
         env_config.energy_start = env_config.energy_max
         env_config.predator_enabled = False
         print("[easy-survival] 에너지감쇠0 + predator off (D24: 환경 한계 검증)")
+
+    # C23b: 평가전용이던 소리경로 스위치를 훈련에도 배선
+    if args.typed_sound:
+        brain_config.typed_sound_enabled = True
+        print("[C23b] typed_sound_enabled=True — 소리경로를 켠 채 훈련(기존엔 평가시만 켜짐)")
+    if args.sound_flip:
+        brain_config.sound_food_flip = True
+        print("[C23b] sound_food_flip=True — sound→d1 좌/우 반전 훈련")
 
     # --context-select: Zone A/B 의미반전 (4월 M4 기반)
     if args.context_select:
