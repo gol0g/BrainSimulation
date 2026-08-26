@@ -119,6 +119,9 @@ def build_parser():
     p.add_argument("--context-select", action="store_true",
                    help="Zone A/B 의미반전 컨텍스트 과제 (4월 M4 기반, 구현됨)")
     p.add_argument("--context-compositional", action="store_true")
+    p.add_argument("--context-hard-gate", action="store_true",
+                   help="C22: v9 hard gate(맥락-무관 D1 억제, D1_ctx 단독정책). "
+                        "4월 '첫 맥락 선택성 돌파'의 핵심인데 러너가 켜지 않고 있었음(죽은 스위치).")
 
     # 중재
     p.add_argument("--wta-arbitration", action="store_true")
@@ -730,7 +733,11 @@ def main():
     if args.context_select:
         env_config.context_rules_enabled = True
         brain_config.context_gate_enabled = True
-        print("[context] Zone A/B 의미반전 활성 — context hard gate ON")
+        if args.context_hard_gate:
+            brain_config.context_hard_gate_enabled = True
+            print("[context] Zone A/B 의미반전 활성 — v9 HARD gate ON (D1_ctx 단독정책)")
+        else:
+            print("[context] Zone A/B 의미반전 활성 — soft gate만 (v9 hard gate OFF)")
 
     # D6 factored value: 이 러너는 place-value를 zone 보상만으로 학습(음식은
     # add_experience 대상 아님) → 구조적으로 이미 factored. 플래그는 no-op이나
