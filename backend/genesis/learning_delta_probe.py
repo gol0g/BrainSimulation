@@ -64,8 +64,24 @@ def main():
             if rew and rew > 0:
                 brain.release_dopamine(reward_magnitude=float(rew), primary_reward=True)
                 eaten += 1
+                # 러너와 동일한 학습 호출 순서(run_v2_tasks.py 560~565, 654~657).
+                # 가중치 갱신은 process() 안에서 자동으로 일어나지 않고 **명시 호출**이 필요하다.
+                cfg = brain.config
+                try:
+                    if getattr(cfg, "perceptual_learning_enabled", False) and getattr(cfg, "it_enabled", False):
+                        brain.update_cortical_rstdp("good_food")
+                    if getattr(cfg, "prediction_error_enabled", False):
+                        brain.update_prediction_error_rstdp("food")
+                    brain.learn_food_location(food_position=(obs["position_x"], obs["position_y"]))
+                    brain.add_experience(obs["position_x"], obs["position_y"], 0, getattr(env, "steps", 0), 25.0)
+                except Exception as e:
+                    print("    [WARN] 학습 호출 실패: %s" % e)
             if done:
                 break
+        try:
+            brain.replay_swr()   # 러너와 동일: 에피소드 말 consolidation
+        except Exception:
+            pass
     print("[train] %dep 완료, 보상 %d회" % (args.episodes, eaten))
 
     after = snap(brain)
