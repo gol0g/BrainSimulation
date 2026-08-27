@@ -1302,6 +1302,9 @@ class ForagerBrainConfig:
     genn_seed: int = 12345   # C24: SPARSE 연결 재현용 시드. None이면 비결정(가중치 로드 손상 재발)
     real_rstdp: bool = False       # C36: food_to_d1을 시냅스별 자격흔적 R-STDP로 생성(기본은 정적)
     real_rstdp_eta: float = 0.02   # C36 학습률
+    rstdp_crossed: bool = False    # C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설
+    rstdp_crossed_init_w: float = 0.5
+    real_rstdp_w_max: float = 30.0  # C36 수리3: 학습 상한(기존 5.0은 선천반사 25.0에 못 미쳐 경쟁 불가)
 
     @property
     def total_neurons(self) -> int:
@@ -2897,7 +2900,8 @@ class ForagerBrain:
         if getattr(self.config, "real_rstdp", False):
             from rstdp_model import make_rstdp_model, DEFAULT_PARAMS
             _p = dict(DEFAULT_PARAMS)
-            _p["w_max"] = float(getattr(self.config, "rstdp_w_max", 20.0))
+            # C36 수리3: 기존 rstdp_w_max(5.0)는 선천반사 25.0과 경쟁 불가 → 별도 상한 사용
+            _p["w_max"] = float(getattr(self.config, "real_rstdp_w_max", 30.0))
             _p["eta"] = float(getattr(self.config, "real_rstdp_eta", DEFAULT_PARAMS["eta"]))
             _wu = make_rstdp_model()
             self.food_to_d1_l = self.model.add_synapse_population(
@@ -2912,10 +2916,33 @@ class ForagerBrain:
                                    {"preTrace": 0.0}, {"postTrace": 0.0}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
                 init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
-            # 도파민을 런타임에 바꿀 수 있게 동적 파라미터로 지정(빌드 전에 해야 함)
-            self.food_to_d1_l.set_wu_param_dynamic("dopamine")
-            self.food_to_d1_r.set_wu_param_dynamic("dopamine")
             self._rstdp_synapses = [self.food_to_d1_l, self.food_to_d1_r]
+
+            # C36 수리1: **학습 가능한 교차 경로**.
+            # 기존 배선은 food_eye→d1→direct→motor가 전부 동측(L→L, R→R)이라, 학습해도
+            # "같은 쪽 반응 강화"만 가능하고 자극→행동 매핑을 뒤집을 수 없었다(위상적 감금).
+            # 교차 시냅스를 R-STDP로 신설하면 매핑 재학습이 비로소 가능해진다.
+            if getattr(self.config, "rstdp_crossed", False):
+                _pc = float(getattr(self.config, "rstdp_crossed_init_w", 0.5))
+                self.food_to_d1_cross_lr = self.model.add_synapse_population(
+                    "food_eye_left_to_d1_r", "SPARSE", self.food_eye_left, self.d1_right,
+                    init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": _pc}), "e": 0.0},
+                                       {"preTrace": 0.0}, {"postTrace": 0.0}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                    init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+                self.food_to_d1_cross_rl = self.model.add_synapse_population(
+                    "food_eye_right_to_d1_l", "SPARSE", self.food_eye_right, self.d1_left,
+                    init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": _pc}), "e": 0.0},
+                                       {"preTrace": 0.0}, {"postTrace": 0.0}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                    init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+                self._rstdp_synapses += [self.food_to_d1_cross_lr, self.food_to_d1_cross_rl]
+                print(f"    [C36 수리1] 학습가능 교차경로 신설: food_eye_L→D1_R, food_eye_R→D1_L "
+                      f"(init={_pc}, R-STDP) — 매핑 재학습 가능")
+
+            # 도파민을 런타임에 바꿀 수 있게 동적 파라미터로 지정(빌드 전에 해야 함)
+            for _s in self._rstdp_synapses:
+                _s.set_wu_param_dynamic("dopamine")
             print(f"    FoodEye→D1 [C36 진짜 R-STDP]: init_w={d1_init_w}, w_max={_p['w_max']}, "
                   f"eta={_p['eta']}, tau_e={_p['tau_e']} (시냅스별 자격흔적)")
         else:

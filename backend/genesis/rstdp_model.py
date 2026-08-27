@@ -56,10 +56,17 @@ def make_rstdp_model():
         e += A_plus * preTrace;
         """,
         # 매 스텝: 흔적 감쇠 + 도파민이 있을 때만 가중치로 굳힘
+        # C36 수리2: **가중치 의존 갱신(soft bound)**으로 포화 방지.
+        # 초판은 g += eta*da*e 후 clip만 해서 전 시냅스가 w_max에 붙어 std가 0으로 붕괴했다
+        # (food_to_d1_r: 100% 변화, std 0→0 = 변별 소멸). 상한에 가까울수록 증가폭을 줄이고
+        # 하한에 가까울수록 감소폭을 줄이면 시냅스별 차이가 보존된다.
         synapse_dynamics_code="""
         e -= e * (dt / tau_e);
         if (dopamine != 0.0) {
-            g += eta * dopamine * e;
+            const scalar dw = eta * dopamine * e;
+            const scalar room = (dw > 0.0) ? (w_max - g) : (g - w_min);
+            const scalar span = w_max - w_min;
+            g += dw * (room / (span > 0.0 ? span : 1.0));
             g = fmin(w_max, fmax(w_min, g));
         }
         """,
