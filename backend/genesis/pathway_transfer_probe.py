@@ -66,6 +66,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--real-rstdp", action="store_true")
     ap.add_argument("--crossed", action="store_true")
+    ap.add_argument("--d1-inhib", type=float, default=None,
+                    help="C41: d1 E/I 억제강도(C14 배선). d1이 자극과 무관하게 ~667로 고정 발화(포화)해 "
+                         "정보를 담지 못한다. 억제를 넣어 변별이 살아나는지 시험.")
     ap.add_argument("--d1-direct-w", type=float, default=None,
                     help="C40: D1→direct 가중치(기본 20.0, DENSE). 이 값이 커서 direct가 포화되고 "
                          "D1의 좌/우 변별(31.3)이 direct에서 2.0으로 소멸한다.")
@@ -80,6 +83,10 @@ def main():
         cfg.rstdp_crossed = True
     if args.d1_direct_w is not None:
         cfg.d1_to_direct_weight = args.d1_direct_w
+    if args.d1_inhib is not None and args.d1_inhib != 0:
+        # d1_inhibition != 0 이면 뇌가 자동으로 억제뉴런·배선을 만든다(forager_brain.py 1764).
+        # 별도 활성 플래그는 없다 — `d1_inhib`은 뉴런집단 속성명이므로 건드리면 안 된다.
+        cfg.d1_inhibition = args.d1_inhib
     brain = ForagerBrain(cfg)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
