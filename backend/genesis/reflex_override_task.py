@@ -96,6 +96,9 @@ def main():
     ap.add_argument("--rstdp-eta", type=float, default=0.02)
     ap.add_argument("--crossed", action="store_true",
                     help="C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설. 없으면 매핑 재학습 불가.")
+    ap.add_argument("--d1-inhib", type=float, default=None,
+                    help="C41: d1 E/I 억제(-200 권장). 없으면 d1이 ~667로 포화해 자극 정보를 담지 못하고, "
+                         "학습·교차·탐색을 다 갖춰도 기저핵을 통과하지 못한다.")
     ap.add_argument("--bias", type=float, default=25.0,
                     help="C37: 탐색 시 운동 편향 세기(매 스텝 주입). 6.0은 반사에 압도돼 정답표본 0개였음.")
     ap.add_argument("--epsilon", type=float, default=0.0,
@@ -114,6 +117,8 @@ def main():
         cfg.rstdp_crossed = True
     if args.w_max is not None:
         cfg.real_rstdp_w_max = args.w_max
+    if args.d1_inhib is not None and args.d1_inhib != 0:
+        cfg.d1_inhibition = args.d1_inhib   # !=0 이면 뇌가 억제뉴런·배선을 자동 생성
     brain = ForagerBrain(cfg)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
