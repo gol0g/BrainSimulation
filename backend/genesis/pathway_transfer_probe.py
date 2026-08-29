@@ -10,7 +10,7 @@ C38에서 `food_eye→D1` 가중치가 1.0→30.0(30배)으로 변했는데 **�
 차이가 D1까지는 살아 있는데 motor에서 사라지면 → D1→motor 전달이 병목.
 D1에서 이미 없으면 → 가중치가 커져도 자극 변별이 안 되는 것(포화 등).
 """
-import argparse, sys, os
+import argparse, sys, os, random
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -66,6 +66,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--real-rstdp", action="store_true")
     ap.add_argument("--crossed", action="store_true")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="C46: 환경·워밍업 난수 시드. 같은 시드면 같은 결과여야 한다(결정론 검증용).")
     ap.add_argument("--direct-motor-w", type=float, default=None,
                     help="C44: direct→motor 가중치(기본 25.0). C42에서 학습 전후 오프셋이 소수점 셋째자리까지 "
                          "동일했다 → 기저핵 출력이 운동에 도달하는 기여가 사실상 0일 가능성 검증.")
@@ -96,6 +98,13 @@ def main():
         # d1_inhibition != 0 이면 뇌가 자동으로 억제뉴런·배선을 만든다(forager_brain.py 1764).
         # 별도 활성 플래그는 없다 — `d1_inhib`은 뉴런집단 속성명이므로 건드리면 안 된다.
         cfg.d1_inhibition = args.d1_inhib
+    # C46: 측정 결정론화.
+    # GeNN 시드(12345)를 고정했는데도 **같은 설정의 두 런이 다른 부호**를 냈다(C45: direct +10.1 vs −10.3).
+    # 원인은 연결이 아니라 **환경**: ForagerGym이 매 런 먹이를 무작위 배치하고, 워밍업 20스텝이
+    # 매번 다른 뇌 상태를 만든다. 이것이 이 세션 내내 모든 측정을 흔든 "런 오프셋"의 정체다
+    # (C22b 이체제 요동, C28b 부호 뒤집힘, C40 단일런 30.9, C43 사전 72%).
+    random.seed(args.seed)
+    np.random.seed(args.seed)
     brain = ForagerBrain(cfg)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
