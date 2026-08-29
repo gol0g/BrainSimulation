@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import numpy as np
+import random
 import sys
 import os
 
@@ -677,7 +678,16 @@ if __name__ == "__main__":
                        help="C1 수리: sound→d1 좌/우 반전 테스트")
     parser.add_argument("--typed-sound", action="store_true",
                        help="C1-fix: 타입×방향 소리를 시각변별경로 합류")
+    parser.add_argument("--seed", type=int, default=None,
+                       help="C46: 환경·워밍업 난수 시드. **미지정이면 런마다 결과가 흔들린다** — "
+                            "이 세션의 개념 측정은 전부 무시드였고, 그것이 노이즈바닥 ±6~7과 "
+                            "뒤집힌 결론 5건의 원인이었다. 조건 비교시 같은 시드로 짝지어라.")
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        print(f"[C46] seed={args.seed} 고정 (결정론적 측정)")
 
     # Brain 생성 + 가중치 로드
     config = ForagerBrainConfig()
