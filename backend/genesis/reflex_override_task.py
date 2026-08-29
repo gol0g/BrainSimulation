@@ -33,15 +33,22 @@ def stim(obs, nh, good_side):
     return o
 
 
-def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0):
+def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False):
     """bias_side가 주어지면 **매 스텝** 운동 집단에 편향을 주입한다.
     C37 1차 실패 원인: 편향을 호출 전 한 번만 넣었더니 감각 입력이 다음 스텝에 덮어써서
     탐색 5975회에 정답 표본이 0개였다. 탐색은 실제로 행동이 바뀔 만큼 주입해야 의미가 있다."""
     tot = 0.0
     for _ in range(steps):
         if bias_side is not None and bias_strength > 0.0:
-            for nm, want in (("motor_left", bias_side == "left"),
-                             ("motor_right", bias_side == "right")):
+            # C52: 탐색 주입 지점을 **학습 시냅스 상류(D1)** 로 옮긴다.
+            # 기존엔 motor에 주입했는데, 학습 시냅스는 food_eye→D1로 그보다 상류다.
+            # 강제된 행동이 D1을 거치지 않으므로 자격흔적에는 **자극이 만든 원래(반사정렬)
+            # D1 패턴**이 기록되고, 보상이 그걸 강화한다 → 실측: 변조폭이 반사 방향으로 +0.036.
+            # D1에 주입하면 흔적이 탐색한 상태를 담아 보상이 그 연합을 강화할 수 있다.
+            _targets = (("d1_left", bias_side == "left"), ("d1_right", bias_side == "right")) \
+                if bias_at_d1 else \
+                (("motor_left", bias_side == "left"), ("motor_right", bias_side == "right"))
+            for nm, want in _targets:
                 p = getattr(brain, nm, None)
                 if p is None:
                     continue
@@ -109,6 +116,9 @@ def main():
     ap.add_argument("--rstdp-eta", type=float, default=0.02)
     ap.add_argument("--crossed", action="store_true",
                     help="C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설. 없으면 매핑 재학습 불가.")
+    ap.add_argument("--bias-at-d1", action="store_true",
+                    help="C52: 탐색 편향을 motor 대신 **D1**(학습 시냅스 하류 첫 단계)에 주입. "
+                         "motor 주입은 학습 시냅스보다 하류라 자격흔적이 탐색행동을 담지 못했다.")
     ap.add_argument("--d1-direct-w", type=float, default=None,
                     help="C45: d1→direct 가중치(기본 20.0). 20이면 direct가 666으로 포화해 "
                          "d1의 변별을 통과시키지 못한다. d1억제와 **함께** 낮춰야 신호가 지난다.")
@@ -216,7 +226,8 @@ def main():
                 explored += 1
                 probe_side = "left" if (np.random.random() < 0.5) else "right"
                 v = steer(brain, stim(obs, nh, side), steps=3,
-                          bias_side=probe_side, bias_strength=args.bias) - off
+                          bias_side=probe_side, bias_strength=args.bias,
+                          bias_at_d1=args.bias_at_d1) - off
             else:
                 v = steer(brain, stim(obs, nh, side), steps=3) - off
             correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
