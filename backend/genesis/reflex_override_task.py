@@ -116,6 +116,10 @@ def main():
     ap.add_argument("--rstdp-eta", type=float, default=0.02)
     ap.add_argument("--crossed", action="store_true",
                     help="C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설. 없으면 매핑 재학습 불가.")
+    ap.add_argument("--no-reward", action="store_true",
+                    help="C63: 도파민을 **한 번도 주지 않고** 동일 횟수만큼 처리만 한다. "
+                         "양 조건 공통의 +0.02~0.04 변조폭 표류가 학습 때문인지 "
+                         "단순 처리(적응·잔류전류) 때문인지 가리는 대조. 표류가 그대로면 학습과 무관.")
     ap.add_argument("--cortical-eta", type=float, default=None,
                     help="C62: 피질 전역스칼라 학습률(기본 0.0008). 이것이 두 조건 공통으로 "
                          "변조폭을 +0.02~0.04 표류시켜(C60/C61) 측정하려는 효과(~0.003)를 10배로 덮는다. "
@@ -248,6 +252,8 @@ def main():
             else:
                 v = steer(brain, stim(obs, nh, side), steps=3) - off
             correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
+            if args.no_reward:
+                continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
             if correct:
                 brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
                 rew += 1
