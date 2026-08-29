@@ -71,17 +71,30 @@ def measure_offset(brain, obs, nh, n=20):
 
 
 def evaluate(brain, obs, nh, trials=100):
+    """정답률과 **변조폭**을 함께 반환.
+
+    C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
+    오답 처리된다 → 0.0%는 "틀림"이 아니라 **"결정 안 함"**. 이 지표로는 학습의 미세 변화를
+    원리적으로 못 잡는다. C28b에서 이미 얻은 교훈(절대부호·임계 판정은 ill-posed, 좌↔우
+    **차이값**만 견고)을 이 프로브에 적용하지 않았던 것.
+
+    변조폭 = mean(조향 | good=우) − mean(조향 | good=좌).
+      반사(good쪽 접근)면 양수, 반사역전 학습이 성공하면 **음수 방향으로 이동**해야 한다.
+    """
     off = measure_offset(brain, obs, nh)
     ok = 0
+    vs_left, vs_right = [], []
     for t in range(trials):
         side = "left" if (t % 2 == 0) else "right"     # 좌우 균형
         v = steer(brain, stim(obs, nh, side)) - off     # 오프셋 보정
+        (vs_left if side == "left" else vs_right).append(v)
         # 정답 = good의 **반대쪽**
         if side == "left" and v > 0.02:
             ok += 1
         elif side == "right" and v < -0.02:
             ok += 1
-    return ok / trials * 100, off
+    mod = float(np.mean(vs_right)) - float(np.mean(vs_left))
+    return ok / trials * 100, off, mod
 
 
 def main():
@@ -164,8 +177,9 @@ def main():
         return out
 
     d1_before = snap_d1()
-    pre, off0 = evaluate(brain, obs, nh, args.trials)
-    print("[사전] 오프셋 %+.3f | 반사역전 정답률 %.1f%% (우연=50)" % (off0, pre))
+    pre, off0, mod0 = evaluate(brain, obs, nh, args.trials)
+    print("[사전] 오프셋 %+.3f | 정답률 %.1f%% | **변조폭 %+.4f** (양수=반사방향, 음수=역전)"
+          % (off0, pre, mod0))
 
     def explore_bias(target_side, strength=6.0):
         """C37: **행동 탐색 주입**.
@@ -229,10 +243,13 @@ def main():
             print("[D1가중치] %-14s |Δ|평균=%.5f 변화율=%.1f%% | 평균 %.3f→%.3f | std %.4f→%.4f"
                   % (nm, d.mean(), (d > 1e-9).mean() * 100, b_.mean(), a_.mean(), b_.std(), a_.std()))
 
-    post, off1 = evaluate(brain, obs, nh, args.trials)
-    print("[사후] 오프셋 %+.3f | 반사역전 정답률 %.1f%%" % (off1, post))
-    print("=> 학습 효과 %+.1f%%p | 판정: %s"
-          % (post - pre, "학습이 반사를 이김" if (post - pre) > 10 else "학습이 반사를 못 이김"))
+    post, off1, mod1 = evaluate(brain, obs, nh, args.trials)
+    print("[사후] 오프셋 %+.3f | 정답률 %.1f%% | **변조폭 %+.4f**" % (off1, post, mod1))
+    dmod = mod1 - mod0
+    print("=> 정답률 %+.1f%%p | **변조폭 변화 %+.4f** | 판정: %s"
+          % (post - pre, dmod,
+             "학습이 조향을 역전 방향으로 이동" if dmod < -0.02
+             else ("학습이 반사 방향으로 강화" if dmod > 0.02 else "변화 없음")))
 
 
 if __name__ == "__main__":
