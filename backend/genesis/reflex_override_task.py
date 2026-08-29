@@ -12,7 +12,7 @@ C29 실패에서 배운 것: "중성 단서"로 고른 `sound_food_*`도 선천 
 
 C28b에서 확인된 **런마다 변하는 상수 오프셋**을 매 평가마다 측정해 빼고 판정한다.
 """
-import argparse, sys, os
+import argparse, sys, os, random
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -96,6 +96,11 @@ def main():
     ap.add_argument("--rstdp-eta", type=float, default=0.02)
     ap.add_argument("--crossed", action="store_true",
                     help="C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설. 없으면 매핑 재학습 불가.")
+    ap.add_argument("--d1-direct-w", type=float, default=None,
+                    help="C45: d1→direct 가중치(기본 20.0). 20이면 direct가 666으로 포화해 "
+                         "d1의 변별을 통과시키지 못한다. d1억제와 **함께** 낮춰야 신호가 지난다.")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="C46: 환경·워밍업 시드. 조건 비교는 같은 시드로 짝지어라.")
     ap.add_argument("--d1-inhib", type=float, default=None,
                     help="C41: d1 E/I 억제(-200 권장). 없으면 d1이 ~667로 포화해 자극 정보를 담지 못하고, "
                          "학습·교차·탐색을 다 갖춰도 기저핵을 통과하지 못한다.")
@@ -106,6 +111,11 @@ def main():
     ap.add_argument("--w-max", type=float, default=None,
                     help="C36 수리3: 학습 상한(기본 30.0). 선천반사 25.0과 경쟁하려면 그 이상 필요.")
     args = ap.parse_args()
+
+    # C46: 환경·워밍업 난수 고정. 미고정이면 사전 정답률이 런마다 0%~72%로 흔들려
+    # 학습 효과가 잡음에 묻힌다(C43에서 실제로 그랬다).
+    random.seed(args.seed)
+    np.random.seed(args.seed)
 
     cfg = ForagerBrainConfig()
     if args.reflex_w is not None:
@@ -119,6 +129,8 @@ def main():
         cfg.real_rstdp_w_max = args.w_max
     if args.d1_inhib is not None and args.d1_inhib != 0:
         cfg.d1_inhibition = args.d1_inhib   # !=0 이면 뇌가 억제뉴런·배선을 자동 생성
+    if args.d1_direct_w is not None:
+        cfg.d1_to_direct_weight = args.d1_direct_w
     brain = ForagerBrain(cfg)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
