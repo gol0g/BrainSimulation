@@ -116,6 +116,10 @@ def main():
     ap.add_argument("--rstdp-eta", type=float, default=0.02)
     ap.add_argument("--crossed", action="store_true",
                     help="C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설. 없으면 매핑 재학습 불가.")
+    ap.add_argument("--hippo-eta", type=float, default=None,
+                    help="C54: 해마 학습률(place→food_memory, 기본 0.15). 0으로 두면 해마 학습을 끈다. "
+                         "C50의 학습 신호(+0.013)가 기저핵이 아니라 해마에서 온 것인지 판별용 "
+                         "(C53: D1을 300까지 밀어도 행동 변화 0 = 기저핵은 행동 제어 불가).")
     ap.add_argument("--bias-at-d1", action="store_true",
                     help="C52: 탐색 편향을 motor 대신 **D1**(학습 시냅스 하류 첫 단계)에 주입. "
                          "motor 주입은 학습 시냅스보다 하류라 자격흔적이 탐색행동을 담지 못했다.")
@@ -154,6 +158,8 @@ def main():
         cfg.d1_inhibition = args.d1_inhib   # !=0 이면 뇌가 억제뉴런·배선을 자동 생성
     if args.d1_direct_w is not None:
         cfg.d1_to_direct_weight = args.d1_direct_w
+    if args.hippo_eta is not None:
+        cfg.place_to_food_memory_eta = args.hippo_eta
     brain = ForagerBrain(cfg)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
