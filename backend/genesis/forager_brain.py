@@ -686,6 +686,8 @@ class ForagerBrainConfig:
     agent_eye_to_sts_social_weight: float = 15.0       # Agent_Eye → STS_Social
     global_ei_inhibition: float = 0.0                  # C16: 전역 E/I 균형(핵심 경로 일괄, 0=비활성)
     d1_inhibition: float = 0.0                         # C14: D1 E/I 균형(0=비활성)
+    direct_inhibition: float = 0.0                     # C56: direct E/I 균형(0=비활성).
+    # d1→direct를 낮추면 탈포화되나 D1 영향력이 0이 된다(보상 381→0). 가중치 대신 억제로 푼다.
     social_to_kc_weight: float = 1.5                   # C12: 사회→KC(학습경로) 게인
     social_to_kc_sparsity: float = 0.03                # C12: 사회→KC 연결밀도
     sts_social_inhibition: float = 0.0                 # C9e: STS_Social 자기억제(E/I 균형, 0=비활성)
@@ -1777,6 +1779,16 @@ class ForagerBrain:
                 "direct_left", n_dir_half, "LIF", lif_params, lif_init)
             self.direct_right = self.model.add_neuron_population(
                 "direct_right", n_dir_half, "LIF", lif_params, lif_init)
+
+            # C56: direct E/I 억제뉴런.
+            # 상충 관계 해소용 — `d1→direct`를 낮추면 direct는 탈포화되지만 **D1의 영향력이 0**이 되고
+            # (실측: 보상 381회 → 0회), 기본값 20이면 영향력은 있으나 direct가 666으로 **포화**해
+            # 변별이 소멸한다. 가중치를 줄이는 대신 **억제로 탈포화**하면 둘 다 만족할 수 있다
+            # (d1에 −200 억제를 걸어 성공한 것과 같은 방식, C41).
+            if getattr(self.config, "direct_inhibition", 0.0) != 0.0:
+                self.direct_inhib = self.model.add_neuron_population(
+                    "direct_inhib", 60, "LIF", lif_params, lif_init)
+                self._direct_inhib_pending = True
 
             # Indirect pathway L/R: NoGo 출력
             self.indirect_left = self.model.add_neuron_population(
@@ -3027,6 +3039,15 @@ class ForagerBrain:
         self._create_static_synapse(
             "indirect_r_to_direct_r", self.indirect_right, self.direct_right,
             self.config.direct_indirect_competition, sparsity=0.1)
+
+        # C56: direct E/I 배선 (d1과 동일 구조). direct→억제뉴런→direct 되먹임으로 포화 해소.
+        if getattr(self, "_direct_inhib_pending", False):
+            _dinh = self.config.direct_inhibition
+            self._create_static_synapse("dirl_to_dirinhib", self.direct_left, self.direct_inhib, 6.0, sparsity=0.10)
+            self._create_static_synapse("dirr_to_dirinhib", self.direct_right, self.direct_inhib, 6.0, sparsity=0.10)
+            self._create_static_synapse("dirinhib_to_dirl", self.direct_inhib, self.direct_left, _dinh, sparsity=0.10)
+            self._create_static_synapse("dirinhib_to_dirr", self.direct_inhib, self.direct_right, _dinh, sparsity=0.10)
+            print(f"    [C56] direct E/I 균형: 억제뉴런 60 → {_dinh} (포화 해소, d1→direct는 강하게 유지)")
 
         # 7. Direct/Indirect → Motor (측면화: L→L, R→R)
         self._create_static_synapse(
