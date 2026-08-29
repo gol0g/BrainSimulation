@@ -66,6 +66,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--real-rstdp", action="store_true")
     ap.add_argument("--crossed", action="store_true")
+    ap.add_argument("--direct-motor-w", type=float, default=None,
+                    help="C44: direct→motor 가중치(기본 25.0). C42에서 학습 전후 오프셋이 소수점 셋째자리까지 "
+                         "동일했다 → 기저핵 출력이 운동에 도달하는 기여가 사실상 0일 가능성 검증.")
+    ap.add_argument("--reflex-w", type=float, default=None,
+                    help="선천반사 가중치(기본 25.0).")
     ap.add_argument("--d1-inhib", type=float, default=None,
                     help="C41: d1 E/I 억제강도(C14 배선). d1이 자극과 무관하게 ~667로 고정 발화(포화)해 "
                          "정보를 담지 못한다. 억제를 넣어 변별이 살아나는지 시험.")
@@ -83,6 +88,10 @@ def main():
         cfg.rstdp_crossed = True
     if args.d1_direct_w is not None:
         cfg.d1_to_direct_weight = args.d1_direct_w
+    if args.direct_motor_w is not None:
+        cfg.direct_to_motor_weight = args.direct_motor_w
+    if args.reflex_w is not None:
+        cfg.food_approach_init_w = args.reflex_w
     if args.d1_inhib is not None and args.d1_inhib != 0:
         # d1_inhibition != 0 이면 뇌가 자동으로 억제뉴런·배선을 만든다(forager_brain.py 1764).
         # 별도 활성 플래그는 없다 — `d1_inhib`은 뉴런집단 속성명이므로 건드리면 안 된다.
