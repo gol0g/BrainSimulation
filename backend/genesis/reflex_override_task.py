@@ -145,6 +145,10 @@ def main():
     ap.add_argument("--d1-direct-w", type=float, default=None,
                     help="C45: d1→direct 가중치(기본 20.0). 20이면 direct가 666으로 포화해 "
                          "d1의 변별을 통과시키지 못한다. d1억제와 **함께** 낮춰야 신호가 지난다.")
+    ap.add_argument("--reflex-sparsity", type=float, default=None,
+                    help="E070/H004: 반사 대역폭(good_food_eye→motor sparsity, 기본 0.15).")
+    ap.add_argument("--learn-sparsity", type=float, default=None,
+                    help="E070/H004: 학습경로 대역폭(food_eye→D1 sparsity, 기본 0.08).")
     ap.add_argument("--seed", type=int, default=0,
                     help="C46: 환경·워밍업 시드. 조건 비교는 같은 시드로 짝지어라.")
     ap.add_argument("--d1-inhib", type=float, default=None,
@@ -177,6 +181,10 @@ def main():
         cfg.d1_inhibition = args.d1_inhib   # !=0 이면 뇌가 억제뉴런·배선을 자동 생성
     if args.d1_direct_w is not None:
         cfg.d1_to_direct_weight = args.d1_direct_w
+    if args.reflex_sparsity is not None:
+        cfg.reflex_sparsity = args.reflex_sparsity
+    if args.learn_sparsity is not None:
+        cfg.learn_path_sparsity = args.learn_sparsity
     if args.cortical_eta is not None:
         cfg.cortical_rstdp_eta = args.cortical_eta
     if args.direct_inhib is not None and args.direct_inhib != 0:

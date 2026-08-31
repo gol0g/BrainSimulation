@@ -1306,7 +1306,10 @@ class ForagerBrainConfig:
     real_rstdp_eta: float = 0.02   # C36 학습률
     rstdp_crossed: bool = False    # C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설
     rstdp_crossed_init_w: float = 0.5
-    real_rstdp_w_max: float = 30.0  # C36 수리3: 학습 상한(기존 5.0은 선천반사 25.0에 못 미쳐 경쟁 불가)
+    real_rstdp_w_max: float = 30.0  # C36 수리3: 학습 상한(E069에서 병목 아님으로 판명)
+    # E070/H004: 경로 대역폭(시냅스 수) 축. 가중치는 고정한 채 이것만 바꿔 영향력 비율을 조작한다.
+    reflex_sparsity: float = 0.15       # good_food_eye→motor 반사 대역폭
+    learn_path_sparsity: float = 0.08   # food_eye→D1 학습경로 대역폭
 
     @property
     def total_neurons(self) -> int:
@@ -2630,12 +2633,12 @@ class ForagerBrain:
                 "good_food_motor_left", "SPARSE", self.good_food_eye_left, self.motor_left,
                 init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": fa_w})}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                init_sparse_connectivity("FixedProbability", {"prob": 0.15}))
+                init_sparse_connectivity("FixedProbability", {"prob": getattr(self.config, "reflex_sparsity", 0.15)}))
             self.good_food_to_motor_r = self.model.add_synapse_population(
                 "good_food_motor_right", "SPARSE", self.good_food_eye_right, self.motor_right,
                 init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": fa_w})}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                init_sparse_connectivity("FixedProbability", {"prob": 0.15}))
+                init_sparse_connectivity("FixedProbability", {"prob": getattr(self.config, "reflex_sparsity", 0.15)}))
             print(f"    Food Explore: food_eye→Motor {food_explore_w} (static, weak)")
             print(f"    Food Approach: good_food_eye→Motor R-STDP (init={fa_w}, learnable)")
         else:
@@ -2921,13 +2924,13 @@ class ForagerBrain:
                 init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": d1_init_w}), "e": 0.0},
                                    {"preTrace": 0.0}, {"postTrace": 0.0}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+                init_sparse_connectivity("FixedProbability", {"prob": getattr(self.config, "learn_path_sparsity", 0.08)}))
             self.food_to_d1_r = self.model.add_synapse_population(
                 "food_eye_right_to_d1_r", "SPARSE", self.food_eye_right, self.d1_right,
                 init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": d1_init_w}), "e": 0.0},
                                    {"preTrace": 0.0}, {"postTrace": 0.0}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+                init_sparse_connectivity("FixedProbability", {"prob": getattr(self.config, "learn_path_sparsity", 0.08)}))
             self._rstdp_synapses = [self.food_to_d1_l, self.food_to_d1_r]
 
             # C36 수리1: **학습 가능한 교차 경로**.
@@ -2941,13 +2944,13 @@ class ForagerBrain:
                     init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": _pc}), "e": 0.0},
                                        {"preTrace": 0.0}, {"postTrace": 0.0}),
                     init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                    init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+                    init_sparse_connectivity("FixedProbability", {"prob": getattr(self.config, "learn_path_sparsity", 0.08)}))
                 self.food_to_d1_cross_rl = self.model.add_synapse_population(
                     "food_eye_right_to_d1_l", "SPARSE", self.food_eye_right, self.d1_left,
                     init_weight_update(_wu, _p, {"g": init_var("Constant", {"constant": _pc}), "e": 0.0},
                                        {"preTrace": 0.0}, {"postTrace": 0.0}),
                     init_postsynaptic("ExpCurr", {"tau": 5.0}),
-                    init_sparse_connectivity("FixedProbability", {"prob": 0.08}))
+                    init_sparse_connectivity("FixedProbability", {"prob": getattr(self.config, "learn_path_sparsity", 0.08)}))
                 self._rstdp_synapses += [self.food_to_d1_cross_lr, self.food_to_d1_cross_rl]
                 print(f"    [C36 수리1] 학습가능 교차경로 신설: food_eye_L→D1_R, food_eye_R→D1_L "
                       f"(init={_pc}, R-STDP) — 매핑 재학습 가능")
