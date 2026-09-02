@@ -10,7 +10,7 @@ for f in research/experiments/E*.md; do
   [ -e "$f" ] || { echo "  (등록된 실험 없음)"; break; }
   id=$(basename "$f" .md)
   if bash scripts/lab/gate.sh "$id" >/dev/null 2>&1; then st="등록완료"; else st="**미완**"; fi
-  if grep -q "^- \*\*결과\*\*:$" "$f" || grep -q "^- \*\*결과\*\*: *$" "$f"; then res="결과미기입"; else res="결과있음"; fi
+  if grep -qE "^### (판정|결과)" "$f"; then res="결과있음"; else res="결과미기입"; fi
   [ -e "research/experiments/$id.log" ] && lg="로그있음" || lg="미실행"
   printf "  %-8s %-10s %-10s %s\n" "$id" "$st" "$lg" "$res"
 done

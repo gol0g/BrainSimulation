@@ -9,11 +9,13 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from forager_brain import ForagerBrain, ForagerBrainConfig
 
-TARGETS = ["food_to_d1_l", "food_to_d1_r", "good_food_to_motor_l", "good_food_to_motor_r"]
+TARGETS = ["food_to_d1_l", "food_to_d1_r", "good_food_to_motor_l", "good_food_to_motor_r",
+           "food_to_d1_cross_lr", "food_to_d1_cross_rl"]   # E071: 교차경로 실재 확인
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--learn-sparsity", type=float, default=None)
 ap.add_argument("--reflex-sparsity", type=float, default=None)
+ap.add_argument("--crossed", action="store_true")
 a = ap.parse_args()
 
 cfg = ForagerBrainConfig()
@@ -22,6 +24,8 @@ if a.learn_sparsity is not None:
     cfg.learn_path_sparsity = a.learn_sparsity
 if a.reflex_sparsity is not None:
     cfg.reflex_sparsity = a.reflex_sparsity
+if a.crossed:
+    cfg.rstdp_crossed = True
 b = ForagerBrain(cfg)
 
 print("SPARSITY learn=%s reflex=%s"
