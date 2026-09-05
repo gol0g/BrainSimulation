@@ -151,6 +151,10 @@ def main():
                     help="E070/H004: 학습경로 대역폭(food_eye→D1 sparsity, 기본 0.08).")
     ap.add_argument("--seed", type=int, default=0,
                     help="C46: 환경·워밍업 시드. 조건 비교는 같은 시드로 짝지어라.")
+    ap.add_argument("--brain-seed", type=int, default=None,
+                    help="E073: 뇌 연결 난수 시드(미지정시 --seed 사용). 분산 출처 분리용.")
+    ap.add_argument("--env-seed", type=int, default=None,
+                    help="E073: 환경·워밍업 난수 시드(미지정시 --seed 사용). 분산 출처 분리용.")
     ap.add_argument("--d1-inhib", type=float, default=None,
                     help="C41: d1 E/I 억제(-200 권장). 없으면 d1이 ~667로 포화해 자극 정보를 담지 못하고, "
                          "학습·교차·탐색을 다 갖춰도 기저핵을 통과하지 못한다.")
@@ -164,10 +168,17 @@ def main():
 
     # C46: 환경·워밍업 난수 고정. 미고정이면 사전 정답률이 런마다 0%~72%로 흔들려
     # 학습 효과가 잡음에 묻힌다(C43에서 실제로 그랬다).
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    # E073: 뇌 연결과 환경을 **분리**해 분산 출처를 가린다.
+    #   시드 간 분산(±0.02)이 효과(-0.005)의 4배라 어떤 가설도 판정 불가였다(K12).
+    _bseed = args.brain_seed if args.brain_seed is not None else args.seed
+    _eseed = args.env_seed if args.env_seed is not None else args.seed
+
+    # 1) 뇌 생성 직전: 뇌 시드로 고정 (SPARSE 연결 난수가 여기서 뽑힌다)
+    random.seed(_bseed)
+    np.random.seed(_bseed)
 
     cfg = ForagerBrainConfig()
+    cfg.genn_seed = 12345 + _bseed   # GeNN 연결 시드도 뇌 시드에 종속
     if args.reflex_w is not None:
         cfg.food_approach_init_w = args.reflex_w
     if args.real_rstdp:
@@ -192,6 +203,10 @@ def main():
     if args.hippo_eta is not None:
         cfg.place_to_food_memory_eta = args.hippo_eta
     brain = ForagerBrain(cfg)
+
+    # 2) 뇌 생성 후: 환경 시드로 재고정 (먹이 배치·워밍업이 여기서 결정된다)
+    random.seed(_eseed)
+    np.random.seed(_eseed)
     env = ForagerGym(ForagerConfig())
     obs = env.reset()
     for _ in range(20):
