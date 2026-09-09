@@ -18,11 +18,15 @@ from forager_gym import ForagerGym, ForagerConfig
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--env-seed", type=int, required=True)
+ap.add_argument("--symmetric", action="store_true", help="H008/E076: 좌우 대칭 강제")
 a = ap.parse_args()
 
 random.seed(a.env_seed)
 np.random.seed(a.env_seed)
-env = ForagerGym(ForagerConfig())
+cfg = ForagerConfig()
+if a.symmetric:
+    cfg.force_lr_symmetry = True
+env = ForagerGym(cfg)
 env.reset()
 
 foods = list(getattr(env, "foods", []))

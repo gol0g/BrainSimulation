@@ -112,6 +112,9 @@ class ForagerConfig:
 
     # === Phase L5: Multi-Food Types (지각 학습) ===
     n_food_types: int = 2                  # 음식 종류 수 (1=기존, 2=좋은/나쁜)
+    force_lr_symmetry: bool = False        # H008/E076: good 먹이를 좌우 균등 배치(비대칭 제거).
+    # 이 뇌는 좌/우 조향으로만 행동하고 지표도 좌↔우 차이라, 먹이 좌우 비대칭이
+    # 학습 효과의 부호를 결정할 수 있다(E075 측정: asym -13~+22로 유일하게 부호 반전).
     food_type_ratio: float = 0.6           # 좋은 음식 비율 (60%)
     bad_food_energy: float = -5.0          # 나쁜 음식 에너지 (부정적)
 
@@ -595,6 +598,8 @@ class ForagerGym:
         # 음식 생성 (Field에만, Pain Zone 외부)
         self.foods = []
         self._spawn_foods(self.config.n_food)
+        if getattr(self.config, "force_lr_symmetry", False):
+            self._enforce_lr_symmetry()
 
         # 통계 초기화
         self.steps = 0
@@ -1984,6 +1989,25 @@ class ForagerGym:
         if self.config.n_food_types <= 1:
             return 0
         return 0 if np.random.random() < self.config.food_type_ratio else 1
+
+    def _enforce_lr_symmetry(self):
+        """H008/E076: good 먹이를 좌우 균등하게 재배치해 좌우 비대칭을 제거한다.
+
+        많은 쪽의 초과분을 x축 기준으로 미러링해 반대편으로 옮긴다.
+        개수·타입·y좌표는 보존하므로 밀도·품질비율 등 다른 특성은 유지된다
+        (좌우 비대칭만 선택적으로 제거 = 인과 검증에 적합)."""
+        W = self.config.width
+        goods = [(i, f) for i, f in enumerate(self.foods) if f[2] == 0]
+        left = [(i, f) for i, f in goods if f[0] < W / 2]
+        right = [(i, f) for i, f in goods if f[0] >= W / 2]
+        while len(left) - len(right) >= 2:
+            i, (x, y, t) = left.pop()
+            self.foods[i] = (W - x, y, t)
+            right.append((i, self.foods[i]))
+        while len(right) - len(left) >= 2:
+            i, (x, y, t) = right.pop()
+            self.foods[i] = (W - x, y, t)
+            left.append((i, self.foods[i]))
 
     def _spawn_foods(self, n: int):
         """Field에 음식 생성 (Nest 외부, Pain Zone 외부)

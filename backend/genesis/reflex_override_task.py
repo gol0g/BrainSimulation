@@ -151,6 +151,8 @@ def main():
                     help="E070/H004: 학습경로 대역폭(food_eye→D1 sparsity, 기본 0.08).")
     ap.add_argument("--seed", type=int, default=0,
                     help="C46: 환경·워밍업 시드. 조건 비교는 같은 시드로 짝지어라.")
+    ap.add_argument("--symmetric-env", action="store_true",
+                    help="H008/E076: 먹이를 좌우 균등 배치해 비대칭만 제거(다른 특성 보존).")
     ap.add_argument("--brain-seed", type=int, default=None,
                     help="E073: 뇌 연결 난수 시드(미지정시 --seed 사용). 분산 출처 분리용.")
     ap.add_argument("--env-seed", type=int, default=None,
@@ -207,7 +209,10 @@ def main():
     # 2) 뇌 생성 후: 환경 시드로 재고정 (먹이 배치·워밍업이 여기서 결정된다)
     random.seed(_eseed)
     np.random.seed(_eseed)
-    env = ForagerGym(ForagerConfig())
+    _ecfg = ForagerConfig()
+    if args.symmetric_env:
+        _ecfg.force_lr_symmetry = True
+    env = ForagerGym(_ecfg)
     obs = env.reset()
     for _ in range(20):
         a, _ = brain.process(obs)
