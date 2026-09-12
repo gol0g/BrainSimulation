@@ -6,8 +6,8 @@ source $R/scripts/cuda_env.sh >/dev/null 2>&1
 source /root/pygenn_wsl/bin/activate
 
 # E075가 끝날 때까지 대기 (GPU 경합 방지)
-while pgrep -f "reflex_override_task.py" >/dev/null 2>&1; do sleep 120; done
-echo "[E076] E075 종료 확인, 시작"
+# (대기 루프 제거: 이전 세션에서 대기 중 종료돼 실행되지 않았음)
+echo "[E076] 시작"
 
 cd /root/rstdp_run
 cp $R/backend/genesis/*.py . 2>/dev/null
