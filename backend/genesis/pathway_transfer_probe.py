@@ -64,6 +64,7 @@ def measure(brain, obs, nh, good_side, steps=5, trials=10):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--kc-gamma", action="store_true", help="E081/H015: KC→D1 가중치 감마분포")
     ap.add_argument("--real-rstdp", action="store_true")
     ap.add_argument("--crossed", action="store_true")
     ap.add_argument("--seed", type=int, default=0,

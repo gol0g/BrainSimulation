@@ -1306,6 +1306,9 @@ class ForagerBrainConfig:
     # 전역 억제(d1_inhibition)는 전체를 균일하게 누를 뿐 승자를 못 가린다.
     # FlyWire: MBON끼리 억제 50%로 경쟁 → 변별이 생긴다.
     d1_lateral_sparsity: float = 0.15
+    kc_weight_gamma: bool = False   # E081/H015: KC→D1 가중치를 감마분포로(뉴런별 입력 다양성).
+    # 균일 가중치면 D1 100개가 같은 입력을 받아 집단이 1개처럼 작동한다(CV 0.101 측정).
+    kc_gamma_shape: float = 0.5     # shape<1이면 롱테일(FlyWire 실측 형태)
     kc_rstdp: bool = False          # E079/H012: KC→D1을 진짜 R-STDP로(기본은 정적=학습불가)
     kc_real_rstdp_eta: float = 0.02
     kc_real_rstdp_w_max: float = 30.0
@@ -9055,18 +9058,31 @@ class ForagerBrain:
             _kp["w_max"] = float(getattr(self.config, "kc_real_rstdp_w_max", 30.0))
             _kp["eta"] = float(getattr(self.config, "kc_real_rstdp_eta", DEFAULT_PARAMS["eta"]))
             _kwu = make_rstdp_model()
+            # E081/H015: 가중치 초기화를 **감마 분포**로.
+            # 측정(d1_diversity_probe): D1 100개 뉴런의 변동계수가 **0.101**, 발화 100% —
+            # FixedProbability + Constant 가중치라 모든 뉴런이 통계적으로 같은 입력을 받아
+            # 집단이 사실상 1개처럼 작동한다. 그래서 측면억제도 실패했다(E080: 가릴 승자가 없다).
+            # FlyWire 실측은 롱테일이다: 연결당 시냅스 중앙값 2 / 평균 3.6 / p99 32 / max 2405.
+            # 감마(shape<1)로 그 형태를 재현하면 뉴런마다 받는 입력 강도가 달라진다.
+            _kcw_init = init_var("Constant", {"constant": kc_d1_w})
+            if getattr(self.config, "kc_weight_gamma", False):
+                _sh = float(getattr(self.config, "kc_gamma_shape", 0.5))
+                _kcw_init = init_var("Gamma", {"shape": _sh, "scale": kc_d1_w / _sh})
             self.kc_to_d1_l = self.model.add_synapse_population(
                 "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
-                init_weight_update(_kwu, _kp, {"g": init_var("Constant", {"constant": kc_d1_w}), "e": 0.0},
+                init_weight_update(_kwu, _kp, {"g": _kcw_init, "e": 0.0},
                                    {"preTrace": 0.0}, {"postTrace": 0.0}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
                 init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
             self.kc_to_d1_r = self.model.add_synapse_population(
                 "kc_r_to_d1_r", "SPARSE", self.kc_right, self.d1_right,
-                init_weight_update(_kwu, _kp, {"g": init_var("Constant", {"constant": kc_d1_w}), "e": 0.0},
+                init_weight_update(_kwu, _kp, {"g": _kcw_init, "e": 0.0},
                                    {"preTrace": 0.0}, {"postTrace": 0.0}),
                 init_postsynaptic("ExpCurr", {"tau": 5.0}),
                 init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            if getattr(self.config, "kc_weight_gamma", False):
+                print(f"    [E081] KC→D1 가중치 감마분포 shape={_sh} "
+                      f"(FlyWire 롱테일 재현: 중앙값2/평균3.6/p99 32)")
             if not hasattr(self, "_rstdp_synapses"):
                 self._rstdp_synapses = []
             self._rstdp_synapses += [self.kc_to_d1_l, self.kc_to_d1_r]

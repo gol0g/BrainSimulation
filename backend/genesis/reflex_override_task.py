@@ -114,6 +114,7 @@ def evaluate(brain, obs, nh, trials=100):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--kc-gamma", action="store_true", help="E081/H015: KC→D1 가중치 감마분포")
     ap.add_argument("--episodes", type=int, default=60)
     ap.add_argument("--steps", type=int, default=300)
     ap.add_argument("--trials", type=int, default=100)
@@ -193,6 +194,8 @@ def main():
         cfg.food_approach_init_w = args.reflex_w
     if args.d1_lateral is not None:
         cfg.d1_lateral_inhibition = args.d1_lateral
+    if args.kc_gamma:
+        cfg.kc_weight_gamma = True
     if args.kc_rstdp:
         cfg.kc_rstdp = True
     if args.real_rstdp:

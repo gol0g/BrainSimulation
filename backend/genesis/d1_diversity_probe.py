@@ -14,6 +14,7 @@ from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 
 ap = argparse.ArgumentParser()
+ap.add_argument("--kc-gamma", action="store_true", help="E081/H015: KC→D1 가중치 감마분포")
 ap.add_argument("--kc-rstdp", action="store_true")
 ap.add_argument("--seed", type=int, default=0)
 a = ap.parse_args()
@@ -22,6 +23,7 @@ import random
 random.seed(a.seed); np.random.seed(a.seed)
 cfg = ForagerBrainConfig()
 if a.kc_rstdp: cfg.kc_rstdp = True
+if getattr(a, "kc_gamma", False): cfg.kc_weight_gamma = True
 b = ForagerBrain(cfg)
 env = ForagerGym(ForagerConfig()); obs = env.reset()
 for _ in range(20):
