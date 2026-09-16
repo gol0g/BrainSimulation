@@ -71,3 +71,7 @@ nul
 agony
 tmpclaude*
 *_CODE/
+
+# FlyWire 원본 데이터(100MB, MIT) — 재현은 아래로:
+#   git clone --depth 1 https://github.com/philshiu/Drosophila_brain_model.git data/flywire/shiu_model
+data/flywire/
