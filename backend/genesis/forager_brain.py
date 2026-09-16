@@ -1302,6 +1302,10 @@ class ForagerBrainConfig:
 
     dt: float = 1.0
     genn_seed: int = 12345   # C24: SPARSE 연결 재현용 시드. None이면 비결정(가중치 로드 손상 재발)
+    d1_lateral_inhibition: float = 0.0   # E080/H014: D1 좌↔우 측면억제(0=비활성).
+    # 전역 억제(d1_inhibition)는 전체를 균일하게 누를 뿐 승자를 못 가린다.
+    # FlyWire: MBON끼리 억제 50%로 경쟁 → 변별이 생긴다.
+    d1_lateral_sparsity: float = 0.15
     kc_rstdp: bool = False          # E079/H012: KC→D1을 진짜 R-STDP로(기본은 정적=학습불가)
     kc_real_rstdp_eta: float = 0.02
     kc_real_rstdp_w_max: float = 30.0
@@ -2981,6 +2985,19 @@ class ForagerBrain:
             self._create_static_synapse("d1r_to_d1inhib", self.d1_right, self.d1_inhib, 6.0, sparsity=0.10)
             self._create_static_synapse("d1inhib_to_d1l", self.d1_inhib, self.d1_left, _di, sparsity=0.10)
             self._create_static_synapse("d1inhib_to_d1r", self.d1_inhib, self.d1_right, _di, sparsity=0.10)
+
+        # E080/H014: **측면 억제**(lateral inhibition) — 기존 d1_inhib는 전역 억제라
+        # D1 전체를 균일하게 누를 뿐 **승자를 가리지 못한다**. FlyWire 실측에서 MBON→MBON은
+        # 억제 50%로 **출력끼리 경쟁**한다(MBON 96개가 KC 5,177개를 나눠 받음).
+        # 우리는 출력이 D1 좌/우 2개뿐이고 경쟁 구조가 없어, KC가 잘 구분해도 평균화된다(E079).
+        # 좌↔우 교차 억제를 넣어 강한 쪽이 약한 쪽을 누르게 한다.
+        if getattr(self.config, "d1_lateral_inhibition", 0.0) != 0.0:
+            _dl = float(self.config.d1_lateral_inhibition)
+            _dls = float(getattr(self.config, "d1_lateral_sparsity", 0.15))
+            self._create_static_synapse("d1l_lat_d1r", self.d1_left, self.d1_right, _dl, sparsity=_dls)
+            self._create_static_synapse("d1r_lat_d1l", self.d1_right, self.d1_left, _dl, sparsity=_dls)
+            print(f"    [E080] D1 측면억제: 좌↔우 {_dl} (sparsity {_dls}) "
+                  f"— FlyWire MBON→MBON 억제 50% 근거")
             print(f"    [C14] D1 E/I 균형: 억제뉴런 60 → {_di} (포화 해소)")
 
         # 2. Food_Eye → D2 MSN (Phase L4: Anti-Hebbian 학습 대상)

@@ -76,6 +76,9 @@ def main():
     ap.add_argument("--direct-inhib", type=float, default=None,
                     help="C56: direct E/I 억제. d1→direct를 낮추면 탈포화되나 D1 영향력이 0이 되므로"
                          "(보상 381→0), 가중치는 유지하고 억제로 포화를 푼다.")
+    ap.add_argument("--d1-lateral", type=float, default=None,
+                    help="E080: D1 좌우 측면억제")
+    ap.add_argument("--kc-rstdp", action="store_true")
     ap.add_argument("--d1-inhib", type=float, default=None,
                     help="C41: d1 E/I 억제강도(C14 배선). d1이 자극과 무관하게 ~667로 고정 발화(포화)해 "
                          "정보를 담지 못한다. 억제를 넣어 변별이 살아나는지 시험.")
@@ -99,6 +102,10 @@ def main():
         cfg.food_approach_init_w = args.reflex_w
     if args.direct_inhib is not None and args.direct_inhib != 0:
         cfg.direct_inhibition = args.direct_inhib
+    if args.d1_lateral is not None:
+        cfg.d1_lateral_inhibition = args.d1_lateral
+    if args.kc_rstdp:
+        cfg.kc_rstdp = True
     if args.d1_inhib is not None and args.d1_inhib != 0:
         # d1_inhibition != 0 이면 뇌가 자동으로 억제뉴런·배선을 만든다(forager_brain.py 1764).
         # 별도 활성 플래그는 없다 — `d1_inhib`은 뉴런집단 속성명이므로 건드리면 안 된다.
