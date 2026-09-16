@@ -1302,6 +1302,9 @@ class ForagerBrainConfig:
 
     dt: float = 1.0
     genn_seed: int = 12345   # C24: SPARSE 연결 재현용 시드. None이면 비결정(가중치 로드 손상 재발)
+    kc_rstdp: bool = False          # E079/H012: KC→D1을 진짜 R-STDP로(기본은 정적=학습불가)
+    kc_real_rstdp_eta: float = 0.02
+    kc_real_rstdp_w_max: float = 30.0
     real_rstdp: bool = False       # C36: food_to_d1을 시냅스별 자격흔적 R-STDP로 생성(기본은 정적)
     real_rstdp_eta: float = 0.02   # C36 학습률
     rstdp_crossed: bool = False    # C36 수리1: 학습가능 교차경로(food_eye_L→D1_R) 신설
@@ -9025,16 +9028,47 @@ class ForagerBrain:
         kc_d1_w = self.config.kc_to_d1_init_w
         kc_sp = self.config.kc_to_d1_sparsity
 
-        self.kc_to_d1_l = self.model.add_synapse_population(
-            "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
-            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
-        self.kc_to_d1_r = self.model.add_synapse_population(
-            "kc_r_to_d1_r", "SPARSE", self.kc_right, self.d1_right,
-            init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
-            init_postsynaptic("ExpCurr", {"tau": 5.0}),
-            init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+        # E079/H012: 주석은 "Output learning synapses"였으나 실제로는 StaticPulse(학습 불가)였다.
+        # FlyWire 실측: DAN이 KC에 **39,362 연결**로 직접 투사해 KC→MBON을 변조한다.
+        # 이것이 버섯체 학습이 일어나는 지점인데, 우리는 도파민을 D1에만 주고 KC엔 주지 않았다.
+        # → C30에서 kc_to_d1*이 전부 "변화 없음"이었던 이유.
+        if getattr(self.config, "kc_rstdp", False):
+            from rstdp_model import make_rstdp_model, DEFAULT_PARAMS
+            _kp = dict(DEFAULT_PARAMS)
+            _kp["w_max"] = float(getattr(self.config, "kc_real_rstdp_w_max", 30.0))
+            _kp["eta"] = float(getattr(self.config, "kc_real_rstdp_eta", DEFAULT_PARAMS["eta"]))
+            _kwu = make_rstdp_model()
+            self.kc_to_d1_l = self.model.add_synapse_population(
+                "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
+                init_weight_update(_kwu, _kp, {"g": init_var("Constant", {"constant": kc_d1_w}), "e": 0.0},
+                                   {"preTrace": 0.0}, {"postTrace": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            self.kc_to_d1_r = self.model.add_synapse_population(
+                "kc_r_to_d1_r", "SPARSE", self.kc_right, self.d1_right,
+                init_weight_update(_kwu, _kp, {"g": init_var("Constant", {"constant": kc_d1_w}), "e": 0.0},
+                                   {"preTrace": 0.0}, {"postTrace": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            if not hasattr(self, "_rstdp_synapses"):
+                self._rstdp_synapses = []
+            self._rstdp_synapses += [self.kc_to_d1_l, self.kc_to_d1_r]
+            self.kc_to_d1_l.set_wu_param_dynamic("dopamine")
+            self.kc_to_d1_r.set_wu_param_dynamic("dopamine")
+            print(f"    KC→D1 [E079 진짜 R-STDP]: init_w={kc_d1_w}, w_max={_kp['w_max']}, "
+                  f"eta={_kp['eta']} (DAN→KC 실측 39,362연결 근거)")
+        else:
+            self.kc_to_d1_l = self.model.add_synapse_population(
+                "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            self.kc_to_d1_r = self.model.add_synapse_population(
+                "kc_r_to_d1_r", "SPARSE", self.kc_right, self.d1_right,
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": kc_sp}))
+            print(f"    KC→D1 [정적 — 학습 불가]: init_w={kc_d1_w} (진짜 학습은 --kc-rstdp)")
         self.kc_to_d2_l = self.model.add_synapse_population(
             "kc_l_to_d2_l", "SPARSE", self.kc_left, self.d2_left,
             init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": kc_d1_w})}),
