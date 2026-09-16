@@ -156,6 +156,16 @@ def main():
                     help="E080/H014: D1 좌↔우 측면억제. 전역억제와 달리 승자를 가려 변별을 만든다.")
     ap.add_argument("--kc-rstdp", action="store_true",
                     help="E079/H013: KC→D1을 시냅스별 자격흔적 R-STDP로. 기본은 집단 스칼라 갱신이라 신용할당이 없다.")
+    ap.add_argument("--kc-d1-w", type=float, default=None,
+                    help="E082/H004: KC→D1 초기 가중치(기본 0.5). K19 — 기본값에서 KC가 D1 발화의 "
+                         "0.6%%만 움직인다. 학습 경로의 출력 영향력을 키우는 손잡이.")
+    ap.add_argument("--dump-kc-weights", action="store_true",
+                    help="E082 조작검증: 학습 후 kc_to_d1 가중치 통계를 출력. "
+                         "--kc-d1-w를 w_max보다 크게 주면 클램프로 깎이는지 확인하는 용도.")
+    ap.add_argument("--kc-w-max", type=float, default=None,
+                    help="E082: KC R-STDP 가중치 상한(기본 30). --kc-d1-w를 30보다 크게 주면 "
+                         "학습이 도로 상한까지 깎아내리므로 함께 올려야 한다. "
+                         "두 조건에서 **같은 값**을 써야 초기 영향력만 비교된다.")
     ap.add_argument("--n-food", type=int, default=None,
                     help="E077: 먹이 개수(기본 45). env6이 n_good=42로 최다였다.")
     ap.add_argument("--food-ratio", type=float, default=None,
@@ -198,6 +208,10 @@ def main():
         cfg.kc_weight_gamma = True
     if args.kc_rstdp:
         cfg.kc_rstdp = True
+    if args.kc_d1_w is not None:
+        cfg.kc_to_d1_init_w = args.kc_d1_w
+    if args.kc_w_max is not None:
+        cfg.kc_real_rstdp_w_max = args.kc_w_max
     if args.real_rstdp:
         cfg.real_rstdp = True
         cfg.real_rstdp_eta = args.rstdp_eta
@@ -339,6 +353,25 @@ def main():
           % (post - pre, dmod,
              "학습이 조향을 역전 방향으로 이동" if dmod < -0.02
              else ("학습이 반사 방향으로 강화" if dmod > 0.02 else "변화 없음")))
+
+    if args.dump_kc_weights:
+        # E082: 상한(kc_real_rstdp_w_max)이 초기값보다 낮으면 학습이 도로 깎아내린다.
+        import numpy as _np
+        for _nm in ("kc_to_d1_l", "kc_to_d1_r"):
+            _syn = getattr(brain, _nm, None)
+            if _syn is None:
+                print("  kc_to_d1 %s: 없음" % _nm); continue
+            try:
+                _syn.vars["g"].pull_from_device()
+                _v = _syn.vars["g"].values
+                if _v is None or (hasattr(_v, "size") and _v.size == 0):
+                    _v = _syn.vars["g"].view
+                _w = _np.asarray(_v, dtype=_np.float64).ravel()
+                _w = _w[_np.isfinite(_w)]
+                print("  kc_to_d1 %s: n=%d 평균 %.2f std %.2f 중앙 %.2f 최소 %.2f 최대 %.2f"
+                      % (_nm, _w.size, _w.mean(), _w.std(), _np.median(_w), _w.min(), _w.max()))
+            except Exception as _e:
+                print("  kc_to_d1 %s: 측정실패 %s: %s" % (_nm, type(_e).__name__, _e))
 
 
 if __name__ == "__main__":
