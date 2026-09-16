@@ -12,8 +12,15 @@ from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 
 import argparse as _ap2
-_p2 = _ap2.ArgumentParser(); _p2.add_argument("--kc-rstdp", action="store_true"); _a2, _ = _p2.parse_known_args()
+_p2 = _ap2.ArgumentParser(); _p2.add_argument("--kc-rstdp", action="store_true")
+# INV-A4/A5는 **기본값으로 박는다**(규약 P15). 설정 기본값 0.0은 D1 포화 상태이고,
+# 이 프로브가 그 상태로 E079 (a)를 측정했다 — 2026-09-16 적발.
+_p2.add_argument("--d1-inhib", type=float, default=-400.0)
+_p2.add_argument("--direct-inhib", type=float, default=-100.0)
+_a2, _ = _p2.parse_known_args()
 cfg = ForagerBrainConfig()
+cfg.d1_inhibition = _a2.d1_inhib
+cfg.direct_inhibition = _a2.direct_inhib
 if _a2.kc_rstdp:
     cfg.kc_rstdp = True
     print("[E079] kc_rstdp=True (시냅스별 자격흔적)")
