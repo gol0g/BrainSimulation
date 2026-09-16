@@ -151,6 +151,8 @@ def main():
                     help="E070/H004: 학습경로 대역폭(food_eye→D1 sparsity, 기본 0.08).")
     ap.add_argument("--seed", type=int, default=0,
                     help="C46: 환경·워밍업 시드. 조건 비교는 같은 시드로 짝지어라.")
+    ap.add_argument("--kc-rstdp", action="store_true",
+                    help="E079/H013: KC→D1을 시냅스별 자격흔적 R-STDP로. 기본은 집단 스칼라 갱신이라 신용할당이 없다.")
     ap.add_argument("--n-food", type=int, default=None,
                     help="E077: 먹이 개수(기본 45). env6이 n_good=42로 최다였다.")
     ap.add_argument("--food-ratio", type=float, default=None,
@@ -187,6 +189,8 @@ def main():
     cfg.genn_seed = 12345 + _bseed   # GeNN 연결 시드도 뇌 시드에 종속
     if args.reflex_w is not None:
         cfg.food_approach_init_w = args.reflex_w
+    if args.kc_rstdp:
+        cfg.kc_rstdp = True
     if args.real_rstdp:
         cfg.real_rstdp = True
         cfg.real_rstdp_eta = args.rstdp_eta

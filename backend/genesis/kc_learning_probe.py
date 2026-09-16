@@ -11,7 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 
+import argparse as _ap2
+_p2 = _ap2.ArgumentParser(); _p2.add_argument("--kc-rstdp", action="store_true"); _a2, _ = _p2.parse_known_args()
 cfg = ForagerBrainConfig()
+if _a2.kc_rstdp:
+    cfg.kc_rstdp = True
+    print("[E079] kc_rstdp=True (시냅스별 자격흔적)")
 b = ForagerBrain(cfg)
 env = ForagerGym(ForagerConfig())
 obs = env.reset()
