@@ -9067,7 +9067,7 @@ class ForagerBrain:
             _kcw_init = init_var("Constant", {"constant": kc_d1_w})
             if getattr(self.config, "kc_weight_gamma", False):
                 _sh = float(getattr(self.config, "kc_gamma_shape", 0.5))
-                _kcw_init = init_var("Gamma", {"shape": _sh, "scale": kc_d1_w / _sh})
+                _kcw_init = init_var("Gamma", {"a": _sh, "b": kc_d1_w / _sh})  # GeNN 파라미터명은 a(shape)/b(scale)
             self.kc_to_d1_l = self.model.add_synapse_population(
                 "kc_l_to_d1_l", "SPARSE", self.kc_left, self.d1_left,
                 init_weight_update(_kwu, _kp, {"g": _kcw_init, "e": 0.0},
