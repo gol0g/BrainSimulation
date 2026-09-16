@@ -151,6 +151,10 @@ def main():
                     help="E070/H004: 학습경로 대역폭(food_eye→D1 sparsity, 기본 0.08).")
     ap.add_argument("--seed", type=int, default=0,
                     help="C46: 환경·워밍업 시드. 조건 비교는 같은 시드로 짝지어라.")
+    ap.add_argument("--n-food", type=int, default=None,
+                    help="E077: 먹이 개수(기본 45). env6이 n_good=42로 최다였다.")
+    ap.add_argument("--food-ratio", type=float, default=None,
+                    help="E077: 좋은 먹이 비율. env6이 0.750으로 최고였다.")
     ap.add_argument("--symmetric-env", action="store_true",
                     help="H008/E076: 먹이를 좌우 균등 배치해 비대칭만 제거(다른 특성 보존).")
     ap.add_argument("--brain-seed", type=int, default=None,
@@ -210,6 +214,10 @@ def main():
     random.seed(_eseed)
     np.random.seed(_eseed)
     _ecfg = ForagerConfig()
+    if args.n_food is not None:
+        _ecfg.n_food = args.n_food
+    if args.food_ratio is not None:
+        _ecfg.food_type_ratio = args.food_ratio
     if args.symmetric_env:
         _ecfg.force_lr_symmetry = True
     env = ForagerGym(_ecfg)

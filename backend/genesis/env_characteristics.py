@@ -19,6 +19,8 @@ from forager_gym import ForagerGym, ForagerConfig
 ap = argparse.ArgumentParser()
 ap.add_argument("--env-seed", type=int, required=True)
 ap.add_argument("--symmetric", action="store_true", help="H008/E076: 좌우 대칭 강제")
+ap.add_argument("--n-food", type=int, default=None, help="E077: 먹이 개수")
+ap.add_argument("--food-ratio", type=float, default=None, help="E077: 좋은 먹이 비율")
 a = ap.parse_args()
 
 random.seed(a.env_seed)
@@ -26,6 +28,10 @@ np.random.seed(a.env_seed)
 cfg = ForagerConfig()
 if a.symmetric:
     cfg.force_lr_symmetry = True
+if a.n_food is not None:
+    cfg.n_food = a.n_food
+if a.food_ratio is not None:
+    cfg.food_type_ratio = a.food_ratio
 env = ForagerGym(cfg)
 env.reset()
 
