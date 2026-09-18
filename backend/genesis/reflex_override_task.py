@@ -162,6 +162,10 @@ def main():
     ap.add_argument("--kc-d1-w", type=float, default=None,
                     help="E082/H004: KC→D1 초기 가중치(기본 0.5). K19 — 기본값에서 KC가 D1 발화의 "
                          "0.6%%만 움직인다. 학습 경로의 출력 영향력을 키우는 손잡이.")
+    ap.add_argument("--transplant-eval", action="store_true",
+                    help="INV-B5: 학습된 가중치를 **같은 시드로 새로 만든 뇌**에 이식해 평가한다. "
+                         "직접 평가는 뇌의 동역학 이력에 의존해 가중치가 동일해도 0.028~0.045 흔들린다"
+                         "(K22). 이식하면 이력이 모든 조건에서 같아져 그 폭이 0.000000이 된다.")
     ap.add_argument("--dump-kc-weights", action="store_true",
                     help="E082 조작검증: 학습 후 kc_to_d1 가중치 통계를 출력. "
                          "--kc-d1-w를 w_max보다 크게 주면 클램프로 깎이는지 확인하는 용도.")
@@ -349,7 +353,26 @@ def main():
             print("[D1가중치] %-14s |Δ|평균=%.5f 변화율=%.1f%% | 평균 %.3f→%.3f | std %.4f→%.4f"
                   % (nm, d.mean(), (d > 1e-9).mean() * 100, b_.mean(), a_.mean(), b_.std(), a_.std()))
 
-    post, off1, mod1 = evaluate(brain, obs, nh, args.trials)
+    if args.transplant_eval:
+        # INV-B5. 사후 측정만 이식 경로로 간다. 사전은 훈련 전 뇌라 이력이 이미 동일하다.
+        # 어댑터: transplant_eval.build()가 기대하는 필드명으로 맞춘다. 이름이 어긋나면
+        # **조용히 다른 뇌를 만들어** 비교가 무의미해지므로 명시적으로 옮긴다.
+        import argparse as _ap3
+        import transplant_eval as TE
+        _ta = _ap3.Namespace(
+            seed=_bseed,                                   # 훈련 뇌와 같은 시드 (genn_seed도 여기 종속)
+            d1_inhib=cfg.d1_inhibition,
+            direct_inhib=cfg.direct_inhibition,
+            kc_w_max=cfg.kc_real_rstdp_w_max,
+            kc_rstdp=bool(getattr(cfg, "kc_rstdp", False)),
+            kc_d1_w=cfg.kc_to_d1_init_w,
+        )
+        _w = TE.pull(brain)
+        _b2, _env2, _obs2 = TE.build(_ta)
+        TE.push(_b2, _w)                                   # 크기 불일치면 예외 — 조용히 넘어가지 않는다
+        post, off1, mod1 = evaluate(_b2, _obs2, nh, args.trials)
+    else:
+        post, off1, mod1 = evaluate(brain, obs, nh, args.trials)
     print("[사후] 오프셋 %+.3f | 정답률 %.1f%% | **변조폭 %+.4f**" % (off1, post, mod1))
     dmod = mod1 - mod0
     print("=> 정답률 %+.1f%%p | **변조폭 변화 %+.4f** | 판정: %s"
