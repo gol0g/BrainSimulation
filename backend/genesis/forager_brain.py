@@ -12239,6 +12239,16 @@ class ForagerBrain:
             self.dopamine_neurons.vars["I_input"].push_to_device()
             self.dopamine_level = 0.0
 
+        # ★2026-09-18 수정 (외부 검토 지적 #1). 위 줄은 **파이썬 변수만** 0으로 둔다.
+        # 실제 R-STDP 시냅스의 `dopamine` 동적 파라미터는 장치에 남아 있고,
+        # reflex 과제는 decay_dopamine()을 한 번도 호출하지 않으므로(12489행이 유일한 호출처,
+        # run_training 전용) **마지막 보상값이 평가 내내 남아 학습이 계속 돈다.**
+        # 실측: 평가 구간에서 kc_to_d1_l 시냅스의 99.9%가 변했고 평균이 3.6975→3.8421로 표류했다.
+        # 그러면 evaluate()의 전제("측정 직전 상태를 맞추면 남는 차이는 가중치뿐", C64)가 깨진다.
+        # 재는 대상이 '훈련이 끝난 뇌'가 아니게 된다.
+        # 양성대조: 아래 한 줄을 넣으면 평가 전 구간에서 |Δ|=0.00000, 변한 시냅스 0.0%.
+        self._push_dopamine_to_rstdp()
+
 
 def run_training(episodes: int = 20, render_mode: str = "none",
                 log_level: str = "normal", debug: bool = False,
