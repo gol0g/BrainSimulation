@@ -50,6 +50,26 @@ def make_cfg(a):
     return cfg
 
 
+def build_from_cfg(cfg, seed):
+    """**훈련에 쓴 cfg 객체 그대로** 이식 대상 뇌를 만든다.
+
+    2026-09-19 사고: 어댑터가 6개 필드만 새 `ForagerBrainConfig`에 옮겨 담았다.
+    그러면 `genn_seed`·`rstdp_crossed`·`food_approach_init_w` 등이 기본값으로 돌아가
+    **구조가 다른 뇌**가 만들어진다. 이식은 의미를 잃고, GeNN은 CODE를 재빌드하다
+    `cuda error 1: invalid argument`로 죽는다(증상이 원인을 가렸다).
+
+    같은 cfg를 쓰면 (i) 구조가 동일하고 (ii) 재빌드가 없어 충돌도 없다.
+    """
+    random.seed(seed); np.random.seed(seed)
+    brain = ForagerBrain(cfg)
+    env = ForagerGym(ForagerConfig()); obs = env.reset()
+    for _ in range(20):
+        act, _ = brain.process(obs); obs, _, d, _ = env.step((act,))
+        if d:
+            obs = env.reset()
+    return brain, env, obs
+
+
 def build(a):
     """시드를 고정해 뇌를 만들고 **고정 길이** 워밍업만 준다. 모든 조건이 같은 이력을 갖는다."""
     random.seed(a.seed); np.random.seed(a.seed)

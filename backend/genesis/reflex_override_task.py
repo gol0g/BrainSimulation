@@ -355,21 +355,11 @@ def main():
 
     if args.transplant_eval:
         # INV-B5. 사후 측정만 이식 경로로 간다. 사전은 훈련 전 뇌라 이력이 이미 동일하다.
-        # 어댑터: transplant_eval.build()가 기대하는 필드명으로 맞춘다. 이름이 어긋나면
-        # **조용히 다른 뇌를 만들어** 비교가 무의미해지므로 명시적으로 옮긴다.
-        import argparse as _ap3
+        # **훈련에 쓴 cfg 그대로** 새 뇌를 만든다 — 필드를 골라 옮기면 구조가 달라진다(2026-09-19 사고).
         import transplant_eval as TE
-        _ta = _ap3.Namespace(
-            seed=_bseed,                                   # 훈련 뇌와 같은 시드 (genn_seed도 여기 종속)
-            d1_inhib=cfg.d1_inhibition,
-            direct_inhib=cfg.direct_inhibition,
-            kc_w_max=cfg.kc_real_rstdp_w_max,
-            kc_rstdp=bool(getattr(cfg, "kc_rstdp", False)),
-            kc_d1_w=cfg.kc_to_d1_init_w,
-        )
         _w = TE.pull(brain)
-        _b2, _env2, _obs2 = TE.build(_ta)
-        TE.push(_b2, _w)                                   # 크기 불일치면 예외 — 조용히 넘어가지 않는다
+        _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed)
+        TE.push(_b2, _w)          # 크기 불일치면 예외 — 조용히 넘어가지 않는다
         post, off1, mod1 = evaluate(_b2, _obs2, nh, args.trials)
     else:
         post, off1, mod1 = evaluate(brain, obs, nh, args.trials)

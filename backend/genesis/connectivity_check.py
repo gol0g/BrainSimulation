@@ -8,7 +8,7 @@
 `transplant_eval.push()` 는 **크기 불일치만** 잡는다. 크기가 같은데 연결이 다르면
 이식이 조용히 엉뚱한 시냅스에 꽂힌다. 그래서 연결 인덱스 자체를 비교한다.
 """
-import sys, os, argparse, random, hashlib
+import sys, os, argparse, random, hashlib, io
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from forager_brain import ForagerBrain, ForagerBrainConfig
@@ -53,23 +53,17 @@ def fingerprint(kc_rstdp, kc_d1_w):
     return out
 
 
-CELLS = [("A w0.5 KC끔", False, 0.5), ("B w0.5 KC켬", True, 0.5),
-         ("C w150 KC끔", False, 150.0), ("D w150 KC켬", True, 150.0)]
-res = {}
-for label, kr, kw in CELLS:
-    res[label] = fingerprint(kr, kw)
-    print("[완료] %s" % label)
-
-print("\n%-22s %-18s %-18s %-18s %-18s" % ("시냅스", *[c[0] for c in CELLS]))
-print("-" * 98)
-allsame = True
-for nm in SYNS:
-    vals = [res[c[0]][nm] for c in CELLS]
-    same = len(set(v[0] for v in vals)) == 1
-    allsame = allsame and same
-    print("%-22s %-18s %-18s %-18s %-18s  %s"
-          % (nm, *[("%s/%d" % (v[0][:8], v[1])) for v in vals],
-             "동일" if same else "**다름**"))
-print("-" * 98)
-print("판정: %s" % ("네 칸의 연결 구조가 동일하다 — 이식·비교 가능" if allsame
-                 else "**연결이 다르다. 칸 간 차이에 배선 차이가 섞인다 — 설계를 고쳐야 한다**"))
+ap2 = None
+# 한 프로세스에서 시냅스 모델이 다른 뇌를 두 번 만들면 GeNN CODE가 충돌한다(실측: A칸 뒤 중단).
+# 그래서 **칸 하나만** 만들고 지문을 파일로 남긴다. 비교는 셸에서 한다.
+import json
+CELLS = {"A": (False, 0.5), "B": (True, 0.5), "C": (False, 150.0), "D": (True, 150.0)}
+cell = os.environ.get("CELL", "A")
+kr, kw = CELLS[cell]
+fp = fingerprint(kr, kw)
+out = os.environ.get("OUT", "/root/freeze_run/conn_%s.json" % cell)
+io.open(out, "w", encoding="utf-8").write(json.dumps({k: list(v) for k, v in fp.items()},
+                                                     ensure_ascii=False, indent=1))
+print("[%s] 지문 기록: %s" % (cell, out))
+for nm, v in fp.items():
+    print("   %-22s %s / %s" % (nm, str(v[0])[:16], v[1]))
