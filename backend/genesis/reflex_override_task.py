@@ -77,7 +77,7 @@ def measure_offset(brain, obs, nh, n=20):
     return float(np.mean(vals))
 
 
-def evaluate(brain, obs, nh, trials=100):
+def evaluate(brain, obs, nh, trials=100, stab=30):
     """정답률과 **변조폭**을 함께 반환.
 
     C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
@@ -93,7 +93,10 @@ def evaluate(brain, obs, nh, trials=100):
     # 뇌의 동역학 상태(적응·잔류전류·도파민)가 사전과 달랐던 것 = **서로 다른 상태의 뇌를 비교**.
     # 측정 직전에 상태를 초기화하고 동일한 안정화를 거치면, 남는 차이는 **가중치뿐**이다.
     brain.reset()
-    for _ in range(30):
+    # 2026-09-18: 안정화 길이를 인자로 뺐다. 30스텝은 **부족하다** — 같은 뇌를 연속 평가하면
+    # 1회차만 튀고(변조폭 0.5609) 2회차부터 0.5524~0.5542로 가라앉는다. 사전 측정이 그 1회차라
+    # 모든 조건의 '변화'에 음수 편향이 들어간다(pilot에서 무학습 칸도 -0.007).
+    for _ in range(stab):
         brain.process(obs)
 
     off = measure_offset(brain, obs, nh)
