@@ -33,9 +33,39 @@ from forager_brain import ForagerBrain, ForagerBrainConfig
 from forager_gym import ForagerGym, ForagerConfig
 import reflex_override_task as T   # 평가 함수를 공유한다 (복사하지 않는다)
 
-# 이식 대상 = 학습으로 변할 수 있는 시냅스. 여기 없는 경로가 학습하면 이식이 불완전해진다.
-LEARNED = ("kc_to_d1_l", "kc_to_d1_r", "food_to_d1_l", "food_to_d1_r",
-           "good_food_to_motor_l", "good_food_to_motor_r")
+# 이식 대상은 **뇌에서 유도한다**. 손으로 목록을 관리하면 반드시 빠진다.
+#
+# 2026-09-19 사고: 하드코딩 목록 6종이 `food_to_d1_cross_lr/rl`(--crossed 로 생기는 R-STDP 경로)을
+# **빠뜨렸고**, 대신 학습하지 않는 `good_food_to_motor_l/r`(StaticPulse)를 넣고 있었다.
+# 그 결과 E084는 "학습된 뇌"가 아니라 **선택된 6종만 옮긴 뇌**를 평가했다.
+# E084 사전등록 6번에 "목록 완전성 미검증"이라고 **직접 적어놓고** 확인하지 않은 채 20런을 돌렸다.
+#
+# `_rstdp_synapses`는 뇌가 도파민 갱신 대상으로 등록한 진짜 학습 시냅스 목록이다
+# (forager_brain.py: food_to_d1 L/R + cross_lr/rl + kc_to_d1 L/R).
+FALLBACK = ("kc_to_d1_l", "kc_to_d1_r", "food_to_d1_l", "food_to_d1_r",
+            "food_to_d1_cross_lr", "food_to_d1_cross_rl")
+
+
+def learned_names(brain):
+    """이 뇌에서 실제로 학습하는 시냅스의 **속성 이름**을 찾아낸다."""
+    syns = getattr(brain, "_rstdp_synapses", None)
+    if not syns:
+        return tuple(n for n in FALLBACK if getattr(brain, n, None) is not None)
+    ids = {id(s) for s in syns}
+    names = []
+    for nm in dir(brain):
+        if nm.startswith("__"):
+            continue
+        try:
+            v = getattr(brain, nm)
+        except Exception:
+            continue
+        if id(v) in ids and nm not in names:
+            names.append(nm)
+    missing = len(ids) - len(names)
+    if missing:
+        raise RuntimeError("학습 시냅스 %d개의 이름을 찾지 못했다 — 이식이 불완전해진다" % missing)
+    return tuple(sorted(names))
 
 
 def make_cfg(a):
@@ -50,7 +80,7 @@ def make_cfg(a):
     return cfg
 
 
-def build_from_cfg(cfg, seed):
+def build_from_cfg(cfg, seed, env_seed=None, env_cfg=None):
     """**훈련에 쓴 cfg 객체 그대로** 이식 대상 뇌를 만든다.
 
     2026-09-19 사고: 어댑터가 6개 필드만 새 `ForagerBrainConfig`에 옮겨 담았다.
@@ -59,10 +89,20 @@ def build_from_cfg(cfg, seed):
     `cuda error 1: invalid argument`로 죽는다(증상이 원인을 가렸다).
 
     같은 cfg를 쓰면 (i) 구조가 동일하고 (ii) 재빌드가 없어 충돌도 없다.
+
+    `env_seed`/`env_cfg`도 **훈련에 쓴 것을 그대로** 넘겨야 한다. 안 넘기면 사전·사후가
+    서로 다른 환경에서 측정된다(2026-09-19 사고).
     """
+    if env_seed is None:
+        env_seed = seed
     random.seed(seed); np.random.seed(seed)
     brain = ForagerBrain(cfg)
-    env = ForagerGym(ForagerConfig()); obs = env.reset()
+    # 2026-09-19 사고: 여기서 환경을 **뇌 시드**로 만들고 기본 ForagerConfig를 썼다.
+    # 훈련 경로는 환경을 **환경 시드**(--env-seed)와 자기 _ecfg 로 만든다.
+    # brain_seed != env_seed 인 뇌(b1~b4)에서 사전·사후가 **다른 환경**을 평가했다는 뜻이다.
+    # 먹이 배치·초기 방향이 달라지고, stim()은 음식 채널만 덮어쓰므로 그 차이가 지워지지 않는다.
+    random.seed(env_seed); np.random.seed(env_seed)
+    env = ForagerGym(env_cfg if env_cfg is not None else ForagerConfig()); obs = env.reset()
     for _ in range(20):
         act, _ = brain.process(obs); obs, _, d, _ = env.step((act,))
         if d:
@@ -82,37 +122,60 @@ def build(a):
     return brain, env, obs
 
 
+def _read_g(syn, nm):
+    """가중치 배열을 읽는다.
+
+    2026-09-19: 예전 코드는 `values`가 비면 `view`로 폴백했다. SPARSE 시냅스에서 `view`는
+    예외를 던진다(`Only variables associated with DENSE or KERNEL ... use 'values'`).
+    하드코딩 6종에서는 우연히 안 걸렸고, 이식 목록을 뇌에서 유도해 교차 경로(SPARSE)가
+    들어오자 즉시 터졌다. **폴백을 쓰지 않는다** — 읽히지 않으면 조용히 넘기지 말고 멈춘다.
+    """
+    # SPARSE 시냅스는 **연결을 먼저 장치에서 가져와야** `values`가 채워진다.
+    # 2026-09-19: 이것을 빠뜨려 `food_to_d1_cross_lr 가중치가 비었다`로 다섯 시드 전부 실패했다.
+    # (`pathway_transfer_probe.py`는 처음부터 이 순서로 하고 있었다 — 나만 빠뜨린 것이다.)
+    try:
+        syn.pull_connectivity_from_device()
+    except Exception:
+        pass   # DENSE 는 이 호출이 없다
+    syn.vars["g"].pull_from_device()
+    v = syn.vars["g"].values
+    if v is None:
+        raise RuntimeError("%s 가중치를 읽지 못했다" % nm)
+    a = np.asarray(v, dtype=np.float64).ravel()
+    if a.size == 0:
+        raise RuntimeError("%s 가중치가 비었다 — 이식이 무의미해진다" % nm)
+    return a
+
+
 def pull(brain):
-    out = {}
-    for nm in LEARNED:
-        s = getattr(brain, nm, None)
-        if s is None:
-            continue
-        s.vars["g"].pull_from_device()
-        v = s.vars["g"].values
-        if v is None or (hasattr(v, "size") and v.size == 0):
-            v = s.vars["g"].view
-        out[nm] = np.array(v, dtype=np.float64).ravel().copy()
-    return out
+    return {nm: _read_g(getattr(brain, nm), nm).copy() for nm in learned_names(brain)}
 
 
 def push(brain, w):
-    """이식. 길이가 다르면 **연결 구조가 다른 뇌**라는 뜻이므로 중단한다(조용히 자르지 않는다)."""
+    """이식. 대상이 없거나 길이가 다르면 **중단한다**(조용히 자르지 않는다)."""
     for nm, arr in w.items():
         s = getattr(brain, nm, None)
         if s is None:
-            raise RuntimeError("이식 대상 없음: %s" % nm)
-        s.vars["g"].pull_from_device()
-        v = s.vars["g"].values
-        if v is None or (hasattr(v, "size") and v.size == 0):
-            v = s.vars["g"].view
-        cur = np.array(v, dtype=np.float64)
+            raise RuntimeError("이식 대상 없음: %s — 구조가 다른 뇌다" % nm)
+        cur = _read_g(s, nm)
         if cur.size != arr.size:
-            raise RuntimeError("%s 크기 불일치 %d vs %d — 같은 시드로 만든 뇌가 아니다"
+            raise RuntimeError("%s 크기 불일치 %d vs %d — 같은 구조의 뇌가 아니다"
                                % (nm, cur.size, arr.size))
         cur[:] = arr
         s.vars["g"].values = cur
         s.vars["g"].push_to_device()
+
+
+def verify(src, dst, w):
+    """이식 후 목적지 가중치가 원본과 **정확히** 같은지 확인한다. 이식이 조용히 실패하지 않게."""
+    bad = []
+    for nm, arr in w.items():
+        got = _read_g(getattr(dst, nm), nm)
+        if not np.array_equal(got, arr):
+            bad.append("%s(최대차 %.3g)" % (nm, float(np.abs(got - arr).max())))
+    if bad:
+        raise RuntimeError("이식 검증 실패: %s" % ", ".join(bad))
+    return sorted(w.keys())
 
 
 def main():

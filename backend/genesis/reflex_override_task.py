@@ -358,8 +358,10 @@ def main():
         # **훈련에 쓴 cfg 그대로** 새 뇌를 만든다 — 필드를 골라 옮기면 구조가 달라진다(2026-09-19 사고).
         import transplant_eval as TE
         _w = TE.pull(brain)
-        _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed)
+        _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
         TE.push(_b2, _w)          # 크기 불일치면 예외 — 조용히 넘어가지 않는다
+        _names = TE.verify(brain, _b2, _w)   # 이식이 실제로 반영됐는지 확인
+        print('[이식] %d개 경로: %s' % (len(_names), ', '.join(_names)))
         post, off1, mod1 = evaluate(_b2, _obs2, nh, args.trials)
     else:
         post, off1, mod1 = evaluate(brain, obs, nh, args.trials)
@@ -371,24 +373,23 @@ def main():
              else ("학습이 반사 방향으로 강화" if dmod > 0.02 else "변화 없음")))
 
     if args.dump_kc_weights:
-        # E082: 상한(kc_real_rstdp_w_max)이 초기값보다 낮으면 학습이 도로 깎아내린다.
+        # 2026-09-19: 예전엔 kc_to_d1만 찍었다. 그런데 조건에 따라 **학습하는 경로가 다르다**
+        # (KC 학습을 끄면 food_to_d1 계열이 학습한다). 조작검증이 "가소성이 멈췄는가"를
+        # 확인하려면 **이식 대상 전체**를 봐야 한다. 목록은 뇌에서 유도한다.
         import numpy as _np
-        for _nm in ("kc_to_d1_l", "kc_to_d1_r"):
-            _syn = getattr(brain, _nm, None)
-            if _syn is None:
-                print("  kc_to_d1 %s: 없음" % _nm); continue
+        import transplant_eval as _TE
+        try:
+            _names = _TE.learned_names(brain)
+        except Exception as _e:
+            _names = ()
+            print("  [경고] 학습 경로 목록 확인 실패: %s" % _e)
+        for _nm in _names:
             try:
-                _syn.vars["g"].pull_from_device()
-                _v = _syn.vars["g"].values
-                if _v is None or (hasattr(_v, "size") and _v.size == 0):
-                    _v = _syn.vars["g"].view
-                _w = _np.asarray(_v, dtype=_np.float64).ravel()
-                _w = _w[_np.isfinite(_w)]
-                print("  kc_to_d1 %s: n=%d 평균 %.2f std %.2f 중앙 %.2f 최소 %.2f 최대 %.2f"
+                _w = _TE._read_g(getattr(brain, _nm), _nm)
+                print("  가중치 %-22s n=%d 평균 %.4f std %.4f 중앙 %.4f 최소 %.4f 최대 %.4f"
                       % (_nm, _w.size, _w.mean(), _w.std(), _np.median(_w), _w.min(), _w.max()))
             except Exception as _e:
-                print("  kc_to_d1 %s: 측정실패 %s: %s" % (_nm, type(_e).__name__, _e))
-
+                print("  가중치 %-22s 측정실패 %s: %s" % (_nm, type(_e).__name__, _e))
 
 if __name__ == "__main__":
     main()

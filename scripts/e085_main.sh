@@ -17,13 +17,14 @@ source /root/pygenn_wsl/bin/activate
 cd /root/rstdp_run
 cp $R/backend/genesis/*.py . 2>/dev/null
 
-BASE="--d1-inhib -400 --direct-inhib -100 --epsilon 0.6 --bias 25 --bias-at-d1 --reflex-w 3 --episodes 60 --kc-w-max 750 --transplant-eval"
+# 네 칸 공통으로 --real-rstdp --crossed 를 켜 **배선을 동일하게** 둔다(검토 지적 #3).
+BASE="--d1-inhib -400 --direct-inhib -100 --epsilon 0.6 --bias 25 --bias-at-d1 --reflex-w 3 --episodes 60 --kc-w-max 750 --transplant-eval --real-rstdp --crossed"
 
 done_already () { grep -qF "$1: =>" "$LOG" 2>/dev/null; }
 run_one () {  # tag  가소성(off/other)  brain  kcw
   local tag="$1"
   if done_already "$tag"; then echo "  $tag: [건너뜀]"; return 0; fi
-  local PL="--no-reward"; [ "$2" = "other" ] && PL="--real-rstdp --crossed"
+  local PL="--no-reward"; [ "$2" = "other" ] && PL=""
   local f="$RAW/$(echo "$tag" | tr ' ' '_').log"
   printf "  %s: " "$tag"
   timeout 3600 python reflex_override_task.py $BASE $PL --kc-d1-w "$4" \
