@@ -213,7 +213,12 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
     nl = len(pops["out_l"].spike_recording_data[0][1])
     nr = len(pops["out_r"].spike_recording_data[0][1])
 
-    if rng.random() < args.epsilon:
+    if args.mode == "supervised":
+        # 정답만 강제하면 **항상 보상** → 도파민이 계속 +1 → 전 시냅스가 w_max 로 포화한다.
+        # 2026-09-25 실측: 가중치 0.5→12~20, 여러 곳이 19.999=w_max. s4는 A·B 둘 다 out_L 쪽 +16.
+        # rstdp_model.py:60 에 같은 실패가 기록돼 있다. **정답/오답을 반반 강제**해 양쪽 부호를 넣는다.
+        act = RULE[stim] if rng.random() < args.sup_correct else ("R" if RULE[stim] == "L" else "L")
+    elif rng.random() < args.epsilon:
         act = "L" if rng.random() < 0.5 else "R"
     elif nl != nr:
         act = "L" if nl > nr else "R"
@@ -285,6 +290,9 @@ def main():
                     help="고른 행동을 해당 출력 집단에 주입해 자격흔적에 남긴다. 0이면 끔 — "
                          "끄면 탐색 행동이 흔적에 안 남아 학습이 반대로 간다(실측 87%%→16%%).")
     ap.add_argument("--act-steps", type=int, default=15)
+    ap.add_argument("--sup-correct", type=float, default=0.5,
+                    help="supervised 모드에서 **정답 행동을 강제할 확률**. 0.5면 정답/오답 반반이라 "
+                         "보상과 벌이 균형을 이룬다. 1.0이면 항상 보상 → w_max 포화(실측).")
     ap.add_argument("--eval-trials", type=int, default=100,
                     help="훈련 후 **탐색 없이** 정답률을 재는 시행 수. 훈련 중 정답률은 "
                          "탐색에 오염되므로 학습 성과를 나타내지 못한다.")
@@ -308,7 +316,7 @@ def main():
                     help="학습 전에 **KC가 A와 B를 분리하는지** 먼저 잰다. 분리가 없으면 "
                          "스파스 확장이 아무 일도 하지 않으므로 학습 실험 자체가 무의미하다.")
     ap.add_argument("--mode", default="learn",
-                    choices=["learn", "noreward", "frozen", "yoked", "reversal"],
+                    choices=["learn", "noreward", "frozen", "yoked", "reversal", "supervised"],
                     help="learn=정상 / noreward=도파민 자체를 안 줌 / "
                          "frozen=학습률 0(배선만의 성능) / "
                          "yoked=행동무관 동일빈도 보상(수반성 대조) / reversal=중간에 규칙 반전")
@@ -367,7 +375,13 @@ def main():
         rule = FLIP if (a.mode == "reversal" and t >= a.trials // 2) else RULE
         stim = "A" if rng.random() < 0.5 else "B"
 
-        if a.mode in ("noreward", "frozen"):
+        if a.mode == "supervised":
+            # E087: 탐색·선택 피드백을 **전부 제거**한다. 행동을 강제하되 정답/오답을 반반 섞고,
+            # 실제 정답 여부로 보상/벌을 준다. 남는 질문은 하나다 —
+            # 보상+동시활동이 **올바른 시냅스를 강화하는가**.
+            def rf(s_, act_, _rule=rule):
+                return _rule[s_] == act_
+        elif a.mode in ("noreward", "frozen"):
             def rf(s_, act_):
                 return False
         elif a.mode == "yoked":
@@ -460,6 +474,39 @@ def main():
         print("  자극 %s → 정답 %s | out_L=%4d  out_R=%4d  차이 %+5d | KC %d개"
               % (stim, RULE[stim], _nl, _nr, _nl - _nr, _kc))
     apply_stim(pops, a, None)
+
+    # ★가중치 구조: **A에 반응하는 KC**의 out_L 가중치가 out_R 가중치보다 커졌는가.
+    # 정답률만 보면 "왜 방향이 안 맞는지"를 못 본다(K27).
+    kc_sets = {}
+    for stim in ("A", "B"):
+        apply_stim(pops, a, None)
+        set_dopamine(syn, 0.0)
+        for _ in range(a.gap_steps):
+            m.step_time()
+        m.pull_recording_buffers_from_device()
+        apply_stim(pops, a, stim)
+        for _ in range(a.steps):
+            m.step_time()
+        m.pull_recording_buffers_from_device()
+        kc_sets[stim] = set(np.asarray(pops["kc"].spike_recording_data[0][1], dtype=int).tolist())
+    apply_stim(pops, a, None)
+    only_a = kc_sets["A"] - kc_sets["B"]
+    only_b = kc_sets["B"] - kc_sets["A"]
+    print("")
+    print("=== 가중치 구조 (A전용 KC %d개, B전용 KC %d개) ===" % (len(only_a), len(only_b)))
+    pre = {}
+    for k, sy in syn.items():
+        sy.pull_connectivity_from_device()
+        pre[k] = np.asarray(sy.get_sparse_pre_inds())
+    for label, kcset, want in (("A전용", only_a, "l"), ("B전용", only_b, "r")):
+        if not kcset:
+            print("  %s KC 없음" % label); continue
+        idx = np.fromiter(kcset, dtype=int)
+        wl = read_g(syn["l"])[np.isin(pre["l"], idx)]
+        wr = read_g(syn["r"])[np.isin(pre["r"], idx)]
+        mark = "**정답쪽 우세**" if ((wl.mean() > wr.mean()) == (want == "l")) else "**반대**"
+        print("  %s KC → out_L 평균 %.4f | out_R 평균 %.4f | 차이 %+.4f (정답은 out_%s) %s"
+              % (label, wl.mean(), wr.mean(), wl.mean() - wr.mean(), want.upper(), mark))
 
     w1 = {k: read_g(s) for k, s in syn.items()}
     print("\n=== 가중치 변화 ===")
