@@ -268,6 +268,10 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--trial-seed", type=int, default=None,
+                    help="E089: **시행 난수열만** 따로 고정한다. 배선(--seed)은 그대로 두고 "
+                         "행동·자극 순서만 바꿔, 학습 결과가 난수열에 얼마나 좌우되는지 잰다. "
+                         "미지정이면 --seed 를 쓴다(기존 동작).")
     ap.add_argument("--trials", type=int, default=400)
     ap.add_argument("--steps", type=int, default=50)
     ap.add_argument("--da-steps", type=int, default=20)
@@ -326,7 +330,7 @@ def main():
 
     random.seed(a.seed)
     np.random.seed(a.seed)
-    rng = random.Random(a.seed)
+    rng = random.Random(a.seed if a.trial_seed is None else a.trial_seed)
 
     global PATTERNS
     PATTERNS = make_patterns(a)
@@ -520,9 +524,10 @@ def main():
     print("\n=== 요약 (mode=%s seed=%d) ===" % (a.mode, a.seed))
     print("  첫 구간 %.1f%% → 마지막 구간 %.1f%% | 변화 %+.1f%%p | 보상률 %.1f%%"
           % (first, last, last - first, n_rewarded / a.trials * 100.0))
-    print("=> MINCIRC mode=%s seed=%d first=%.1f last=%.1f delta=%+.1f reward=%.1f **eval=%.1f** tie=%d"
+    print("=> MINCIRC mode=%s seed=%d first=%.1f last=%.1f delta=%+.1f reward=%.1f **eval=%.1f** tie=%d trialseed=%s"
           % (a.mode, a.seed, first, last, last - first,
-             n_rewarded / a.trials * 100.0, eval_acc, eval_tie))
+             n_rewarded / a.trials * 100.0, eval_acc, eval_tie,
+             a.seed if a.trial_seed is None else a.trial_seed))
 
 
 if __name__ == "__main__":
