@@ -30,6 +30,7 @@ E069부터 16건을 병목 좁히기에 썼지만, 쫓던 효과 자체가 측�
 5. **동결 유지**: 학습을 멈춘 뒤에도 성능이 유지된다.
 """
 import argparse
+import io
 import os
 import random
 import sys
@@ -268,6 +269,10 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--reward-file", type=str, default=None,
+                    help="shuffled 모드용. 같은 시드·난수열의 learn 이 남긴 보상 계열(0/1 한 줄씩).")
+    ap.add_argument("--dump-rewards", type=str, default=None,
+                    help="learn 모드에서 시행별 보상 여부(0/1)를 이 파일에 기록한다.")
     ap.add_argument("--trial-seed", type=int, default=None,
                     help="E089: **시행 난수열만** 따로 고정한다. 배선(--seed)은 그대로 두고 "
                          "행동·자극 순서만 바꿔, 학습 결과가 난수열에 얼마나 좌우되는지 잰다. "
@@ -320,7 +325,8 @@ def main():
                     help="학습 전에 **KC가 A와 B를 분리하는지** 먼저 잰다. 분리가 없으면 "
                          "스파스 확장이 아무 일도 하지 않으므로 학습 실험 자체가 무의미하다.")
     ap.add_argument("--mode", default="learn",
-                    choices=["learn", "noreward", "frozen", "yoked", "reversal", "supervised"],
+                    choices=["learn", "noreward", "frozen", "yoked", "reversal", "supervised",
+                             "shuffled"],
                     help="learn=정상 / noreward=도파민 자체를 안 줌 / "
                          "frozen=학습률 0(배선만의 성능) / "
                          "yoked=행동무관 동일빈도 보상(수반성 대조) / reversal=중간에 규칙 반전")
@@ -334,6 +340,23 @@ def main():
 
     global PATTERNS
     PATTERNS = make_patterns(a)
+    # shuffled 용 보상 계열: learn 과 **같은 난수열**로 만든 뒤 섞는다.
+    # 실제 learn 의 보상률을 미리 알 수 없으므로, 같은 시드의 rng 로 뽑은 행동열로
+    # 기대 보상률을 추정하는 대신 **직전 E090/E091 실측 보상률(약 50%)**을 쓰지 않는다.
+    # 대신 learn 을 먼저 돌려 얻은 보상 계열을 파일로 받는다(--reward-file).
+    SHUFFLED = []
+    if a.mode == "shuffled":
+        if not a.reward_file or not os.path.exists(a.reward_file):
+            raise SystemExit("shuffled 모드는 --reward-file 이 필요하다 "
+                             "(같은 시드·난수열의 learn 이 남긴 보상 계열)")
+        seq = [x.strip() == "1" for x in io.open(a.reward_file, encoding="utf-8") if x.strip()]
+        if len(seq) < a.trials:
+            raise SystemExit("보상 계열이 짧다: %d < %d" % (len(seq), a.trials))
+        seq = seq[:a.trials]
+        shuf = random.Random(7000 + (a.trial_seed if a.trial_seed is not None else a.seed))
+        shuf.shuffle(seq)
+        SHUFFLED = seq
+
     m, pops, syn = build(a)
 
     if a.probe_kc:
@@ -375,11 +398,18 @@ def main():
     hist = []
     ok = 0
     n_rewarded = 0
+    REWARD_LOG = []
     for t in range(a.trials):
         rule = FLIP if (a.mode == "reversal" and t >= a.trials // 2) else RULE
         stim = "A" if rng.random() < 0.5 else "B"
 
-        if a.mode == "supervised":
+        if a.mode == "shuffled":
+            # E092: 보상의 **총량·시계열을 그대로 두고 수반성만 제거**한다.
+            # learn 과 같은 난수열로 미리 뽑아둔 보상 계열을 시행에 무작위 재배정한다.
+            # yoked(고정 확률)와 다르다 — 보상률이 learn 과 같아야 조작이 유효하다.
+            def rf(s_, act_, _t=t):
+                return SHUFFLED[_t]
+        elif a.mode == "supervised":
             # E087: 탐색·선택 피드백을 **전부 제거**한다. 행동을 강제하되 정답/오답을 반반 섞고,
             # 실제 정답 여부로 보상/벌을 준다. 남는 질문은 하나다 —
             # 보상+동시활동이 **올바른 시냅스를 강화하는가**.
@@ -400,7 +430,9 @@ def main():
         act, nl, nr = run_trial(m, pops, syn, stim, a, rng, rf)
         if rf(stim, act) if a.mode in ("learn", "reversal") else False:
             pass
-        n_rewarded += 1 if rf(stim, act) else 0
+        _got = rf(stim, act)
+        n_rewarded += 1 if _got else 0
+        REWARD_LOG.append(1 if _got else 0)
         ok += 1 if rule[stim] == act else 0
 
         if (t + 1) % a.block == 0:
@@ -511,6 +543,10 @@ def main():
         mark = "**정답쪽 우세**" if ((wl.mean() > wr.mean()) == (want == "l")) else "**반대**"
         print("  %s KC → out_L 평균 %.4f | out_R 평균 %.4f | 차이 %+.4f (정답은 out_%s) %s"
               % (label, wl.mean(), wr.mean(), wl.mean() - wr.mean(), want.upper(), mark))
+
+    if a.dump_rewards:
+        _txt = chr(10).join(str(x) for x in REWARD_LOG) + chr(10)
+        io.open(a.dump_rewards, "w", encoding="utf-8").write(_txt)
 
     w1 = {k: read_g(s) for k, s in syn.items()}
     print("\n=== 가중치 변화 ===")
