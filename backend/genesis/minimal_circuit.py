@@ -464,6 +464,7 @@ def main():
     # 실측: epsilon=1.0 seed2 에서 A→out_L 296 vs 42, B→out_R 199 vs 47 로 **매핑은 학습됐는데**
     # 정답률은 51.5%였다. 훈련과 평가를 분리한다(전체 모델은 원래 분리돼 있다).
     eval_ok = 0
+    eval_orig = 0
     eval_tie = 0
     eval_rng = random.Random(9000 + a.seed)
     eval_by = {"A": [0, 0], "B": [0, 0]}   # [정답, 전체]
@@ -493,15 +494,24 @@ def main():
         else:
             eval_tie += 1
             act = "L" if rng.random() < 0.5 else "R"
+        # 2026-09-25 수정(외부 검토): reversal 모드는 훈련 후반에 FLIP 을 쓰는데
+        # 평가는 항상 RULE 로 채점했다 → **역전을 학습해도 옛 정답으로 점수를 매긴다.**
+        # 최종 활성 규칙과 원래 규칙 둘 다 집계한다.
+        _final = FLIP if a.mode == "reversal" else RULE
         eval_by[stim][1] += 1
-        if RULE[stim] == act:
+        if _final[stim] == act:
             eval_ok += 1
             eval_by[stim][0] += 1
+        if RULE[stim] == act:
+            eval_orig += 1
     eval_acc = eval_ok / a.eval_trials * 100.0
     apply_stim(pops, a, None)
     print("")
     print("=== 평가 (탐색 없음, 학습 없음, 무작위 순서 %d시행) : 정답률 %.1f%% | 동점 %d회 ==="
           % (a.eval_trials, eval_acc, eval_tie))
+    if a.mode == "reversal":
+        print("   (reversal) 최종 규칙 기준 %.1f%% | 원래 규칙 기준 %.1f%%"
+              % (eval_acc, eval_orig / a.eval_trials * 100.0))
     for _k in ("A", "B"):
         _c, _n = eval_by[_k]
         print("   자극 %s: %d/%d (%.1f%%)" % (_k, _c, _n, (_c / _n * 100) if _n else float("nan")))

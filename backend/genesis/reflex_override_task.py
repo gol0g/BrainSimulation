@@ -169,6 +169,10 @@ def main():
     ap.add_argument("--dump-kc-weights", action="store_true",
                     help="E082 조작검증: 학습 후 kc_to_d1 가중치 통계를 출력. "
                          "--kc-d1-w를 w_max보다 크게 주면 클램프로 깎이는지 확인하는 용도.")
+    ap.add_argument("--tau-e", type=float, default=None,
+                    help="E098/K42: R-STDP 자격흔적 시정수(기본 200). 이 과제는 시행이 3스텝인데 "
+                         "tau 200이면 시행당 0.985만 감쇠해 66시행 뒤에도 37%%가 남는다 — "
+                         "현재 보상이 과거 수십 시행의 흔적에 배정된다.")
     ap.add_argument("--kc-w-max", type=float, default=None,
                     help="E082: KC R-STDP 가중치 상한(기본 30). --kc-d1-w를 30보다 크게 주면 "
                          "학습이 도로 상한까지 깎아내리므로 함께 올려야 한다. "
@@ -213,6 +217,8 @@ def main():
         cfg.d1_lateral_inhibition = args.d1_lateral
     if args.kc_gamma:
         cfg.kc_weight_gamma = True
+    if args.tau_e is not None:
+        cfg.rstdp_tau_e = args.tau_e
     if args.kc_rstdp:
         cfg.kc_rstdp = True
     if args.kc_d1_w is not None:

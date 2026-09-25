@@ -685,6 +685,7 @@ class ForagerBrainConfig:
     # 시냅스 가중치
     agent_eye_to_sts_social_weight: float = 15.0       # Agent_Eye → STS_Social
     global_ei_inhibition: float = 0.0                  # C16: 전역 E/I 균형(핵심 경로 일괄, 0=비활성)
+    rstdp_tau_e: float = 200.0     # E098/K42: 자격흔적 시정수. 보상 지연에 맞춰야 한다.
     d1_inhibition: float = 0.0                         # C14: D1 E/I 균형(0=비활성)
     direct_inhibition: float = 0.0                     # C56: direct E/I 균형(0=비활성).
     # d1→direct를 낮추면 탈포화되나 D1 영향력이 0이 된다(보상 381→0). 가중치 대신 억제로 푼다.
@@ -2928,6 +2929,9 @@ class ForagerBrain:
             # C36 수리3: 기존 rstdp_w_max(5.0)는 선천반사 25.0과 경쟁 불가 → 별도 상한 사용
             _p["w_max"] = float(getattr(self.config, "real_rstdp_w_max", 30.0))
             _p["eta"] = float(getattr(self.config, "real_rstdp_eta", DEFAULT_PARAMS["eta"]))
+            # E098/K42: 자격흔적 시정수를 config 에서 받는다.
+            # **두 생성 지점 모두**에 적용해야 조작이 온전하다(한쪽만 하면 반만 걸린다).
+            _p["tau_e"] = float(getattr(self.config, "rstdp_tau_e", DEFAULT_PARAMS["tau_e"]))
             _wu = make_rstdp_model()
             self.food_to_d1_l = self.model.add_synapse_population(
                 "food_eye_left_to_d1_l", "SPARSE", self.food_eye_left, self.d1_left,
@@ -9057,6 +9061,9 @@ class ForagerBrain:
             _kp = dict(DEFAULT_PARAMS)
             _kp["w_max"] = float(getattr(self.config, "kc_real_rstdp_w_max", 30.0))
             _kp["eta"] = float(getattr(self.config, "kc_real_rstdp_eta", DEFAULT_PARAMS["eta"]))
+            # E098/K42: 자격흔적 시정수를 config 에서 받는다.
+            # **두 생성 지점 모두**에 적용해야 조작이 온전하다(한쪽만 하면 반만 걸린다).
+            _kp["tau_e"] = float(getattr(self.config, "rstdp_tau_e", DEFAULT_PARAMS["tau_e"]))
             _kwu = make_rstdp_model()
             # E081/H015: 가중치 초기화를 **감마 분포**로.
             # 측정(d1_diversity_probe): D1 100개 뉴런의 변동계수가 **0.101**, 발화 100% —
