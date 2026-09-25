@@ -125,6 +125,8 @@ def build(args):
     # KC → 출력: **유일한 학습 경로**.
     kp = dict(DEFAULT_PARAMS)
     kp["w_max"] = args.w_max
+    if args.tau_e is not None:
+        kp["tau_e"] = args.tau_e
     # frozen: 학습률 0. **배선만으로 나오는 정답률**을 잰다.
     # 첫 구간부터 70%가 나왔다 — 선천 배선이 정답을 만들고 있는지 먼저 갈라야 한다(C47 전례).
     kp["eta"] = 0.0 if args.mode == "frozen" else args.eta
@@ -291,6 +293,9 @@ def main():
     ap.add_argument("--stim-i", type=float, default=3.0)
     ap.add_argument("--eta", type=float, default=0.02)
     ap.add_argument("--w-max", type=float, default=20.0)
+    ap.add_argument("--tau-e", type=float, default=None,
+                    help="E093: 자격흔적 시정수(기본 200). 동시활동에서 도파민까지 35~65스텝 걸린다. "
+                         "짧으면 신용이 안 남고 길면 앞 시행 흔적이 섞인다.")
     ap.add_argument("--da", type=float, default=1.0)
     ap.add_argument("--da-neg", type=float, default=0.5,
                     help="오답 시 음의 도파민. 0이면 가중치가 올라가기만 해 한쪽이 상한으로 폭주한다.")
