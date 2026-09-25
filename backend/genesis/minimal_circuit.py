@@ -242,6 +242,14 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
         pops["out_l"].set_dynamic_param_value("Ioffset", 0.0)
         pops["out_r"].set_dynamic_param_value("Ioffset", 0.0)
 
+    # 보상 지연: 행동 창이 끝난 뒤 **아무것도 안 하고** 기다린다.
+    # act_steps 를 늘리면 창과 지연이 함께 늘어 원인을 못 가른다(K41). 여기서 지연만 바꾼다.
+    if args.delay_steps > 0:
+        apply_stim(pops, args, None)
+        for _ in range(args.delay_steps):
+            m.step_time()
+        m.pull_recording_buffers_from_device()
+
     give = rewarded_fn(stim, act)
     # 정답에 보상만 주면 가중치가 올라가기만 해 한쪽이 상한으로 폭주한다
     # (실측: kc_out_l 평균 0.500→20.000 = w_max, std 0.0026). 오답에 음의 도파민이 필요하다.
@@ -304,6 +312,10 @@ def main():
                     help="고른 행동을 해당 출력 집단에 주입해 자격흔적에 남긴다. 0이면 끔 — "
                          "끄면 탐색 행동이 흔적에 안 남아 학습이 반대로 간다(실측 87%%→16%%).")
     ap.add_argument("--act-steps", type=int, default=15)
+    ap.add_argument("--delay-steps", type=int, default=0,
+                    help="E097: 행동 주입이 끝난 뒤 도파민까지의 **무자극 대기**. "
+                         "act_steps 는 행동 창 길이와 보상 지연을 **동시에** 바꾼다(K41 교락). "
+                         "이 인자로 지연만 따로 늘려 둘을 분리한다.")
     ap.add_argument("--sup-correct", type=float, default=0.5,
                     help="supervised 모드에서 **정답 행동을 강제할 확률**. 0.5면 정답/오답 반반이라 "
                          "보상과 벌이 균형을 이룬다. 1.0이면 항상 보상 → w_max 포화(실측).")
