@@ -12,7 +12,7 @@ source /root/pygenn_wsl/bin/activate
 mkdir -p /root/minc_run && cd /root/minc_run
 cp $R/backend/genesis/minimal_circuit.py $R/backend/genesis/rstdp_model.py . 2>/dev/null
 BASE="--sens-kc-p 0.02 --kc-inh 12.0 --sens-kc-w 4.0 --da-neg 1.0 --baseline 0.0 --gap-steps 600 --block 400 --eval-trials 100 --epsilon 0.6 --eta 0.001 --trials 400 --act-drive 18.0 --tau-e 12"
-done_already () { grep -qF "$1: " "$LOG" 2>/dev/null; }
+done_already () { grep -qF "$1: => MINCIRC" "$LOG" 2>/dev/null; }   # 결과 줄까지 있어야 완료(끊긴 런 재실행)
 run_one () {   # tag mode seed trialseed extra...
   local tag="$1"; local mode="$2"; local sd="$3"; local ts="$4"; shift 4
   if done_already "$tag"; then echo "  $tag: [건너뜀]"; return 0; fi
