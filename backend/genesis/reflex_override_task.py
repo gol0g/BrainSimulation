@@ -207,6 +207,8 @@ def main():
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
     ap.add_argument("--reward-window", type=int, default=0,
                     help="E109: 보상 후 같은 자극을 유지한 채 처리할 스텝 수(도파민이 이번 시행 흔적에 작용). 0=이전 동작")
+    ap.add_argument("--trace-kc-motor", default=None,
+                    help="E111: 매 시행 도파민 직전 KC→motor 4그룹 자격흔적 합·가중치 평균을 CSV로(읽기 전용)")
     ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
                     help="E110: 보상 창 동안 자극. same=유지(E109, 반사 강화로 판명) / none=끔(최소 회로와 같음)")
     ap.add_argument("--trial-gap", type=int, default=0,
@@ -414,6 +416,7 @@ def main():
     rew = 0
     explored = 0
     eps = args.epsilon
+    TRACE_ROWS = []
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5)
         for t in range(args.steps):
@@ -433,6 +436,15 @@ def main():
             else:
                 v = steer(brain, stim(obs, nh, side), steps=3) - off
             correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
+            if args.trace_kc_motor and getattr(brain, "kc_motor_syn", None):
+                # E111: 도파민 직전 KC→motor 자격흔적·가중치 (4그룹 합/평균). 읽기 전용.
+                _row = [ep, t, side, int(do_explore), round(float(v), 4), int(correct)]
+                for (_k, _m) in (("l", "l"), ("l", "r"), ("r", "l"), ("r", "r")):
+                    _s = brain.kc_motor_syn[(_k, _m)]
+                    _s.vars["e"].pull_from_device(); _s.vars["g"].pull_from_device()
+                    _e = np.asarray(_s.vars["e"].values, dtype=np.float64); _g = np.asarray(_s.vars["g"].values, dtype=np.float64)
+                    _row += [round(float(_e.sum()), 4), round(float(_g.mean()), 5)]
+                TRACE_ROWS.append(_row)
             if args.no_reward:
                 continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
             if correct:
@@ -468,6 +480,14 @@ def main():
                 for _ in range(args.trial_gap):
                     brain.process(_neu)
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
+    if args.trace_kc_motor and TRACE_ROWS:
+        import csv
+        with open(args.trace_kc_motor, "w", newline="", encoding="utf-8") as _fh:
+            _w = csv.writer(_fh)
+            _w.writerow(["ep", "t", "good_side", "explore", "v", "correct",
+                         "e_ll", "g_ll", "e_lr", "g_lr", "e_rl", "g_rl", "e_rr", "g_rr"])
+            _w.writerows(TRACE_ROWS)
+        print("[추적] KC→motor %d시행 → %s" % (len(TRACE_ROWS), args.trace_kc_motor))
 
     d1_after = snap_d1()
     for nm in sorted(d1_before):
