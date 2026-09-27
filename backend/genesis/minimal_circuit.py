@@ -44,6 +44,15 @@ from rstdp_model import DEFAULT_PARAMS, make_rstdp_model
 
 PATTERNS = {}
 BASE = [0.0]          # 기대 보상(러닝 평균). 리스트로 둬서 함수 안에서 갱신한다.
+# E102: 시행별 사건 추적(--trace-file). None 이면 아무것도 읽지 않는다 — 동역학 불변(기기에서 읽기만 한다).
+TRACE = None
+
+
+def _pre_sums(s, var, n_pre):
+    """시냅스 변수(var)를 **전시냅스(KC)별로 합산**한다. 추적 전용 — 값을 쓰지 않는다."""
+    s.vars[var].pull_from_device()
+    v = np.asarray(s.vars[var].values, dtype=np.float64).ravel()
+    return np.bincount(TRACE["pre"][id(s)], weights=v, minlength=n_pre)
 RULE = {"A": "L", "B": "R"}
 FLIP = {"A": "R", "B": "L"}
 
@@ -251,6 +260,10 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
         m.pull_recording_buffers_from_device()
 
     give = rewarded_fn(stim, act)
+    if TRACE is not None:
+        # 도파민 직전의 자격흔적 — 이 값의 부호가 처벌 시 옛 연합이 깎이는지 강화되는지를 정한다.
+        TRACE["e_l"].append(_pre_sums(syn["l"], "e", TRACE["n_pre"]))
+        TRACE["e_r"].append(_pre_sums(syn["r"], "e", TRACE["n_pre"]))
     # 정답에 보상만 주면 가중치가 올라가기만 해 한쪽이 상한으로 폭주한다
     # (실측: kc_out_l 평균 0.500→20.000 = w_max, std 0.0026). 오답에 음의 도파민이 필요하다.
     #
@@ -273,6 +286,10 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
         m.step_time()
     m.pull_recording_buffers_from_device()
     set_dopamine(syn, 0.0)
+    if TRACE is not None:
+        TRACE["g_l"].append(_pre_sums(syn["l"], "g", TRACE["n_pre"]))
+        TRACE["g_r"].append(_pre_sums(syn["r"], "g", TRACE["n_pre"]))
+        TRACE["ev"].append((stim, act, bool(give), nl, nr))
     return act, nl, nr
 
 
@@ -338,6 +355,8 @@ def main():
                     help="자극 사이 무자극 구간. 전역 억제가 가라앉을 시간을 준다.")
     ap.add_argument("--probe-reverse", action="store_true",
                     help="B를 먼저 재서 순서 효과를 확인한다.")
+    ap.add_argument("--trace-file", type=str, default=None,
+                    help="E102: 시행별 (자극·행동·보상, 도파민 직전 자격흔적, 도파민 후 가중치)를 KC별 합으로 .npz 저장. 읽기 전용")
     ap.add_argument("--probe-kc", action="store_true",
                     help="학습 전에 **KC가 A와 B를 분리하는지** 먼저 잰다. 분리가 없으면 "
                          "스파스 확장이 아무 일도 하지 않으므로 학습 실험 자체가 무의미하다.")
@@ -411,6 +430,14 @@ def main():
         return
 
     w0 = {k: read_g(s).copy() for k, s in syn.items()}
+    if a.trace_file:
+        global TRACE
+        TRACE = {"n_pre": a.n_kc, "pre": {}, "e_l": [], "e_r": [], "g_l": [], "g_r": [], "ev": []}
+        for k, sy in syn.items():
+            sy.pull_connectivity_from_device()
+            TRACE["pre"][id(sy)] = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+        TRACE["g0_l"] = _pre_sums(syn["l"], "g", a.n_kc)
+        TRACE["g0_r"] = _pre_sums(syn["r"], "g", a.n_kc)
 
     hist = []
     ok = 0
@@ -570,6 +597,18 @@ def main():
         mark = "**정답쪽 우세**" if ((wl.mean() > wr.mean()) == (want == "l")) else "**반대**"
         print("  %s KC → out_L 평균 %.4f | out_R 평균 %.4f | 차이 %+.4f (정답은 out_%s) %s"
               % (label, wl.mean(), wr.mean(), wl.mean() - wr.mean(), want.upper(), mark))
+
+    if TRACE is not None:
+        np.savez_compressed(
+            a.trace_file, g0_l=TRACE["g0_l"], g0_r=TRACE["g0_r"],
+            e_l=np.array(TRACE["e_l"]), e_r=np.array(TRACE["e_r"]),
+            g_l=np.array(TRACE["g_l"]), g_r=np.array(TRACE["g_r"]),
+            stim=np.array([x[0] for x in TRACE["ev"]]), act=np.array([x[1] for x in TRACE["ev"]]),
+            reward=np.array([x[2] for x in TRACE["ev"]]), nl=np.array([x[3] for x in TRACE["ev"]]),
+            nr=np.array([x[4] for x in TRACE["ev"]]),
+            kc_a=np.fromiter(kc_sets["A"], dtype=np.int64), kc_b=np.fromiter(kc_sets["B"], dtype=np.int64),
+            flip_at=(a.trials // 2 if a.mode == "reversal" else -1))
+        print("[추적] %d시행 저장 → %s" % (len(TRACE["ev"]), a.trace_file))
 
     if a.dump_rewards:
         _txt = chr(10).join(str(x) for x in REWARD_LOG) + chr(10)

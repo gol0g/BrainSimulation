@@ -82,3 +82,6 @@ data/flywire/
 !research/experiments/logs/
 !research/experiments/logs/**/
 !research/experiments/logs/**/*.log
+
+# E102: 시행별 추적 원본(npz, 런당 수십 MB)은 올리지 않는다 — 요약 JSON 만 logs/E102/ 에 둔다
+research/experiments/traces/
