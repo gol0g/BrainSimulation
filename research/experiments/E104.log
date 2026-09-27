@@ -1,0 +1,33 @@
+=== E104 실행: 2026-09-27T02:10:40Z ===
+커맨드: bash scripts/e104_main.sh
+---
+########## 회귀 (코드 변경 후 필수) ##########
+[회귀] 평가 100%: 24/24
+[회귀] **통과** — E095의 성취가 유지된다
+########## 반전 시간 경과 (F400, F800) ##########
+  F400 w5 t300: => MINCIRC mode=reversal seed=5 first=66.0 last=72.5 delta=+6.5 reward=58.3 **eval=100.0** tie=0 trialseed=300
+  F400 w5 t301: => MINCIRC mode=reversal seed=5 first=70.5 last=68.8 delta=-1.8 reward=57.1 **eval=100.0** tie=0 trialseed=301
+  F400 w5 t302: => MINCIRC mode=reversal seed=5 first=69.5 last=71.0 delta=+1.5 reward=58.0 **eval=100.0** tie=0 trialseed=302
+  F400 w5 t303: => MINCIRC mode=reversal seed=5 first=63.5 last=72.2 delta=+8.8 reward=56.8 **eval=100.0** tie=0 trialseed=303
+  F400 w6 t300: => MINCIRC mode=reversal seed=6 first=63.7 last=72.5 delta=+8.8 reward=55.6 **eval=100.0** tie=0 trialseed=300
+  F400 w6 t301: => MINCIRC mode=reversal seed=6 first=67.8 last=68.8 delta=+1.0 reward=54.3 **eval=100.0** tie=0 trialseed=301
+  F400 w6 t302: => MINCIRC mode=reversal seed=6 first=66.5 last=71.0 delta=+4.5 reward=55.3 **eval=100.0** tie=0 trialseed=302
+  F400 w6 t303: => MINCIRC mode=reversal seed=6 first=60.5 last=72.0 delta=+11.5 reward=53.9 **eval=100.0** tie=0 trialseed=303
+  F400 w7 t300: => MINCIRC mode=reversal seed=7 first=58.0 last=72.5 delta=+14.5 reward=59.8 **eval=100.0** tie=0 trialseed=300
+  F400 w7 t301: => MINCIRC mode=reversal seed=7 first=61.3 last=69.0 delta=+7.7 reward=58.3 **eval=100.0** tie=0 trialseed=301
+  F400 w7 t302: => MINCIRC mode=reversal seed=7 first=61.5 last=71.0 delta=+9.5 reward=59.0 **eval=100.0** tie=0 trialseed=302
+  F400 w7 t303: => MINCIRC mode=reversal seed=7 first=54.8 last=72.0 delta=+17.2 reward=57.4 **eval=100.0** tie=0 trialseed=303
+  F800 w5 t300: => MINCIRC mode=reversal seed=5 first=66.0 last=55.8 delta=-10.2 reward=49.5 **eval=100.0** tie=0 trialseed=300
+  F800 w5 t301: => MINCIRC mode=reversal seed=5 first=70.5 last=49.0 delta=-21.5 reward=49.2 **eval=79.0** tie=57 trialseed=301
+  F800 w5 t302: => MINCIRC mode=reversal seed=5 first=69.5 last=51.0 delta=-18.5 reward=51.3 **eval=43.0** tie=0 trialseed=302
+  F800 w5 t303: => MINCIRC mode=reversal seed=5 first=63.5 last=44.8 delta=-18.8 reward=48.1 **eval=43.0** tie=0 trialseed=303
+  F800 w6 t300: => MINCIRC mode=reversal seed=6 first=63.7 last=52.2 delta=-11.5 reward=48.4 **eval=100.0** tie=0 trialseed=300
+  F800 w6 t301: => MINCIRC mode=reversal seed=6 first=67.8 last=52.2 delta=-15.5 reward=49.0 **eval=100.0** tie=0 trialseed=301
+  F800 w6 t302: => MINCIRC mode=reversal seed=6 first=66.5 last=53.2 delta=-13.2 reward=50.9 **eval=100.0** tie=0 trialseed=302
+  F800 w6 t303: => MINCIRC mode=reversal seed=6 first=60.5 last=54.2 delta=-6.2 reward=49.5 **eval=100.0** tie=0 trialseed=303
+  F800 w7 t300: => MINCIRC mode=reversal seed=7 first=58.0 last=57.2 delta=-0.7 reward=49.0 **eval=100.0** tie=0 trialseed=300
+  F800 w7 t301: => MINCIRC mode=reversal seed=7 first=61.3 last=63.2 delta=+2.0 reward=50.0 **eval=100.0** tie=0 trialseed=301
+  F800 w7 t302: => MINCIRC mode=reversal seed=7 first=61.5 last=66.0 delta=+4.5 reward=52.4 **eval=100.0** tie=0 trialseed=302
+  F800 w7 t303: => MINCIRC mode=reversal seed=7 first=54.8 last=69.8 delta=+15.0 reward=51.4 **eval=100.0** tie=0 trialseed=303
+[E104] 전체 루프 종료
+=== 종료코드 0 ===

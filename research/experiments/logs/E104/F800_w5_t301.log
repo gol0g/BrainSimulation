@@ -1,0 +1,30 @@
+make: Entering directory '/root/minc_run/minimal_circuit_CODE'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/root/minc_run/minimal_circuit_CODE'
+  시행    1~ 400: 정답률  70.5%
+  시행  401~ 800: 정답률  69.8%
+  시행  801~1200: 정답률  26.8%
+  시행 1201~1600: 정답률  30.0%
+  시행 1601~2000: 정답률  49.0%
+
+=== 평가 (탐색 없음, 학습 없음, 무작위 순서 100시행) : 정답률 79.0% | 동점 57회 ===
+   (reversal) 최종 규칙 기준 79.0% | 원래 규칙 기준 21.0%
+   자극 A: 36/57 (63.2%)
+   자극 B: 43/43 (100.0%)
+
+=== 학습 후 자극별 출력 (선택 이전의 원 신호) ===
+  자극 A → 정답 L | out_L=  20  out_R=  20  차이    +0 | KC 88개
+  자극 B → 정답 R | out_L=  56  out_R=   2  차이   +54 | KC 85개
+
+=== 가중치 구조 (A전용 KC 71개, B전용 KC 68개) ===
+  A전용 KC → out_L 평균 0.5755 | out_R 평균 0.6489 | 차이 -0.0734 (정답은 out_L) **반대**
+  B전용 KC → out_L 평균 0.7962 | out_R 평균 0.6135 | 차이 +0.1828 (정답은 out_R) **반대**
+[추적] 2000시행 저장 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E104/F800_w5_t301.npz
+
+=== 가중치 변화 ===
+  kc_out_l: n=7872 |Δ|평균 0.03875 변화율  19.9% | 평균 0.500→0.539 | std 0.0000→0.0921
+  kc_out_r: n=7840 |Δ|평균 0.02795 변화율  19.4% | 평균 0.500→0.528 | std 0.0000→0.0593
+
+=== 요약 (mode=reversal seed=5) ===
+  첫 구간 70.5% → 마지막 구간 49.0% | 변화 -21.5%p | 보상률 49.2%
+=> MINCIRC mode=reversal seed=5 first=70.5 last=49.0 delta=-21.5 reward=49.2 **eval=79.0** tie=57 trialseed=301
