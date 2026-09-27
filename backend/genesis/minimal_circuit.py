@@ -178,7 +178,19 @@ def make_patterns(args):
     b_only = rs.choice(rest2, k - len(shared), replace=False)
     pa = np.zeros(n); pa[shared] = 1; pa[a_only] = 1
     pb = np.zeros(n); pb[shared] = 1; pb[b_only] = 1
-    return {"A": pa, "B": pb}
+    pats = {"A": pa, "B": pb}
+    if getattr(args, "n_stim", 2) == 4:
+        # E107: C/D 는 A/B **다음에** 같은 난수열에서 뽑는다 → A/B 는 2자극 런과 동일(1단계 쌍둥이 성립).
+        # C/D 는 감각 집단 전체에서 뽑아 A/B 와 무작위로 겹친다(KC 표현 공유 → 간섭 여지).
+        shared2 = rs.choice(n, int(k * args.overlap), replace=False)
+        rest3 = np.setdiff1d(np.arange(n), shared2)
+        c_only = rs.choice(rest3, k - len(shared2), replace=False)
+        rest4 = np.setdiff1d(rest3, c_only)
+        d_only = rs.choice(rest4, k - len(shared2), replace=False)
+        pc = np.zeros(n); pc[shared2] = 1; pc[c_only] = 1
+        pd = np.zeros(n); pd[shared2] = 1; pd[d_only] = 1
+        pats["C"], pats["D"] = pc, pd
+    return pats
 
 
 def apply_stim(pops, args, stim):
@@ -359,6 +371,12 @@ def main():
                     help="자극 사이 무자극 구간. 전역 억제가 가라앉을 시간을 준다.")
     ap.add_argument("--probe-reverse", action="store_true",
                     help="B를 먼저 재서 순서 효과를 확인한다.")
+    ap.add_argument("--n-stim", type=int, default=2, choices=(2, 4),
+                    help="E107: 자극 수. 4면 C/D 추가(A/B 는 2자극과 동일하게 뽑힘)")
+    ap.add_argument("--phase2-trials", type=int, default=0,
+                    help="E107: 1단계(A/B, --trials) 뒤 C/D 만 제시하는 2단계 시행 수. 0이면 이전 동작")
+    ap.add_argument("--phase2-rule", default="same", choices=("same", "cross"),
+                    help="E107: 2단계 규칙. same = C→L, D→R / cross = C→R, D→L")
     ap.add_argument("--flip-at", type=int, default=None,
                     help="E104: reversal 모드에서 규칙을 뒤집는 시행 번호(기본: 전체의 절반 — 이전 동작)")
     ap.add_argument("--trace-file", type=str, default=None,
@@ -382,6 +400,13 @@ def main():
 
     global PATTERNS
     PATTERNS = make_patterns(a)
+    if a.phase2_trials > 0:
+        if a.n_stim != 4:
+            raise SystemExit("--phase2-trials 는 --n-stim 4 가 필요하다")
+        if a.mode not in ("learn", "frozen", "noreward"):
+            raise SystemExit("2단계는 learn/frozen/noreward 모드만 지원한다(reversal·shuffled 미지원)")
+    if a.n_stim == 4:
+        RULE["C"], RULE["D"] = ("L", "R") if a.phase2_rule == "same" else ("R", "L")
     # shuffled 용 보상 계열: learn 과 **같은 난수열**로 만든 뒤 섞는다.
     # 실제 learn 의 보상률을 미리 알 수 없으므로, 같은 시드의 rng 로 뽑은 행동열로
     # 기대 보상률을 추정하는 대신 **직전 E090/E091 실측 보상률(약 50%)**을 쓰지 않는다.
@@ -451,9 +476,12 @@ def main():
     ok = 0
     n_rewarded = 0
     REWARD_LOG = []
-    for t in range(a.trials):
+    for t in range(a.trials + a.phase2_trials):
         rule = FLIP if (a.mode == "reversal" and t >= FLIP_AT) else RULE
-        stim = "A" if rng.random() < 0.5 else "B"
+        if t < a.trials:
+            stim = "A" if rng.random() < 0.5 else "B"
+        else:
+            stim = "C" if rng.random() < 0.5 else "D"   # E107 2단계: 난수 소비는 1단계와 같은 방식
 
         if a.mode == "shuffled":
             # E092: 보상의 **총량·시계열을 그대로 두고 수반성만 제거**한다.
@@ -541,6 +569,26 @@ def main():
             eval_orig += 1
     eval_acc = eval_ok / a.eval_trials * 100.0
     apply_stim(pops, a, None)
+    eval_cd = None
+    if a.n_stim == 4:
+        # E107: C/D 평가 — A/B 평가가 끝난 뒤, 별도 난수열(A/B 결과 불변). 학습 없음·탐색 없음.
+        _r2 = random.Random(9100 + a.seed); _ok2 = 0
+        for i in range(a.eval_trials):
+            stim = "C" if _r2.random() < 0.5 else "D"
+            apply_stim(pops, a, None); set_dopamine(syn, 0.0)
+            for _ in range(a.gap_steps):
+                m.step_time()
+            m.pull_recording_buffers_from_device()
+            apply_stim(pops, a, stim)
+            for _ in range(a.steps):
+                m.step_time()
+            m.pull_recording_buffers_from_device()
+            _nl = len(pops["out_l"].spike_recording_data[0][1]); _nr = len(pops["out_r"].spike_recording_data[0][1])
+            act = "L" if _nl > _nr else ("R" if _nr > _nl else ("L" if _r2.random() < 0.5 else "R"))
+            _ok2 += 1 if RULE[stim] == act else 0
+        eval_cd = _ok2 / a.eval_trials * 100.0
+        apply_stim(pops, a, None)
+        print("=== 평가 C/D (규칙 %s) : 정답률 %.1f%% ===" % (a.phase2_rule, eval_cd))
     print("")
     print("=== 평가 (탐색 없음, 학습 없음, 무작위 순서 %d시행) : 정답률 %.1f%% | 동점 %d회 ==="
           % (a.eval_trials, eval_acc, eval_tie))
@@ -634,11 +682,12 @@ def main():
     first, last = (hist[0], hist[-1]) if hist else (float("nan"), float("nan"))
     print("\n=== 요약 (mode=%s seed=%d) ===" % (a.mode, a.seed))
     print("  첫 구간 %.1f%% → 마지막 구간 %.1f%% | 변화 %+.1f%%p | 보상률 %.1f%%"
-          % (first, last, last - first, n_rewarded / a.trials * 100.0))
+          % (first, last, last - first, n_rewarded / (a.trials + a.phase2_trials) * 100.0))
     print("=> MINCIRC mode=%s seed=%d first=%.1f last=%.1f delta=%+.1f reward=%.1f **eval=%.1f** tie=%d trialseed=%s"
           % (a.mode, a.seed, first, last, last - first,
-             n_rewarded / a.trials * 100.0, eval_acc, eval_tie,
-             a.seed if a.trial_seed is None else a.trial_seed))
+             n_rewarded / (a.trials + a.phase2_trials) * 100.0, eval_acc, eval_tie,
+             a.seed if a.trial_seed is None else a.trial_seed)
+          + ("" if eval_cd is None else " evalCD=%.1f phase2=%d rule2=%s" % (eval_cd, a.phase2_trials, a.phase2_rule)))
 
 
 if __name__ == "__main__":
