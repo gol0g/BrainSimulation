@@ -212,7 +212,7 @@ def main():
     ap.add_argument("--decomp-weights", default=None,
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
-                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm"))
+                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron"))
     ap.add_argument("--trace-kc-motor", default=None,
                     help="E111: 매 시행 도파민 직전 KC→motor 4그룹 자격흔적 합·가중치 평균을 CSV로(읽기 전용)")
     ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
@@ -329,16 +329,77 @@ def main():
             # 그룹 평균만 남김(공통 상승 + 매핑 차이 D 보존, 그룹 안 구조 제거)
             sub = dict(W)
             for n in kc:
-                sub[n] = np.full(W[n].size, float(W[n].mean()))
+                # float32 로 표현 가능한 값으로(뇌 가중치는 float32 — float64 평균은 이식 검증(정확 일치)에서 실패한다, E112)
+                sub[n] = np.full(W[n].size, float(np.float32(W[n].mean())))
         elif mode == "kc_cm":
             # 네 그룹 전체 평균(공통 상승만 보존, D·구조 제거)
             sub = dict(W)
-            gm = float(np.mean([W[n].mean() for n in kc]))
+            # 풀링 평균(사전등록 "전체 평균"), float32 표현 가능 값
+            gm = float(np.float32(np.concatenate([W[n] for n in kc]).mean()))
             for n in kc:
                 sub[n] = np.full(W[n].size, gm)
+        elif mode == "neuron":
+            sub = dict(W)
         else:
             raise SystemExit("알 수 없는 분해 모드 %s" % mode)
         _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
+        if mode == "neuron":
+            # E113: 뉴런 수준 신용 누수 — motor 뉴런별 (학습된 KC 입력 Δg 평균) 대 (반사 입력 연결 수).
+            # 연결은 같은 시드로 만든 새 뇌에서 읽는다(학습 뇌와 동일 — 이식 검증이 크기·순서를 보장).
+            def post_inds(syn):
+                syn.pull_connectivity_from_device()
+                a = np.asarray(syn.get_sparse_post_inds(), dtype=np.int64)
+                if a.size == 0:
+                    raise RuntimeError("연결을 읽지 못했다 — 측정 도구 실패")
+                return a
+            init_w = float(cfg.kc_motor_init_w)
+            n_m = {"l": int(cfg.n_motor_left), "r": int(cfg.n_motor_right)}
+            refl = {}
+            for side in ("l", "r"):
+                deg = np.zeros(n_m[side])
+                for nm in ("good_food_to_motor_%s" % side, "food_explore_motor_%s" % side):
+                    sy = getattr(_b2, nm, None)
+                    if sy is None:
+                        raise SystemExit("반사 경로 %s 없음" % nm)
+                    deg += np.bincount(post_inds(sy), minlength=n_m[side])[:n_m[side]]
+                refl[side] = deg
+            for k in ("l", "r"):
+                for m in ("l", "r"):
+                    nm = "kc_%s_to_motor_%s" % (k, m)
+                    post = post_inds(getattr(_b2, nm))
+                    dg = W[nm] - init_w
+                    if dg.size != post.size:
+                        raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, dg.size, post.size))
+                    s_ = np.bincount(post, weights=dg, minlength=n_m[m]); c_ = np.bincount(post, minlength=n_m[m])
+                    mdg = s_ / np.maximum(c_, 1)
+                    d = refl[m]
+                    r = float(np.corrcoef(d, mdg)[0, 1]) if d.std() > 0 and mdg.std() > 0 else float("nan")
+                    q = np.quantile(d, [0.25, 0.75])
+                    lo, hi = mdg[d <= q[0]].mean(), mdg[d >= q[1]].mean()
+                    print("=> NEURON group=%s%s r=%+.4f dg_hiRefl=%+.4f dg_loRefl=%+.4f dg_all=%+.4f refl_mean=%.1f"
+                          % (k, m, r, hi, lo, float(dg.mean()), float(d.mean())))
+            # KC(pre) 쪽: KC 는 한 번에 ~6%만 발화 → 그룹 평균은 비활성 KC 시냅스로 희석된다.
+            # KC 별로 같은 쪽 motor(반사: kc_l→motor_l, kc_r→motor_r)와 교차 motor 로 가는 평균 Δg 를 구하고,
+            # 가장 많이 변한 KC(활성 KC 근사: 두 방향 평균 Δg 상위 5%)에서 반사 대 교차를 비교한다.
+            n_k = int(cfg.n_kc_per_side)
+            for k in ("l", "r"):
+                same, cross = k, ("r" if k == "l" else "l")
+                pm = {}
+                for m in (same, cross):
+                    nm = "kc_%s_to_motor_%s" % (k, m)
+                    sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
+                    pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                    dg = W[nm] - init_w
+                    pm[m] = np.bincount(pre, weights=dg, minlength=n_k) / np.maximum(np.bincount(pre, minlength=n_k), 1)
+                tot = (pm[same] + pm[cross]) / 2
+                top = tot >= np.quantile(tot, 0.95)
+                bot = tot <= np.quantile(tot, 0.50)
+                print("=> KCPRE side=%s top5%%: 반사(%s%s) %+.4f 교차(%s%s) %+.4f 차 %+.4f | 하위50%%: 반사 %+.4f 교차 %+.4f | r(반사,교차)=%+.3f"
+                      % (k, k, same, float(pm[same][top].mean()), k, cross, float(pm[cross][top].mean()),
+                         float(pm[same][top].mean() - pm[cross][top].mean()),
+                         float(pm[same][bot].mean()), float(pm[cross][bot].mean()),
+                         float(np.corrcoef(pm[same], pm[cross])[0, 1])))
+            return
         if sub:
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
