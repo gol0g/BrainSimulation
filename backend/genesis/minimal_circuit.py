@@ -248,6 +248,10 @@ def run_trial(m, pops, syn, stim, args, rng, rewarded_fn):
         for _ in range(args.act_steps):
             m.step_time()
         m.pull_recording_buffers_from_device()
+        if TRACE is not None:
+            # E103: 행동 창에서 **비선택 출력도 발화하는가** — 발화하면 그쪽 자격흔적도 양으로 남아 보상이 옛 연합까지 강화한다.
+            TRACE["act_spk"].append((len(pops["out_l"].spike_recording_data[0][1]),
+                                     len(pops["out_r"].spike_recording_data[0][1])))
         pops["out_l"].set_dynamic_param_value("Ioffset", 0.0)
         pops["out_r"].set_dynamic_param_value("Ioffset", 0.0)
 
@@ -432,7 +436,7 @@ def main():
     w0 = {k: read_g(s).copy() for k, s in syn.items()}
     if a.trace_file:
         global TRACE
-        TRACE = {"n_pre": a.n_kc, "pre": {}, "e_l": [], "e_r": [], "g_l": [], "g_r": [], "ev": []}
+        TRACE = {"n_pre": a.n_kc, "pre": {}, "e_l": [], "e_r": [], "g_l": [], "g_r": [], "ev": [], "act_spk": []}
         for k, sy in syn.items():
             sy.pull_connectivity_from_device()
             TRACE["pre"][id(sy)] = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
@@ -606,6 +610,7 @@ def main():
             stim=np.array([x[0] for x in TRACE["ev"]]), act=np.array([x[1] for x in TRACE["ev"]]),
             reward=np.array([x[2] for x in TRACE["ev"]]), nl=np.array([x[3] for x in TRACE["ev"]]),
             nr=np.array([x[4] for x in TRACE["ev"]]),
+            act_spk=np.array(TRACE["act_spk"]) if TRACE["act_spk"] else np.zeros((0, 2)),
             kc_a=np.fromiter(kc_sets["A"], dtype=np.int64), kc_b=np.fromiter(kc_sets["B"], dtype=np.int64),
             flip_at=(a.trials // 2 if a.mode == "reversal" else -1))
         print("[추적] %d시행 저장 → %s" % (len(TRACE["ev"]), a.trace_file))
