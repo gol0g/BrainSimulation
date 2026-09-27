@@ -18,6 +18,20 @@ except FileNotFoundError:
 if len(D) < 6:
     print("[E111] %d/6런 — **판정 보류. 다 모일 때까지 수치 미출력.**" % len(D)); sys.exit(0)
 f = lambda k, b, key: float(D[(k, b)][key])
+# 측정 도구 확인: CSV 에서 e 가 실제로 읽혔는가(1차 실행은 전부 0·nan 이었다)
+import csv, math, os
+bad = []
+for k in (25, 8):
+    for b in range(3):
+        p = "research/experiments/logs/E111/B%d_b%d.csv.log" % (k, b)
+        rows = list(csv.DictReader(open(p, encoding="utf-8"))) if os.path.exists(p) else []
+        zero = sum(all(float(r[c]) == 0.0 for c in ("e_ll", "e_lr", "e_rl", "e_rr")) for r in rows)
+        nang = sum(any(math.isnan(float(r[c])) for c in ("g_ll", "g_lr", "g_rl", "g_rr")) for r in rows)
+        if not rows or zero > 0.1 * len(rows) or nang > 0:
+            bad.append("B%d b%d (행 %d, e 전부 0인 행 %d, g nan 행 %d)" % (k, b, len(rows), zero, nang))
+if bad:
+    print("**측정 도구 실패 — 판정 무효**: " + "; ".join(bad)); sys.exit(0)
+print("측정 도구 확인: 6런 모두 e 판독·g 유한")
 print("조작검증: 추적 불변 — B25 b0 변조폭 변화 %s (E110 eta0.15 학습 b0 = +0.2679): %s" % (D[(25, 0)]["dmod"], D[(25, 0)]["dmod"] == "+0.2679"))
 print("조작검증: 탐색 |v| B8 < B25 %d/3" % sum(f(8, b, "explore_absv") < f(25, b, "explore_absv") for b in range(3)))
 print("조작검증: 탐색·정답 사건 ≥20: %s" % all(f(k, b, "expl_correct_n") >= 20 for k in (25, 8) for b in range(3)))

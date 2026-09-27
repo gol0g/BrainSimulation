@@ -441,8 +441,12 @@ def main():
                 _row = [ep, t, side, int(do_explore), round(float(v), 4), int(correct)]
                 for (_k, _m) in (("l", "l"), ("l", "r"), ("r", "l"), ("r", "r")):
                     _s = brain.kc_motor_syn[(_k, _m)]
+                    # SPARSE 는 연결을 먼저 당겨야 values 가 채워진다(E111 1차: 빠뜨려서 전부 빈 배열 → 합 0·평균 nan).
+                    _s.pull_connectivity_from_device()
                     _s.vars["e"].pull_from_device(); _s.vars["g"].pull_from_device()
                     _e = np.asarray(_s.vars["e"].values, dtype=np.float64); _g = np.asarray(_s.vars["g"].values, dtype=np.float64)
+                    if _e.size == 0 or _g.size == 0:
+                        raise RuntimeError("KC→motor 추적: 빈 배열(%s%s) — 측정 도구 실패" % (_k, _m))
                     _row += [round(float(_e.sum()), 4), round(float(_g.mean()), 5)]
                 TRACE_ROWS.append(_row)
             if args.no_reward:

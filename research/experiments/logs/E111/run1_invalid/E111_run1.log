@@ -1,0 +1,11 @@
+=== E111 실행: 2026-09-27T05:59:02Z ===
+커맨드: bash scripts/e111_main.sh
+---
+  B25 b0: => => 정답률 +0.0%p | **변조폭 변화 +0.2679** | 판정: 학습이 반사 방향으로 강화 | E111SUM expl_correct_n=140 expl_correct_pos=0 expl_correct_mean=0 greedy_wrong_n=204 greedy_wrong_pos=0 greedy_wrong_mean=0 expl_wrong_n=156 expl_wrong_pos=0 expl_wrong_mean=0 explore_absv=0.2852 g_ll=nan→nan g_lr=nan→nan g_rl=nan→nan g_rr=nan→nan
+  B25 b1: => => 정답률 +0.0%p | **변조폭 변화 +0.2757** | 판정: 학습이 반사 방향으로 강화 | E111SUM expl_correct_n=140 expl_correct_pos=0 expl_correct_mean=0 greedy_wrong_n=204 greedy_wrong_pos=0 greedy_wrong_mean=0 expl_wrong_n=156 expl_wrong_pos=0 expl_wrong_mean=0 explore_absv=0.2847 g_ll=nan→nan g_lr=nan→nan g_rl=nan→nan g_rr=nan→nan
+  B25 b2: => => 정답률 +0.0%p | **변조폭 변화 +0.2726** | 판정: 학습이 반사 방향으로 강화 | E111SUM expl_correct_n=140 expl_correct_pos=0 expl_correct_mean=0 greedy_wrong_n=204 greedy_wrong_pos=0 greedy_wrong_mean=0 expl_wrong_n=156 expl_wrong_pos=0 expl_wrong_mean=0 explore_absv=0.2841 g_ll=nan→nan g_lr=nan→nan g_rl=nan→nan g_rr=nan→nan
+  B8 b0: => => 정답률 +0.0%p | **변조폭 변화 +0.0993** | 판정: 학습이 반사 방향으로 강화 | E111SUM expl_correct_n=66 expl_correct_pos=0 expl_correct_mean=0 greedy_wrong_n=201 greedy_wrong_pos=0 greedy_wrong_mean=0 expl_wrong_n=230 expl_wrong_pos=0 expl_wrong_mean=0 explore_absv=0.1376 g_ll=nan→nan g_lr=nan→nan g_rl=nan→nan g_rr=nan→nan
+  B8 b1: => => 정답률 +0.0%p | **변조폭 변화 +0.0736** | 판정: 학습이 반사 방향으로 강화 | E111SUM expl_correct_n=65 expl_correct_pos=0 expl_correct_mean=0 greedy_wrong_n=201 greedy_wrong_pos=0 greedy_wrong_mean=0 expl_wrong_n=231 expl_wrong_pos=0 expl_wrong_mean=0 explore_absv=0.1267 g_ll=nan→nan g_lr=nan→nan g_rl=nan→nan g_rr=nan→nan
+  B8 b2: => => 정답률 +0.0%p | **변조폭 변화 +0.0122** | 판정: 변화 없음 | E111SUM expl_correct_n=28 expl_correct_pos=0 expl_correct_mean=0 greedy_wrong_n=204 greedy_wrong_pos=0 greedy_wrong_mean=0 expl_wrong_n=268 expl_wrong_pos=0 expl_wrong_mean=0 explore_absv=0.1167 g_ll=nan→nan g_lr=nan→nan g_rl=nan→nan g_rr=nan→nan
+[E111] 전체 루프 종료
+=== 종료코드 0 ===
