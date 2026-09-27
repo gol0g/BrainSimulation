@@ -1,0 +1,35 @@
+=== E108 실행: 2026-09-27T04:10:40Z ===
+커맨드: bash scripts/e108_main.sh
+---
+  S0 b0: => CALIB d1_left=-0.0027 d1_right=+0.0238 motor_left=-0.3377 motor_right=+0.3322 good_left=-0.2070
+  S0 b1: => CALIB d1_left=-0.0082 d1_right=+0.0221 motor_left=-0.3391 motor_right=+0.3360 good_left=-0.2146
+  S0 b2: => CALIB d1_left=-0.0117 d1_right=+0.0190 motor_left=-0.3419 motor_right=+0.3315 good_left=-0.2076
+  S0 b3: => CALIB d1_left=-0.0273 d1_right=+0.0068 motor_left=-0.3399 motor_right=+0.3350 good_left=-0.2111
+  S0 b4: => CALIB d1_left=-0.0152 d1_right=+0.0179 motor_left=-0.3373 motor_right=+0.3330 good_left=-0.2153
+  S1 b0: => CALIB d1_left=-0.0226 d1_right=+0.0369 motor_left=-0.3199 motor_right=+0.3240 good_left=-0.1855
+  S1 b1: => CALIB d1_left=-0.0285 d1_right=+0.0338 motor_left=-0.3294 motor_right=+0.3193 good_left=-0.2029
+  S1 b2: => CALIB d1_left=-0.0261 d1_right=+0.0210 motor_left=-0.3286 motor_right=+0.3231 good_left=-0.1863
+  S1 b3: => CALIB d1_left=-0.0314 d1_right=+0.0304 motor_left=-0.3198 motor_right=+0.3328 good_left=-0.1835
+  S1 b4: => CALIB d1_left=-0.0238 d1_right=+0.0354 motor_left=-0.3317 motor_right=+0.3179 good_left=-0.2045
+  S2 b0: => CALIB d1_left=-0.0100 d1_right=+0.0021 motor_left=-0.3154 motor_right=+0.3177 good_left=-0.1538
+  S2 b1: => CALIB d1_left=-0.0095 d1_right=+0.0084 motor_left=-0.3142 motor_right=+0.3185 good_left=-0.1510
+  S2 b2: => CALIB d1_left=-0.0053 d1_right=+0.0007 motor_left=-0.3175 motor_right=+0.3179 good_left=-0.1499
+  S2 b3: => CALIB d1_left=-0.0030 d1_right=+0.0118 motor_left=-0.3194 motor_right=+0.3210 good_left=-0.1522
+  S2 b4: => CALIB d1_left=-0.0124 d1_right=+0.0016 motor_left=-0.3188 motor_right=+0.3152 good_left=-0.1569
+  S3 b0: => CALIB d1_left=-0.0082 d1_right=+0.0561 motor_left=-0.3198 motor_right=+0.3252 good_left=-0.1924
+  S3 b1: => CALIB d1_left=-0.0310 d1_right=+0.0389 motor_left=-0.3328 motor_right=+0.3274 good_left=-0.2092
+  S3 b2: => CALIB d1_left=-0.0251 d1_right=+0.0283 motor_left=-0.3340 motor_right=+0.3249 good_left=-0.1961
+  S3 b3: => CALIB d1_left=-0.0310 d1_right=+0.0351 motor_left=-0.3256 motor_right=+0.3371 good_left=-0.1933
+  S3 b4: => CALIB d1_left=-0.0267 d1_right=+0.0388 motor_left=-0.3336 motor_right=+0.3212 good_left=-0.2107
+  S4 b0: => CALIB d1_left=-0.0159 d1_right=+0.0035 motor_left=-0.3150 motor_right=+0.3177 good_left=-0.1550
+  S4 b1: => CALIB d1_left=-0.0173 d1_right=+0.0117 motor_left=-0.3144 motor_right=+0.3185 good_left=-0.1530
+  S4 b2: => CALIB d1_left=-0.0071 d1_right=+0.0040 motor_left=-0.3166 motor_right=+0.3182 good_left=-0.1489
+  S4 b3: => CALIB d1_left=-0.0078 d1_right=+0.0194 motor_left=-0.3200 motor_right=+0.3201 good_left=-0.1530
+  S4 b4: => CALIB d1_left=-0.0186 d1_right=+0.0061 motor_left=-0.3193 motor_right=+0.3148 good_left=-0.1637
+  S5 b0: => CALIB d1_left=+0.0013 d1_right=+0.0018 motor_left=-0.3137 motor_right=+0.3201 good_left=-0.1503
+  S5 b1: => CALIB d1_left=+0.0006 d1_right=+0.0022 motor_left=-0.3139 motor_right=+0.3193 good_left=-0.1522
+  S5 b2: => CALIB d1_left=-0.0015 d1_right=-0.0014 motor_left=-0.3176 motor_right=+0.3186 good_left=-0.1471
+  S5 b3: => CALIB d1_left=-0.0001 d1_right=+0.0007 motor_left=-0.3205 motor_right=+0.3210 good_left=-0.1520
+  S5 b4: => CALIB d1_left=-0.0024 d1_right=-0.0019 motor_left=-0.3192 motor_right=+0.3154 good_left=-0.1563
+[E108] 전체 루프 종료
+=== 종료코드 0 ===
