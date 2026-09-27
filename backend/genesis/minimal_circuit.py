@@ -359,6 +359,8 @@ def main():
                     help="자극 사이 무자극 구간. 전역 억제가 가라앉을 시간을 준다.")
     ap.add_argument("--probe-reverse", action="store_true",
                     help="B를 먼저 재서 순서 효과를 확인한다.")
+    ap.add_argument("--flip-at", type=int, default=None,
+                    help="E104: reversal 모드에서 규칙을 뒤집는 시행 번호(기본: 전체의 절반 — 이전 동작)")
     ap.add_argument("--trace-file", type=str, default=None,
                     help="E102: 시행별 (자극·행동·보상, 도파민 직전 자격흔적, 도파민 후 가중치)를 KC별 합으로 .npz 저장. 읽기 전용")
     ap.add_argument("--probe-kc", action="store_true",
@@ -434,6 +436,8 @@ def main():
         return
 
     w0 = {k: read_g(s).copy() for k, s in syn.items()}
+    # E104: 반전 시점. 기본은 이전과 같이 전체 시행의 절반(동작 불변).
+    FLIP_AT = a.flip_at if a.flip_at is not None else a.trials // 2
     if a.trace_file:
         global TRACE
         TRACE = {"n_pre": a.n_kc, "pre": {}, "e_l": [], "e_r": [], "g_l": [], "g_r": [], "ev": [], "act_spk": []}
@@ -448,7 +452,7 @@ def main():
     n_rewarded = 0
     REWARD_LOG = []
     for t in range(a.trials):
-        rule = FLIP if (a.mode == "reversal" and t >= a.trials // 2) else RULE
+        rule = FLIP if (a.mode == "reversal" and t >= FLIP_AT) else RULE
         stim = "A" if rng.random() < 0.5 else "B"
 
         if a.mode == "shuffled":
@@ -612,7 +616,7 @@ def main():
             nr=np.array([x[4] for x in TRACE["ev"]]),
             act_spk=np.array(TRACE["act_spk"]) if TRACE["act_spk"] else np.zeros((0, 2)),
             kc_a=np.fromiter(kc_sets["A"], dtype=np.int64), kc_b=np.fromiter(kc_sets["B"], dtype=np.int64),
-            flip_at=(a.trials // 2 if a.mode == "reversal" else -1))
+            flip_at=(FLIP_AT if a.mode == "reversal" else -1))
         print("[추적] %d시행 저장 → %s" % (len(TRACE["ev"]), a.trace_file))
 
     if a.dump_rewards:
