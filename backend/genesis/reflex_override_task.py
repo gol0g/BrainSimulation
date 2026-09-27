@@ -196,6 +196,21 @@ def main():
                     help="C37: 행동 탐색 확률. 0이면 결정론적 정책이라 정답 표본이 0개 → 학습 불가.")
     ap.add_argument("--w-max", type=float, default=None,
                     help="C36 수리3: 학습 상한(기본 30.0). 선천반사 25.0과 경쟁하려면 그 이상 필요.")
+    ap.add_argument("--kc-motor", action="store_true",
+                    help="E109: KC→motor 4방향 R-STDP 학습 경로(버섯체 MBON 유사). D1 경로 권한 부족(K52) 대안.")
+    ap.add_argument("--kc-motor-w-max", type=float, default=2.0)
+    ap.add_argument("--kc-motor-init-w", type=float, default=0.5)
+    ap.add_argument("--kc-motor-eta", type=float, default=0.001)
+    ap.add_argument("--kc-motor-sparsity", type=float, default=0.05)
+    ap.add_argument("--calib-kc-motor", action="store_true",
+                    help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
+                         "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
+    ap.add_argument("--reward-window", type=int, default=0,
+                    help="E109: 보상 후 같은 자극을 유지한 채 처리할 스텝 수(도파민이 이번 시행 흔적에 작용). 0=이전 동작")
+    ap.add_argument("--trial-gap", type=int, default=0,
+                    help="E109: 보상 창 뒤 도파민 0 + 무자극 처리 스텝 수(흔적 소거). 0=이전 동작")
+    ap.add_argument("--calib-kc-motor-set", default=None, choices=("zero", "rev", "ali"),
+                    help="E109 보정(수정판): 새 뇌에 KC→motor 가중치를 한 상태로 넣고 **한 번만** 평가(이력 교란 제거).")
     ap.add_argument("--calib-d1-sign", type=int, default=0,
                     help="E108 조작검증: N>0이면 D1/motor 좌우 편향별 조향 부호를 N회씩 재고 종료(학습 없음).")
     args = ap.parse_args()
@@ -248,6 +263,12 @@ def main():
         cfg.direct_inhibition = args.direct_inhib
     if args.hippo_eta is not None:
         cfg.place_to_food_memory_eta = args.hippo_eta
+    if args.kc_motor:
+        cfg.kc_motor_rstdp = True
+        cfg.kc_motor_w_max = args.kc_motor_w_max
+        cfg.kc_motor_init_w = args.kc_motor_init_w
+        cfg.kc_motor_eta = args.kc_motor_eta
+        cfg.kc_motor_sparsity = args.kc_motor_sparsity
     brain = ForagerBrain(cfg)
 
     # 2) 뇌 생성 후: 환경 시드로 재고정 (먹이 배치·워밍업이 여기서 결정된다)
@@ -268,6 +289,53 @@ def main():
         if d:
             obs = env.reset()
     nh = env.config.n_rays // 2
+
+    if args.calib_kc_motor_set:
+        # E109 보정 수정판: 한 뇌를 연달아 평가하면 동역학 이력이 조건을 교란한다(K22 — 첫 판에서 init≠zero 로 드러남).
+        # **조건마다 같은 시드로 새로 만든 뇌를 한 번만 평가**한다(INV-B5 와 같은 원리: 이력 동일 → 가중치만 다름).
+        syn = getattr(brain, "kc_motor_syn", None)
+        if not syn:
+            raise SystemExit("--calib-kc-motor-set 은 --kc-motor 가 필요하다")
+        wm = args.kc_motor_w_max
+        same, cross = {"zero": (0.0, 0.0), "rev": (0.0, wm), "ali": (wm, 0.0)}[args.calib_kc_motor_set]
+        for (k, m), s_ in syn.items():
+            s_.pull_connectivity_from_device()
+            s_.vars["g"].pull_from_device()
+            _n = np.asarray(s_.vars["g"].values).size
+            s_.vars["g"].values = np.full(_n, (same if k == m else cross), dtype=np.float32)
+            s_.vars["g"].push_to_device()
+        acc, off, mod = evaluate(brain, obs, nh, args.trials)
+        print("=> CALIBKM1 set=%s wmax=%.2f sp=%.3f mod=%+.4f acc=%.1f off=%+.4f"
+              % (args.calib_kc_motor_set, wm, args.kc_motor_sparsity, mod, acc, off))
+        return
+
+    if args.calib_kc_motor:
+        # E109 조작검증: KC→motor 경로의 **행동 권한**. 학습 없이 가중치를 극단으로 넣고 변조폭을 잰다.
+        # 변조폭 = mean(조향|good=우) − mean(조향|good=좌). 반사면 양수, 역전이면 음수.
+        syn = getattr(brain, "kc_motor_syn", None)
+        if not syn:
+            raise SystemExit("--calib-kc-motor 는 --kc-motor 가 필요하다")
+
+        def set_w(same, cross):
+            for (k, m), s_ in syn.items():
+                s_.pull_connectivity_from_device()
+                s_.vars["g"].pull_from_device()
+                # SPARSE 는 view 로 쓸 수 없다(PyGeNN: values 사용) — transplant_eval 과 같은 규칙
+                _n = np.asarray(s_.vars["g"].values).size
+                s_.vars["g"].values = np.full(_n, (same if k == m else cross), dtype=np.float32)
+                s_.vars["g"].push_to_device()
+
+        out = {}
+        _, _, out["init"] = evaluate(brain, obs, nh, args.trials)
+        wm = args.kc_motor_w_max
+        set_w(0.0, wm); _, _, out["rev"] = evaluate(brain, obs, nh, args.trials)      # 완전 역전 학습 상태
+        set_w(wm, 0.0); _, _, out["ali"] = evaluate(brain, obs, nh, args.trials)      # 반사 정렬 학습 상태
+        set_w(0.0, 0.0); _, _, out["zero"] = evaluate(brain, obs, nh, args.trials)    # 경로 없음
+        print("[보정 KC→motor] w_max=%.2f 변조폭: 초기 %+.4f | 역전(교차=w_max) %+.4f | 정렬 %+.4f | 0 %+.4f"
+              % (wm, out["init"], out["rev"], out["ali"], out["zero"]))
+        print("=> CALIBKM wmax=%.2f init=%+.4f rev=%+.4f ali=%+.4f zero=%+.4f"
+              % (wm, out["init"], out["rev"], out["ali"], out["zero"]))
+        return
 
     if args.calib_d1_sign > 0:
         # E108 조작검증: D1 좌/우 편향이 조향(angle_delta 합) 부호를 어느 쪽으로 바꾸는가.
@@ -378,6 +446,20 @@ def main():
                     pass
             else:
                 brain.release_dopamine(reward_magnitude=-0.5)
+            if args.reward_window > 0 or args.trial_gap > 0:
+                # E109: 보상 타이밍 수리. 이 과제는 decay_dopamine()을 부르지 않아 도파민이 **다음 시행**의
+                # 처리 스텝 동안 가중치에 반영됐다(시행 t 보상 → 시행 t+1 활동에 배정). 최소 회로처럼
+                # (1) 같은 자극을 유지한 채 보상 창 K스텝 → (2) 도파민 0 → (3) 무자극 간격 G스텝.
+                _o = stim(obs, nh, side)
+                for _ in range(args.reward_window):
+                    brain.process(_o)
+                brain.dopamine_level = 0.0
+                brain._push_dopamine_to_rstdp()
+                _neu = stim(obs, nh, "left")
+                for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+                    _neu[_k] = np.zeros(nh)
+                for _ in range(args.trial_gap):
+                    brain.process(_neu)
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
 
     d1_after = snap_d1()

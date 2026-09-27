@@ -1194,6 +1194,14 @@ class ForagerBrainConfig:
     kc_inh_to_kc_sparsity: float = 0.08
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
+    # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
+    # 최소 회로(K50)처럼 학습 경로를 운동 출력에 직접 닿게 한다. 기본 꺼짐 = 기존 동작.
+    kc_motor_rstdp: bool = False
+    kc_motor_init_w: float = 0.5
+    kc_motor_w_max: float = 2.0
+    kc_motor_eta: float = 0.001
+    kc_motor_tau_e: float = 12.0
+    kc_motor_sparsity: float = 0.05
     kc_rstdp_eta: float = 0.0003
     kc_rstdp_w_max: float = 5.0
     kc_rstdp_w_rest: float = 0.5
@@ -9047,6 +9055,35 @@ class ForagerBrain:
         self._create_static_synapse(
             "kc_inh_r_to_kc_r", self.kc_inh_right, self.kc_right,
             self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+
+        # === E109: KC→motor 학습 경로 (4방향: 같은 쪽 + 교차) ===
+        # 최소 회로의 KC→출력 R-STDP 를 옮긴다. 교차(kc_l→motor_r)가 있어야 반사 반대 매핑을 배울 수 있다.
+        # 학습 시냅스의 post 가 motor 이므로 motor 탐색 편향이 곧 행동 흔적 구동(최소 회로 act_drive)이 된다.
+        if getattr(self.config, "kc_motor_rstdp", False):
+            from rstdp_model import make_rstdp_model, DEFAULT_PARAMS
+            _mp = dict(DEFAULT_PARAMS)
+            _mp["w_max"] = float(self.config.kc_motor_w_max)
+            _mp["eta"] = float(self.config.kc_motor_eta)
+            _mp["tau_e"] = float(self.config.kc_motor_tau_e)
+            _mwu = make_rstdp_model()
+            _mw = float(self.config.kc_motor_init_w)
+            _msp = float(self.config.kc_motor_sparsity)
+            self.kc_motor_syn = {}
+            for _kn, _kpop in (("l", self.kc_left), ("r", self.kc_right)):
+                for _mn, _mpop in (("l", self.motor_left), ("r", self.motor_right)):
+                    _syn = self.model.add_synapse_population(
+                        "kc_%s_to_motor_%s" % (_kn, _mn), "SPARSE", _kpop, _mpop,
+                        init_weight_update(_mwu, _mp, {"g": init_var("Constant", {"constant": _mw}), "e": 0.0},
+                                           {"preTrace": 0.0}, {"postTrace": 0.0}),
+                        init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                        init_sparse_connectivity("FixedProbability", {"prob": _msp}))
+                    _syn.set_wu_param_dynamic("dopamine")
+                    self.kc_motor_syn[(_kn, _mn)] = _syn
+            if not hasattr(self, "_rstdp_synapses"):
+                self._rstdp_synapses = []
+            self._rstdp_synapses += list(self.kc_motor_syn.values())
+            print(f"    KC→motor [E109 R-STDP 4방향]: init_w={_mw}, w_max={_mp['w_max']}, eta={_mp['eta']}, "
+                  f"tau_e={_mp['tau_e']}, sparsity={_msp}")
 
         # === D) Output learning synapses: 4 SPARSE (1 KC × 2 sides × D1+D2) ===
         kc_d1_w = self.config.kc_to_d1_init_w
