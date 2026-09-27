@@ -1,0 +1,19 @@
+make: Entering directory '/root/minc_run/minimal_circuit_CODE'
+make: Leaving directory '/root/minc_run/minimal_circuit_CODE'
+  시행    1~ 400: 정답률  65.0%
+
+=== 평가 (탐색 없음, 학습 없음, 무작위 순서 100시행) : 정답률 100.0% | 동점 0회 ===
+   자극 A: 44/44 (100.0%)
+   자극 B: 56/56 (100.0%)
+
+=== 학습 후 자극별 출력 (선택 이전의 원 신호) ===
+  자극 A → 정답 L | out_L= 170  out_R=  51  차이  +119 | KC 90개
+  자극 B → 정답 R | out_L=  88  out_R=  96  차이    -8 | KC 112개
+
+=== 가중치 변화 ===
+  kc_out_l: n=8062 |Δ|평균 1.87364 변화율  22.0% | 평균 0.500→2.374 | std 0.0000→3.7638
+  kc_out_r: n=8032 |Δ|평균 1.54730 변화율  22.1% | 평균 0.500→2.047 | std 0.0000→3.5356
+
+=== 요약 (mode=learn seed=0) ===
+  첫 구간 65.0% → 마지막 구간 65.0% | 변화 +0.0%p | 보상률 65.0%
+=> MINCIRC mode=learn seed=0 first=65.0 last=65.0 delta=+0.0 reward=65.0 **eval=100.0** tie=0

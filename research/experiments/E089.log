@@ -1,0 +1,55 @@
+=== E089 실행: 2026-09-24T16:14:10Z ===
+커맨드: bash scripts/e089_main.sh
+---
+########## 배선 시드 0 ##########
+  frozen w0: => MINCIRC mode=frozen seed=0 first=28.7 last=28.7 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=100
+  learn w0 t100: => MINCIRC mode=learn seed=0 first=47.8 last=47.8 delta=+0.0 reward=47.8 **eval=56.0** tie=0 trialseed=100
+  learn w0 t101: => MINCIRC mode=learn seed=0 first=59.5 last=59.5 delta=+0.0 reward=59.5 **eval=44.0** tie=0 trialseed=101
+  learn w0 t102: => MINCIRC mode=learn seed=0 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=56.0** tie=0 trialseed=102
+  learn w0 t103: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=103
+  learn w0 t104: => MINCIRC mode=learn seed=0 first=47.5 last=47.5 delta=+0.0 reward=47.5 **eval=44.0** tie=0 trialseed=104
+  learn w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+  learn w0 t106: => MINCIRC mode=learn seed=0 first=64.2 last=64.2 delta=+0.0 reward=64.2 **eval=56.0** tie=0 trialseed=106
+  learn w0 t107: => MINCIRC mode=learn seed=0 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=44.0** tie=0 trialseed=107
+########## 배선 시드 1 ##########
+  frozen w1: => MINCIRC mode=frozen seed=1 first=67.5 last=67.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=100
+  learn w1 t100: => MINCIRC mode=learn seed=1 first=63.2 last=63.2 delta=+0.0 reward=63.2 **eval=100.0** tie=0 trialseed=100
+  learn w1 t101: => MINCIRC mode=learn seed=1 first=56.0 last=56.0 delta=+0.0 reward=56.0 **eval=100.0** tie=0 trialseed=101
+  learn w1 t102: => MINCIRC mode=learn seed=1 first=42.0 last=42.0 delta=+0.0 reward=42.0 **eval=49.0** tie=0 trialseed=102
+  learn w1 t103: => MINCIRC mode=learn seed=1 first=68.0 last=68.0 delta=+0.0 reward=68.0 **eval=100.0** tie=0 trialseed=103
+  learn w1 t104: => MINCIRC mode=learn seed=1 first=69.2 last=69.2 delta=+0.0 reward=69.2 **eval=100.0** tie=0 trialseed=104
+  learn w1 t105: => MINCIRC mode=learn seed=1 first=50.7 last=50.7 delta=+0.0 reward=50.7 **eval=51.0** tie=0 trialseed=105
+  learn w1 t106: => MINCIRC mode=learn seed=1 first=69.2 last=69.2 delta=+0.0 reward=69.2 **eval=100.0** tie=0 trialseed=106
+  learn w1 t107: => MINCIRC mode=learn seed=1 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+########## 배선 시드 2 ##########
+  frozen w2: => MINCIRC mode=frozen seed=2 first=67.5 last=67.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=100
+  learn w2 t100: => MINCIRC mode=learn seed=2 first=58.8 last=58.8 delta=+0.0 reward=58.8 **eval=100.0** tie=0 trialseed=100
+  learn w2 t101: => MINCIRC mode=learn seed=2 first=55.8 last=55.8 delta=+0.0 reward=55.8 **eval=54.0** tie=0 trialseed=101
+  learn w2 t102: => MINCIRC mode=learn seed=2 first=42.0 last=42.0 delta=+0.0 reward=42.0 **eval=54.0** tie=0 trialseed=102
+  learn w2 t103: => MINCIRC mode=learn seed=2 first=60.2 last=60.2 delta=+0.0 reward=60.2 **eval=100.0** tie=0 trialseed=103
+  learn w2 t104: => MINCIRC mode=learn seed=2 first=68.8 last=68.8 delta=+0.0 reward=68.8 **eval=100.0** tie=0 trialseed=104
+  learn w2 t105: => MINCIRC mode=learn seed=2 first=54.2 last=54.2 delta=+0.0 reward=54.2 **eval=46.0** tie=0 trialseed=105
+  learn w2 t106: => MINCIRC mode=learn seed=2 first=70.0 last=70.0 delta=+0.0 reward=70.0 **eval=100.0** tie=0 trialseed=106
+  learn w2 t107: => MINCIRC mode=learn seed=2 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+########## 배선 시드 3 ##########
+  frozen w3: => MINCIRC mode=frozen seed=3 first=48.0 last=48.0 delta=+0.0 reward=0.0 **eval=47.0** tie=0 trialseed=100
+  learn w3 t100: => MINCIRC mode=learn seed=3 first=48.0 last=48.0 delta=+0.0 reward=48.0 **eval=47.0** tie=0 trialseed=100
+  learn w3 t101: => MINCIRC mode=learn seed=3 first=53.2 last=53.2 delta=+0.0 reward=53.2 **eval=47.0** tie=0 trialseed=101
+  learn w3 t102: => MINCIRC mode=learn seed=3 first=42.0 last=42.0 delta=+0.0 reward=42.0 **eval=47.0** tie=0 trialseed=102
+  learn w3 t103: => MINCIRC mode=learn seed=3 first=46.5 last=46.5 delta=+0.0 reward=46.5 **eval=47.0** tie=0 trialseed=103
+  learn w3 t104: => MINCIRC mode=learn seed=3 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=47.0** tie=0 trialseed=104
+  learn w3 t105: => MINCIRC mode=learn seed=3 first=65.5 last=65.5 delta=+0.0 reward=65.5 **eval=100.0** tie=0 trialseed=105
+  learn w3 t106: => MINCIRC mode=learn seed=3 first=48.0 last=48.0 delta=+0.0 reward=48.0 **eval=47.0** tie=0 trialseed=106
+  learn w3 t107: => MINCIRC mode=learn seed=3 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=47.0** tie=0 trialseed=107
+########## 배선 시드 4 ##########
+  frozen w4: => MINCIRC mode=frozen seed=4 first=48.2 last=48.2 delta=+0.0 reward=0.0 **eval=54.0** tie=0 trialseed=100
+  learn w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+  learn w4 t101: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=101
+  learn w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+  learn w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+  learn w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+  learn w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+  learn w4 t106: => MINCIRC mode=learn seed=4 first=64.8 last=64.8 delta=+0.0 reward=64.8 **eval=100.0** tie=0 trialseed=106
+  learn w4 t107: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=107
+[E089] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E089
+=== 종료코드 0 ===

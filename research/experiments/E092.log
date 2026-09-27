@@ -1,0 +1,92 @@
+=== E092 실행: 2026-09-25T05:45:50Z ===
+커맨드: bash scripts/e092_main.sh
+---
+  frozen w0: => MINCIRC mode=frozen seed=0 first=28.7 last=28.7 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=100
+  frozen w1: => MINCIRC mode=frozen seed=1 first=67.5 last=67.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=100
+  frozen w2: => MINCIRC mode=frozen seed=2 first=67.5 last=67.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=100
+  frozen w3: => MINCIRC mode=frozen seed=3 first=48.0 last=48.0 delta=+0.0 reward=0.0 **eval=47.0** tie=0 trialseed=100
+  frozen w4: => MINCIRC mode=frozen seed=4 first=48.2 last=48.2 delta=+0.0 reward=0.0 **eval=54.0** tie=0 trialseed=100
+########## learn (보상 계열 저장) ##########
+  learn w0 t100: => MINCIRC mode=learn seed=0 first=47.2 last=47.2 delta=+0.0 reward=47.2 **eval=56.0** tie=0 trialseed=100
+  learn w0 t101: => MINCIRC mode=learn seed=0 first=73.2 last=73.2 delta=+0.0 reward=73.2 **eval=100.0** tie=0 trialseed=101
+  learn w0 t102: => MINCIRC mode=learn seed=0 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=56.0** tie=0 trialseed=102
+  learn w0 t103: => MINCIRC mode=learn seed=0 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=56.0** tie=0 trialseed=103
+  learn w0 t104: => MINCIRC mode=learn seed=0 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=104
+  learn w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+  learn w0 t106: => MINCIRC mode=learn seed=0 first=69.2 last=69.2 delta=+0.0 reward=69.2 **eval=100.0** tie=0 trialseed=106
+  learn w0 t107: => MINCIRC mode=learn seed=0 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=44.0** tie=0 trialseed=107
+  learn w1 t100: => MINCIRC mode=learn seed=1 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=51.0** tie=0 trialseed=100
+  learn w1 t101: => MINCIRC mode=learn seed=1 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+  learn w1 t102: => MINCIRC mode=learn seed=1 first=53.0 last=53.0 delta=+0.0 reward=53.0 **eval=51.0** tie=0 trialseed=102
+  learn w1 t103: => MINCIRC mode=learn seed=1 first=51.2 last=51.2 delta=+0.0 reward=51.2 **eval=51.0** tie=0 trialseed=103
+  learn w1 t104: => MINCIRC mode=learn seed=1 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=104
+  learn w1 t105: => MINCIRC mode=learn seed=1 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=51.0** tie=0 trialseed=105
+  learn w1 t106: => MINCIRC mode=learn seed=1 first=70.0 last=70.0 delta=+0.0 reward=70.0 **eval=100.0** tie=0 trialseed=106
+  learn w1 t107: => MINCIRC mode=learn seed=1 first=53.2 last=53.2 delta=+0.0 reward=53.2 **eval=51.0** tie=0 trialseed=107
+  learn w2 t100: => MINCIRC mode=learn seed=2 first=67.2 last=67.2 delta=+0.0 reward=67.2 **eval=100.0** tie=0 trialseed=100
+  learn w2 t101: => MINCIRC mode=learn seed=2 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+  learn w2 t102: => MINCIRC mode=learn seed=2 first=62.5 last=62.5 delta=+0.0 reward=62.5 **eval=46.0** tie=0 trialseed=102
+  learn w2 t103: => MINCIRC mode=learn seed=2 first=62.0 last=62.0 delta=+0.0 reward=62.0 **eval=46.0** tie=0 trialseed=103
+  learn w2 t104: => MINCIRC mode=learn seed=2 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=104
+  learn w2 t105: => MINCIRC mode=learn seed=2 first=68.0 last=68.0 delta=+0.0 reward=68.0 **eval=100.0** tie=0 trialseed=105
+  learn w2 t106: => MINCIRC mode=learn seed=2 first=70.0 last=70.0 delta=+0.0 reward=70.0 **eval=100.0** tie=0 trialseed=106
+  learn w2 t107: => MINCIRC mode=learn seed=2 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=107
+  learn w3 t100: => MINCIRC mode=learn seed=3 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=47.0** tie=0 trialseed=100
+  learn w3 t101: => MINCIRC mode=learn seed=3 first=53.8 last=53.8 delta=+0.0 reward=53.8 **eval=47.0** tie=0 trialseed=101
+  learn w3 t102: => MINCIRC mode=learn seed=3 first=44.8 last=44.8 delta=+0.0 reward=44.8 **eval=47.0** tie=0 trialseed=102
+  learn w3 t103: => MINCIRC mode=learn seed=3 first=66.0 last=66.0 delta=+0.0 reward=66.0 **eval=100.0** tie=0 trialseed=103
+  learn w3 t104: => MINCIRC mode=learn seed=3 first=49.2 last=49.2 delta=+0.0 reward=49.2 **eval=47.0** tie=0 trialseed=104
+  learn w3 t105: => MINCIRC mode=learn seed=3 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=100.0** tie=0 trialseed=105
+  learn w3 t106: => MINCIRC mode=learn seed=3 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=47.0** tie=0 trialseed=106
+  learn w3 t107: => MINCIRC mode=learn seed=3 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+  learn w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+  learn w4 t101: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=101
+  learn w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+  learn w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+  learn w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+  learn w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+  learn w4 t106: => MINCIRC mode=learn seed=4 first=49.2 last=49.2 delta=+0.0 reward=49.2 **eval=54.0** tie=0 trialseed=106
+  learn w4 t107: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=107
+########## shuffled (같은 보상 계열, 수반성만 제거) ##########
+  shuf w0 t100: => MINCIRC mode=shuffled seed=0 first=44.2 last=44.2 delta=+0.0 reward=47.2 **eval=44.0** tie=0 trialseed=100
+  shuf w0 t101: => MINCIRC mode=shuffled seed=0 first=53.2 last=53.2 delta=+0.0 reward=73.2 **eval=44.0** tie=0 trialseed=101
+  shuf w0 t102: => MINCIRC mode=shuffled seed=0 first=41.5 last=41.5 delta=+0.0 reward=49.5 **eval=44.0** tie=0 trialseed=102
+  shuf w0 t103: => MINCIRC mode=shuffled seed=0 first=46.5 last=46.5 delta=+0.0 reward=65.2 **eval=44.0** tie=0 trialseed=103
+  shuf w0 t104: => MINCIRC mode=shuffled seed=0 first=48.0 last=48.0 delta=+0.0 reward=66.2 **eval=44.0** tie=0 trialseed=104
+  shuf w0 t105: => MINCIRC mode=shuffled seed=0 first=48.8 last=48.8 delta=+0.0 reward=48.5 **eval=44.0** tie=0 trialseed=105
+  shuf w0 t106: => MINCIRC mode=shuffled seed=0 first=44.8 last=44.8 delta=+0.0 reward=69.2 **eval=44.0** tie=0 trialseed=106
+  shuf w0 t107: => MINCIRC mode=shuffled seed=0 first=49.8 last=49.8 delta=+0.0 reward=50.2 **eval=44.0** tie=0 trialseed=107
+  shuf w1 t100: => MINCIRC mode=shuffled seed=1 first=51.5 last=51.5 delta=+0.0 reward=48.8 **eval=51.0** tie=0 trialseed=100
+  shuf w1 t101: => MINCIRC mode=shuffled seed=1 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+  shuf w1 t102: => MINCIRC mode=shuffled seed=1 first=54.5 last=54.5 delta=+0.0 reward=53.0 **eval=51.0** tie=0 trialseed=102
+  shuf w1 t103: => MINCIRC mode=shuffled seed=1 first=51.7 last=51.7 delta=+0.0 reward=51.2 **eval=51.0** tie=0 trialseed=103
+  shuf w1 t104: => MINCIRC mode=shuffled seed=1 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=104
+  shuf w1 t105: => MINCIRC mode=shuffled seed=1 first=50.0 last=50.0 delta=+0.0 reward=48.5 **eval=51.0** tie=0 trialseed=105
+  shuf w1 t106: => MINCIRC mode=shuffled seed=1 first=69.0 last=69.0 delta=+0.0 reward=70.0 **eval=100.0** tie=0 trialseed=106
+  shuf w1 t107: => MINCIRC mode=shuffled seed=1 first=53.2 last=53.2 delta=+0.0 reward=53.2 **eval=51.0** tie=0 trialseed=107
+  shuf w2 t100: => MINCIRC mode=shuffled seed=2 first=66.5 last=66.5 delta=+0.0 reward=67.2 **eval=46.0** tie=0 trialseed=100
+  shuf w2 t101: => MINCIRC mode=shuffled seed=2 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+  shuf w2 t102: => MINCIRC mode=shuffled seed=2 first=58.8 last=58.8 delta=+0.0 reward=62.5 **eval=46.0** tie=0 trialseed=102
+  shuf w2 t103: => MINCIRC mode=shuffled seed=2 first=53.2 last=53.2 delta=+0.0 reward=62.0 **eval=46.0** tie=0 trialseed=103
+  shuf w2 t104: => MINCIRC mode=shuffled seed=2 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=104
+  shuf w2 t105: => MINCIRC mode=shuffled seed=2 first=54.0 last=54.0 delta=+0.0 reward=68.0 **eval=46.0** tie=0 trialseed=105
+  shuf w2 t106: => MINCIRC mode=shuffled seed=2 first=65.5 last=65.5 delta=+0.0 reward=70.0 **eval=46.0** tie=0 trialseed=106
+  shuf w2 t107: => MINCIRC mode=shuffled seed=2 first=71.8 last=71.8 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=107
+  shuf w3 t100: => MINCIRC mode=shuffled seed=3 first=50.7 last=50.7 delta=+0.0 reward=52.2 **eval=47.0** tie=0 trialseed=100
+  shuf w3 t101: => MINCIRC mode=shuffled seed=3 first=53.0 last=53.0 delta=+0.0 reward=53.8 **eval=47.0** tie=0 trialseed=101
+  shuf w3 t102: => MINCIRC mode=shuffled seed=3 first=41.8 last=41.8 delta=+0.0 reward=44.8 **eval=47.0** tie=0 trialseed=102
+  shuf w3 t103: => MINCIRC mode=shuffled seed=3 first=49.0 last=49.0 delta=+0.0 reward=66.0 **eval=47.0** tie=0 trialseed=103
+  shuf w3 t104: => MINCIRC mode=shuffled seed=3 first=48.2 last=48.2 delta=+0.0 reward=49.2 **eval=47.0** tie=0 trialseed=104
+  shuf w3 t105: => MINCIRC mode=shuffled seed=3 first=50.2 last=50.2 delta=+0.0 reward=65.2 **eval=47.0** tie=0 trialseed=105
+  shuf w3 t106: => MINCIRC mode=shuffled seed=3 first=48.5 last=48.5 delta=+0.0 reward=48.8 **eval=47.0** tie=0 trialseed=106
+  shuf w3 t107: => MINCIRC mode=shuffled seed=3 first=49.5 last=49.5 delta=+0.0 reward=72.0 **eval=47.0** tie=0 trialseed=107
+  shuf w4 t100: => MINCIRC mode=shuffled seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+  shuf w4 t101: => MINCIRC mode=shuffled seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=101
+  shuf w4 t102: => MINCIRC mode=shuffled seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+  shuf w4 t103: => MINCIRC mode=shuffled seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+  shuf w4 t104: => MINCIRC mode=shuffled seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+  shuf w4 t105: => MINCIRC mode=shuffled seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+  shuf w4 t106: => MINCIRC mode=shuffled seed=4 first=49.2 last=49.2 delta=+0.0 reward=49.2 **eval=54.0** tie=0 trialseed=106
+  shuf w4 t107: => MINCIRC mode=shuffled seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=107
+[E092] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E092
+=== 종료코드 0 ===

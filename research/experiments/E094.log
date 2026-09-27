@@ -1,0 +1,527 @@
+=== E094 실행: 2026-09-25T06:48:24Z ===
+커맨드: bash scripts/e094_main.sh
+---
+  frozen w0: => MINCIRC mode=frozen seed=0 first=28.7 last=28.7 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.5000 | out_R 평균 0.5000 | 차이 +0.0000 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5000 | out_R 평균 0.5000 | 차이 +0.0000 (정답은 out_R) **정답쪽 우세**
+  frozen w3: => MINCIRC mode=frozen seed=3 first=48.0 last=48.0 delta=+0.0 reward=0.0 **eval=47.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.5000 | out_R 평균 0.5000 | 차이 +0.0000 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5000 | out_R 평균 0.5000 | 차이 +0.0000 (정답은 out_R) **정답쪽 우세**
+  frozen w4: => MINCIRC mode=frozen seed=4 first=48.2 last=48.2 delta=+0.0 reward=0.0 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.5000 | out_R 평균 0.5000 | 차이 +0.0000 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5000 | out_R 평균 0.5000 | 차이 +0.0000 (정답은 out_R) **정답쪽 우세**
+########## 축 A: tau_e=200 고정, act_drive 훑기 ##########
+--- act=6.0 ---
+  A_tau200act6.0 w0 t100: => MINCIRC mode=learn seed=0 first=47.2 last=47.2 delta=+0.0 reward=47.2 **eval=56.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.7898 | out_R 평균 0.8103 | 차이 -0.0205 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.9504 | out_R 평균 3.5155 | 차이 -2.5651 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t101: => MINCIRC mode=learn seed=0 first=73.2 last=73.2 delta=+0.0 reward=73.2 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.9818 | out_R 평균 0.9125 | 차이 +2.0693 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3538 | out_R 평균 2.3645 | 차이 -1.0107 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t102: => MINCIRC mode=learn seed=0 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=56.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.7183 | out_R 평균 0.8605 | 차이 -0.1421 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.9313 | out_R 평균 4.1914 | 차이 -3.2601 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t103: => MINCIRC mode=learn seed=0 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=56.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.7153 | out_R 평균 1.0258 | 차이 +0.6895 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1365 | out_R 평균 2.9334 | 차이 -1.7969 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t104: => MINCIRC mode=learn seed=0 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 2.1436 | out_R 평균 1.0105 | 차이 +1.1331 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1538 | out_R 평균 2.4377 | 차이 -1.2839 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 0.6719 | out_R 평균 1.2895 | 차이 -0.6176 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.8090 | out_R 평균 3.6700 | 차이 -2.8610 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t106: => MINCIRC mode=learn seed=0 first=69.2 last=69.2 delta=+0.0 reward=69.2 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 2.2197 | out_R 평균 1.0198 | 차이 +1.1999 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1851 | out_R 평균 2.4896 | 차이 -1.3046 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w0 t107: => MINCIRC mode=learn seed=0 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=44.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 4.0670 | out_R 평균 0.6790 | 차이 +3.3880 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0014 | out_R 평균 0.9485 | 차이 +0.0530 (정답은 out_R) **반대**
+  A_tau200act6.0 w3 t100: => MINCIRC mode=learn seed=3 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=47.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 2.9069 | out_R 평균 0.8152 | 차이 +2.0917 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9812 | out_R 평균 1.3088 | 차이 -0.3276 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w3 t101: => MINCIRC mode=learn seed=3 first=53.8 last=53.8 delta=+0.0 reward=53.8 **eval=47.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 4.6219 | out_R 평균 0.7047 | 차이 +3.9172 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2449 | out_R 평균 0.8278 | 차이 +0.4171 (정답은 out_R) **반대**
+  A_tau200act6.0 w3 t102: => MINCIRC mode=learn seed=3 first=44.8 last=44.8 delta=+0.0 reward=44.8 **eval=47.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 2.6113 | out_R 평균 0.7101 | 차이 +1.9012 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8917 | out_R 평균 1.1131 | 차이 -0.2214 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w3 t103: => MINCIRC mode=learn seed=3 first=66.0 last=66.0 delta=+0.0 reward=66.0 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.8846 | out_R 평균 1.1033 | 차이 +0.7813 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0995 | out_R 평균 2.8825 | 차이 -1.7830 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w3 t104: => MINCIRC mode=learn seed=3 first=49.2 last=49.2 delta=+0.0 reward=49.2 **eval=47.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 4.1307 | out_R 평균 0.7012 | 차이 +3.4295 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0174 | out_R 평균 0.8441 | 차이 +0.1733 (정답은 out_R) **반대**
+  A_tau200act6.0 w3 t105: => MINCIRC mode=learn seed=3 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 2.0817 | out_R 평균 1.1077 | 차이 +0.9739 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0280 | out_R 평균 2.5158 | 차이 -1.4878 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w3 t106: => MINCIRC mode=learn seed=3 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=47.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 4.5632 | out_R 평균 0.6657 | 차이 +3.8975 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1913 | out_R 평균 0.6939 | 차이 +0.4974 (정답은 out_R) **반대**
+  A_tau200act6.0 w3 t107: => MINCIRC mode=learn seed=3 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 2.4703 | out_R 평균 1.1129 | 차이 +1.3574 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2475 | out_R 평균 2.5227 | 차이 -1.2752 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.5934 | out_R 평균 1.3272 | 차이 -0.7338 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6908 | out_R 평균 4.4872 | 차이 -3.7965 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t101: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 0.6273 | out_R 평균 1.4542 | 차이 -0.8269 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6585 | out_R 평균 4.9687 | 차이 -4.3102 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.5895 | out_R 평균 1.2620 | 차이 -0.6725 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6583 | out_R 평균 5.0754 | 차이 -4.4172 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 0.5863 | out_R 평균 1.5105 | 차이 -0.9242 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6556 | out_R 평균 4.7926 | 차이 -4.1370 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 0.6442 | out_R 평균 1.6018 | 차이 -0.9576 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7018 | out_R 평균 4.3407 | 차이 -3.6389 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 0.6135 | out_R 평균 1.6078 | 차이 -0.9943 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6570 | out_R 평균 4.1062 | 차이 -3.4492 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t106: => MINCIRC mode=learn seed=4 first=49.2 last=49.2 delta=+0.0 reward=49.2 **eval=54.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 0.6596 | out_R 평균 1.2949 | 차이 -0.6353 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6580 | out_R 평균 4.4599 | 차이 -3.8019 (정답은 out_R) **정답쪽 우세**
+  A_tau200act6.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 0.6155 | out_R 평균 1.5464 | 차이 -0.9310 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6570 | out_R 평균 4.8986 | 차이 -4.2416 (정답은 out_R) **정답쪽 우세**
+--- act=18.0 ---
+  A_tau200act18.0 w0 t100: => MINCIRC mode=learn seed=0 first=47.8 last=47.8 delta=+0.0 reward=47.8 **eval=56.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.8024 | out_R 평균 1.1488 | 차이 -0.3463 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7055 | out_R 평균 5.1556 | 차이 -4.4501 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t101: => MINCIRC mode=learn seed=0 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 3.5081 | out_R 평균 1.0194 | 차이 +2.4887 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3722 | out_R 평균 3.6108 | 차이 -2.2386 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t102: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.8375 | out_R 평균 1.0532 | 차이 -0.2158 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7526 | out_R 평균 5.6395 | 차이 -4.8869 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t103: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.0542 | out_R 평균 0.9956 | 차이 +0.0587 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8237 | out_R 평균 5.0598 | 차이 -4.2361 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t104: => MINCIRC mode=learn seed=0 first=52.8 last=52.8 delta=+0.0 reward=52.8 **eval=56.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.3685 | out_R 평균 1.0131 | 차이 +0.3553 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8984 | out_R 평균 4.4182 | 차이 -3.5198 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.0498 | out_R 평균 1.1762 | 차이 -0.1264 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7118 | out_R 평균 4.6679 | 차이 -3.9561 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t106: => MINCIRC mode=learn seed=0 first=66.0 last=66.0 delta=+0.0 reward=66.0 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 4.1502 | out_R 평균 0.8566 | 차이 +3.2935 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4853 | out_R 평균 2.5505 | 차이 -1.0652 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w0 t107: => MINCIRC mode=learn seed=0 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.2597 | out_R 평균 0.9962 | 차이 +2.2635 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3057 | out_R 평균 3.2441 | 차이 -1.9385 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t100: => MINCIRC mode=learn seed=3 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 2.7937 | out_R 평균 1.1864 | 차이 +1.6073 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3888 | out_R 평균 3.0352 | 차이 -1.6464 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t101: => MINCIRC mode=learn seed=3 first=54.5 last=54.5 delta=+0.0 reward=54.5 **eval=47.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 5.0549 | out_R 평균 0.7934 | 차이 +4.2615 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0757 | out_R 평균 1.4231 | 차이 -0.3474 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t102: => MINCIRC mode=learn seed=3 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 2.4330 | out_R 평균 1.1161 | 차이 +1.3169 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4648 | out_R 평균 3.3830 | 차이 -1.9183 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t103: => MINCIRC mode=learn seed=3 first=68.0 last=68.0 delta=+0.0 reward=68.0 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 2.5079 | out_R 평균 1.3088 | 차이 +1.1991 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1962 | out_R 평균 3.8114 | 차이 -2.6152 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t104: => MINCIRC mode=learn seed=3 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=47.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 4.9115 | out_R 평균 0.7281 | 차이 +4.1834 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9662 | out_R 평균 1.1899 | 차이 -0.2237 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t105: => MINCIRC mode=learn seed=3 first=62.7 last=62.7 delta=+0.0 reward=62.7 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 2.3175 | out_R 평균 1.2815 | 차이 +1.0359 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9953 | out_R 평균 3.6567 | 차이 -2.6614 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t106: => MINCIRC mode=learn seed=3 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=47.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 5.1871 | out_R 평균 0.6922 | 차이 +4.4949 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9591 | out_R 평균 1.1337 | 차이 -0.1745 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w3 t107: => MINCIRC mode=learn seed=3 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.1984 | out_R 평균 1.2665 | 차이 +1.9319 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4774 | out_R 평균 3.0701 | 차이 -1.5927 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.7846 | out_R 평균 1.1983 | 차이 -0.4137 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6291 | out_R 평균 5.3532 | 차이 -4.7241 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t101: => MINCIRC mode=learn seed=4 first=73.8 last=73.8 delta=+0.0 reward=73.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.6192 | out_R 평균 1.4616 | 차이 +1.1576 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8317 | out_R 평균 5.1345 | 차이 -4.3028 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.7420 | out_R 평균 1.2057 | 차이 -0.4637 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6234 | out_R 평균 5.8945 | 차이 -5.2710 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 0.7763 | out_R 평균 1.4283 | 차이 -0.6520 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5837 | out_R 평균 5.7625 | 차이 -5.1788 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.1585 | out_R 평균 1.1222 | 차이 +0.0362 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6312 | out_R 평균 5.2550 | 차이 -4.6238 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 0.9350 | out_R 평균 1.3778 | 차이 -0.4428 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6225 | out_R 평균 4.8805 | 차이 -4.2580 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t106: => MINCIRC mode=learn seed=4 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=54.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 1.0900 | out_R 평균 0.9771 | 차이 +0.1129 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5946 | out_R 평균 5.3852 | 차이 -4.7906 (정답은 out_R) **정답쪽 우세**
+  A_tau200act18.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 0.9272 | out_R 평균 1.3245 | 차이 -0.3973 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5901 | out_R 평균 5.8589 | 차이 -5.2689 (정답은 out_R) **정답쪽 우세**
+--- act=36.0 ---
+  A_tau200act36.0 w0 t100: => MINCIRC mode=learn seed=0 first=47.8 last=47.8 delta=+0.0 reward=47.8 **eval=56.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.9305 | out_R 평균 1.0729 | 차이 -0.1424 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7279 | out_R 평균 5.0897 | 차이 -4.3618 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t101: => MINCIRC mode=learn seed=0 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 3.5456 | out_R 평균 1.0198 | 차이 +2.5258 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3658 | out_R 평균 3.6960 | 차이 -2.3301 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t102: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.9463 | out_R 평균 0.9909 | 차이 -0.0446 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7813 | out_R 평균 5.5758 | 차이 -4.7945 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t103: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.1238 | out_R 평균 0.9917 | 차이 +0.1321 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8226 | out_R 평균 5.0789 | 차이 -4.2562 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t104: => MINCIRC mode=learn seed=0 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 2.5289 | out_R 평균 1.2337 | 차이 +1.2952 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0442 | out_R 평균 3.9691 | 차이 -2.9250 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.2111 | out_R 평균 1.0852 | 차이 +0.1259 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7464 | out_R 평균 4.5806 | 차이 -3.8343 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t106: => MINCIRC mode=learn seed=0 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 3.0770 | out_R 평균 1.0744 | 차이 +2.0026 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2520 | out_R 평균 3.4517 | 차이 -2.1998 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w0 t107: => MINCIRC mode=learn seed=0 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.2282 | out_R 평균 1.0128 | 차이 +2.2154 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2810 | out_R 평균 3.4261 | 차이 -2.1452 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t100: => MINCIRC mode=learn seed=3 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 2.8264 | out_R 평균 1.1990 | 차이 +1.6274 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3899 | out_R 평균 3.0910 | 차이 -1.7011 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t101: => MINCIRC mode=learn seed=3 first=54.2 last=54.2 delta=+0.0 reward=54.2 **eval=47.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 5.0636 | out_R 평균 0.7934 | 차이 +4.2702 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0708 | out_R 평균 1.4803 | 차이 -0.4094 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t102: => MINCIRC mode=learn seed=3 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 2.4714 | out_R 평균 1.1215 | 차이 +1.3499 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4642 | out_R 평균 3.4420 | 차이 -1.9778 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t103: => MINCIRC mode=learn seed=3 first=68.0 last=68.0 delta=+0.0 reward=68.0 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 2.5849 | out_R 평균 1.3107 | 차이 +1.2742 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2089 | out_R 평균 3.8016 | 차이 -2.5927 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t104: => MINCIRC mode=learn seed=3 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=47.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 4.8943 | out_R 평균 0.7313 | 차이 +4.1630 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9638 | out_R 평균 1.2557 | 차이 -0.2919 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t105: => MINCIRC mode=learn seed=3 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 2.6076 | out_R 평균 1.3592 | 차이 +1.2484 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0378 | out_R 평균 3.4951 | 차이 -2.4573 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t106: => MINCIRC mode=learn seed=3 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=47.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 5.1252 | out_R 평균 0.7167 | 차이 +4.4085 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9556 | out_R 평균 1.2025 | 차이 -0.2469 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w3 t107: => MINCIRC mode=learn seed=3 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.2328 | out_R 평균 1.2747 | 차이 +1.9581 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4846 | out_R 평균 3.1275 | 차이 -1.6429 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.9447 | out_R 평균 1.0527 | 차이 -0.1080 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6285 | out_R 평균 5.3482 | 차이 -4.7197 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t101: => MINCIRC mode=learn seed=4 first=72.8 last=72.8 delta=+0.0 reward=72.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.6579 | out_R 평균 1.4450 | 차이 +1.2129 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8267 | out_R 평균 5.1447 | 차이 -4.3180 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.8974 | out_R 평균 1.0444 | 차이 -0.1470 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5887 | out_R 평균 6.0462 | 차이 -5.4575 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 0.9955 | out_R 평균 1.1773 | 차이 -0.1818 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5853 | out_R 평균 5.7558 | 차이 -5.1705 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.3054 | out_R 평균 1.0558 | 차이 +0.2496 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6365 | out_R 평균 5.2206 | 차이 -4.5840 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.1318 | out_R 평균 1.2570 | 차이 -0.1252 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5865 | out_R 평균 5.0408 | 차이 -4.4543 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t106: => MINCIRC mode=learn seed=4 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=54.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 1.1889 | out_R 평균 0.9348 | 차이 +0.2541 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5969 | out_R 평균 5.3576 | 차이 -4.7607 (정답은 out_R) **정답쪽 우세**
+  A_tau200act36.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.0 last=52.0 delta=+0.0 reward=52.0 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 1.1590 | out_R 평균 1.0938 | 차이 +0.0652 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5911 | out_R 평균 5.8135 | 차이 -5.2224 (정답은 out_R) **정답쪽 우세**
+--- act=72.0 ---
+  A_tau200act72.0 w0 t100: => MINCIRC mode=learn seed=0 first=47.8 last=47.8 delta=+0.0 reward=47.8 **eval=56.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.9850 | out_R 평균 1.0410 | 차이 -0.0560 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7275 | out_R 평균 5.0868 | 차이 -4.3593 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t101: => MINCIRC mode=learn seed=0 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 3.5544 | out_R 평균 1.0192 | 차이 +2.5352 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3647 | out_R 평균 3.7052 | 차이 -2.3405 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t102: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.9796 | out_R 평균 0.9876 | 차이 -0.0080 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7792 | out_R 평균 5.5738 | 차이 -4.7946 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t103: => MINCIRC mode=learn seed=0 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=56.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.1578 | out_R 평균 0.9791 | 차이 +0.1787 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8200 | out_R 평균 5.0796 | 차이 -4.2596 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t104: => MINCIRC mode=learn seed=0 first=66.5 last=66.5 delta=+0.0 reward=66.5 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 2.5288 | out_R 평균 1.2310 | 차이 +1.2978 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0411 | out_R 평균 3.9737 | 차이 -2.9326 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.2546 | out_R 평균 1.0708 | 차이 +0.1838 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7443 | out_R 평균 4.5809 | 차이 -3.8366 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t106: => MINCIRC mode=learn seed=0 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 3.0943 | out_R 평균 1.0735 | 차이 +2.0208 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2498 | out_R 평균 3.4675 | 차이 -2.2177 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w0 t107: => MINCIRC mode=learn seed=0 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.2313 | out_R 평균 1.0122 | 차이 +2.2190 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2705 | out_R 평균 3.4794 | 차이 -2.2089 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t100: => MINCIRC mode=learn seed=3 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 2.8466 | out_R 평균 1.1986 | 차이 +1.6479 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3900 | out_R 평균 3.1025 | 차이 -1.7125 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t101: => MINCIRC mode=learn seed=3 first=54.2 last=54.2 delta=+0.0 reward=54.2 **eval=47.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 5.0100 | out_R 평균 0.7939 | 차이 +4.2161 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0627 | out_R 평균 1.5059 | 차이 -0.4432 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t102: => MINCIRC mode=learn seed=3 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 2.4863 | out_R 평균 1.1233 | 차이 +1.3630 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4663 | out_R 평균 3.4500 | 차이 -1.9836 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t103: => MINCIRC mode=learn seed=3 first=68.0 last=68.0 delta=+0.0 reward=68.0 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 2.6087 | out_R 평균 1.3106 | 차이 +1.2981 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2130 | out_R 평균 3.7903 | 차이 -2.5773 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t104: => MINCIRC mode=learn seed=3 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=47.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 4.8954 | out_R 평균 0.7299 | 차이 +4.1655 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9635 | out_R 평균 1.2737 | 차이 -0.3102 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t105: => MINCIRC mode=learn seed=3 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 2.6375 | out_R 평균 1.3572 | 차이 +1.2803 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0422 | out_R 평균 3.4841 | 차이 -2.4418 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t106: => MINCIRC mode=learn seed=3 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=47.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 5.1270 | out_R 평균 0.7169 | 차이 +4.4101 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9548 | out_R 평균 1.2242 | 차이 -0.2694 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w3 t107: => MINCIRC mode=learn seed=3 first=72.0 last=72.0 delta=+0.0 reward=72.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.2614 | out_R 평균 1.2658 | 차이 +1.9956 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.4918 | out_R 평균 3.1344 | 차이 -1.6426 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 1.0056 | out_R 평균 1.0130 | 차이 -0.0074 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6274 | out_R 평균 5.3423 | 차이 -4.7149 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t101: => MINCIRC mode=learn seed=4 first=56.8 last=56.8 delta=+0.0 reward=56.8 **eval=54.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 1.4529 | out_R 평균 0.9790 | 차이 +0.4740 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6497 | out_R 평균 5.8170 | 차이 -5.1674 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.9643 | out_R 평균 1.0014 | 차이 -0.0371 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5872 | out_R 평균 6.0403 | 차이 -5.4532 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.0832 | out_R 평균 1.1154 | 차이 -0.0322 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5835 | out_R 평균 5.7571 | 차이 -5.1735 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.3414 | out_R 평균 1.0487 | 차이 +0.2927 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6369 | out_R 평균 5.2181 | 차이 -4.5812 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.2308 | out_R 평균 1.1759 | 차이 +0.0550 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5880 | out_R 평균 5.0310 | 차이 -4.4430 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t106: => MINCIRC mode=learn seed=4 first=49.8 last=49.8 delta=+0.0 reward=49.8 **eval=54.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 1.2547 | out_R 평균 0.9439 | 차이 +0.3107 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5921 | out_R 평균 5.3790 | 차이 -4.7869 (정답은 out_R) **정답쪽 우세**
+  A_tau200act72.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.0 last=52.0 delta=+0.0 reward=52.0 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 1.2006 | out_R 평균 1.0756 | 차이 +0.1250 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5914 | out_R 평균 5.8104 | 차이 -5.2191 (정답은 out_R) **정답쪽 우세**
+########## 축 B: act_drive=18 고정, tau_e 훑기 ##########
+--- tau=50 ---
+  B_tau50act18.0 w0 t100: => MINCIRC mode=learn seed=0 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 1.6495 | out_R 평균 0.6783 | 차이 +0.9713 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7517 | out_R 평균 1.8709 | 차이 -1.1192 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t101: => MINCIRC mode=learn seed=0 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 1.9420 | out_R 평균 0.7105 | 차이 +1.2315 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8182 | out_R 평균 1.9439 | 차이 -1.1256 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t102: => MINCIRC mode=learn seed=0 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 1.4205 | out_R 평균 0.6584 | 차이 +0.7621 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7593 | out_R 평균 2.0729 | 차이 -1.3136 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t103: => MINCIRC mode=learn seed=0 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.6042 | out_R 평균 0.6887 | 차이 +0.9155 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7407 | out_R 평균 1.9270 | 차이 -1.1863 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t104: => MINCIRC mode=learn seed=0 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.7636 | out_R 평균 0.6855 | 차이 +1.0781 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7462 | out_R 평균 1.7881 | 차이 -1.0419 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t105: => MINCIRC mode=learn seed=0 first=68.0 last=68.0 delta=+0.0 reward=68.0 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.8086 | out_R 평균 0.6967 | 차이 +1.1120 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7455 | out_R 평균 1.7324 | 차이 -0.9869 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t106: => MINCIRC mode=learn seed=0 first=69.2 last=69.2 delta=+0.0 reward=69.2 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 1.8922 | out_R 평균 0.6850 | 차이 +1.2072 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7825 | out_R 평균 1.7933 | 차이 -1.0108 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w0 t107: => MINCIRC mode=learn seed=0 first=67.2 last=67.2 delta=+0.0 reward=67.2 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 1.9736 | out_R 평균 0.6480 | 차이 +1.3256 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8105 | out_R 평균 1.7108 | 차이 -0.9002 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t100: => MINCIRC mode=learn seed=3 first=66.5 last=66.5 delta=+0.0 reward=66.5 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 1.7502 | out_R 평균 0.6746 | 차이 +1.0755 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7878 | out_R 평균 1.8086 | 차이 -1.0208 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t101: => MINCIRC mode=learn seed=3 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.1108 | out_R 평균 0.6967 | 차이 +1.4141 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8918 | out_R 평균 1.8596 | 차이 -0.9679 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t102: => MINCIRC mode=learn seed=3 first=65.8 last=65.8 delta=+0.0 reward=65.8 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 1.4858 | out_R 평균 0.6566 | 차이 +0.8292 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7633 | out_R 평균 1.9959 | 차이 -1.2326 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t103: => MINCIRC mode=learn seed=3 first=67.8 last=67.8 delta=+0.0 reward=67.8 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.6379 | out_R 평균 0.6908 | 차이 +0.9472 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7605 | out_R 평균 1.9046 | 차이 -1.1440 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t104: => MINCIRC mode=learn seed=3 first=68.8 last=68.8 delta=+0.0 reward=68.8 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.9994 | out_R 평균 0.6698 | 차이 +1.3296 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8072 | out_R 평균 1.7240 | 차이 -0.9168 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t105: => MINCIRC mode=learn seed=3 first=65.2 last=65.2 delta=+0.0 reward=65.2 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.7720 | out_R 평균 0.6812 | 차이 +1.0907 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7432 | out_R 평균 1.7204 | 차이 -0.9772 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t106: => MINCIRC mode=learn seed=3 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 2.0323 | out_R 평균 0.6773 | 차이 +1.3550 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8287 | out_R 평균 1.7338 | 차이 -0.9051 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w3 t107: => MINCIRC mode=learn seed=3 first=70.0 last=70.0 delta=+0.0 reward=70.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 2.0534 | out_R 평균 0.6594 | 차이 +1.3940 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8530 | out_R 평균 1.7598 | 차이 -0.9068 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t100: => MINCIRC mode=learn seed=4 first=49.8 last=49.8 delta=+0.0 reward=49.8 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.8314 | out_R 평균 0.6169 | 차이 +0.2145 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5337 | out_R 평균 2.8611 | 차이 -2.3274 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t101: => MINCIRC mode=learn seed=4 first=74.5 last=74.5 delta=+0.0 reward=74.5 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 1.8899 | out_R 평균 0.6974 | 차이 +1.1924 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6987 | out_R 평균 2.0640 | 차이 -1.3653 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.7374 | out_R 평균 0.6554 | 차이 +0.0820 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5343 | out_R 평균 3.0745 | 차이 -2.5402 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 0.7879 | out_R 평균 0.6730 | 차이 +0.1150 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5330 | out_R 평균 2.9108 | 차이 -2.3778 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t104: => MINCIRC mode=learn seed=4 first=66.5 last=66.5 delta=+0.0 reward=66.5 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.5218 | out_R 평균 0.7342 | 차이 +0.7876 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5881 | out_R 평균 2.4285 | 차이 -1.8404 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 0.9311 | out_R 평균 0.6317 | 차이 +0.2994 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5402 | out_R 평균 2.4969 | 차이 -1.9567 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t106: => MINCIRC mode=learn seed=4 first=69.0 last=69.0 delta=+0.0 reward=69.0 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 1.7069 | out_R 평균 0.6933 | 차이 +1.0136 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6271 | out_R 평균 2.1297 | 차이 -1.5026 (정답은 out_R) **정답쪽 우세**
+  B_tau50act18.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.5 last=52.5 delta=+0.0 reward=52.5 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 0.9170 | out_R 평균 0.6245 | 차이 +0.2925 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5435 | out_R 평균 2.8840 | 차이 -2.3405 (정답은 out_R) **정답쪽 우세**
+--- tau=100 ---
+  B_tau100act18.0 w0 t100: => MINCIRC mode=learn seed=0 first=47.5 last=47.5 delta=+0.0 reward=47.5 **eval=56.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.9013 | out_R 평균 0.7216 | 차이 +0.1798 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7043 | out_R 평균 3.7847 | 차이 -3.0804 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t101: => MINCIRC mode=learn seed=0 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.6961 | out_R 평균 0.9125 | 차이 +1.7836 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1528 | out_R 평균 2.6862 | 차이 -1.5334 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t102: => MINCIRC mode=learn seed=0 first=51.0 last=51.0 delta=+0.0 reward=51.0 **eval=56.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.9090 | out_R 평균 0.7052 | 차이 +0.2038 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7475 | out_R 평균 4.1654 | 차이 -3.4178 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t103: => MINCIRC mode=learn seed=0 first=67.0 last=67.0 delta=+0.0 reward=67.0 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 2.0680 | out_R 평균 0.9793 | 차이 +1.0887 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9833 | out_R 평균 2.8629 | 차이 -1.8796 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t104: => MINCIRC mode=learn seed=0 first=67.0 last=67.0 delta=+0.0 reward=67.0 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 2.2417 | out_R 평균 0.9504 | 차이 +1.2912 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9609 | out_R 평균 2.6474 | 차이 -1.6865 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.0583 | out_R 평균 0.8089 | 차이 +0.2494 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.6859 | out_R 평균 3.4864 | 차이 -2.8005 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t106: => MINCIRC mode=learn seed=0 first=69.2 last=69.2 delta=+0.0 reward=69.2 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 2.5394 | out_R 평균 0.9147 | 차이 +1.6247 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0762 | out_R 평균 2.4348 | 차이 -1.3586 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w0 t107: => MINCIRC mode=learn seed=0 first=65.5 last=65.5 delta=+0.0 reward=65.5 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 3.0796 | out_R 평균 0.7596 | 차이 +2.3200 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2372 | out_R 평균 2.1359 | 차이 -0.8987 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t100: => MINCIRC mode=learn seed=3 first=66.5 last=66.5 delta=+0.0 reward=66.5 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 2.3823 | out_R 평균 0.9307 | 차이 +1.4516 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1834 | out_R 평균 2.3939 | 차이 -1.2105 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t101: => MINCIRC mode=learn seed=3 first=74.8 last=74.8 delta=+0.0 reward=74.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.9684 | out_R 평균 0.9886 | 차이 +1.9798 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3603 | out_R 평균 2.4874 | 차이 -1.1271 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t102: => MINCIRC mode=learn seed=3 first=65.5 last=65.5 delta=+0.0 reward=65.5 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 1.8996 | out_R 평균 0.8894 | 차이 +1.0102 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0595 | out_R 평균 2.8461 | 차이 -1.7866 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t103: => MINCIRC mode=learn seed=3 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.9756 | out_R 평균 1.0003 | 차이 +0.9754 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9264 | out_R 평균 3.0018 | 차이 -2.0754 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t104: => MINCIRC mode=learn seed=3 first=68.5 last=68.5 delta=+0.0 reward=68.5 **eval=100.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 2.7467 | out_R 평균 0.9481 | 차이 +1.7986 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2142 | out_R 평균 2.2628 | 차이 -1.0486 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t105: => MINCIRC mode=learn seed=3 first=64.5 last=64.5 delta=+0.0 reward=64.5 **eval=100.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 2.0993 | out_R 평균 1.0156 | 차이 +1.0838 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.9015 | out_R 평균 2.5143 | 차이 -1.6128 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t106: => MINCIRC mode=learn seed=3 first=49.0 last=49.0 delta=+0.0 reward=49.0 **eval=47.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 3.9080 | out_R 평균 0.6498 | 차이 +3.2583 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.7780 | out_R 평균 1.0529 | 차이 -0.2749 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w3 t107: => MINCIRC mode=learn seed=3 first=70.0 last=70.0 delta=+0.0 reward=70.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 2.8534 | out_R 평균 0.9062 | 차이 +1.9473 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.2673 | out_R 평균 2.3395 | 차이 -1.0722 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.8094 | out_R 평균 0.8697 | 차이 -0.0602 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5702 | out_R 평균 4.3538 | 차이 -3.7836 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t101: => MINCIRC mode=learn seed=4 first=73.8 last=73.8 delta=+0.0 reward=73.8 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 2.3159 | out_R 평균 1.0396 | 차이 +1.2763 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.8562 | out_R 평균 3.2705 | 차이 -2.4143 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.7198 | out_R 평균 0.9394 | 차이 -0.2196 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5668 | out_R 평균 4.8059 | 차이 -4.2391 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 0.7773 | out_R 평균 1.0301 | 차이 -0.2528 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5520 | out_R 평균 4.5657 | 차이 -4.0138 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.0650 | out_R 평균 0.8679 | 차이 +0.1971 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5773 | out_R 평균 4.2211 | 차이 -3.6437 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 0.9017 | out_R 평균 1.0354 | 차이 -0.1337 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.5675 | out_R 평균 3.9519 | 차이 -3.3844 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t106: => MINCIRC mode=learn seed=4 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=54.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 0.9903 | out_R 평균 0.7775 | 차이 +0.2128 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5767 | out_R 평균 4.2422 | 차이 -3.6655 (정답은 out_R) **정답쪽 우세**
+  B_tau100act18.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.2 last=52.2 delta=+0.0 reward=52.2 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 0.9890 | out_R 평균 0.8398 | 차이 +0.1492 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 0.5785 | out_R 평균 4.4868 | 차이 -3.9083 (정답은 out_R) **정답쪽 우세**
+--- tau=400 ---
+  B_tau400act18.0 w0 t100: => MINCIRC mode=learn seed=0 first=47.8 last=47.8 delta=+0.0 reward=47.8 **eval=56.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 1.0341 | out_R 평균 1.4227 | 차이 -0.3886 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 1.0483 | out_R 평균 5.6409 | 차이 -4.5926 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t101: => MINCIRC mode=learn seed=0 first=75.2 last=75.2 delta=+0.0 reward=75.2 **eval=100.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 5.0894 | out_R 평균 1.1448 | 차이 +3.9446 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.6719 | out_R 평균 4.8775 | 차이 -3.2056 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t102: => MINCIRC mode=learn seed=0 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=56.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.7743 | out_R 평균 1.8373 | 차이 -1.0630 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.7940 | out_R 평균 6.9807 | 차이 -6.1868 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t103: => MINCIRC mode=learn seed=0 first=56.5 last=56.5 delta=+0.0 reward=56.5 **eval=56.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 1.7232 | out_R 평균 1.3810 | 차이 +0.3422 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.1814 | out_R 평균 5.6604 | 차이 -4.4790 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t104: => MINCIRC mode=learn seed=0 first=52.8 last=52.8 delta=+0.0 reward=52.8 **eval=56.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.4939 | out_R 평균 1.5495 | 차이 -0.0557 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 1.0107 | out_R 평균 5.7128 | 차이 -4.7021 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t105: => MINCIRC mode=learn seed=0 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=56.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.1465 | out_R 평균 1.7488 | 차이 -0.6023 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.9072 | out_R 평균 5.5897 | 차이 -4.6825 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t106: => MINCIRC mode=learn seed=0 first=69.5 last=69.5 delta=+0.0 reward=69.5 **eval=100.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 4.4676 | out_R 평균 1.2011 | 차이 +3.2665 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.5773 | out_R 평균 4.2841 | 차이 -2.7068 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w0 t107: => MINCIRC mode=learn seed=0 first=66.0 last=66.0 delta=+0.0 reward=66.0 **eval=100.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 5.0118 | out_R 평균 1.0235 | 차이 +3.9883 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.7857 | out_R 평균 3.2876 | 차이 -1.5019 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w3 t100: => MINCIRC mode=learn seed=3 first=67.0 last=67.0 delta=+0.0 reward=67.0 **eval=100.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 3.4143 | out_R 평균 1.5714 | 차이 +1.8429 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.7494 | out_R 평균 4.0447 | 차이 -2.2953 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w3 t101: => MINCIRC mode=learn seed=3 first=53.5 last=53.5 delta=+0.0 reward=53.5 **eval=47.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 6.2073 | out_R 평균 0.8822 | 차이 +5.3251 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.5079 | out_R 평균 1.6288 | 차이 -0.1209 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w3 t102: => MINCIRC mode=learn seed=3 first=66.2 last=66.2 delta=+0.0 reward=66.2 **eval=100.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 3.0331 | out_R 평균 1.4611 | 차이 +1.5720 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.8902 | out_R 평균 4.4825 | 차이 -2.5923 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w3 t103: => MINCIRC mode=learn seed=3 first=58.0 last=58.0 delta=+0.0 reward=58.0 **eval=53.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 2.0864 | out_R 평균 1.3846 | 차이 +0.7018 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3236 | out_R 평균 5.1489 | 차이 -3.8253 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w3 t104: => MINCIRC mode=learn seed=3 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=47.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 6.1161 | out_R 평균 0.7897 | 차이 +5.3264 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.5784 | out_R 평균 1.2001 | 차이 +0.3784 (정답은 out_R) **반대**
+  B_tau400act18.0 w3 t105: => MINCIRC mode=learn seed=3 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=53.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 1.6071 | out_R 평균 1.2657 | 차이 +0.3414 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.0824 | out_R 평균 4.9598 | 차이 -3.8773 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w3 t106: => MINCIRC mode=learn seed=3 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=47.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 6.4415 | out_R 평균 0.7562 | 차이 +5.6853 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.3785 | out_R 평균 1.2760 | 차이 +0.1026 (정답은 out_R) **반대**
+  B_tau400act18.0 w3 t107: => MINCIRC mode=learn seed=3 first=51.2 last=51.2 delta=+0.0 reward=51.2 **eval=47.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 6.2729 | out_R 평균 0.7576 | 차이 +5.5152 (정답은 out_L) **정답쪽 우세**
+          B전용 KC → out_L 평균 1.6263 | out_R 평균 1.4818 | 차이 +0.1445 (정답은 out_R) **반대**
+  B_tau400act18.0 w4 t100: => MINCIRC mode=learn seed=4 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=54.0** tie=0 trialseed=100
+          A전용 KC → out_L 평균 0.6934 | out_R 평균 2.1044 | 차이 -1.4110 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6447 | out_R 평균 6.5961 | 차이 -5.9514 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t101: => MINCIRC mode=learn seed=4 first=52.5 last=52.5 delta=+0.0 reward=52.5 **eval=54.0** tie=0 trialseed=101
+          A전용 KC → out_L 평균 1.2899 | out_R 평균 1.4335 | 차이 -0.1436 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6399 | out_R 평균 7.0828 | 차이 -6.4429 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t102: => MINCIRC mode=learn seed=4 first=50.2 last=50.2 delta=+0.0 reward=50.2 **eval=54.0** tie=0 trialseed=102
+          A전용 KC → out_L 평균 0.7780 | out_R 평균 1.8229 | 차이 -1.0449 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6485 | out_R 평균 7.1584 | 차이 -6.5098 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t103: => MINCIRC mode=learn seed=4 first=50.5 last=50.5 delta=+0.0 reward=50.5 **eval=54.0** tie=0 trialseed=103
+          A전용 KC → out_L 평균 0.9737 | out_R 평균 1.8510 | 차이 -0.8773 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6820 | out_R 평균 6.6332 | 차이 -5.9512 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t104: => MINCIRC mode=learn seed=4 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=54.0** tie=0 trialseed=104
+          A전용 KC → out_L 평균 1.0990 | out_R 평균 1.9955 | 차이 -0.8965 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6477 | out_R 평균 6.5794 | 차이 -5.9317 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t105: => MINCIRC mode=learn seed=4 first=48.5 last=48.5 delta=+0.0 reward=48.5 **eval=54.0** tie=0 trialseed=105
+          A전용 KC → out_L 평균 0.8069 | out_R 평균 2.4486 | 차이 -1.6417 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6509 | out_R 평균 6.0337 | 차이 -5.3828 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t106: => MINCIRC mode=learn seed=4 first=49.2 last=49.2 delta=+0.0 reward=49.2 **eval=54.0** tie=0 trialseed=106
+          A전용 KC → out_L 평균 1.2833 | out_R 평균 1.4370 | 차이 -0.1537 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6882 | out_R 평균 6.2200 | 차이 -5.5318 (정답은 out_R) **정답쪽 우세**
+  B_tau400act18.0 w4 t107: => MINCIRC mode=learn seed=4 first=52.0 last=52.0 delta=+0.0 reward=52.0 **eval=54.0** tie=0 trialseed=107
+          A전용 KC → out_L 평균 1.0821 | out_R 평균 1.8757 | 차이 -0.7936 (정답은 out_L) **반대**
+          B전용 KC → out_L 평균 0.6497 | out_R 평균 6.9783 | 차이 -6.3286 (정답은 out_R) **정답쪽 우세**
+[E094] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E094
+=== 종료코드 0 ===

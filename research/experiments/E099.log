@@ -1,0 +1,197 @@
+=== E099 실행: 2026-09-26T15:56:11Z ===
+커맨드: bash scripts/e099_main.sh
+---
+########## frozen (선천 기준선) ##########
+  frozen w5 t200: => MINCIRC mode=frozen seed=5 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=200
+  frozen w5 t201: => MINCIRC mode=frozen seed=5 first=54.8 last=54.8 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=201
+  frozen w5 t202: => MINCIRC mode=frozen seed=5 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=202
+  frozen w5 t203: => MINCIRC mode=frozen seed=5 first=54.2 last=54.2 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=203
+  frozen w6 t200: => MINCIRC mode=frozen seed=6 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=200
+  frozen w6 t201: => MINCIRC mode=frozen seed=6 first=54.8 last=54.8 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=201
+  frozen w6 t202: => MINCIRC mode=frozen seed=6 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=202
+  frozen w6 t203: => MINCIRC mode=frozen seed=6 first=54.2 last=54.2 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=203
+  frozen w7 t200: => MINCIRC mode=frozen seed=7 first=51.7 last=51.7 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=200
+  frozen w7 t201: => MINCIRC mode=frozen seed=7 first=47.5 last=47.5 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=201
+  frozen w7 t202: => MINCIRC mode=frozen seed=7 first=44.8 last=44.8 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=202
+  frozen w7 t203: => MINCIRC mode=frozen seed=7 first=52.0 last=52.0 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=203
+  frozen w8 t200: => MINCIRC mode=frozen seed=8 first=30.8 last=30.8 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=200
+  frozen w8 t201: => MINCIRC mode=frozen seed=8 first=32.5 last=32.5 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=201
+  frozen w8 t202: => MINCIRC mode=frozen seed=8 first=27.5 last=27.5 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=202
+  frozen w8 t203: => MINCIRC mode=frozen seed=8 first=33.0 last=33.0 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=203
+  frozen w9 t200: => MINCIRC mode=frozen seed=9 first=70.5 last=70.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=200
+  frozen w9 t201: => MINCIRC mode=frozen seed=9 first=69.8 last=69.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=201
+  frozen w9 t202: => MINCIRC mode=frozen seed=9 first=66.8 last=66.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=202
+  frozen w9 t203: => MINCIRC mode=frozen seed=9 first=73.2 last=73.2 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=203
+  frozen w1 t200: => MINCIRC mode=frozen seed=1 first=70.5 last=70.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=200
+  frozen w1 t201: => MINCIRC mode=frozen seed=1 first=69.8 last=69.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=201
+  frozen w1 t202: => MINCIRC mode=frozen seed=1 first=66.8 last=66.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=202
+  frozen w1 t203: => MINCIRC mode=frozen seed=1 first=73.2 last=73.2 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=203
+  frozen w2 t200: => MINCIRC mode=frozen seed=2 first=70.5 last=70.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=200
+  frozen w2 t201: => MINCIRC mode=frozen seed=2 first=69.8 last=69.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=201
+  frozen w2 t202: => MINCIRC mode=frozen seed=2 first=66.8 last=66.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=202
+  frozen w2 t203: => MINCIRC mode=frozen seed=2 first=73.2 last=73.2 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=203
+########## learn (보상 계열 저장) ##########
+  learn w5 t200: => MINCIRC mode=learn seed=5 first=51.2 last=51.2 delta=+0.0 reward=51.2 **eval=100.0** tie=0 trialseed=200
+  learn w5 t201: => MINCIRC mode=learn seed=5 first=63.7 last=63.7 delta=+0.0 reward=63.7 **eval=100.0** tie=0 trialseed=201
+  learn w5 t202: => MINCIRC mode=learn seed=5 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=57.0** tie=0 trialseed=202
+  learn w5 t203: => MINCIRC mode=learn seed=5 first=62.3 last=62.3 delta=+0.0 reward=62.3 **eval=100.0** tie=0 trialseed=203
+  learn w5 t204: => MINCIRC mode=learn seed=5 first=59.2 last=59.2 delta=+0.0 reward=59.2 **eval=100.0** tie=0 trialseed=204
+  learn w5 t205: => MINCIRC mode=learn seed=5 first=59.5 last=59.5 delta=+0.0 reward=59.5 **eval=100.0** tie=0 trialseed=205
+  learn w5 t206: => MINCIRC mode=learn seed=5 first=68.2 last=68.2 delta=+0.0 reward=68.2 **eval=100.0** tie=0 trialseed=206
+  learn w5 t207: => MINCIRC mode=learn seed=5 first=55.2 last=55.2 delta=+0.0 reward=55.2 **eval=100.0** tie=0 trialseed=207
+  learn w6 t200: => MINCIRC mode=learn seed=6 first=65.5 last=65.5 delta=+0.0 reward=65.5 **eval=100.0** tie=0 trialseed=200
+  learn w6 t201: => MINCIRC mode=learn seed=6 first=67.5 last=67.5 delta=+0.0 reward=67.5 **eval=100.0** tie=0 trialseed=201
+  learn w6 t202: === E099 실행: 2026-09-26T16:25:25Z ===
+커맨드: bash scripts/e099_main.sh
+---
+########## frozen (선천 기준선) ##########
+  frozen w5 t200: [건너뜀]
+  frozen w5 t201: [건너뜀]
+  frozen w5 t202: [건너뜀]
+  frozen w5 t203: [건너뜀]
+  frozen w6 t200: [건너뜀]
+  frozen w6 t201: [건너뜀]
+  frozen w6 t202: [건너뜀]
+  frozen w6 t203: [건너뜀]
+  frozen w7 t200: [건너뜀]
+  frozen w7 t201: [건너뜀]
+  frozen w7 t202: [건너뜀]
+  frozen w7 t203: [건너뜀]
+  frozen w8 t200: [건너뜀]
+  frozen w8 t201: [건너뜀]
+  frozen w8 t202: [건너뜀]
+  frozen w8 t203: [건너뜀]
+  frozen w9 t200: [건너뜀]
+  frozen w9 t201: [건너뜀]
+  frozen w9 t202: [건너뜀]
+  frozen w9 t203: [건너뜀]
+  frozen w1 t200: [건너뜀]
+  frozen w1 t201: [건너뜀]
+  frozen w1 t202: [건너뜀]
+  frozen w1 t203: [건너뜀]
+  frozen w2 t200: [건너뜀]
+  frozen w2 t201: [건너뜀]
+  frozen w2 t202: [건너뜀]
+  frozen w2 t203: [건너뜀]
+########## learn (보상 계열 저장) ##########
+  learn w5 t200: [건너뜀]
+  learn w5 t201: [건너뜀]
+  learn w5 t202: [건너뜀]
+  learn w5 t203: [건너뜀]
+  learn w5 t204: [건너뜀]
+  learn w5 t205: [건너뜀]
+  learn w5 t206: [건너뜀]
+  learn w5 t207: [건너뜀]
+  learn w6 t200: [건너뜀]
+  learn w6 t201: [건너뜀]
+  learn w6 t202: => MINCIRC mode=learn seed=6 first=61.5 last=61.5 delta=+0.0 reward=61.5 **eval=100.0** tie=0 trialseed=202
+  learn w6 t203: => MINCIRC mode=learn seed=6 first=67.8 last=67.8 delta=+0.0 reward=67.8 **eval=100.0** tie=0 trialseed=203
+  learn w6 t204: => MINCIRC mode=learn seed=6 first=64.5 last=64.5 delta=+0.0 reward=64.5 **eval=100.0** tie=0 trialseed=204
+  learn w6 t205: => MINCIRC mode=learn seed=6 first=63.0 last=63.0 delta=+0.0 reward=63.0 **eval=100.0** tie=0 trialseed=205
+  learn w6 t206: => MINCIRC mode=learn seed=6 first=69.0 last=69.0 delta=+0.0 reward=69.0 **eval=100.0** tie=0 trialseed=206
+  learn w6 t207: => MINCIRC mode=learn seed=6 first=67.0 last=67.0 delta=+0.0 reward=67.0 **eval=100.0** tie=0 trialseed=207
+  learn w7 t200: => MINCIRC mode=learn seed=7 first=59.2 last=59.2 delta=+0.0 reward=59.2 **eval=100.0** tie=0 trialseed=200
+  learn w7 t201: => MINCIRC mode=learn seed=7 first=48.2 last=48.2 delta=+0.0 reward=48.2 **eval=100.0** tie=0 trialseed=201
+  learn w7 t202: => MINCIRC mode=learn seed=7 first=50.0 last=50.0 delta=+0.0 reward=50.0 **eval=100.0** tie=0 trialseed=202
+  learn w7 t203: => MINCIRC mode=learn seed=7 first=57.0 last=57.0 delta=+0.0 reward=57.0 **eval=100.0** tie=0 trialseed=203
+  learn w7 t204: => MINCIRC mode=learn seed=7 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=100.0** tie=0 trialseed=204
+  learn w7 t205: => MINCIRC mode=learn seed=7 first=44.2 last=44.2 delta=+0.0 reward=44.2 **eval=48.0** tie=0 trialseed=205
+  learn w7 t206: => MINCIRC mode=learn seed=7 first=55.5 last=55.5 delta=+0.0 reward=55.5 **eval=100.0** tie=0 trialseed=206
+  learn w7 t207: => MINCIRC mode=learn seed=7 first=53.0 last=53.0 delta=+0.0 reward=53.0 **eval=100.0** tie=0 trialseed=207
+  learn w8 t200: => MINCIRC mode=learn seed=8 first=60.5 last=60.5 delta=+0.0 reward=60.5 **eval=100.0** tie=0 trialseed=200
+  learn w8 t201: => MINCIRC mode=learn seed=8 first=59.2 last=59.2 delta=+0.0 reward=59.2 **eval=100.0** tie=0 trialseed=201
+  learn w8 t202: => MINCIRC mode=learn seed=8 first=53.0 last=53.0 delta=+0.0 reward=53.0 **eval=100.0** tie=0 trialseed=202
+  learn w8 t203: => MINCIRC mode=learn seed=8 first=61.8 last=61.8 delta=+0.0 reward=61.8 **eval=100.0** tie=0 trialseed=203
+  learn w8 t204: => MINCIRC mode=learn seed=8 first=55.0 last=55.0 delta=+0.0 reward=55.0 **eval=100.0** tie=0 trialseed=204
+  learn w8 t205: => MINCIRC mode=learn seed=8 first=51.2 last=51.2 delta=+0.0 reward=51.2 **eval=100.0** tie=0 trialseed=205
+  learn w8 t206: => MINCIRC mode=learn seed=8 first=63.0 last=63.0 delta=+0.0 reward=63.0 **eval=100.0** tie=0 trialseed=206
+  learn w8 t207: => MINCIRC mode=learn seed=8 first=61.0 last=61.0 delta=+0.0 reward=61.0 **eval=100.0** tie=0 trialseed=207
+  learn w9 t200: => MINCIRC mode=learn seed=9 first=70.5 last=70.5 delta=+0.0 reward=70.5 **eval=100.0** tie=0 trialseed=200
+  learn w9 t201: => MINCIRC mode=learn seed=9 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=201
+  learn w9 t202: => MINCIRC mode=learn seed=9 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=202
+  learn w9 t203: => MINCIRC mode=learn seed=9 first=73.2 last=73.2 delta=+0.0 reward=73.2 **eval=100.0** tie=0 trialseed=203
+  learn w9 t204: => MINCIRC mode=learn seed=9 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=204
+  learn w9 t205: => MINCIRC mode=learn seed=9 first=67.5 last=67.5 delta=+0.0 reward=67.5 **eval=100.0** tie=0 trialseed=205
+  learn w9 t206: => MINCIRC mode=learn seed=9 first=74.5 last=74.5 delta=+0.0 reward=74.5 **eval=100.0** tie=0 trialseed=206
+  learn w9 t207: => MINCIRC mode=learn seed=9 first=70.2 last=70.2 delta=+0.0 reward=70.2 **eval=100.0** tie=0 trialseed=207
+########## shuffled ##########
+  shuf w5 t200: => MINCIRC mode=shuffled seed=5 first=49.5 last=49.5 delta=+0.0 reward=51.2 **eval=57.0** tie=0 trialseed=200
+  shuf w5 t201: => MINCIRC mode=shuffled seed=5 first=52.2 last=52.2 delta=+0.0 reward=63.7 **eval=57.0** tie=0 trialseed=201
+  shuf w5 t202: => MINCIRC mode=shuffled seed=5 first=49.5 last=49.5 delta=+0.0 reward=49.5 **eval=57.0** tie=0 trialseed=202
+  shuf w5 t203: => MINCIRC mode=shuffled seed=5 first=54.2 last=54.2 delta=+0.0 reward=62.3 **eval=57.0** tie=0 trialseed=203
+  shuf w5 t204: => MINCIRC mode=shuffled seed=5 first=44.5 last=44.5 delta=+0.0 reward=59.2 **eval=57.0** tie=0 trialseed=204
+  shuf w5 t205: => MINCIRC mode=shuffled seed=5 first=51.5 last=51.5 delta=+0.0 reward=59.5 **eval=57.0** tie=0 trialseed=205
+  shuf w5 t206: => MINCIRC mode=shuffled seed=5 first=50.5 last=50.5 delta=+0.0 reward=68.2 **eval=57.0** tie=0 trialseed=206
+  shuf w5 t207: => MINCIRC mode=shuffled seed=5 first=43.5 last=43.5 delta=+0.0 reward=55.2 **eval=57.0** tie=0 trialseed=207
+  shuf w6 t200: => MINCIRC mode=shuffled seed=6 first=49.5 last=49.5 delta=+0.0 reward=65.5 **eval=44.0** tie=0 trialseed=200
+  shuf w6 t201: => MINCIRC mode=shuffled seed=6 first=54.8 last=54.8 delta=+0.0 reward=67.5 **eval=44.0** tie=0 trialseed=201
+  shuf w6 t202: => MINCIRC mode=shuffled seed=6 first=49.5 last=49.5 delta=+0.0 reward=61.5 **eval=44.0** tie=0 trialseed=202
+  shuf w6 t203: => MINCIRC mode=shuffled seed=6 first=54.2 last=54.2 delta=+0.0 reward=67.8 **eval=44.0** tie=0 trialseed=203
+  shuf w6 t204: => MINCIRC mode=shuffled seed=6 first=42.5 last=42.5 delta=+0.0 reward=64.5 **eval=44.0** tie=0 trialseed=204
+  shuf w6 t205: => MINCIRC mode=shuffled seed=6 first=60.8 last=60.8 delta=+0.0 reward=63.0 **eval=100.0** tie=0 trialseed=205
+  shuf w6 t206: => MINCIRC mode=shuffled seed=6 first=30.5 last=30.5 delta=+0.0 reward=69.0 **eval=0.0** tie=0 trialseed=206
+  shuf w6 t207: => MINCIRC mode=shuffled seed=6 first=49.0 last=49.0 delta=+0.0 reward=67.0 **eval=44.0** tie=0 trialseed=207
+  shuf w7 t200: => MINCIRC mode=shuffled seed=7 first=51.7 last=51.7 delta=+0.0 reward=59.2 **eval=48.0** tie=0 trialseed=200
+  shuf w7 t201: => MINCIRC mode=shuffled seed=7 first=46.8 last=46.8 delta=+0.0 reward=48.2 **eval=48.0** tie=0 trialseed=201
+  shuf w7 t202: => MINCIRC mode=shuffled seed=7 first=31.5 last=31.5 delta=+0.0 reward=50.0 **eval=0.0** tie=0 trialseed=202
+  shuf w7 t203: => MINCIRC mode=shuffled seed=7 first=52.0 last=52.0 delta=+0.0 reward=57.0 **eval=48.0** tie=0 trialseed=203
+  shuf w7 t204: => MINCIRC mode=shuffled seed=7 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=48.0** tie=0 trialseed=204
+  shuf w7 t205: => MINCIRC mode=shuffled seed=7 first=44.2 last=44.2 delta=+0.0 reward=44.2 **eval=48.0** tie=0 trialseed=205
+  shuf w7 t206: => MINCIRC mode=shuffled seed=7 first=54.8 last=54.8 delta=+0.0 reward=55.5 **eval=48.0** tie=0 trialseed=206
+  shuf w7 t207: => MINCIRC mode=shuffled seed=7 first=49.2 last=49.2 delta=+0.0 reward=53.0 **eval=48.0** tie=0 trialseed=207
+  shuf w8 t200: => MINCIRC mode=shuffled seed=8 first=30.8 last=30.8 delta=+0.0 reward=60.5 **eval=0.0** tie=0 trialseed=200
+  shuf w8 t201: => MINCIRC mode=shuffled seed=8 first=32.5 last=32.5 delta=+0.0 reward=59.2 **eval=0.0** tie=0 trialseed=201
+  shuf w8 t202: => MINCIRC mode=shuffled seed=8 first=27.5 last=27.5 delta=+0.0 reward=53.0 **eval=0.0** tie=0 trialseed=202
+  shuf w8 t203: => MINCIRC mode=shuffled seed=8 first=43.8 last=43.8 delta=+0.0 reward=61.8 **eval=45.0** tie=0 trialseed=203
+  shuf w8 t204: => MINCIRC mode=shuffled seed=8 first=29.8 last=29.8 delta=+0.0 reward=55.0 **eval=0.0** tie=0 trialseed=204
+  shuf w8 t205: => MINCIRC mode=shuffled seed=8 first=37.2 last=37.2 delta=+0.0 reward=51.2 **eval=45.0** tie=0 trialseed=205
+  shuf w8 t206: => MINCIRC mode=shuffled seed=8 first=30.5 last=30.5 delta=+0.0 reward=63.0 **eval=0.0** tie=0 trialseed=206
+  shuf w8 t207: => MINCIRC mode=shuffled seed=8 first=29.0 last=29.0 delta=+0.0 reward=61.0 **eval=0.0** tie=0 trialseed=207
+  shuf w9 t200: => MINCIRC mode=shuffled seed=9 first=70.5 last=70.5 delta=+0.0 reward=70.5 **eval=100.0** tie=0 trialseed=200
+  shuf w9 t201: => MINCIRC mode=shuffled seed=9 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=201
+  shuf w9 t202: => MINCIRC mode=shuffled seed=9 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=202
+  shuf w9 t203: => MINCIRC mode=shuffled seed=9 first=73.2 last=73.2 delta=+0.0 reward=73.2 **eval=100.0** tie=0 trialseed=203
+  shuf w9 t204: => MINCIRC mode=shuffled seed=9 first=60.2 last=60.2 delta=+0.0 reward=69.8 **eval=51.0** tie=0 trialseed=204
+  shuf w9 t205: => MINCIRC mode=shuffled seed=9 first=67.5 last=67.5 delta=+0.0 reward=67.5 **eval=100.0** tie=0 trialseed=205
+  shuf w9 t206: => MINCIRC mode=shuffled seed=9 first=72.5 last=72.5 delta=+0.0 reward=74.5 **eval=100.0** tie=0 trialseed=206
+  shuf w9 t207: => MINCIRC mode=shuffled seed=9 first=69.2 last=69.2 delta=+0.0 reward=70.2 **eval=100.0** tie=0 trialseed=207
+########## noreward ##########
+  norew w5 t200: => MINCIRC mode=noreward seed=5 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=200
+  norew w5 t201: => MINCIRC mode=noreward seed=5 first=54.8 last=54.8 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=201
+  norew w5 t202: => MINCIRC mode=noreward seed=5 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=202
+  norew w5 t203: => MINCIRC mode=noreward seed=5 first=54.2 last=54.2 delta=+0.0 reward=0.0 **eval=57.0** tie=0 trialseed=203
+  norew w6 t200: => MINCIRC mode=noreward seed=6 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=200
+  norew w6 t201: => MINCIRC mode=noreward seed=6 first=54.8 last=54.8 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=201
+  norew w6 t202: => MINCIRC mode=noreward seed=6 first=49.5 last=49.5 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=202
+  norew w6 t203: => MINCIRC mode=noreward seed=6 first=54.2 last=54.2 delta=+0.0 reward=0.0 **eval=44.0** tie=0 trialseed=203
+  norew w7 t200: => MINCIRC mode=noreward seed=7 first=51.7 last=51.7 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=200
+  norew w7 t201: => MINCIRC mode=noreward seed=7 first=47.5 last=47.5 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=201
+  norew w7 t202: => MINCIRC mode=noreward seed=7 first=44.8 last=44.8 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=202
+  norew w7 t203: => MINCIRC mode=noreward seed=7 first=52.0 last=52.0 delta=+0.0 reward=0.0 **eval=48.0** tie=0 trialseed=203
+  norew w8 t200: => MINCIRC mode=noreward seed=8 first=30.8 last=30.8 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=200
+  norew w8 t201: => MINCIRC mode=noreward seed=8 first=32.5 last=32.5 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=201
+  norew w8 t202: => MINCIRC mode=noreward seed=8 first=27.5 last=27.5 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=202
+  norew w8 t203: => MINCIRC mode=noreward seed=8 first=33.0 last=33.0 delta=+0.0 reward=0.0 **eval=0.0** tie=0 trialseed=203
+  norew w9 t200: => MINCIRC mode=noreward seed=9 first=70.5 last=70.5 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=200
+  norew w9 t201: => MINCIRC mode=noreward seed=9 first=69.8 last=69.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=201
+  norew w9 t202: => MINCIRC mode=noreward seed=9 first=66.8 last=66.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=202
+  norew w9 t203: => MINCIRC mode=noreward seed=9 first=73.2 last=73.2 delta=+0.0 reward=0.0 **eval=100.0** tie=0 trialseed=203
+########## learn 배선 1·2 (파괴 점검) ##########
+  learn w1 t200: => MINCIRC mode=learn seed=1 first=70.5 last=70.5 delta=+0.0 reward=70.5 **eval=100.0** tie=0 trialseed=200
+  learn w1 t201: => MINCIRC mode=learn seed=1 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=201
+  learn w1 t202: => MINCIRC mode=learn seed=1 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=202
+  learn w1 t203: => MINCIRC mode=learn seed=1 first=73.2 last=73.2 delta=+0.0 reward=73.2 **eval=100.0** tie=0 trialseed=203
+  learn w1 t204: => MINCIRC mode=learn seed=1 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=204
+  learn w1 t205: => MINCIRC mode=learn seed=1 first=67.5 last=67.5 delta=+0.0 reward=67.5 **eval=100.0** tie=0 trialseed=205
+  learn w1 t206: => MINCIRC mode=learn seed=1 first=74.5 last=74.5 delta=+0.0 reward=74.5 **eval=100.0** tie=0 trialseed=206
+  learn w1 t207: => MINCIRC mode=learn seed=1 first=70.2 last=70.2 delta=+0.0 reward=70.2 **eval=100.0** tie=0 trialseed=207
+  learn w2 t200: => MINCIRC mode=learn seed=2 first=70.5 last=70.5 delta=+0.0 reward=70.5 **eval=100.0** tie=0 trialseed=200
+  learn w2 t201: => MINCIRC mode=learn seed=2 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=201
+  learn w2 t202: => MINCIRC mode=learn seed=2 first=66.8 last=66.8 delta=+0.0 reward=66.8 **eval=100.0** tie=0 trialseed=202
+  learn w2 t203: => MINCIRC mode=learn seed=2 first=73.2 last=73.2 delta=+0.0 reward=73.2 **eval=100.0** tie=0 trialseed=203
+  learn w2 t204: => MINCIRC mode=learn seed=2 first=69.8 last=69.8 delta=+0.0 reward=69.8 **eval=100.0** tie=0 trialseed=204
+  learn w2 t205: => MINCIRC mode=learn seed=2 first=67.5 last=67.5 delta=+0.0 reward=67.5 **eval=100.0** tie=0 trialseed=205
+  learn w2 t206: => MINCIRC mode=learn seed=2 first=74.5 last=74.5 delta=+0.0 reward=74.5 **eval=100.0** tie=0 trialseed=206
+  learn w2 t207: => MINCIRC mode=learn seed=2 first=70.2 last=70.2 delta=+0.0 reward=70.2 **eval=100.0** tie=0 trialseed=207
+[E099] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E099
+=== 종료코드 0 ===

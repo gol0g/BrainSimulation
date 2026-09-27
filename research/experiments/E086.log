@@ -1,0 +1,35 @@
+=== E086 실행: 2026-09-19T15:33:08Z ===
+커맨드: bash scripts/e086_main.sh
+---
+########## frozen ##########
+  frozen s0: => MINCIRC mode=frozen seed=0 first=28.7 last=28.7 delta=+0.0 reward=0.0 **eval=0.0** tie=0
+  frozen s1: => MINCIRC mode=frozen seed=1 first=72.2 last=72.2 delta=+0.0 reward=0.0 **eval=100.0** tie=0
+  frozen s2: => MINCIRC mode=frozen seed=2 first=71.8 last=71.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0
+  frozen s3: => MINCIRC mode=frozen seed=3 first=48.8 last=48.8 delta=+0.0 reward=0.0 **eval=47.0** tie=0
+  frozen s4: => MINCIRC mode=frozen seed=4 first=51.0 last=51.0 delta=+0.0 reward=0.0 **eval=54.0** tie=0
+########## noreward ##########
+  noreward s0: => MINCIRC mode=noreward seed=0 first=28.7 last=28.7 delta=+0.0 reward=0.0 **eval=0.0** tie=0
+  noreward s1: => MINCIRC mode=noreward seed=1 first=72.2 last=72.2 delta=+0.0 reward=0.0 **eval=100.0** tie=0
+  noreward s2: => MINCIRC mode=noreward seed=2 first=71.8 last=71.8 delta=+0.0 reward=0.0 **eval=100.0** tie=0
+  noreward s3: => MINCIRC mode=noreward seed=3 first=48.8 last=48.8 delta=+0.0 reward=0.0 **eval=47.0** tie=0
+  noreward s4: => MINCIRC mode=noreward seed=4 first=51.0 last=51.0 delta=+0.0 reward=0.0 **eval=54.0** tie=0
+########## yoked ##########
+  yoked s0: => MINCIRC mode=yoked seed=0 first=47.0 last=47.0 delta=+0.0 reward=49.5 **eval=44.0** tie=0
+  yoked s1: => MINCIRC mode=yoked seed=1 first=50.2 last=50.2 delta=+0.0 reward=46.0 **eval=49.0** tie=0
+  yoked s2: => MINCIRC mode=yoked seed=2 first=50.0 last=50.0 delta=+0.0 reward=44.2 **eval=54.0** tie=0
+  yoked s3: => MINCIRC mode=yoked seed=3 first=48.2 last=48.2 delta=+0.0 reward=51.2 **eval=53.0** tie=0
+  yoked s4: => MINCIRC mode=yoked seed=4 first=60.8 last=60.8 delta=+0.0 reward=46.8 **eval=46.0** tie=0
+########## learn ##########
+  learn s0: => MINCIRC mode=learn seed=0 first=65.0 last=65.0 delta=+0.0 reward=65.0 **eval=100.0** tie=0
+  learn s1: => MINCIRC mode=learn seed=1 first=50.0 last=50.0 delta=+0.0 reward=50.0 **eval=49.0** tie=0
+  learn s2: => MINCIRC mode=learn seed=2 first=67.0 last=67.0 delta=+0.0 reward=67.0 **eval=100.0** tie=0
+  learn s3: => MINCIRC mode=learn seed=3 first=48.8 last=48.8 delta=+0.0 reward=48.8 **eval=47.0** tie=0
+  learn s4: => MINCIRC mode=learn seed=4 first=52.0 last=52.0 delta=+0.0 reward=52.0 **eval=46.0** tie=0
+########## reversal ##########
+  reversal s0: => MINCIRC mode=reversal seed=0 first=51.7 last=51.7 delta=+0.0 reward=51.7 **eval=44.0** tie=0
+  reversal s1: => MINCIRC mode=reversal seed=1 first=51.5 last=51.5 delta=+0.0 reward=51.5 **eval=49.0** tie=0
+  reversal s2: => MINCIRC mode=reversal seed=2 first=45.0 last=45.0 delta=+0.0 reward=45.0 **eval=100.0** tie=0
+  reversal s3: => MINCIRC mode=reversal seed=3 first=54.2 last=54.2 delta=+0.0 reward=54.2 **eval=47.0** tie=0
+  reversal s4: => MINCIRC mode=reversal seed=4 first=51.0 last=51.0 delta=+0.0 reward=51.0 **eval=46.0** tie=0
+[E086] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E086
+=== 종료코드 0 ===

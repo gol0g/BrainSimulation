@@ -1,0 +1,6 @@
+make: Entering directory '/root/minc_run/minimal_circuit_CODE'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/root/minc_run/minimal_circuit_CODE'
+  시행    1~ 400: 정답률  62.3%
+  시행  401~ 800: 정답률  68.8%
+  시행  801~1200: 정답률  31.5%
