@@ -1,0 +1,33 @@
+=== E103 실행: 2026-09-27T01:53:14Z ===
+커맨드: bash scripts/e103_main.sh
+---
+########## 회귀 (코드 변경 후 필수) ##########
+[회귀] 평가 100%: 24/24
+[회귀] **통과** — E095의 성취가 유지된다
+########## 추적 반전 (T20, T2) ##########
+  T20 w5 t300: => MINCIRC mode=reversal seed=5 first=58.8 last=33.2 delta=-25.5 reward=46.0 **eval=0.0** tie=0 trialseed=300
+  T20 w5 t301: => MINCIRC mode=reversal seed=5 first=57.8 last=35.0 delta=-22.8 reward=46.4 **eval=43.0** tie=0 trialseed=301
+  T20 w5 t302: => MINCIRC mode=reversal seed=5 first=60.5 last=29.2 delta=-31.2 reward=44.9 **eval=0.0** tie=0 trialseed=302
+  T20 w5 t303: => MINCIRC mode=reversal seed=5 first=55.5 last=29.0 delta=-26.5 reward=42.2 **eval=0.0** tie=0 trialseed=303
+  T20 w6 t300: => MINCIRC mode=reversal seed=6 first=63.7 last=33.2 delta=-30.5 reward=48.5 **eval=0.0** tie=0 trialseed=300
+  T20 w6 t301: => MINCIRC mode=reversal seed=6 first=68.5 last=30.2 delta=-38.2 reward=49.4 **eval=0.0** tie=0 trialseed=301
+  T20 w6 t302: => MINCIRC mode=reversal seed=6 first=66.5 last=29.0 delta=-37.5 reward=47.8 **eval=0.0** tie=0 trialseed=302
+  T20 w6 t303: => MINCIRC mode=reversal seed=6 first=60.8 last=29.2 delta=-31.5 reward=45.0 **eval=0.0** tie=0 trialseed=303
+  T20 w7 t300: => MINCIRC mode=reversal seed=7 first=50.5 last=44.0 delta=-6.5 reward=47.2 **eval=52.0** tie=0 trialseed=300
+  T20 w7 t301: => MINCIRC mode=reversal seed=7 first=49.2 last=45.2 delta=-4.0 reward=47.2 **eval=52.0** tie=0 trialseed=301
+  T20 w7 t302: => MINCIRC mode=reversal seed=7 first=54.0 last=33.5 delta=-20.5 reward=43.8 **eval=52.0** tie=0 trialseed=302
+  T20 w7 t303: => MINCIRC mode=reversal seed=7 first=48.8 last=52.2 delta=+3.5 reward=50.5 **eval=52.0** tie=0 trialseed=303
+  T2 w5 t300: => MINCIRC mode=reversal seed=5 first=66.0 last=40.2 delta=-25.8 reward=53.1 **eval=43.0** tie=0 trialseed=300
+  T2 w5 t301: => MINCIRC mode=reversal seed=5 first=70.5 last=36.5 delta=-34.0 reward=53.5 **eval=43.0** tie=0 trialseed=301
+  T2 w5 t302: => MINCIRC mode=reversal seed=5 first=69.5 last=35.5 delta=-34.0 reward=52.5 **eval=43.0** tie=0 trialseed=302
+  T2 w5 t303: => MINCIRC mode=reversal seed=5 first=63.5 last=30.5 delta=-33.0 reward=47.0 **eval=43.0** tie=0 trialseed=303
+  T2 w6 t300: => MINCIRC mode=reversal seed=6 first=63.7 last=33.2 delta=-30.5 reward=48.5 **eval=0.0** tie=0 trialseed=300
+  T2 w6 t301: => MINCIRC mode=reversal seed=6 first=67.8 last=30.2 delta=-37.5 reward=49.0 **eval=0.0** tie=0 trialseed=301
+  T2 w6 t302: => MINCIRC mode=reversal seed=6 first=66.5 last=29.0 delta=-37.5 reward=47.8 **eval=0.0** tie=0 trialseed=302
+  T2 w6 t303: => MINCIRC mode=reversal seed=6 first=60.5 last=29.5 delta=-31.0 reward=45.0 **eval=24.0** tie=44 trialseed=303
+  T2 w7 t300: => MINCIRC mode=reversal seed=7 first=58.0 last=40.2 delta=-17.7 reward=49.1 **eval=52.0** tie=0 trialseed=300
+  T2 w7 t301: => MINCIRC mode=reversal seed=7 first=61.3 last=36.0 delta=-25.3 reward=48.6 **eval=52.0** tie=0 trialseed=301
+  T2 w7 t302: => MINCIRC mode=reversal seed=7 first=61.5 last=35.8 delta=-25.8 reward=48.6 **eval=52.0** tie=0 trialseed=302
+  T2 w7 t303: => MINCIRC mode=reversal seed=7 first=54.8 last=44.5 delta=-10.2 reward=49.6 **eval=52.0** tie=0 trialseed=303
+[E103] 전체 루프 종료
+=== 종료코드 0 ===
