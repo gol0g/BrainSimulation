@@ -207,6 +207,8 @@ def main():
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
     ap.add_argument("--reward-window", type=int, default=0,
                     help="E109: 보상 후 같은 자극을 유지한 채 처리할 스텝 수(도파민이 이번 시행 흔적에 작용). 0=이전 동작")
+    ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
+                    help="E110: 보상 창 동안 자극. same=유지(E109, 반사 강화로 판명) / none=끔(최소 회로와 같음)")
     ap.add_argument("--trial-gap", type=int, default=0,
                     help="E109: 보상 창 뒤 도파민 0 + 무자극 처리 스텝 수(흔적 소거). 0=이전 동작")
     ap.add_argument("--calib-kc-motor-set", default=None, choices=("zero", "rev", "ali"),
@@ -451,6 +453,11 @@ def main():
                 # 처리 스텝 동안 가중치에 반영됐다(시행 t 보상 → 시행 t+1 활동에 배정). 최소 회로처럼
                 # (1) 같은 자극을 유지한 채 보상 창 K스텝 → (2) 도파민 0 → (3) 무자극 간격 G스텝.
                 _o = stim(obs, nh, side)
+                if args.reward_stim == "none":
+                    # E110: 보상 구간에 **자극을 끈다**(최소 회로 apply_stim None 과 같음). 자극을 유지하면
+                    # 뇌 자신의 반사 반응이 도파민과 겹쳐 반사 연합이 강화된다(E109 첫 런 +0.25).
+                    for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+                        _o[_k] = np.zeros(nh)
                 for _ in range(args.reward_window):
                     brain.process(_o)
                 brain.dopamine_level = 0.0

@@ -379,3 +379,4 @@ make: Entering directory '/root/e109_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e109_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
+[사전] 오프셋 -0.013 | 정답률 0.0% | **변조폭 +0.3444** (양수=반사방향, 음수=역전)
