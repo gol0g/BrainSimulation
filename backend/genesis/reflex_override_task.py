@@ -240,7 +240,7 @@ def main():
     ap.add_argument("--decomp-weights", default=None,
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
-                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron"))
+                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets"))
     ap.add_argument("--trace-kc-motor", default=None,
                     help="E111: 매 시행 도파민 직전 KC→motor 4그룹 자격흔적 합·가중치 평균을 CSV로(읽기 전용)")
     ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
@@ -390,11 +390,53 @@ def main():
             gm = float(np.float32(np.concatenate([W[n] for n in kc]).mean()))
             for n in kc:
                 sub[n] = np.full(W[n].size, gm)
-        elif mode == "neuron":
+        elif mode in ("neuron", "kcsets"):
             sub = dict(W)
         else:
             raise SystemExit("알 수 없는 분해 모드 %s" % mode)
         _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
+        if mode == "kcsets":
+            # E117: KC 반응 집합(자극 good=왼쪽/오른쪽) — 새 뇌(학습 가중치 이식 전)에 steer 와 같은 3스텝 제시 × N, 사이 무자극 10스텝.
+            # KC 입력은 감각에서 오므로 반응 집합은 KC→motor 가중치와 무관하다. 집합별로 저장된 학습 Δg 를 분해한다.
+            n_k = int(cfg.n_kc_per_side)
+            cnt = {sd: {"l": np.zeros(n_k), "r": np.zeros(n_k)} for sd in ("left", "right")}
+            _b2.reset()
+            for _ in range(30):
+                _b2.process(_obs2)
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+                neu[_k] = np.zeros(nh)
+            for rep_i in range(args.trials):
+                sd = "left" if rep_i % 2 == 0 else "right"
+                for _ in range(3):
+                    _b2.process(stim(_obs2, nh, sd))
+                    for kn, pop in (("l", _b2.kc_left), ("r", _b2.kc_right)):
+                        ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+                        if ids.size:
+                            cnt[sd][kn] += np.bincount(ids, minlength=n_k)[:n_k]
+                for _ in range(10):
+                    _b2.process(neu)
+            tot_sp = sum(float(cnt[sd][kn].sum()) for sd in cnt for kn in "lr")
+            if tot_sp == 0:
+                raise RuntimeError("KC 스파이크 0 — 측정 도구 실패(기록 버퍼 확인)")
+            init_w = float(cfg.kc_motor_init_w)
+            for kn in ("l", "r"):
+                aL = cnt["left"][kn] > 0; aR = cnt["right"][kn] > 0
+                cls = {"좌전용": aL & ~aR, "우전용": aR & ~aL, "공유": aL & aR, "무반응": ~aL & ~aR}
+                pm = {}
+                for m in ("l", "r"):
+                    nm = "kc_%s_to_motor_%s" % (kn, m)
+                    sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
+                    pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                    dg = W[nm] - init_w
+                    pm[m] = np.bincount(pre, weights=dg, minlength=n_k) / np.maximum(np.bincount(pre, minlength=n_k), 1)
+                out = []
+                for cn, msk in cls.items():
+                    n = int(msk.sum())
+                    out.append("%s n=%d →L %+.2f →R %+.2f" % (cn, n, float(pm["l"][msk].mean()) if n else float("nan"),
+                                                               float(pm["r"][msk].mean()) if n else float("nan")))
+                print("=> KCSETS kc_%s | %s" % (kn, " | ".join(out)))
+            return
         if mode == "neuron":
             # E113: 뉴런 수준 신용 누수 — motor 뉴런별 (학습된 KC 입력 Δg 평균) 대 (반사 입력 연결 수).
             # 연결은 같은 시드로 만든 새 뇌에서 읽는다(학습 뇌와 동일 — 이식 검증이 크기·순서를 보장).
