@@ -337,7 +337,7 @@ Building Forager Brain (28,323 neurons)...
     PPC_Goal_Food→KC: 2.0, sparsity=0.05
     Social_Memory→KC: 1.5, sparsity=0.03
     Assoc_Binding→KC: 2.0, sparsity=0.05 (C2: learned category→BG)
-    KC→motor [E109 R-STDP 4방향]: init_w=30.0, w_max=300.0, eta=0.15, tau_e=12.0, sparsity=0.25
+    KC→motor [E109 R-STDP 4방향]: init_w=30.0, w_max=300.0, eta=0.03, tau_e=12.0, sparsity=0.25
     KC→D1 [정적 — 학습 불가]: init_w=0.5 (진짜 학습은 --kc-rstdp)
   Phase L16: Sparse Expansion (KC) — single KC
     KC: 3000×2 = 6000, KC_Inh: 400×2 = 800
@@ -376,12 +376,13 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e109_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e109_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 -0.007 | 정답률 0.0% | **변조폭 +0.3555** (양수=반사방향, 음수=역전)
-[학습] 5ep 완료, 보상 140회 (탐색 주입 296회, ε=0.60)
-[D1가중치] food_to_d1_l   |Δ|평균=3.40439 변화율=56.4% | 평균 1.000→4.404 | std 0.0000→4.0250
-[D1가중치] food_to_d1_r   |Δ|평균=3.46286 변화율=63.1% | 평균 1.000→4.463 | std 0.0000→4.1260
+[사전] 오프셋 -0.006 | 정답률 0.0% | **변조폭 +0.3449** (양수=반사방향, 음수=역전)
+[학습] 5ep 완료, 보상 0회 (탐색 주입 296회, ε=0.60)
+[D1가중치] food_to_d1_l   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
+[D1가중치] food_to_d1_r   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -721,7 +722,7 @@ Building Forager Brain (28,323 neurons)...
     PPC_Goal_Food→KC: 2.0, sparsity=0.05
     Social_Memory→KC: 1.5, sparsity=0.03
     Assoc_Binding→KC: 2.0, sparsity=0.05 (C2: learned category→BG)
-    KC→motor [E109 R-STDP 4방향]: init_w=30.0, w_max=300.0, eta=0.15, tau_e=12.0, sparsity=0.25
+    KC→motor [E109 R-STDP 4방향]: init_w=30.0, w_max=300.0, eta=0.03, tau_e=12.0, sparsity=0.25
     KC→D1 [정적 — 학습 불가]: init_w=0.5 (진짜 학습은 --kc-rstdp)
   Phase L16: Sparse Expansion (KC) — single KC
     KC: 3000×2 = 6000, KC_Inh: 400×2 = 800
@@ -764,5 +765,5 @@ make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e109_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 [이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.001 | 정답률 0.0% | **변조폭 +0.6311**
-=> 정답률 +0.0%p | **변조폭 변화 +0.2757** | 판정: 학습이 반사 방향으로 강화
+[사후] 오프셋 -0.006 | 정답률 0.0% | **변조폭 +0.3449**
+=> 정답률 +0.0%p | **변조폭 변화 +0.0000** | 판정: 변화 없음

@@ -378,10 +378,10 @@ Building model...
 make: Entering directory '/root/e109_run/forager_brain_CODE'
 make: Leaving directory '/root/e109_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 -0.007 | 정답률 0.0% | **변조폭 +0.3555** (양수=반사방향, 음수=역전)
+[사전] 오프셋 -0.006 | 정답률 0.0% | **변조폭 +0.3449** (양수=반사방향, 음수=역전)
 [학습] 5ep 완료, 보상 140회 (탐색 주입 296회, ε=0.60)
-[D1가중치] food_to_d1_l   |Δ|평균=3.40439 변화율=56.4% | 평균 1.000→4.404 | std 0.0000→4.0250
-[D1가중치] food_to_d1_r   |Δ|평균=3.46286 변화율=63.1% | 평균 1.000→4.463 | std 0.0000→4.1260
+[D1가중치] food_to_d1_l   |Δ|평균=3.40557 변화율=52.5% | 평균 1.000→4.405 | std 0.0000→4.0445
+[D1가중치] food_to_d1_r   |Δ|평균=3.22996 변화율=57.2% | 평균 1.000→4.229 | std 0.0000→4.0428
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -764,5 +764,5 @@ make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e109_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 [이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.001 | 정답률 0.0% | **변조폭 +0.6311**
-=> 정답률 +0.0%p | **변조폭 변화 +0.2757** | 판정: 학습이 반사 방향으로 강화
+[사후] 오프셋 -0.002 | 정답률 0.0% | **변조폭 +0.6176**
+=> 정답률 +0.0%p | **변조폭 변화 +0.2726** | 판정: 학습이 반사 방향으로 강화
