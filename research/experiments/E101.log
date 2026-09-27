@@ -104,4 +104,22 @@
   W2-L4 w7 t304: => MINCIRC mode=learn seed=7 first=62.3 last=62.3 delta=+0.0 reward=62.3 **eval=100.0** tie=0 trialseed=304
   W2-rev8 w7 t304: => MINCIRC mode=reversal seed=7 first=62.3 last=37.2 delta=-25.0 reward=49.8 **eval=52.0** tie=0 trialseed=304
   W2-L8 w7 t304: => MINCIRC mode=learn seed=7 first=62.3 last=68.8 delta=+6.5 reward=65.5 **eval=100.0** tie=0 trialseed=304
-  W2-rev16 w7 t304: 
+  W2-rev16 w7 t304: => MINCIRC mode=reversal seed=7 first=62.3 last=33.2 delta=-29.0 reward=48.9 **eval=0.0** tie=0 trialseed=304
+  W20-rev16 w7 t304: => MINCIRC mode=reversal seed=7 first=59.2 last=33.2 delta=-26.0 reward=48.2 **eval=0.0** tie=0 trialseed=304
+  W2-L4 w7 t305: => MINCIRC mode=learn seed=7 first=57.2 last=57.2 delta=+0.0 reward=57.2 **eval=100.0** tie=0 trialseed=305
+  W2-rev8 w7 t305: => MINCIRC mode=reversal seed=7 first=57.2 last=49.8 delta=-7.5 reward=53.5 **eval=52.0** tie=0 trialseed=305
+  W2-L8 w7 t305: => MINCIRC mode=learn seed=7 first=57.2 last=68.5 delta=+11.2 reward=62.9 **eval=100.0** tie=0 trialseed=305
+  W2-rev16 w7 t305: => MINCIRC mode=reversal seed=7 first=57.2 last=32.0 delta=-25.2 reward=46.9 **eval=52.0** tie=0 trialseed=305
+  W20-rev16 w7 t305: => MINCIRC mode=reversal seed=7 first=47.8 last=35.5 delta=-12.2 reward=43.9 **eval=52.0** tie=0 trialseed=305
+  W2-L4 w7 t306: => MINCIRC mode=learn seed=7 first=58.5 last=58.5 delta=+0.0 reward=58.5 **eval=100.0** tie=0 trialseed=306
+  W2-rev8 w7 t306: => MINCIRC mode=reversal seed=7 first=58.5 last=38.8 delta=-19.8 reward=48.6 **eval=52.0** tie=0 trialseed=306
+  W2-L8 w7 t306: => MINCIRC mode=learn seed=7 first=58.5 last=70.5 delta=+12.0 reward=64.5 **eval=100.0** tie=0 trialseed=306
+  W2-rev16 w7 t306: => MINCIRC mode=reversal seed=7 first=58.5 last=29.8 delta=-28.8 reward=47.2 **eval=28.0** tie=52 trialseed=306
+  W20-rev16 w7 t306: => MINCIRC mode=reversal seed=7 first=51.2 last=29.8 delta=-21.5 reward=45.4 **eval=0.0** tie=0 trialseed=306
+  W2-L4 w7 t307: => MINCIRC mode=learn seed=7 first=56.2 last=56.2 delta=+0.0 reward=56.2 **eval=100.0** tie=0 trialseed=307
+  W2-rev8 w7 t307: => MINCIRC mode=reversal seed=7 first=56.2 last=38.8 delta=-17.5 reward=47.5 **eval=52.0** tie=0 trialseed=307
+  W2-L8 w7 t307: => MINCIRC mode=learn seed=7 first=56.2 last=75.2 delta=+19.0 reward=65.8 **eval=100.0** tie=0 trialseed=307
+  W2-rev16 w7 t307: => MINCIRC mode=reversal seed=7 first=56.2 last=27.3 delta=-29.0 reward=47.6 **eval=52.0** tie=0 trialseed=307
+  W20-rev16 w7 t307: => MINCIRC mode=reversal seed=7 first=46.2 last=26.2 delta=-20.0 reward=43.9 **eval=0.0** tie=0 trialseed=307
+[E101] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E101
+=== 종료코드 0 ===
