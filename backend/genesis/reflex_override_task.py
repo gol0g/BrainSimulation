@@ -64,6 +64,26 @@ def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False
     return tot
 
 
+def act_window_current(brain, o, ex_side, current, steps):
+    """E115: 행동 창 — 실행 motor 에 +current, 반대 motor 에 −current 를 **지속 전류**로(Ioffset) 넣고 steps 처리.
+    motor Ioffset 이 동적 파라미터여야 한다(cfg.motor_ioffset_dynamic). 끝나면 0으로 되돌린다.
+    반환: 창 동안 (실행 motor 발화율 합, 반대 motor 발화율 합)."""
+    ml, mr = brain.motor_left, brain.motor_right
+    ml.set_dynamic_param_value("Ioffset", current if ex_side == "left" else -current)
+    mr.set_dynamic_param_value("Ioffset", current if ex_side == "right" else -current)
+    ex_r = ot_r = 0.0
+    try:
+        for _ in range(steps):
+            _a, info = brain.process(o)
+            l, r = info["motor_left_rate"], info["motor_right_rate"]
+            ex_r += (l if ex_side == "left" else r)
+            ot_r += (r if ex_side == "left" else l)
+    finally:
+        ml.set_dynamic_param_value("Ioffset", 0.0)
+        mr.set_dynamic_param_value("Ioffset", 0.0)
+    return ex_r, ot_r
+
+
 def measure_offset(brain, obs, nh, n=20):
     """좌우 대칭 자극에서 남는 조향 = 런 상수 오프셋(C28b: 런마다 0.3~0.83으로 요동)."""
     vals = []
@@ -211,6 +231,10 @@ def main():
                     help="E114: 행동 결정 후 자극 유지 + 실행 motor 구동·반대쪽 억제 스텝 수(0=이전 동작)")
     ap.add_argument("--act-drive", type=float, default=25.0,
                     help="E114: 행동 창 구동 세기(실행 motor V +A, 반대쪽 −A, 매 스텝)")
+    ap.add_argument("--act-current", type=float, default=0.0,
+                    help="E115: 행동 창을 지속 전류(Ioffset ±A)로. >0 이면 --act-drive(막전위 튕기기) 대신 사용. motor Ioffset 동적화 필요(자동 설정)")
+    ap.add_argument("--calib-act-current", default=None,
+                    help="E115 보정: 쉼표로 전류 목록(예: 0,50,100,200,400). 자극 good=left, 실행=right/left 각 20회 행동 창 발화율 → 종료")
     ap.add_argument("--save-weights", default=None,
                     help="E112: 이식 평가 직전 학습 가중치를 npz로 저장")
     ap.add_argument("--decomp-weights", default=None,
@@ -277,6 +301,8 @@ def main():
         cfg.direct_inhibition = args.direct_inhib
     if args.hippo_eta is not None:
         cfg.place_to_food_memory_eta = args.hippo_eta
+    if args.act_current > 0 or args.calib_act_current:
+        cfg.motor_ioffset_dynamic = True
     if args.kc_motor:
         cfg.kc_motor_rstdp = True
         cfg.kc_motor_w_max = args.kc_motor_w_max
@@ -303,6 +329,28 @@ def main():
         if d:
             obs = env.reset()
     nh = env.config.n_rays // 2
+
+    if args.calib_act_current:
+        # E115 보정(학습 없음): 행동 창 지속 전류 세기별 실행/반대 motor 발화. 자극 good=left(반사 = 왼쪽 motor).
+        # 목표: 실행=right(반사 반대)일 때 반대(왼쪽, 반사) motor 가 거의 침묵하는 최소 전류.
+        brain.reset()
+        for _ in range(30):
+            brain.process(obs)
+        for cur in [float(x) for x in args.calib_act_current.split(",")]:
+            for ex in ("right", "left"):
+                exs, ots = [], []
+                for _ in range(20):
+                    e_, o_ = act_window_current(brain, stim(obs, nh, "left"), ex, cur, max(1, args.act_window or 3))
+                    exs.append(e_); ots.append(o_)
+                    for _ in range(10):   # 시행 간격(무자극)
+                        _n = stim(obs, nh, "left")
+                        for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+                            _n[_k] = np.zeros(nh)
+                        brain.process(_n)
+                print("=> CALIBAC cur=%.1f ex=%s ex_rate=%.4f other_rate=%.4f sel=%.3f"
+                      % (cur, ex, float(np.mean(exs)), float(np.mean(ots)),
+                         float(np.mean(exs)) / max(float(np.mean(exs)) + float(np.mean(ots)), 1e-9)))
+        return
 
     if args.decomp_weights:
         # E112: 부분 이식 분해(평가만). 이식 평가와 **같은 경로**(TE.build_from_cfg: 같은 시드 새 뇌 + 같은 워밍업)로
@@ -573,7 +621,11 @@ def main():
                 # 자극을 유지한 채 **실행한 motor 만 구동하고 반대쪽은 억제**해, 흔적이 실행 행동을 담게 한다.
                 # K52: v<0 = motor_left 우세. v==0 이면 무작위.
                 _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
-                steer(brain, stim(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
+                if args.act_current > 0:
+                    # E115: 지속 전류(Ioffset) — 창 전체 동안 실행 motor +I, 반대 −I. 최소 회로 act_drive 와 같은 방식.
+                    act_window_current(brain, stim(obs, nh, side), _ex, args.act_current, args.act_window)
+                else:
+                    steer(brain, stim(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
             if args.no_reward:
                 continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
             if correct:

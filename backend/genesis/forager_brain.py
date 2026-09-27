@@ -1196,6 +1196,7 @@ class ForagerBrainConfig:
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
     # 최소 회로(K50)처럼 학습 경로를 운동 출력에 직접 닿게 한다. 기본 꺼짐 = 기존 동작.
+    motor_ioffset_dynamic: bool = False   # E115: 행동 창 지속 전류용
     kc_motor_rstdp: bool = False
     kc_motor_init_w: float = 0.5
     kc_motor_w_max: float = 2.0
@@ -1697,6 +1698,11 @@ class ForagerBrain:
             "motor_left", self.config.n_motor_left, "LIF", motor_lif_params, lif_init)
         self.motor_right = self.model.add_neuron_population(
             "motor_right", self.config.n_motor_right, "LIF", motor_lif_params, lif_init)
+        if getattr(self.config, "motor_ioffset_dynamic", False):
+            # E115: 행동 창에서 motor 에 **지속 전류**를 넣기 위해 Ioffset 을 동적 파라미터로(기본 꺼짐 = 이전과 동일).
+            # 막전위 튕기기(steer 편향)는 처리 스텝 시작에만 작용해 반사 입력이 반대쪽 motor 를 곧 다시 발화시킨다(E114 첫 쌍).
+            self.motor_left.set_param_dynamic("Ioffset")
+            self.motor_right.set_param_dynamic("Ioffset")
         print(f"  Motor: C={self.config.motor_capacitance} (anti-saturation)")
 
         print(f"  Motor: Left({self.config.n_motor_left}) + Right({self.config.n_motor_right})")
