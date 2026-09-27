@@ -207,6 +207,12 @@ def main():
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
     ap.add_argument("--reward-window", type=int, default=0,
                     help="E109: 보상 후 같은 자극을 유지한 채 처리할 스텝 수(도파민이 이번 시행 흔적에 작용). 0=이전 동작")
+    ap.add_argument("--save-weights", default=None,
+                    help="E112: 이식 평가 직전 학습 가중치를 npz로 저장")
+    ap.add_argument("--decomp-weights", default=None,
+                    help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
+    ap.add_argument("--decomp-mode", default="all",
+                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm"))
     ap.add_argument("--trace-kc-motor", default=None,
                     help="E111: 매 시행 도파민 직전 KC→motor 4그룹 자격흔적 합·가중치 평균을 CSV로(읽기 전용)")
     ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
@@ -293,6 +299,53 @@ def main():
         if d:
             obs = env.reset()
     nh = env.config.n_rays // 2
+
+    if args.decomp_weights:
+        # E112: 부분 이식 분해(평가만). 이식 평가와 **같은 경로**(TE.build_from_cfg: 같은 시드 새 뇌 + 같은 워밍업)로
+        # 저장된 학습 가중치의 일부만 넣거나 변형해 넣고 한 번 평가한다.
+        import transplant_eval as TE
+        W = dict(np.load(args.decomp_weights))
+        kc = sorted(n for n in W if n.startswith("kc_") and "_to_motor_" in n)
+        d1 = sorted(n for n in W if n.startswith("food_to_d1"))
+        if len(kc) != 4 or not d1:
+            raise SystemExit("분해: KC→motor 4개·D1 경로가 필요하다 (kc=%d d1=%d)" % (len(kc), len(d1)))
+        mode = args.decomp_mode
+        sub = {}
+        if mode == "all":
+            sub = dict(W)
+        elif mode == "none":
+            sub = {}
+        elif mode == "kc_only":
+            sub = {n: W[n] for n in kc}
+        elif mode == "d1_only":
+            sub = {n: W[n] for n in d1}
+        elif mode == "kc_shuffle":
+            # 그룹별 평균·분포 보존, 시냅스별 구조(어느 KC→어느 motor 뉴런)만 파괴
+            sub = dict(W)
+            _rs = np.random.RandomState(777)
+            for n in kc:
+                sub[n] = W[n][_rs.permutation(W[n].size)]
+        elif mode == "kc_uniform":
+            # 그룹 평균만 남김(공통 상승 + 매핑 차이 D 보존, 그룹 안 구조 제거)
+            sub = dict(W)
+            for n in kc:
+                sub[n] = np.full(W[n].size, float(W[n].mean()))
+        elif mode == "kc_cm":
+            # 네 그룹 전체 평균(공통 상승만 보존, D·구조 제거)
+            sub = dict(W)
+            gm = float(np.mean([W[n].mean() for n in kc]))
+            for n in kc:
+                sub[n] = np.full(W[n].size, gm)
+        else:
+            raise SystemExit("알 수 없는 분해 모드 %s" % mode)
+        _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
+        if sub:
+            TE.push(_b2, sub)
+            TE.verify(_b2, _b2, sub)
+        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials)
+        gms = " ".join("%s=%.4f" % (n.replace("_to_motor_", ">"), float(sub[n].mean()) if n in sub else float("nan")) for n in kc)
+        print("=> DECOMP mode=%s mod=%+.4f acc=%.1f off=%+.4f pushed=%d kc_means[%s]" % (mode, mod, acc, off, len(sub), gms))
+        return
 
     if args.calib_kc_motor_set:
         # E109 보정 수정판: 한 뇌를 연달아 평가하면 동역학 이력이 조건을 교란한다(K22 — 첫 판에서 init≠zero 로 드러남).
@@ -506,6 +559,10 @@ def main():
         # **훈련에 쓴 cfg 그대로** 새 뇌를 만든다 — 필드를 골라 옮기면 구조가 달라진다(2026-09-19 사고).
         import transplant_eval as TE
         _w = TE.pull(brain)
+        if args.save_weights:
+            # E112: 학습된 가중치 저장 — 부분 이식 분해(--decomp-weights)에 쓴다.
+            np.savez_compressed(args.save_weights, **_w)
+            print("[저장] 학습 가중치 %d개 경로 → %s" % (len(_w), args.save_weights))
         _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
         TE.push(_b2, _w)          # 크기 불일치면 예외 — 조용히 넘어가지 않는다
         _names = TE.verify(brain, _b2, _w)   # 이식이 실제로 반영됐는지 확인
