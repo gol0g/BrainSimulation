@@ -1,0 +1,21 @@
+=== E102 실행: 2026-09-27T01:39:15Z ===
+커맨드: bash scripts/e102_main.sh
+---
+########## 회귀 (코드 변경 후 필수) ##########
+[회귀] 평가 100%: 24/24
+[회귀] **통과** — E095의 성취가 유지된다
+########## 추적 반전 ##########
+  trace w5 t300: => MINCIRC mode=reversal seed=5 first=58.8 last=33.2 delta=-25.5 reward=46.0 **eval=0.0** tie=0 trialseed=300
+  trace w5 t301: => MINCIRC mode=reversal seed=5 first=57.8 last=35.0 delta=-22.8 reward=46.4 **eval=43.0** tie=0 trialseed=301
+  trace w5 t302: => MINCIRC mode=reversal seed=5 first=60.5 last=29.2 delta=-31.2 reward=44.9 **eval=0.0** tie=0 trialseed=302
+  trace w5 t303: => MINCIRC mode=reversal seed=5 first=55.5 last=29.0 delta=-26.5 reward=42.2 **eval=0.0** tie=0 trialseed=303
+  trace w6 t300: => MINCIRC mode=reversal seed=6 first=63.7 last=33.2 delta=-30.5 reward=48.5 **eval=0.0** tie=0 trialseed=300
+  trace w6 t301: => MINCIRC mode=reversal seed=6 first=68.5 last=30.2 delta=-38.2 reward=49.4 **eval=0.0** tie=0 trialseed=301
+  trace w6 t302: => MINCIRC mode=reversal seed=6 first=66.5 last=29.0 delta=-37.5 reward=47.8 **eval=0.0** tie=0 trialseed=302
+  trace w6 t303: => MINCIRC mode=reversal seed=6 first=60.8 last=29.2 delta=-31.5 reward=45.0 **eval=0.0** tie=0 trialseed=303
+  trace w7 t300: => MINCIRC mode=reversal seed=7 first=50.5 last=44.0 delta=-6.5 reward=47.2 **eval=52.0** tie=0 trialseed=300
+  trace w7 t301: => MINCIRC mode=reversal seed=7 first=49.2 last=45.2 delta=-4.0 reward=47.2 **eval=52.0** tie=0 trialseed=301
+  trace w7 t302: => MINCIRC mode=reversal seed=7 first=54.0 last=33.5 delta=-20.5 reward=43.8 **eval=52.0** tie=0 trialseed=302
+  trace w7 t303: => MINCIRC mode=reversal seed=7 first=48.8 last=52.2 delta=+3.5 reward=50.5 **eval=52.0** tie=0 trialseed=303
+[E102] 전체 루프 종료
+=== 종료코드 0 ===
