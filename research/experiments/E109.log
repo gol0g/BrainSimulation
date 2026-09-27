@@ -1,0 +1,7 @@
+=== E109 실행: 2026-09-27T05:01:59Z ===
+커맨드: bash scripts/e109_main.sh
+---
+  eta0.15 학습 b0: [실패 rc=1]
+          raise RuntimeError("학습 시냅스 %d개의 이름을 찾지 못했다 — 이식이 불완전해진다" % missing)
+      RuntimeError: 학습 시냅스 4개의 이름을 찾지 못했다 — 이식이 불완전해진다
+  eta0.15 무학습 b0: 

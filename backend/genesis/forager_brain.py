@@ -9079,6 +9079,8 @@ class ForagerBrain:
                         init_sparse_connectivity("FixedProbability", {"prob": _msp}))
                     _syn.set_wu_param_dynamic("dopamine")
                     self.kc_motor_syn[(_kn, _mn)] = _syn
+                    # 이식 평가(transplant_eval.learned_names)는 학습 시냅스를 **속성 이름**으로 찾는다 — 딕셔너리만으로는 누락된다(E109 첫 실행 실패).
+                    setattr(self, "kc_%s_to_motor_%s" % (_kn, _mn), _syn)
             if not hasattr(self, "_rstdp_synapses"):
                 self._rstdp_synapses = []
             self._rstdp_synapses += list(self.kc_motor_syn.values())
