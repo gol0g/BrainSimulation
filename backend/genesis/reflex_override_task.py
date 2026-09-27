@@ -196,6 +196,8 @@ def main():
                     help="C37: 행동 탐색 확률. 0이면 결정론적 정책이라 정답 표본이 0개 → 학습 불가.")
     ap.add_argument("--w-max", type=float, default=None,
                     help="C36 수리3: 학습 상한(기본 30.0). 선천반사 25.0과 경쟁하려면 그 이상 필요.")
+    ap.add_argument("--calib-d1-sign", type=int, default=0,
+                    help="E108 조작검증: N>0이면 D1/motor 좌우 편향별 조향 부호를 N회씩 재고 종료(학습 없음).")
     args = ap.parse_args()
 
     # C46: 환경·워밍업 난수 고정. 미고정이면 사전 정답률이 런마다 0%~72%로 흔들려
@@ -266,6 +268,33 @@ def main():
         if d:
             obs = env.reset()
     nh = env.config.n_rays // 2
+
+    if args.calib_d1_sign > 0:
+        # E108 조작검증: D1 좌/우 편향이 조향(angle_delta 합) 부호를 어느 쪽으로 바꾸는가.
+        # angle_delta 주석(>0=CCW=왼쪽)과 과제의 정답 판정(good 왼쪽이면 v>0이 정답=반대쪽)이 엇갈려 보여
+        # 행동 흔적 구동(--act-stamp)의 방향을 코드 해석이 아니라 **실측**으로 정한다. 학습 없음(도파민 0).
+        brain.reset()
+        for _ in range(30):
+            brain.process(obs)
+        off = measure_offset(brain, obs, nh)
+        neut = stim(obs, nh, "left")
+        for k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+            neut[k] = np.ones(nh) * 0.45
+        res = {}
+        for where in ("d1", "motor"):
+            for side in ("left", "right"):
+                vs = [steer(brain, neut, steps=3, bias_side=side, bias_strength=args.bias,
+                            bias_at_d1=(where == "d1")) - off for _ in range(args.calib_d1_sign)]
+                res[(where, side)] = (float(np.mean(vs)), float(np.std(vs)))
+                print("[보정] %-5s 편향=%-5s → 조향 평균 %+.4f (표준편차 %.4f, n=%d)"
+                      % (where, side, res[(where, side)][0], res[(where, side)][1], args.calib_d1_sign))
+        # 반사 방향 참고: good 이 왼쪽일 때의 조향 부호
+        vl = float(np.mean([steer(brain, stim(obs, nh, "left"), steps=3) - off for _ in range(args.calib_d1_sign)]))
+        print("[보정] 반사 참고: good=left 조향 평균 %+.4f (반사=good 쪽 접근)" % vl)
+        print("=> CALIB d1_left=%+.4f d1_right=%+.4f motor_left=%+.4f motor_right=%+.4f good_left=%+.4f"
+              % (res[("d1", "left")][0], res[("d1", "right")][0], res[("motor", "left")][0],
+                 res[("motor", "right")][0], vl))
+        return
 
     def snap_d1():
         """C36 진단: food_to_d1 가중치가 실제로 변하는가.
