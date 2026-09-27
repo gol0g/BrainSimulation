@@ -207,6 +207,10 @@ def main():
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
     ap.add_argument("--reward-window", type=int, default=0,
                     help="E109: 보상 후 같은 자극을 유지한 채 처리할 스텝 수(도파민이 이번 시행 흔적에 작용). 0=이전 동작")
+    ap.add_argument("--act-window", type=int, default=0,
+                    help="E114: 행동 결정 후 자극 유지 + 실행 motor 구동·반대쪽 억제 스텝 수(0=이전 동작)")
+    ap.add_argument("--act-drive", type=float, default=25.0,
+                    help="E114: 행동 창 구동 세기(실행 motor V +A, 반대쪽 −A, 매 스텝)")
     ap.add_argument("--save-weights", default=None,
                     help="E112: 이식 평가 직전 학습 가중치를 npz로 저장")
     ap.add_argument("--decomp-weights", default=None,
@@ -563,6 +567,13 @@ def main():
                         raise RuntimeError("KC→motor 추적: 빈 배열(%s%s) — 측정 도구 실패" % (_k, _m))
                     _row += [round(float(_e.sum()), 4), round(float(_g.mean()), 5)]
                 TRACE_ROWS.append(_row)
+            if args.act_window > 0:
+                # E114: 행동 창(최소 회로 act_drive + WTA 이식). 전체 모델은 반사 경로 때문에 두 motor 가 함께 발화해
+                # 자격흔적이 양쪽에 생기고 보상이 비선택적 공통 강화로만 작동했다(E112·E113). 행동이 정해진 뒤
+                # 자극을 유지한 채 **실행한 motor 만 구동하고 반대쪽은 억제**해, 흔적이 실행 행동을 담게 한다.
+                # K52: v<0 = motor_left 우세. v==0 이면 무작위.
+                _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
+                steer(brain, stim(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
             if args.no_reward:
                 continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
             if correct:

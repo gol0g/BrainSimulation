@@ -1,0 +1,52 @@
+=== E113 실행: 2026-09-27T08:07:26Z ===
+커맨드: bash scripts/e113_main.sh
+---
+########## 1단계 학습·저장 ##########
+  train b5: => +0.3488 +0.6168 
+  train b6: => +0.3572 +0.6334 
+  train b7: => +0.3569 +0.6187 
+  train b8: => +0.3423 +0.5724 
+  train b9: => +0.3587 +0.6297 
+########## 2단계 분해 ##########
+  dec b5 none: => DECOMP mode=none mod=+0.3488 acc=0.0 off=-0.0021 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b5 all: => DECOMP mode=all mod=+0.6168 acc=0.0 off=-0.0005 pushed=8 kc_means[kc_l>l=33.6859 kc_l>r=33.6740 kc_r>l=33.4939 kc_r>r=33.5729]
+  dec b5 kc_only: => DECOMP mode=kc_only mod=+0.6061 acc=0.0 off=-0.0013 pushed=4 kc_means[kc_l>l=33.6859 kc_l>r=33.6740 kc_r>l=33.4939 kc_r>r=33.5729]
+  dec b5 d1_only: => DECOMP mode=d1_only mod=+0.2748 acc=0.0 off=+0.0028 pushed=4 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b5 kc_shuffle: => DECOMP mode=kc_shuffle mod=+0.2444 acc=0.0 off=+0.0036 pushed=8 kc_means[kc_l>l=33.6859 kc_l>r=33.6740 kc_r>l=33.4939 kc_r>r=33.5729]
+  dec b5 kc_uniform: => DECOMP mode=kc_uniform mod=+0.2417 acc=0.0 off=+0.0035 pushed=8 kc_means[kc_l>l=33.6859 kc_l>r=33.6740 kc_r>l=33.4939 kc_r>r=33.5729]
+  dec b5 kc_cm: => DECOMP mode=kc_cm mod=+0.2421 acc=0.0 off=+0.0034 pushed=8 kc_means[kc_l>l=33.6066 kc_l>r=33.6066 kc_r>l=33.6066 kc_r>r=33.6066]
+  dec b5 neuron: => DECOMP mode=neuron NEURON group=ll r=+0.0111 dg_hiRefl=+3.6922 dg_loRefl=+3.6859 dg_all=+3.6859 refl_mean=90.1 NEURON group=lr r=+0.0795 dg_hiRefl=+3.7089 dg_loRefl=+3.6050 dg_all=+3.6740 refl_mean=90.3 NEURON group=rl r=+0.0564 dg_hiRefl=+3.5474 dg_loRefl=+3.4672 dg_all=+3.4939 refl_mean=90.1 NEURON group=rr r=-0.0142 dg_hiRefl=+3.5270 dg_loRefl=+3.5516 dg_all=+3.5729 refl_mean=90.3 KCPRE side=l top5%: 반사(ll) +71.8645 교차(lr) +71.2958 차 +0.5686 | 하위50%: 반사 -0.0007 교차 -0.0006 | r(반사,교차)=+0.989 KCPRE side=r top5%: 반사(rr) +71.3963 교차(rl) +69.5269 차 +1.8694 | 하위50%: 반사 -0.0011 교차 -0.0010 | r(반사,교차)=+0.992 
+  dec b6 none: => DECOMP mode=none mod=+0.3572 acc=0.0 off=-0.0134 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b6 all: => DECOMP mode=all mod=+0.6334 acc=0.0 off=-0.0036 pushed=8 kc_means[kc_l>l=33.5065 kc_l>r=33.3908 kc_r>l=33.4229 kc_r>r=33.5380]
+  dec b6 kc_only: => DECOMP mode=kc_only mod=+0.6062 acc=0.0 off=-0.0059 pushed=4 kc_means[kc_l>l=33.5065 kc_l>r=33.3908 kc_r>l=33.4229 kc_r>r=33.5380]
+  dec b6 d1_only: => DECOMP mode=d1_only mod=+0.2753 acc=0.0 off=-0.0323 pushed=4 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b6 kc_shuffle: => DECOMP mode=kc_shuffle mod=+0.2505 acc=0.0 off=-0.0417 pushed=8 kc_means[kc_l>l=33.5065 kc_l>r=33.3908 kc_r>l=33.4229 kc_r>r=33.5380]
+  dec b6 kc_uniform: => DECOMP mode=kc_uniform mod=+0.2533 acc=0.0 off=-0.0430 pushed=8 kc_means[kc_l>l=33.5065 kc_l>r=33.3908 kc_r>l=33.4229 kc_r>r=33.5380]
+  dec b6 kc_cm: => DECOMP mode=kc_cm mod=+0.2526 acc=0.0 off=-0.0431 pushed=8 kc_means[kc_l>l=33.4646 kc_l>r=33.4646 kc_r>l=33.4646 kc_r>r=33.4646]
+  dec b6 neuron: => DECOMP mode=neuron NEURON group=ll r=+0.0174 dg_hiRefl=+3.4759 dg_loRefl=+3.5086 dg_all=+3.5065 refl_mean=90.3 NEURON group=lr r=-0.0065 dg_hiRefl=+3.3893 dg_loRefl=+3.3828 dg_all=+3.3908 refl_mean=89.9 NEURON group=rl r=-0.0103 dg_hiRefl=+3.4439 dg_loRefl=+3.4488 dg_all=+3.4229 refl_mean=90.3 NEURON group=rr r=+0.1262 dg_hiRefl=+3.6132 dg_loRefl=+3.4970 dg_all=+3.5380 refl_mean=89.9 KCPRE side=l top5%: 반사(ll) +68.8566 교차(lr) +67.4010 차 +1.4557 | 하위50%: 반사 -0.0006 교차 -0.0006 | r(반사,교차)=+0.990 KCPRE side=r top5%: 반사(rr) +71.0847 교차(rl) +68.5114 차 +2.5733 | 하위50%: 반사 -0.0011 교차 -0.0011 | r(반사,교차)=+0.989 
+  dec b7 none: => DECOMP mode=none mod=+0.3569 acc=0.0 off=+0.0181 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b7 all: => DECOMP mode=all mod=+0.6187 acc=0.0 off=+0.0027 pushed=8 kc_means[kc_l>l=33.3226 kc_l>r=33.2946 kc_r>l=33.5628 kc_r>r=33.7030]
+  dec b7 kc_only: => DECOMP mode=kc_only mod=+0.6025 acc=0.0 off=+0.0076 pushed=4 kc_means[kc_l>l=33.3226 kc_l>r=33.2946 kc_r>l=33.5628 kc_r>r=33.7030]
+  dec b7 d1_only: => DECOMP mode=d1_only mod=+0.2773 acc=0.0 off=+0.0584 pushed=4 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b7 kc_shuffle: => DECOMP mode=kc_shuffle mod=+0.2612 acc=0.0 off=+0.0649 pushed=8 kc_means[kc_l>l=33.3226 kc_l>r=33.2946 kc_r>l=33.5628 kc_r>r=33.7030]
+  dec b7 kc_uniform: => DECOMP mode=kc_uniform mod=+0.2596 acc=0.0 off=+0.0684 pushed=8 kc_means[kc_l>l=33.3226 kc_l>r=33.2946 kc_r>l=33.5628 kc_r>r=33.7030]
+  dec b7 kc_cm: => DECOMP mode=kc_cm mod=+0.2588 acc=0.0 off=+0.0682 pushed=8 kc_means[kc_l>l=33.4707 kc_l>r=33.4707 kc_r>l=33.4707 kc_r>r=33.4707]
+  dec b7 neuron: => DECOMP mode=neuron NEURON group=ll r=+0.0363 dg_hiRefl=+3.3876 dg_loRefl=+3.3249 dg_all=+3.3226 refl_mean=89.7 NEURON group=lr r=+0.0921 dg_hiRefl=+3.3336 dg_loRefl=+3.2352 dg_all=+3.2946 refl_mean=91.0 NEURON group=rl r=+0.0710 dg_hiRefl=+3.6075 dg_loRefl=+3.4963 dg_all=+3.5628 refl_mean=89.7 NEURON group=rr r=+0.1042 dg_hiRefl=+3.7517 dg_loRefl=+3.6420 dg_all=+3.7030 refl_mean=91.0 KCPRE side=l top5%: 반사(ll) +66.3415 교차(lr) +64.6115 차 +1.7299 | 하위50%: 반사 -0.0010 교차 -0.0009 | r(반사,교차)=+0.986 KCPRE side=r top5%: 반사(rr) +73.1386 교차(rl) +70.7791 차 +2.3595 | 하위50%: 반사 -0.0014 교차 -0.0011 | r(반사,교차)=+0.990 
+  dec b8 none: => DECOMP mode=none mod=+0.3423 acc=0.0 off=+0.0243 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b8 all: => DECOMP mode=all mod=+0.5724 acc=0.0 off=+0.0175 pushed=8 kc_means[kc_l>l=33.2335 kc_l>r=33.1842 kc_r>l=33.9086 kc_r>r=34.1315]
+  dec b8 kc_only: => DECOMP mode=kc_only mod=+0.6049 acc=0.0 off=+0.0130 pushed=4 kc_means[kc_l>l=33.2335 kc_l>r=33.1842 kc_r>l=33.9086 kc_r>r=34.1315]
+  dec b8 d1_only: => DECOMP mode=d1_only mod=+0.3044 acc=0.0 off=+0.1046 pushed=4 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b8 kc_shuffle: => DECOMP mode=kc_shuffle mod=+0.2939 acc=0.0 off=+0.1276 pushed=8 kc_means[kc_l>l=33.2335 kc_l>r=33.1842 kc_r>l=33.9086 kc_r>r=34.1315]
+  dec b8 kc_uniform: => DECOMP mode=kc_uniform mod=+0.2966 acc=0.0 off=+0.1307 pushed=8 kc_means[kc_l>l=33.2335 kc_l>r=33.1842 kc_r>l=33.9086 kc_r>r=34.1315]
+  dec b8 kc_cm: => DECOMP mode=kc_cm mod=+0.2952 acc=0.0 off=+0.1303 pushed=8 kc_means[kc_l>l=33.6147 kc_l>r=33.6147 kc_r>l=33.6147 kc_r>r=33.6147]
+  dec b8 neuron: => DECOMP mode=neuron NEURON group=ll r=+0.0420 dg_hiRefl=+3.2989 dg_loRefl=+3.2540 dg_all=+3.2335 refl_mean=90.0 NEURON group=lr r=+0.0843 dg_hiRefl=+3.2196 dg_loRefl=+3.1293 dg_all=+3.1842 refl_mean=90.8 NEURON group=rl r=+0.0031 dg_hiRefl=+3.9509 dg_loRefl=+3.9592 dg_all=+3.9086 refl_mean=90.0 NEURON group=rr r=+0.0314 dg_hiRefl=+4.1889 dg_loRefl=+4.1428 dg_all=+4.1315 refl_mean=90.8 KCPRE side=l top5%: 반사(ll) +3.2529 교차(lr) +3.2015 차 +0.0513 | 하위50%: 반사 -0.0010 교차 -0.0009 | r(반사,교차)=+0.990 KCPRE side=r top5%: 반사(rr) +79.6374 교차(rl) +76.1237 차 +3.5137 | 하위50%: 반사 -0.0010 교차 -0.0010 | r(반사,교차)=+0.992 
+  dec b9 none: => DECOMP mode=none mod=+0.3587 acc=0.0 off=+0.0031 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b9 all: => DECOMP mode=all mod=+0.6297 acc=0.0 off=-0.0004 pushed=8 kc_means[kc_l>l=33.5193 kc_l>r=33.4312 kc_r>l=33.9377 kc_r>r=34.0860]
+  dec b9 kc_only: => DECOMP mode=kc_only mod=+0.6131 acc=0.0 off=-0.0035 pushed=4 kc_means[kc_l>l=33.5193 kc_l>r=33.4312 kc_r>l=33.9377 kc_r>r=34.0860]
+  dec b9 d1_only: => DECOMP mode=d1_only mod=+0.2688 acc=0.0 off=+0.0252 pushed=4 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
+  dec b9 kc_shuffle: => DECOMP mode=kc_shuffle mod=+0.2476 acc=0.0 off=+0.0309 pushed=8 kc_means[kc_l>l=33.5193 kc_l>r=33.4312 kc_r>l=33.9377 kc_r>r=34.0860]
+  dec b9 kc_uniform: => DECOMP mode=kc_uniform mod=+0.2390 acc=0.0 off=+0.0300 pushed=8 kc_means[kc_l>l=33.5193 kc_l>r=33.4312 kc_r>l=33.9377 kc_r>r=34.0860]
+  dec b9 kc_cm: => DECOMP mode=kc_cm mod=+0.2387 acc=0.0 off=+0.0299 pushed=8 kc_means[kc_l>l=33.7435 kc_l>r=33.7435 kc_r>l=33.7435 kc_r>r=33.7435]
+  dec b9 neuron: => DECOMP mode=neuron NEURON group=ll r=+0.0194 dg_hiRefl=+3.5115 dg_loRefl=+3.5092 dg_all=+3.5193 refl_mean=89.8 NEURON group=lr r=+0.0033 dg_hiRefl=+3.4122 dg_loRefl=+3.3873 dg_all=+3.4312 refl_mean=89.8 NEURON group=rl r=+0.0141 dg_hiRefl=+3.9620 dg_loRefl=+3.9179 dg_all=+3.9377 refl_mean=89.8 NEURON group=rr r=+0.0544 dg_hiRefl=+4.1385 dg_loRefl=+4.0526 dg_all=+4.0860 refl_mean=89.8 KCPRE side=l top5%: 반사(ll) +70.1354 교차(lr) +68.4735 차 +1.6619 | 하위50%: 반사 -0.0012 교차 -0.0011 | r(반사,교차)=+0.988 KCPRE side=r top5%: 반사(rr) +79.5413 교차(rl) +76.9229 차 +2.6184 | 하위50%: 반사 -0.0009 교차 -0.0009 | r(반사,교차)=+0.989 
+[E113] 전체 루프 종료
+=== 종료코드 0 ===
