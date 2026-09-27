@@ -1,0 +1,86 @@
+=== E107 실행: 2026-09-27T03:24:10Z ===
+커맨드: bash scripts/e107_main.sh
+---
+########## 회귀 (코드 변경 — K38·K50) ##########
+[회귀] 평가 100%: 24/24
+[회귀] **통과** — E095의 성취가 유지된다
+K38 회귀 통과
+[회귀] 평가 100%: 24/24
+[회귀] **통과** — E095의 성취가 유지된다
+K50 회귀 통과
+########## 2단계 same / cross ##########
+  same w5 t400: => MINCIRC mode=learn seed=5 first=67.5 last=58.0 delta=-9.5 reward=62.7 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=same
+  same w5 t401: => MINCIRC mode=learn seed=5 first=64.5 last=60.2 delta=-4.2 reward=62.4 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=same
+  same w5 t402: => MINCIRC mode=learn seed=5 first=68.0 last=59.8 delta=-8.2 reward=63.9 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=same
+  same w5 t403: => MINCIRC mode=learn seed=5 first=71.0 last=65.5 delta=-5.5 reward=68.2 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=same
+  same w5 t404: => MINCIRC mode=learn seed=5 first=68.2 last=61.8 delta=-6.5 reward=65.0 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=same
+  same w5 t405: => MINCIRC mode=learn seed=5 first=67.0 last=63.2 delta=-3.8 reward=65.1 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=same
+  same w5 t406: => MINCIRC mode=learn seed=5 first=65.8 last=66.0 delta=+0.2 reward=65.9 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=same
+  same w5 t407: => MINCIRC mode=learn seed=5 first=69.5 last=59.8 delta=-9.8 reward=64.6 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=same
+  same w6 t400: => MINCIRC mode=learn seed=6 first=65.2 last=56.0 delta=-9.2 reward=60.6 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=same
+  same w6 t401: => MINCIRC mode=learn seed=6 first=62.0 last=56.2 delta=-5.8 reward=59.1 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=same
+  same w6 t402: => MINCIRC mode=learn seed=6 first=64.2 last=63.0 delta=-1.2 reward=63.6 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=same
+  same w6 t403: => MINCIRC mode=learn seed=6 first=68.0 last=65.2 delta=-2.8 reward=66.6 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=same
+  same w6 t404: => MINCIRC mode=learn seed=6 first=65.5 last=61.5 delta=-4.0 reward=63.5 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=same
+  same w6 t405: => MINCIRC mode=learn seed=6 first=62.5 last=64.0 delta=+1.5 reward=63.2 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=same
+  same w6 t406: => MINCIRC mode=learn seed=6 first=61.8 last=71.2 delta=+9.5 reward=66.5 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=same
+  same w6 t407: => MINCIRC mode=learn seed=6 first=67.0 last=71.5 delta=+4.5 reward=69.2 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=same
+  same w7 t400: => MINCIRC mode=learn seed=7 first=54.0 last=53.0 delta=-1.0 reward=53.5 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=same
+  same w7 t401: => MINCIRC mode=learn seed=7 first=55.8 last=54.5 delta=-1.2 reward=55.1 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=same
+  same w7 t402: => MINCIRC mode=learn seed=7 first=59.5 last=57.5 delta=-2.0 reward=58.5 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=same
+  same w7 t403: => MINCIRC mode=learn seed=7 first=58.2 last=59.2 delta=+1.0 reward=58.8 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=same
+  same w7 t404: => MINCIRC mode=learn seed=7 first=55.2 last=56.8 delta=+1.5 reward=56.0 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=same
+  same w7 t405: => MINCIRC mode=learn seed=7 first=59.5 last=57.5 delta=-2.0 reward=58.5 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=same
+  same w7 t406: => MINCIRC mode=learn seed=7 first=52.8 last=60.8 delta=+8.0 reward=56.8 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=same
+  same w7 t407: => MINCIRC mode=learn seed=7 first=62.7 last=57.8 delta=-5.0 reward=60.2 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=same
+  same w8 t400: => MINCIRC mode=learn seed=8 first=55.8 last=65.0 delta=+9.2 reward=60.4 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=same
+  same w8 t401: => MINCIRC mode=learn seed=8 first=58.8 last=68.0 delta=+9.2 reward=63.4 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=same
+  same w8 t402: => MINCIRC mode=learn seed=8 first=62.7 last=66.8 delta=+4.0 reward=64.8 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=same
+  same w8 t403: => MINCIRC mode=learn seed=8 first=61.5 last=72.5 delta=+11.0 reward=67.0 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=same
+  same w8 t404: => MINCIRC mode=learn seed=8 first=62.3 last=68.8 delta=+6.5 reward=65.5 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=same
+  same w8 t405: => MINCIRC mode=learn seed=8 first=59.2 last=69.8 delta=+10.5 reward=64.5 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=same
+  same w8 t406: => MINCIRC mode=learn seed=8 first=57.2 last=71.8 delta=+14.5 reward=64.5 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=same
+  same w8 t407: => MINCIRC mode=learn seed=8 first=63.7 last=68.5 delta=+4.8 reward=66.1 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=same
+  cross w5 t400: => MINCIRC mode=learn seed=5 first=67.5 last=72.5 delta=+5.0 reward=70.0 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t401: => MINCIRC mode=learn seed=5 first=64.5 last=69.5 delta=+5.0 reward=67.0 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t402: => MINCIRC mode=learn seed=5 first=68.0 last=71.2 delta=+3.2 reward=69.6 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t403: => MINCIRC mode=learn seed=5 first=71.0 last=69.0 delta=-2.0 reward=70.0 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t404: => MINCIRC mode=learn seed=5 first=68.2 last=65.8 delta=-2.5 reward=67.0 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t405: => MINCIRC mode=learn seed=5 first=67.0 last=70.0 delta=+3.0 reward=68.5 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t406: => MINCIRC mode=learn seed=5 first=65.8 last=68.5 delta=+2.8 reward=67.1 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=cross
+  cross w5 t407: => MINCIRC mode=learn seed=5 first=69.5 last=64.2 delta=-5.2 reward=66.9 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=cross
+  cross w6 t400: => MINCIRC mode=learn seed=6 first=65.2 last=52.8 delta=-12.5 reward=59.0 **eval=100.0** tie=0 trialseed=400 evalCD=51.0 phase2=400 rule2=cross
+  cross w6 t401: => MINCIRC mode=learn seed=6 first=62.0 last=52.2 delta=-9.8 reward=57.1 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=cross
+  cross w6 t402: => MINCIRC mode=learn seed=6 first=64.2 last=51.2 delta=-13.0 reward=57.8 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=cross
+  cross w6 t403: => MINCIRC mode=learn seed=6 first=68.0 last=51.0 delta=-17.0 reward=59.5 **eval=100.0** tie=0 trialseed=403 evalCD=51.0 phase2=400 rule2=cross
+  cross w6 t404: => MINCIRC mode=learn seed=6 first=65.5 last=49.2 delta=-16.2 reward=57.4 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=cross
+  cross w6 t405: => MINCIRC mode=learn seed=6 first=62.5 last=50.7 delta=-11.8 reward=56.6 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=cross
+  cross w6 t406: => MINCIRC mode=learn seed=6 first=61.8 last=53.8 delta=-8.0 reward=57.8 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=cross
+  cross w6 t407: => MINCIRC mode=learn seed=6 first=67.0 last=51.7 delta=-15.3 reward=59.4 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t400: => MINCIRC mode=learn seed=7 first=54.0 last=64.2 delta=+10.2 reward=59.1 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t401: => MINCIRC mode=learn seed=7 first=55.8 last=62.7 delta=+7.0 reward=59.2 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t402: => MINCIRC mode=learn seed=7 first=59.5 last=67.8 delta=+8.2 reward=63.6 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t403: => MINCIRC mode=learn seed=7 first=58.2 last=62.3 delta=+4.0 reward=60.2 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t404: => MINCIRC mode=learn seed=7 first=55.2 last=61.3 delta=+6.0 reward=58.2 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t405: => MINCIRC mode=learn seed=7 first=59.5 last=66.5 delta=+7.0 reward=63.0 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t406: => MINCIRC mode=learn seed=7 first=52.8 last=64.5 delta=+11.8 reward=58.6 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=cross
+  cross w7 t407: => MINCIRC mode=learn seed=7 first=62.7 last=70.5 delta=+7.8 reward=66.6 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t400: => MINCIRC mode=learn seed=8 first=55.8 last=66.5 delta=+10.8 reward=61.1 **eval=100.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t401: => MINCIRC mode=learn seed=8 first=58.8 last=63.5 delta=+4.8 reward=61.1 **eval=100.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t402: => MINCIRC mode=learn seed=8 first=62.7 last=68.8 delta=+6.0 reward=65.8 **eval=100.0** tie=0 trialseed=402 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t403: => MINCIRC mode=learn seed=8 first=61.5 last=63.2 delta=+1.7 reward=62.4 **eval=100.0** tie=0 trialseed=403 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t404: => MINCIRC mode=learn seed=8 first=62.3 last=62.3 delta=+0.0 reward=62.3 **eval=100.0** tie=0 trialseed=404 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t405: => MINCIRC mode=learn seed=8 first=59.2 last=63.5 delta=+4.2 reward=61.4 **eval=100.0** tie=0 trialseed=405 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t406: => MINCIRC mode=learn seed=8 first=57.2 last=65.0 delta=+7.8 reward=61.1 **eval=100.0** tie=0 trialseed=406 evalCD=100.0 phase2=400 rule2=cross
+  cross w8 t407: => MINCIRC mode=learn seed=8 first=63.7 last=57.0 delta=-6.8 reward=60.4 **eval=100.0** tie=0 trialseed=407 evalCD=100.0 phase2=400 rule2=cross
+########## frz (C/D 선천) ##########
+  frz w5 t400: => MINCIRC mode=frozen seed=5 first=48.0 last=45.2 delta=-2.8 reward=0.0 **eval=57.0** tie=0 trialseed=400 evalCD=45.0 phase2=400 rule2=same
+  frz w5 t401: => MINCIRC mode=frozen seed=5 first=46.0 last=46.5 delta=+0.5 reward=0.0 **eval=57.0** tie=0 trialseed=401 evalCD=45.0 phase2=400 rule2=same
+  frz w6 t400: => MINCIRC mode=frozen seed=6 first=48.0 last=65.0 delta=+17.0 reward=0.0 **eval=44.0** tie=0 trialseed=400 evalCD=100.0 phase2=400 rule2=same
+  frz w6 t401: => MINCIRC mode=frozen seed=6 first=46.0 last=68.0 delta=+22.0 reward=0.0 **eval=44.0** tie=0 trialseed=401 evalCD=100.0 phase2=400 rule2=same
+  frz w7 t400: => MINCIRC mode=frozen seed=7 first=53.5 last=45.2 delta=-8.2 reward=0.0 **eval=48.0** tie=0 trialseed=400 evalCD=51.0 phase2=400 rule2=same
+  frz w7 t401: => MINCIRC mode=frozen seed=7 first=48.5 last=46.5 delta=-2.0 reward=0.0 **eval=48.0** tie=0 trialseed=401 evalCD=51.0 phase2=400 rule2=same
+  frz w8 t400: => MINCIRC mode=frozen seed=8 first=30.8 last=45.2 delta=+14.5 reward=0.0 **eval=0.0** tie=0 trialseed=400 evalCD=53.0 phase2=400 rule2=same
+  frz w8 t401: => MINCIRC mode=frozen seed=8 first=27.0 last=46.5 delta=+19.5 reward=0.0 **eval=0.0** tie=0 trialseed=401 evalCD=53.0 phase2=400 rule2=same
+[E107] 전체 루프 종료 — 원본 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E107
+=== 종료코드 0 ===
