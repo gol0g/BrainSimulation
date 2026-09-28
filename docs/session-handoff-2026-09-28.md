@@ -101,3 +101,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - E121 완료(21:59~22:25) → **음성**. 분기 미해결 종료(22:26). P9·invariants(INV-B5 알려진 누락)·이력 반영. **다음: 새 분기 — 최소 회로(K50) 전이**, 새 A/B/C/D 문서부터.
 - 새 분기 "최소 회로의 전이"(상한 3): `research/abcd-2026-09-28-transfer.md`. **E122**(미학습 사례 범주 일반화) 경로 검사 통과·게이트 통과 → 실행(24런 ≈15분). 감시 `watch-exp.sh E122 24 "EXGEN"`. 완료 후 `python3 scripts/judge_e122.py`.
 - E122 완료(22:36~22:49) → **지지**(learn 14/16, frozen 0/8, 원형 100%). P9 반영. 다음 E123(용량-반응, 분기 2/3).
+- E123(용량-반응 50·100·200시행, 분기 2/3) 게이트 통과 → 실행(48런 ≈20분). 감시 `watch-exp.sh E123 48 "EXGEN"`.
