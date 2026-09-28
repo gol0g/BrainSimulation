@@ -99,3 +99,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - E121 경로 검사(21:12~21:57): 측정 확인 — 이식 평가는 학습을 놓치지 않음(학습 중 보상률 상승 = 부호 정답률, 크기는 작음). 이식 밖 가소성 6개(IT 지각 학습) 발견(영향 작음). 새 옵션 `--kc-bilateral-scale`·`--snap-all-syn`·`[KC공통입력]`(회귀 소수점 동일). kcsets 공유 KC 수는 공통 입력 제거로 거의 불변 → 요소 이름 "좌우 공통 KC 입력 제거"로 정정.
 - **E121**(분기 3/3, 마지막) 게이트 통과(21:58) → 커밋·push 후 실행, 10런 약 1시간. 감시 `watch-exp.sh E121 10 "변조폭 변화"`. 완료 후 `python3 scripts/judge_e121.py` → P9 + 분기 종료 정리(abcd D절).
 - E121 완료(21:59~22:25) → **음성**. 분기 미해결 종료(22:26). P9·invariants(INV-B5 알려진 누락)·이력 반영. **다음: 새 분기 — 최소 회로(K50) 전이**, 새 A/B/C/D 문서부터.
+- 새 분기 "최소 회로의 전이"(상한 3): `research/abcd-2026-09-28-transfer.md`. **E122**(미학습 사례 범주 일반화) 경로 검사 통과·게이트 통과 → 실행(24런 ≈15분). 감시 `watch-exp.sh E122 24 "EXGEN"`. 완료 후 `python3 scripts/judge_e122.py`.

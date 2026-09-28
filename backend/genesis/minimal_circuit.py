@@ -193,6 +193,46 @@ def make_patterns(args):
     return pats
 
 
+def exemplar_levels(args):
+    return [float(x) for x in args.distort_test.split(",") if x.strip()]
+
+
+def make_exemplars(args):
+    """E122: 범주 사례. 원형(PATTERNS A/B)의 활성 비트 m개를 원형에 없는 비트 m개로 바꾼다(m = round(d × 활성 수)).
+    추가 비트는 원형 밖 전체(다른 범주 비트 포함)에서 뽑는다. 훈련·평가 사례와 원형은 서로 모두 다르다(집합 수준).
+    별도 난수열(RandomState 2000+seed) — 배선·시행 난수열을 건드리지 않는다."""
+    rs = np.random.RandomState(2000 + args.seed)
+    levels = exemplar_levels(args)
+    out = {}
+    for cat in ("A", "B"):
+        p = PATTERNS[cat]
+        on = np.flatnonzero(p > 0)
+        off = np.flatnonzero(p == 0)
+        seen = {tuple(on.tolist())}
+
+        def draw(d, _p=p, _on=on, _off=off, _seen=seen):
+            m = int(round(d * len(_on)))
+            if m < 1:
+                raise SystemExit("왜곡 %.3f 은 교체 비트 0개 — 원형과 같다" % d)
+            for _ in range(10000):
+                q = _p.copy()
+                q[rs.choice(_on, m, replace=False)] = 0
+                q[rs.choice(_off, m, replace=False)] = 1
+                key = tuple(np.flatnonzero(q).tolist())
+                if key not in _seen:
+                    _seen.add(key)
+                    return q
+            raise SystemExit("사례 생성 실패(중복만 나옴): d=%.3f" % d)
+        out[cat] = {"train": [draw(args.distort_train) for _ in range(args.exemplars)],
+                    "test": {d: [draw(d) for _ in range(args.n_test_ex)] for d in levels}}
+    return out
+
+
+def register_exemplar(key, arr, cat):
+    PATTERNS[key] = arr
+    RULE[key] = RULE[cat]
+
+
 def apply_stim(pops, args, stim):
     v = pops["sens"].vars["I_input"]
     arr = np.zeros(args.n_sens, dtype=np.float32)
@@ -392,6 +432,13 @@ def main():
                          "yoked=행동무관 동일빈도 보상(수반성 대조) / reversal=중간에 규칙 반전")
     ap.add_argument("--yoked-rate", type=float, default=None,
                     help="yoked 모드의 보상 빈도. 지정하지 않으면 learn 조건의 실측 정답률을 넣어야 한다.")
+    ap.add_argument("--exemplars", type=int, default=0,
+                    help="E122: >0 이면 원형 A/B 대신 범주당 이 수의 변형 사례로 훈련한다(원형은 훈련에 안 나옴)")
+    ap.add_argument("--distort-train", type=float, default=0.2, help="E122: 훈련 사례 왜곡(교체 비트 비율)")
+    ap.add_argument("--distort-test", type=str, default="0.1,0.2,0.3,0.4", help="E122: 평가 사례 왜곡 수준(쉼표)")
+    ap.add_argument("--n-test-ex", type=int, default=20, help="E122: 수준·범주당 평가 사례 수(훈련과 겹치지 않음)")
+    ap.add_argument("--probe-ex", action="store_true",
+                    help="E122 경로 검사: 학습 전 원형·사례의 KC 집합 자카드만 재고 종료")
     a = ap.parse_args()
 
     random.seed(a.seed)
@@ -400,6 +447,30 @@ def main():
 
     global PATTERNS
     PATTERNS = make_patterns(a)
+    EX = None
+    if a.exemplars > 0:
+        if a.mode not in ("learn", "frozen", "noreward", "shuffled") or a.n_stim != 2 or a.phase2_trials:
+            raise SystemExit("--exemplars 는 learn/frozen/noreward/shuffled, 2자극, 1단계만 지원한다")
+        EX = make_exemplars(a)
+        for cat in ("A", "B"):
+            for i, q in enumerate(EX[cat]["train"]):
+                register_exemplar("%s#%d" % (cat, i), q, cat)
+            for d, lst in EX[cat]["test"].items():
+                for i, q in enumerate(lst):
+                    register_exemplar("%s@%.2f#%d" % (cat, d, i), q, cat)
+        # 경로 검사 출력(P19: 정의 포함) — 교체 비트 수·원형과의 겹침·다른 범주 원형과의 겹침
+        for cat, oth in (("A", "B"), ("B", "A")):
+            P, O = PATTERNS[cat], PATTERNS[oth]
+            def _st(lst):
+                ov = [int((q * P).sum()) for q in lst]; ob = [int((q * O).sum()) for q in lst]; n1 = [int(q.sum()) for q in lst]
+                return "활성 %d~%d, 원형겹침 %d~%d, 타원형겹침 %d~%d" % (min(n1), max(n1), min(ov), max(ov), min(ob), max(ob))
+            print("[사례] %s 훈련 %d개(d=%.2f): %s" % (cat, a.exemplars, a.distort_train, _st(EX[cat]["train"])))
+            for d, lst in EX[cat]["test"].items():
+                print("[사례] %s 평가 d=%.2f %d개: %s" % (cat, d, len(lst), _st(lst)))
+        _all = [tuple(np.flatnonzero(q).tolist()) for c in ("A", "B") for q in EX[c]["train"] + sum(EX[c]["test"].values(), [])]
+        _pro = {tuple(np.flatnonzero(PATTERNS[c]).tolist()) for c in ("A", "B")}
+        print("[사례] 전체 %d개, 서로 다른 집합 %d개, 원형과 같은 것 %d개(0이어야 함)"
+              % (len(_all), len(set(_all)), sum(x in _pro for x in _all)))
     if a.phase2_trials > 0:
         if a.n_stim != 4:
             raise SystemExit("--phase2-trials 는 --n-stim 4 가 필요하다")
@@ -460,6 +531,36 @@ def main():
               % (a.seed, len(sets["A"]), len(sets["B"]), len(both), jac))
         return
 
+    def present(key):
+        """무자극 gap → 자극 steps. 도파민 0(학습 없음). (out_L 스파이크, out_R 스파이크, KC 집합)"""
+        apply_stim(pops, a, None)
+        set_dopamine(syn, 0.0)
+        for _ in range(a.gap_steps):
+            m.step_time()
+        m.pull_recording_buffers_from_device()
+        apply_stim(pops, a, key)
+        for _ in range(a.steps):
+            m.step_time()
+        m.pull_recording_buffers_from_device()
+        return (len(pops["out_l"].spike_recording_data[0][1]), len(pops["out_r"].spike_recording_data[0][1]),
+                set(np.asarray(pops["kc"].spike_recording_data[0][1], dtype=int).tolist()))
+
+    if a.probe_ex:
+        if EX is None:
+            raise SystemExit("--probe-ex 는 --exemplars 가 필요하다")
+        def jac(x, y):
+            return len(x & y) / len(x | y) * 100 if (x | y) else float("nan")
+        kA, kB = present("A")[2], present("B")[2]
+        print("=> EXKC seed=%d proto_A_kc=%d proto_B_kc=%d jaccard_AB=%.1f" % (a.seed, len(kA), len(kB), jac(kA, kB)))
+        for d in exemplar_levels(a):
+            jA, jB = [], []
+            for i in range(min(10, a.n_test_ex)):
+                ks = present("A@%.2f#%d" % (d, i))[2]
+                jA.append(jac(ks, kA)); jB.append(jac(ks, kB))
+            print("=> EXKC d=%.2f A사례(10): jaccard_to_protoA 평균 %.1f | jaccard_to_protoB 평균 %.1f" % (d, np.mean(jA), np.mean(jB)))
+        apply_stim(pops, a, None)
+        return
+
     w0 = {k: read_g(s).copy() for k, s in syn.items()}
     # E104: 반전 시점. 기본은 이전과 같이 전체 시행의 절반(동작 불변).
     FLIP_AT = a.flip_at if a.flip_at is not None else a.trials // 2
@@ -472,6 +573,7 @@ def main():
         TRACE["g0_l"] = _pre_sums(syn["l"], "g", a.n_kc)
         TRACE["g0_r"] = _pre_sums(syn["r"], "g", a.n_kc)
 
+    EX_RNG = random.Random(3000 + (a.seed if a.trial_seed is None else a.trial_seed))
     hist = []
     ok = 0
     n_rewarded = 0
@@ -480,6 +582,9 @@ def main():
         rule = FLIP if (a.mode == "reversal" and t >= FLIP_AT) else RULE
         if t < a.trials:
             stim = "A" if rng.random() < 0.5 else "B"
+            if EX is not None:
+                # E122: 범주 순서는 K50과 같은 rng, 사례 선택은 별도 난수열(시행 난수열 불변)
+                stim = "%s#%d" % (stim, EX_RNG.randrange(a.exemplars))
         else:
             stim = "C" if rng.random() < 0.5 else "D"   # E107 2단계: 난수 소비는 1단계와 같은 방식
 
@@ -569,6 +674,29 @@ def main():
             eval_orig += 1
     eval_acc = eval_ok / a.eval_trials * 100.0
     apply_stim(pops, a, None)
+    if EX is not None:
+        # E122: 미학습 사례 평가 — 원형 평가(위, 원형은 훈련에 안 나옴) 뒤, 별도 난수열. 탐색·학습 없음.
+        _xr = random.Random(9200 + a.seed)
+        res = {}
+        for lv in ["train"] + exemplar_levels(a):
+            _ok = 0; _tie = 0
+            for i in range(a.eval_trials):
+                cat = "A" if _xr.random() < 0.5 else "B"
+                if lv == "train":
+                    key = "%s#%d" % (cat, _xr.randrange(a.exemplars))
+                else:
+                    key = "%s@%.2f#%d" % (cat, lv, _xr.randrange(a.n_test_ex))
+                _nl, _nr, _ = present(key)
+                if _nl == _nr:
+                    _tie += 1
+                act = "L" if _nl > _nr else ("R" if _nr > _nl else ("L" if _xr.random() < 0.5 else "R"))
+                _ok += 1 if RULE[cat] == act else 0
+            res[lv] = (_ok / a.eval_trials * 100.0, _tie)
+        apply_stim(pops, a, None)
+        print("=> EXGEN mode=%s seed=%d trialseed=%s proto=%.1f train=%.1f %s | ties %s"
+              % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, eval_acc, res["train"][0],
+                 " ".join("d%.2f=%.1f" % (lv, res[lv][0]) for lv in exemplar_levels(a)),
+                 " ".join("%s:%d" % (("train" if lv == "train" else "d%.2f" % lv), res[lv][1]) for lv in res)))
     eval_cd = None
     if a.n_stim == 4:
         # E107: C/D 평가 — A/B 평가가 끝난 뒤, 별도 난수열(A/B 결과 불변). 학습 없음·탐색 없음.

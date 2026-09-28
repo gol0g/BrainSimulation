@@ -1,0 +1,18 @@
+[사례] A 훈련 8개(d=0.20): 활성 30~30, 원형겹침 24~24, 타원형겹침 4~7
+[사례] A 평가 d=0.10 20개: 활성 30~30, 원형겹침 27~27, 타원형겹침 5~8
+[사례] A 평가 d=0.20 20개: 활성 30~30, 원형겹침 24~24, 타원형겹침 5~10
+[사례] A 평가 d=0.30 20개: 활성 30~30, 원형겹침 21~21, 타원형겹침 3~10
+[사례] A 평가 d=0.40 20개: 활성 30~30, 원형겹침 18~18, 타원형겹침 5~11
+[사례] B 훈련 8개(d=0.20): 활성 30~30, 원형겹침 24~24, 타원형겹침 6~10
+[사례] B 평가 d=0.10 20개: 활성 30~30, 원형겹침 27~27, 타원형겹침 5~8
+[사례] B 평가 d=0.20 20개: 활성 30~30, 원형겹침 24~24, 타원형겹침 6~9
+[사례] B 평가 d=0.30 20개: 활성 30~30, 원형겹침 21~21, 타원형겹침 5~13
+[사례] B 평가 d=0.40 20개: 활성 30~30, 원형겹침 18~18, 타원형겹침 4~11
+[사례] 전체 176개, 서로 다른 집합 176개, 원형과 같은 것 0개(0이어야 함)
+make: Entering directory '/root/e122_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e122_run/minimal_circuit_CODE'
+=> EXKC seed=18 proto_A_kc=97 proto_B_kc=101 jaccard_AB=13.8
+=> EXKC d=0.10 A사례(10): jaccard_to_protoA 평균 73.6 | jaccard_to_protoB 평균 13.8
+=> EXKC d=0.20 A사례(10): jaccard_to_protoA 평균 60.7 | jaccard_to_protoB 평균 14.5
+=> EXKC d=0.30 A사례(10): jaccard_to_protoA 평균 45.1 | jaccard_to_protoB 평균 15.2
+=> EXKC d=0.40 A사례(10): jaccard_to_protoA 평균 36.8 | jaccard_to_protoB 평균 14.4
