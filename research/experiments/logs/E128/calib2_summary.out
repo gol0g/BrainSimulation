@@ -1,0 +1,11 @@
+  K50 w18: L전용 n=24 R전용 n=24 양쪽 n=225 | kc_spikes_per_stim 평균 94.5 | active_kc_per_stim 평균 94.5 | both_spike_share(양쪽 KC 스파이크/전체) 0.937 | rate_margin_ok=3/8
+  inh24 w18: L전용 n=24 R전용 n=24 양쪽 n=225 | kc_spikes_per_stim 평균 94.5 | active_kc_per_stim 평균 94.5 | both_spike_share(양쪽 KC 스파이크/전체) 0.937 | rate_margin_ok=3/8
+  inh48 w18: L전용 n=24 R전용 n=24 양쪽 n=225 | kc_spikes_per_stim 평균 94.5 | active_kc_per_stim 평균 94.5 | both_spike_share(양쪽 KC 스파이크/전체) 0.937 | rate_margin_ok=3/8
+  p01w15 w18: L전용 n=63 R전용 n=63 양쪽 n=302 | kc_spikes_per_stim 평균 140.2 | active_kc_per_stim 평균 140.2 | both_spike_share(양쪽 KC 스파이크/전체) 0.885 | rate_margin_ok=3/8
+  p02w10 w18: L전용 n=66 R전용 n=52 양쪽 n=535 | kc_spikes_per_stim 평균 303.2 | active_kc_per_stim 평균 303.2 | both_spike_share(양쪽 KC 스파이크/전체) 0.947 | rate_margin_ok=4/8
+  K50 w19: L전용 n=46 R전용 n=41 양쪽 n=231 | kc_spikes_per_stim 평균 92.1 | active_kc_per_stim 평균 92.1 | both_spike_share(양쪽 KC 스파이크/전체) 0.881 | rate_margin_ok=5/8
+  inh24 w19: L전용 n=46 R전용 n=41 양쪽 n=231 | kc_spikes_per_stim 평균 92.1 | active_kc_per_stim 평균 92.1 | both_spike_share(양쪽 KC 스파이크/전체) 0.881 | rate_margin_ok=5/8
+  inh48 w19: L전용 n=46 R전용 n=41 양쪽 n=231 | kc_spikes_per_stim 평균 92.1 | active_kc_per_stim 평균 92.1 | both_spike_share(양쪽 KC 스파이크/전체) 0.881 | rate_margin_ok=5/8
+  p01w15 w19: L전용 n=70 R전용 n=66 양쪽 n=299 | kc_spikes_per_stim 평균 137.4 | active_kc_per_stim 평균 137.4 | both_spike_share(양쪽 KC 스파이크/전체) 0.871 | rate_margin_ok=3/8
+  p02w10 w19: L전용 n=49 R전용 n=79 양쪽 n=529 | kc_spikes_per_stim 평균 277.5 | active_kc_per_stim 평균 277.5 | both_spike_share(양쪽 KC 스파이크/전체) 0.936 | rate_margin_ok=4/8
+[E128 보정 2차(발화율)] 종료

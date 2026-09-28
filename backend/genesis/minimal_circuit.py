@@ -819,9 +819,15 @@ def main():
             tr = ["S%d" % i for i in range(T)]
             tr += (["D%d_%d" % (i, (i + 1) % T) for i in range(T)] if a.sd_diff == "cyclic"
                    else ["D%d_%d" % (i, j) for i in range(T) for j in range(T) if i != j])
-            ks = {k: present(k)[2] for k in tr}
-            apply_stim(pops, a, None)
             nk = a.n_kc
+            ks, kc_cnt = {}, {}
+            for k in tr:
+                _p = present(k)
+                ks[k] = _p[2]
+                # E128: 발화율(스파이크 수) — 스파이크 ≥1 집합은 억제·발화율 차이를 못 본다(E128 보정 kc-inh 12/24/48 동일)
+                _ids = np.asarray(pops["kc"].spike_recording_data[0][1], dtype=np.int64)
+                kc_cnt[k] = np.bincount(_ids, minlength=nk)[:nk].astype(np.float64)
+            apply_stim(pops, a, None)
             gsum = {}
             for m_ in ("l", "r"):
                 sy = syn[m_]; sy.pull_connectivity_from_device()
@@ -848,6 +854,14 @@ def main():
             print("=> SDCREDIT mode=%s seed=%d trialseed=%s diff=%s | %s | margin_sign_ok=%d/%d | spec_share(|Σg_L−Σg_R| 중 전용 KC 몫) 평균 %.3f"
                   % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, a.sd_diff, " | ".join(parts),
                      mar_ok, len(ks), float(np.nanmean(share)) if share else float("nan")))
+            # E128: 발화율 가중 지표 — 자극당 KC 스파이크 수, 양쪽 KC 가 낸 스파이크 몫, 발화율 가중 여유 Σ_k spikes_k·dSg_k
+            both = cls["양쪽"]
+            tot_sp = np.array([kc_cnt[k].sum() for k in tr])
+            both_sp = np.array([kc_cnt[k][both].sum() for k in tr])
+            rm_ok = sum(1 for k in tr if float((kc_cnt[k] * dd).sum()) * (1 if RULE[k] == "L" else -1) > 0)
+            print("=> SDRATE mode=%s seed=%d trialseed=%s | kc_spikes_per_stim 평균 %.1f | active_kc_per_stim 평균 %.1f | both_spike_share(양쪽 KC 스파이크/전체) %.3f | rate_margin_ok=%d/%d"
+                  % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, float(tot_sp.mean()),
+                     float(np.mean([len(ks[k]) for k in tr])), float(both_sp.sum() / max(tot_sp.sum(), 1)), rm_ok, len(tr)))
         # E125: 라벨(L/R) 균형 정답률 — 규칙이 samediff 면 위 균형과 같다(라벨 = 같음/다름)
         print("=> SDLAB diff=%s rule=%s mode=%s seed=%d trialseed=%s train_accL=%.1f train_accR=%.1f train_lbal=%.1f novel_accL=%.1f novel_accR=%.1f novel_lbal=%.1f"
               % (a.sd_diff, a.sd_rule, a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
