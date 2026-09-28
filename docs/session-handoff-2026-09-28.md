@@ -50,3 +50,10 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - "재실행 흔들림 ≤1e-4" 전제는 틀림 — 관측 최대 0.03. 0.03 미만 차이는 확립 안 됨.
 - 조작검증은 바꾼 변수 하나를 분리해야 한다(E118 (2)는 초기값만으로 통과해 판별력 없음).
 - SPARSE 변수는 `pull_connectivity_from_device()` 후 `.values`; float32 가중치 정확 일치 검사.
+
+## 7. 재개 시험 결과 (2026-09-28 14:56~15:01)
+- 방법: `claude -p` 새 프로세스(~/brain, CLAUDE.md·기억 자동 로드), 읽기 전용(Bash·Write·Edit 금지), 12문항. 정답표는 시험 전 작성.
+- 결과 **12/12**. 파킹 훅이 막았을 때도 시험 지시(파일 수정·실험 금지)를 지키고 다음 할 일로 E119 사전등록을 짚었다.
+- 시험이 드러낸 결함 2개와 조치(15:01):
+  1. Pi의 `~/brain/CLAUDE.md`가 작업 대상을 `../BrainSimulation-rebuild/`로 적어 존재하지 않는 `~/BrainSimulation-rebuild`를 먼저 읽음 → Pi 경로로 교정.
+  2. `~/brain/rebuild-ro/`(9/27 GitHub 클론)의 낡은 current-state를 읽음(시험 세션은 스스로 배제) → fast-forward(9b686b7) + CLAUDE.md에 "정본 아님" 명시.
