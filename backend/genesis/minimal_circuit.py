@@ -486,6 +486,9 @@ def main():
     ap.add_argument("--sd-diff", default="all", choices=("all", "cyclic"),
                     help="E126: 훈련 다름 쌍. all=훈련 항목의 모든 다름 쌍(E124, 같음 4 vs 다름 12) / "
                          "cyclic=순환 짝 (i, i+1 mod T) 만(같음 4 vs 다름 4 균형). 훈련 집합 평가도 훈련 자극만")
+    ap.add_argument("--sd-credit", action="store_true",
+                    help="E127(읽기 전용, 평가 뒤): 훈련 자극별 KC 반응 집합으로 KC 를 L전용·R전용·양쪽으로 나눠 "
+                         "출력 가중치 합 차(Σg_L − Σg_R)와 자극별 예측 구동 여유를 출력")
     ap.add_argument("--sd-rule", default="samediff", choices=("samediff", "half1"),
                     help="E125: 라벨 규칙. samediff=같음→L(E124) / half1=반쪽1 항목이 앞 절반이면 L(같은 자극, 선형 분리 가능)")
     ap.add_argument("--probe-sd", action="store_true",
@@ -810,6 +813,41 @@ def main():
               % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
                  res["train"][0], res["train"][1], res["train"][2], res["novel"][0], res["novel"][1], res["novel"][2],
                  res["train"][3], res["novel"][3], res["train"][4], res["train"][5], res["novel"][4], res["novel"][5]))
+        if a.sd_credit:
+            # E127: 신용 측정(읽기 전용 — 도파민 0 제시만, 가중치 변화 없음). 훈련 자극 = 같음 S0..T-1 + 다름(cyclic: 순환 쌍 / all: 모든 쌍)
+            T = a.sd_train_items
+            tr = ["S%d" % i for i in range(T)]
+            tr += (["D%d_%d" % (i, (i + 1) % T) for i in range(T)] if a.sd_diff == "cyclic"
+                   else ["D%d_%d" % (i, j) for i in range(T) for j in range(T) if i != j])
+            ks = {k: present(k)[2] for k in tr}
+            apply_stim(pops, a, None)
+            nk = a.n_kc
+            gsum = {}
+            for m_ in ("l", "r"):
+                sy = syn[m_]; sy.pull_connectivity_from_device()
+                pre_ = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                gsum[m_] = np.bincount(pre_, weights=read_g(sy), minlength=nk)[:nk]       # KC 별 Σg(→out)
+            dd = gsum["l"] - gsum["r"]                                                        # KC 별 Σg_L − Σg_R
+            nL = np.zeros(nk); nR = np.zeros(nk)
+            for k, st_ in ks.items():
+                idx = np.fromiter(st_, dtype=np.int64) if st_ else np.zeros(0, dtype=np.int64)
+                (nL if RULE[k] == "L" else nR)[idx] += 1
+            cls = {"L전용": (nL > 0) & (nR == 0), "R전용": (nR > 0) & (nL == 0), "양쪽": (nL > 0) & (nR > 0)}
+            parts = []
+            for cn, msk in cls.items():
+                parts.append("%s n=%d dSg=%+.4f" % (cn, int(msk.sum()), float(dd[msk].mean()) if msk.any() else float("nan")))
+            # 자극별 예측 구동 여유: Σ_{활성 KC} (Σg_L − Σg_R), 정답이 L 이면 양수여야. 부류별 기여 분해.
+            mar_ok = 0; share = []
+            for k, st_ in ks.items():
+                idx = np.fromiter(st_, dtype=np.int64) if st_ else np.zeros(0, dtype=np.int64)
+                mg = float(dd[idx].sum()) * (1 if RULE[k] == "L" else -1)
+                mar_ok += 1 if mg > 0 else 0
+                spec = (cls["L전용"] | cls["R전용"])[idx]
+                tot = float(np.abs(dd[idx]).sum())
+                share.append(float(np.abs(dd[idx][spec]).sum()) / tot if tot > 0 else float("nan"))
+            print("=> SDCREDIT mode=%s seed=%d trialseed=%s diff=%s | %s | margin_sign_ok=%d/%d | spec_share(|Σg_L−Σg_R| 중 전용 KC 몫) 평균 %.3f"
+                  % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, a.sd_diff, " | ".join(parts),
+                     mar_ok, len(ks), float(np.nanmean(share)) if share else float("nan")))
         # E125: 라벨(L/R) 균형 정답률 — 규칙이 samediff 면 위 균형과 같다(라벨 = 같음/다름)
         print("=> SDLAB diff=%s rule=%s mode=%s seed=%d trialseed=%s train_accL=%.1f train_accR=%.1f train_lbal=%.1f novel_accL=%.1f novel_accR=%.1f novel_lbal=%.1f"
               % (a.sd_diff, a.sd_rule, a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
