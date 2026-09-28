@@ -57,3 +57,39 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 시험이 드러낸 결함 2개와 조치(15:01):
   1. Pi의 `~/brain/CLAUDE.md`가 작업 대상을 `../BrainSimulation-rebuild/`로 적어 존재하지 않는 `~/BrainSimulation-rebuild`를 먼저 읽음 → Pi 경로로 교정.
   2. `~/brain/rebuild-ro/`(9/27 GitHub 클론)의 낡은 current-state를 읽음(시험 세션은 스스로 배제) → fast-forward(9b686b7) + CLAUDE.md에 "정본 아님" 명시.
+
+## 8. E119 진행 상태 (시각은 date)
+> 작성 2026-09-28 15:25 — Pi 세션 "BrainSimulation E119 (Pi)"(시작 폴더 ~/brain). 사용자 지시로 저장소 폴더 새 세션에 교대. **본실험은 띄우지 않았다.**
+
+**끝낸 것**
+- 재개 순서 1~6 + audit.sh(실행 중 실험 없음, P9 위반 없음).
+- 사전등록 `research/experiments/E119.md` 1~8절(7절은 P5 결과 한 줄 남음), 가설 `research/hypotheses/H045.md` 신설. 템플릿 INV-A5(−400, 폐기값)는 `[~]` 사유와 함께 현행 −100 선언. **게이트는 아직 돌리지 않았다.**
+- 판정 `scripts/judge_e119.py`(판정 핵심 `judge()` 순수 함수, 단위 출력) + 합성 시험 `scripts/test_judge_e119.py` **13/13 통과**(`logs/E119/judge_synthetic.log`). 시험 중 경계 부동소수 결함(−0.0877−0.0123=−0.0999…)을 발견해 효과를 소수 4자리 반올림 후 비교하도록 수정.
+- 경로 검사 P1~P4(`scripts/e119_path_check.sh`, 요약 `logs/E119/path_summary.out`, 로그 15:06~15:24) — 결과는 E119.md 7절:
+  P1 반사 0 도달 ✓(기준 +0.02 vs 반사 25 +0.41), P2 판독 권한 R 0.564/0.553 ✓, **P3 판정 불일치 12.4% ✗ → `--judge exec` 채택**, P4 E118 b0 소수점 재현 ✓.
+- 러너 `scripts/e119_main.sh` 작성(재개 가능, 요약 줄 형식 = judge 파서). **`JUDGE="__JUDGE__"` 자리표시 그대로** — P5 통과 후 `exec`로 바꿔야 한다(안 바꾸면 argparse가 거부해 전 런 실패).
+
+**진행 중 / 남은 것**
+1. **P5 `--judge exec` 경로 검사**(`scripts/e119_exec_check.sh`, 15:24:53 schtasks로 시작, 뇌 15 반사 0·25 각 1런) → `logs/E119/path_exec_summary.out`.
+   통과 기준: (a) 반사 25 exec가 P3 judge v(`path_learn_rw25_b15.log`: 보상 140, 사후 +0.4208, 변화 −0.0189)와 소수점까지 같음(불일치 0이므로), (b) 반사 0 exec의 `[판정경로]`가 `judge=exec`로 찍히고 보상 횟수가 judge v(237)와 달라짐. 결과는 E119.md 7절에 한 줄 추가(아래 9절에 이 세션이 적었으면 그것을 확인).
+2. `e119_main.sh`의 JUDGE → exec, E119.md 상태 줄 갱신 → `bash scripts/lab/gate.sh E119` → 절차 4절(lab_run.cmd + schtasks, 명령 `bash scripts/lab/run_experiment.sh E119 "bash scripts/e119_main.sh"`) → `~/bin/watch-exp.sh E119 20 "변조폭 변화"` 종료까지 감시.
+3. 완료 후 `python3 scripts/judge_e119.py` → P9 세 곳 + DESIGN_RECOVERY append + 독립 대조.
+4. **커밋·push 안 함** — 이번 변경 전부(과제 코드, 스크립트 5개, E119.md, H045.md, 이 절) 미커밋.
+
+**코드 변경과 검증 상태** (`backend/genesis/reflex_override_task.py`)
+| 변경 | 수정 | 검증 |
+|---|---|---|
+| `--judge {v,exec}` 옵션(exec는 act-window 필요, 아니면 종료) | 완료 | v: P4 회귀로 기존 경로 불변 확인. **exec: P5 진행 중 — 미검증** |
+| `_ex`(실행 행동) 계산을 판정 직후로 이동 | 완료 | P4 E118 b0 소수점 재현(보상 140, +0.4060→+0.4033) ✓ |
+| `[판정경로]` 계수기(읽기 전용) | 완료 | P3에서 값 출력 확인(반사 25 0%, 반사 0 21.0%/12.4%). 계수 정의의 합성 검사는 안 함 — 반사 25 0건·반대 방향 0건은 v 부호=_ex 정의와 일치 |
+| `[반사가중치]` 스냅숏(읽기 전용, 빈 배열이면 예외) | 완료 | P1·P3에서 0/25/10 설정값 그대로 판독 ✓ |
+| judge_e119.py | 완료 | 합성 13/13 ✓. 실제 E119.log 줄로는 미검증(형식은 E118 러너와 같은 echo) |
+
+**주의**: P3에서 표본 밖 뇌 15의 반사 0 judge v 학습 효과 −0.0989를 이미 보았다(E119.md 7절 "사전 노출 기록"). 기준은 abcd C절에 먼저 고정돼 있었다.
+
+## 9. 이 세션(저장소 폴더, 15:26~) 진행 — 시각은 date·로그
+- 재개 순서 1~6 + audit.sh(E119 미실행·결과 미기입, P9 위반 없음).
+- **P5 통과**(로그 15:24:53~15:34:50, `logs/E119/path_exec_summary.out`): (a) 반사 25 exec = judge v 소수점까지 동일(사전 +0.4397, 보상 140, 사후 +0.4208, 변화 −0.0189). (b) 반사 0 exec `[판정경로] judge=exec`, 보상 330(≠237). E119.md 7절에 기록.
+- 판정 파서를 P3 원 로그에서 러너와 같은 echo로 만든 줄로 확인(정확히 파싱).
+- `e119_main.sh` JUDGE → `exec`(15:35). 게이트: 7절 줄의 "난수 소비 없음"을 '변경 없음'으로 오인 → 문구를 "소비 0회"로 바꿔 통과(게이트 코드 불변).
+- 커밋·push 후 본실험 시작 → 감시 `~/bin/watch-exp.sh E119 20 "변조폭 변화"`.

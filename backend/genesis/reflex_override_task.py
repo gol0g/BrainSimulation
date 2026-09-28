@@ -251,7 +251,12 @@ def main():
                     help="E109 보정(수정판): 새 뇌에 KC→motor 가중치를 한 상태로 넣고 **한 번만** 평가(이력 교란 제거).")
     ap.add_argument("--calib-d1-sign", type=int, default=0,
                     help="E108 조작검증: N>0이면 D1/motor 좌우 편향별 조향 부호를 N회씩 재고 종료(학습 없음).")
+    ap.add_argument("--judge", default="v", choices=("v", "exec"),
+                    help="E119: 보상 판정 기준. v=행동 창 이전 조향 v(|v|<=0.02 는 오답, 이전 동작) / "
+                         "exec=행동 창에서 실제 실행한 motor(_ex, v 부호) — --act-window 필요")
     args = ap.parse_args()
+    if args.judge == "exec" and args.act_window <= 0:
+        raise SystemExit("--judge exec 는 --act-window 가 필요하다(실행 행동 _ex 가 행동 창에서만 정해진다)")
 
     # C46: 환경·워밍업 난수 고정. 미고정이면 사전 정답률이 런마다 0%~72%로 흔들려
     # 학습 효과가 잡음에 묻힌다(C43에서 실제로 그랬다).
@@ -621,10 +626,29 @@ def main():
             except Exception:
                 pass
 
+    def snap_reflex():
+        """E119 경로 검사(읽기 전용): 반사 경로 가중치 평균. good_food→motor 는 학습 가능(food_approach)하나
+        이식 목록에 없다 — 학습 중 행동에만 영향을 준다."""
+        out = {}
+        for nm in ("good_food_to_motor_l", "good_food_to_motor_r", "food_explore_motor_l", "food_explore_motor_r"):
+            s = getattr(brain, nm, None)
+            if s is None:
+                continue
+            s.pull_connectivity_from_device()
+            s.vars["g"].pull_from_device()
+            v_ = np.asarray(s.vars["g"].values, dtype=np.float64)
+            if v_.size == 0:
+                raise RuntimeError("반사 가중치 %s: 빈 배열 — 측정 도구 실패" % nm)
+            out[nm] = (float(v_.mean()), int(v_.size))
+        return out
+
+    reflex_before = snap_reflex()
     rew = 0
     explored = 0
     eps = args.epsilon
     TRACE_ROWS = []
+    # E119 판정 경로 계수(읽기 전용): 행동 창이 있을 때 v 판정과 실행 행동 판정을 시행마다 비교한다.
+    J = {"n": 0, "small": 0, "v_ok_ex_no": 0, "v_no_ex_ok": 0}
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5)
         for t in range(args.steps):
@@ -644,6 +668,17 @@ def main():
             else:
                 v = steer(brain, stim(obs, nh, side), steps=3) - off
             correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
+            if args.act_window > 0:
+                # K52: v<0 = motor_left 우세. v==0 이면 무작위. (E119: 판정 비교를 위해 행동 창 앞으로 옮김 —
+                # 사이에 np.random 소비가 없어 난수열은 이전과 같다)
+                _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
+                correct_ex = (side == "left" and _ex == "right") or (side == "right" and _ex == "left")
+                J["n"] += 1
+                J["small"] += int(abs(v) <= 0.02)
+                J["v_ok_ex_no"] += int(correct and not correct_ex)
+                J["v_no_ex_ok"] += int(correct_ex and not correct)
+                if args.judge == "exec":
+                    correct = correct_ex
             if args.trace_kc_motor and getattr(brain, "kc_motor_syn", None):
                 # E111: 도파민 직전 KC→motor 자격흔적·가중치 (4그룹 합/평균). 읽기 전용.
                 _row = [ep, t, side, int(do_explore), round(float(v), 4), int(correct)]
@@ -661,8 +696,7 @@ def main():
                 # E114: 행동 창(최소 회로 act_drive + WTA 이식). 전체 모델은 반사 경로 때문에 두 motor 가 함께 발화해
                 # 자격흔적이 양쪽에 생기고 보상이 비선택적 공통 강화로만 작동했다(E112·E113). 행동이 정해진 뒤
                 # 자극을 유지한 채 **실행한 motor 만 구동하고 반대쪽은 억제**해, 흔적이 실행 행동을 담게 한다.
-                # K52: v<0 = motor_left 우세. v==0 이면 무작위.
-                _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
+                # _ex 는 위(판정 직후)에서 정했다.
                 if args.act_current > 0:
                     # E115: 지속 전류(Ioffset) — 창 전체 동안 실행 motor +I, 반대 −I. 최소 회로 act_drive 와 같은 방식.
                     act_window_current(brain, stim(obs, nh, side), _ex, args.act_current, args.act_window)
@@ -703,6 +737,14 @@ def main():
                 for _ in range(args.trial_gap):
                     brain.process(_neu)
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
+    if J["n"]:
+        print("[판정경로] judge=%s 시행=%d abs_v_le_0.02=%d (%.1f%%) v정답_실행오답=%d v오답_실행정답=%d 불일치율=%.1f%%"
+              % (args.judge, J["n"], J["small"], 100.0 * J["small"] / J["n"], J["v_ok_ex_no"], J["v_no_ex_ok"],
+                 100.0 * (J["v_ok_ex_no"] + J["v_no_ex_ok"]) / J["n"]))
+    reflex_after = snap_reflex()
+    for nm in sorted(reflex_before):
+        print("[반사가중치] %-22s n=%d w_mean %.4f→%.4f (학습 뇌; 이식 대상 아님)"
+              % (nm, reflex_before[nm][1], reflex_before[nm][0], reflex_after[nm][0]))
     if args.trace_kc_motor and TRACE_ROWS:
         import csv
         with open(args.trace_kc_motor, "w", newline="", encoding="utf-8") as _fh:
