@@ -376,13 +376,8 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e118_run/forager_brain_CODE'
-make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e118_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 -0.000 | 정답률 0.0% | **변조폭 +0.4035** (양수=반사방향, 음수=역전)
-[학습] 5ep 완료, 보상 0회 (탐색 주입 296회, ε=0.60)
-[D1가중치] food_to_d1_l   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[D1가중치] food_to_d1_r   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -764,6 +759,9 @@ make: Entering directory '/root/e118_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e118_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.000 | 정답률 0.0% | **변조폭 +0.4035**
-=> 정답률 +0.0%p | **변조폭 변화 +0.0000** | 판정: 변화 없음
+=> NEURON group=ll r=+0.2018 dg_hiRefl=-2.0118 dg_loRefl=-2.1665 dg_all=-2.0970 refl_mean=90.3
+=> NEURON group=lr r=-0.1795 dg_hiRefl=+0.0989 dg_loRefl=+0.2479 dg_all=+0.1826 refl_mean=90.4
+=> NEURON group=rl r=-0.1492 dg_hiRefl=-0.1034 dg_loRefl=+0.0220 dg_all=-0.0550 refl_mean=90.3
+=> NEURON group=rr r=+0.2149 dg_hiRefl=-1.6397 dg_loRefl=-1.7611 dg_all=-1.6789 refl_mean=90.4
+=> KCPRE side=l top5%: 반사(ll) +0.0166 교차(lr) -0.0120 차 +0.0286 | 하위50%: 반사 -2.1193 교차 +0.1964 | r(반사,교차)=-0.495
+=> KCPRE side=r top5%: 반사(rr) +0.0033 교차(rl) +0.0012 차 +0.0021 | 하위50%: 반사 -1.7069 교차 -0.0560 | r(반사,교차)=-0.088

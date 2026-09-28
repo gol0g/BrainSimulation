@@ -375,14 +375,9 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e118_run/forager_brain_CODE'
-make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e118_run/forager_brain_CODE'
+make: Entering directory '/root/e117_run/forager_brain_CODE'
+make: Leaving directory '/root/e117_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 -0.000 | 정답률 0.0% | **변조폭 +0.4035** (양수=반사방향, 음수=역전)
-[학습] 5ep 완료, 보상 0회 (탐색 주입 296회, ε=0.60)
-[D1가중치] food_to_d1_l   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[D1가중치] food_to_d1_r   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -760,10 +755,9 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e118_run/forager_brain_CODE'
+make: Entering directory '/root/e117_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e118_run/forager_brain_CODE'
+make: Leaving directory '/root/e117_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.000 | 정답률 0.0% | **변조폭 +0.4035**
-=> 정답률 +0.0%p | **변조폭 변화 +0.0000** | 판정: 변화 없음
+=> KCSETS kc_l | 좌전용 n=60 →L -30.90 →R +5.18 | 우전용 n=2 →L -2.15 →R +0.11 | 공유 n=121 →L -36.38 →R -2.09 | 무반응 n=2817 →L -0.00 →R -0.01
+=> KCSETS kc_r | 좌전용 n=1 →L +0.00 →R +0.00 | 우전용 n=42 →L +12.32 →R -34.39 | 공유 n=106 →L -0.54 →R -33.79 | 무반응 n=2851 →L -0.03 →R +0.02
