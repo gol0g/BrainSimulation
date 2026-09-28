@@ -228,6 +228,29 @@ def make_exemplars(args):
     return out
 
 
+def make_samediff(args):
+    """E124: 같음/다름 관계 과제. 감각 집단을 두 반쪽(0~h-1, h~2h-1)으로 나누고 항목 코드(반쪽 안 활성 k개)를
+    양쪽에 놓는다. 같은 항목 쌍 = 'S', 다른 항목 쌍 = 'D'. 항목 0..T-1 은 훈련, T..N-1 은 평가 전용(처음 보는 항목).
+    별도 난수열(RandomState 4000+seed)."""
+    rs = np.random.RandomState(4000 + args.seed)
+    h = args.n_sens // 2
+    k = int(round(args.sd_frac * h))
+    codes, seen = [], set()
+    while len(codes) < args.sd_items:
+        c = tuple(sorted(rs.choice(h, k, replace=False).tolist()))
+        if c not in seen:
+            seen.add(c); codes.append(np.array(c))
+    pats = {}
+    for i in range(args.sd_items):
+        for j in range(args.sd_items):
+            q = np.zeros(args.n_sens)
+            q[codes[i]] = 1
+            q[h + codes[j]] = 1
+            key = ("S%d" % i) if i == j else ("D%d_%d" % (i, j))
+            pats[key] = (q, "L" if i == j else "R")
+    return codes, pats
+
+
 def register_exemplar(key, arr, cat):
     PATTERNS[key] = arr
     RULE[key] = RULE[cat]
@@ -437,6 +460,11 @@ def main():
     ap.add_argument("--distort-train", type=float, default=0.2, help="E122: 훈련 사례 왜곡(교체 비트 비율)")
     ap.add_argument("--distort-test", type=str, default="0.1,0.2,0.3,0.4", help="E122: 평가 사례 왜곡 수준(쉼표)")
     ap.add_argument("--n-test-ex", type=int, default=20, help="E122: 수준·범주당 평가 사례 수(훈련과 겹치지 않음)")
+    ap.add_argument("--samediff", action="store_true",
+                    help="E124: 같음/다름 관계 과제(같은 항목 쌍→L, 다른 쌍→R). 평가는 처음 보는 항목으로")
+    ap.add_argument("--sd-items", type=int, default=8, help="E124: 항목 수(앞 sd-train-items 개만 훈련)")
+    ap.add_argument("--sd-train-items", type=int, default=4)
+    ap.add_argument("--sd-frac", type=float, default=0.3, help="E124: 반쪽 안 항목 코드 활성 비율")
     ap.add_argument("--probe-ex", action="store_true",
                     help="E122 경로 검사: 학습 전 원형·사례의 KC 집합 자카드만 재고 종료")
     a = ap.parse_args()
@@ -448,6 +476,22 @@ def main():
     global PATTERNS
     PATTERNS = make_patterns(a)
     EX = None
+    SD = None
+    if a.samediff:
+        if a.exemplars > 0 or a.mode not in ("learn", "frozen", "noreward") or a.n_stim != 2 or a.phase2_trials:
+            raise SystemExit("--samediff 는 learn/frozen/noreward, 2자극, 1단계, 사례 모드 없이만 지원한다")
+        if a.n_sens % 2:
+            raise SystemExit("--samediff 는 n_sens 가 짝수여야 한다")
+        SD, _sdp = make_samediff(a)
+        for key, (q, r) in _sdp.items():
+            PATTERNS[key] = q
+            RULE[key] = r
+        _h = a.n_sens // 2
+        _ov = [len(set(SD[i].tolist()) & set(SD[j].tolist())) for i in range(a.sd_items) for j in range(i + 1, a.sd_items)]
+        _nv = [len(set(SD[i].tolist()) & set(SD[j].tolist())) for i in range(a.sd_train_items) for j in range(a.sd_train_items, a.sd_items)]
+        print("[관계] 항목 %d개(훈련 %d, 새 %d), 반쪽 %d 중 활성 %d, 항목 간 겹침 %d~%d(평균 %.1f), 새↔훈련 겹침 %d~%d, 패턴 %d개(S %d, D %d)"
+              % (a.sd_items, a.sd_train_items, a.sd_items - a.sd_train_items, _h, len(SD[0]), min(_ov), max(_ov), np.mean(_ov),
+                 min(_nv), max(_nv), len(_sdp), sum(k.startswith("S") for k in _sdp), sum(k.startswith("D") for k in _sdp)))
     if a.exemplars > 0:
         if a.mode not in ("learn", "frozen", "noreward", "shuffled") or a.n_stim != 2 or a.phase2_trials:
             raise SystemExit("--exemplars 는 learn/frozen/noreward/shuffled, 2자극, 1단계만 지원한다")
@@ -585,6 +629,14 @@ def main():
             if EX is not None:
                 # E122: 범주 순서는 K50과 같은 rng, 사례 선택은 별도 난수열(시행 난수열 불변)
                 stim = "%s#%d" % (stim, EX_RNG.randrange(a.exemplars))
+            elif SD is not None:
+                # E124: A → 같음, B → 다름(범주 순서는 K50과 같은 rng). 항목은 별도 난수열, 훈련 항목만.
+                _i = EX_RNG.randrange(a.sd_train_items)
+                if stim == "A":
+                    stim = "S%d" % _i
+                else:
+                    _j = EX_RNG.randrange(a.sd_train_items - 1)
+                    stim = "D%d_%d" % (_i, _j if _j < _i else _j + 1)
         else:
             stim = "C" if rng.random() < 0.5 else "D"   # E107 2단계: 난수 소비는 1단계와 같은 방식
 
@@ -674,6 +726,36 @@ def main():
             eval_orig += 1
     eval_acc = eval_ok / a.eval_trials * 100.0
     apply_stim(pops, a, None)
+    if SD is not None:
+        # E124: 관계 평가 — 훈련 항목 쌍과 처음 보는 항목 쌍. 같음/다름 반반, 균형 정답률 = (같음 정답률 + 다름 정답률)/2.
+        _xr = random.Random(9300 + a.seed)
+        res = {}
+        for setname, lo, hi in (("train", 0, a.sd_train_items), ("novel", a.sd_train_items, a.sd_items)):
+            c = {"S": [0, 0], "D": [0, 0]}; _tie = 0
+            for i in range(a.eval_trials):
+                same = _xr.random() < 0.5
+                _i = _xr.randrange(lo, hi)
+                if same:
+                    key = "S%d" % _i
+                else:
+                    _j = _xr.randrange(lo, hi - 1)
+                    _j = _j if _j < _i else _j + 1
+                    key = "D%d_%d" % (_i, _j)
+                _nl, _nr, _ = present(key)
+                if _nl == _nr:
+                    _tie += 1
+                act = "L" if _nl > _nr else ("R" if _nr > _nl else ("L" if _xr.random() < 0.5 else "R"))
+                kk = "S" if same else "D"
+                c[kk][1] += 1
+                c[kk][0] += 1 if RULE[key] == act else 0
+            sa = c["S"][0] / c["S"][1] * 100 if c["S"][1] else float("nan")
+            da = c["D"][0] / c["D"][1] * 100 if c["D"][1] else float("nan")
+            res[setname] = (sa, da, (sa + da) / 2, _tie, c["S"][1], c["D"][1])
+        apply_stim(pops, a, None)
+        print("=> SDGEN mode=%s seed=%d trialseed=%s train_same=%.1f train_diff=%.1f train_bal=%.1f novel_same=%.1f novel_diff=%.1f novel_bal=%.1f | ties train:%d novel:%d | n_same/diff train %d/%d novel %d/%d"
+              % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
+                 res["train"][0], res["train"][1], res["train"][2], res["novel"][0], res["novel"][1], res["novel"][2],
+                 res["train"][3], res["novel"][3], res["train"][4], res["train"][5], res["novel"][4], res["novel"][5]))
     if EX is not None:
         # E122: 미학습 사례 평가 — 원형 평가(위, 원형은 훈련에 안 나옴) 뒤, 별도 난수열. 탐색·학습 없음.
         _xr = random.Random(9200 + a.seed)
