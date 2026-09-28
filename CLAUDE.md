@@ -13,8 +13,9 @@
 **재개 순서 (고정):**
 1. `research/current-state.md` — 지금 무엇을 믿는가 (역사 아님. 이것만 읽으면 재개 가능)
 2. `research/invariants.md` — 어기면 결론이 **무효**가 되는 설정 8개. 실험 전 필수
-3. `research/protocols.md` — 측정 규약 P1~P12
-4. `bash scripts/lab/audit.sh` — 미완 등록·결과 미기입·신선도 점검
+3. `research/protocols.md` — 측정 규약 P1~P19
+4. **`research/process-request-2026-09-25.md` — 연구 운영 조건 1~6(외부 검토 요청).** 조건 2(실제 경로 검사)·6(분기 상한·종료 조건)은 게이트가 강제한다(2026-09-28). 요청서는 규약을 늘리지 말고 기존 경로에 연결하라고 한다.
+5. `bash scripts/lab/audit.sh` — 미완 등록·결과 미기입·신선도 점검
 
 ## 실험 실행 규칙 (게이트가 강제한다)
 ```

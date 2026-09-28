@@ -50,6 +50,39 @@ grep -q '<나머지는 교란이다' "$F" && fail "6. 의도한 차이가 명시
 grep -q '<뺄셈.비율 지표를 쓸 때' "$F" && fail "6. 지표 상쇄 검토가 비어 있다"
 grep -q '<최소 하나. 없다고 쓰면' "$F" && fail "6. 배제 못 하는 설명이 비어 있다 (하나도 없다면 대조를 의심하라)"
 
+# 7·8. process-request(2026-09-25) 조건 2·6 — 2026-09-28 연결. 선언이 아니라 실행 증거와 분기 한도를 요구한다.
+#    E109~E112 에서 새 코드 경로를 검사 없이 본실험에 넣어 반복 실패했고, E108~E118 은 상한 없이 11개 실험을 이어갔다.
+if grep -q '^## 7\. 실행 경로 검사' "$F"; then
+  grep -q '<없음이면' "$F" && fail "7. 새·변경 코드 경로가 비어 있다"
+  grep -q '<research/experiments/logs/E###' "$F" && fail "7. 경로 검사 로그가 비어 있다"
+  PL=$(grep -E '^- \*\*경로 검사 로그\*\*:' "$F" | head -1)
+  NC=$(grep -E '^- \*\*새·변경 코드 경로\*\*:' "$F" | head -1)
+  if echo "$NC" | grep -q '없음'; then
+    PREV=$(echo "$NC" | grep -oE 'E[0-9]{3}' | head -1)
+    [ -n "$PREV" ] && [ -e "$R/research/experiments/$PREV.md" ] || fail "7. '없음'이면 같은 경로의 직전 실험(E###)을 적어라"
+  else
+    LP=$(echo "$PL" | grep -oE '(research|scripts)/[^ )`]+' | head -1)
+    if [ -z "$LP" ] || [ ! -s "$R/$LP" ]; then
+      fail "7. 경로 검사 로그 파일이 없거나 비었다 ($LP) — 짧은 실행 검사를 먼저 돌려라"
+    fi
+  fi
+else
+  fail "7. 실행 경로 검사 절이 없다 (process-request 조건 2)"
+fi
+if grep -q '^## 8\. 분기 상한' "$F"; then
+  grep -q '<이 실험이 답하려는' "$F" && fail "8. 분기가 비어 있다"
+  grep -q '<무엇을 보면 이 분기를' "$F" && fail "8. 종료 조건이 비어 있다"
+  NN=$(grep -E '^- \*\*분기 누적 실험 수 / 상한\*\*:' "$F" | grep -oE '[0-9]+ */ *[0-9]+' | head -1)
+  if [ -z "$NN" ]; then
+    fail "8. 분기 누적 실험 수 / 상한이 숫자로 없다"
+  else
+    n=${NN%%/*}; N=${NN##*/}; n=${n// /}; N=${N// /}
+    [ "$n" -le "$N" ] || fail "8. 분기 상한 초과 ($n/$N) — 분기를 종료하거나 상한 변경 사유를 기록하라"
+  fi
+else
+  fail "8. 분기 상한과 종료 조건 절이 없다 (process-request 조건 6)"
+fi
+
 if [ "$FAILED" -ne 0 ]; then
   echo "[게이트] 거부됨. 위 항목을 채운 뒤 다시 실행하라."
   exit 1
