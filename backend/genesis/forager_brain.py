@@ -1188,6 +1188,7 @@ class ForagerBrainConfig:
     kc_good_bad_food_sparsity: float = 0.10
     kc_it_food_weight: float = 2.0
     kc_it_food_sparsity: float = 0.05
+    kc_bilateral_scale: float = 1.0      # E121: 좌우 공통 KC 입력 6종 가중치 배율(0=좌/우 눈 입력만). 연결 구조는 불변
     kc_to_inh_weight: float = 5.0
     kc_to_inh_sparsity: float = 0.05
     kc_inh_to_kc_weight: float = -15.0
@@ -8979,21 +8980,23 @@ class ForagerBrain:
         self._create_static_synapse(
             "bad_food_eye_r_to_kc_r", self.bad_food_eye_right, self.kc_right,
             self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+        # E121: 좌우 공통(bilateral) KC 입력 배율 — 0 이면 KC 가 좌/우 눈 입력만 받는다(최소 회로 구조). 연결은 그대로 만든다(난수 소비 불변).
+        _kbs = float(getattr(self.config, "kc_bilateral_scale", 1.0))
         # it_food_category → KC (bilateral)
         self._create_static_synapse(
             "it_food_to_kc_l", self.it_food_category, self.kc_left,
-            self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
+            self.config.kc_it_food_weight * _kbs, sparsity=self.config.kc_it_food_sparsity)
         self._create_static_synapse(
             "it_food_to_kc_r", self.it_food_category, self.kc_right,
-            self.config.kc_it_food_weight, sparsity=self.config.kc_it_food_sparsity)
+            self.config.kc_it_food_weight * _kbs, sparsity=self.config.kc_it_food_sparsity)
         # assoc_edible → KC (bilateral)
         if hasattr(self, 'assoc_edible'):
             self._create_static_synapse(
                 "assoc_edible_to_kc_l", self.assoc_edible, self.kc_left,
-                2.0, sparsity=0.05)
+                2.0 * _kbs, sparsity=0.05)
             self._create_static_synapse(
                 "assoc_edible_to_kc_r", self.assoc_edible, self.kc_right,
-                2.0, sparsity=0.05)
+                2.0 * _kbs, sparsity=0.05)
             print(f"    Assoc_Edible→KC: 2.0, sparsity=0.05")
 
         # sound_food L/R → KC L/R (lateralized)
@@ -9009,20 +9012,20 @@ class ForagerBrain:
         if self.config.language_enabled and hasattr(self, 'wernicke_food'):
             self._create_static_synapse(
                 "wernicke_food_to_kc_l", self.wernicke_food, self.kc_left,
-                3.0, sparsity=0.05)
+                3.0 * _kbs, sparsity=0.05)
             self._create_static_synapse(
                 "wernicke_food_to_kc_r", self.wernicke_food, self.kc_right,
-                3.0, sparsity=0.05)
+                3.0 * _kbs, sparsity=0.05)
             print(f"    Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)")
 
         # ppc_goal_food → KC
         if hasattr(self, 'ppc_goal_food'):
             self._create_static_synapse(
                 "ppc_goal_food_to_kc_l", self.ppc_goal_food, self.kc_left,
-                2.0, sparsity=0.05)
+                2.0 * _kbs, sparsity=0.05)
             self._create_static_synapse(
                 "ppc_goal_food_to_kc_r", self.ppc_goal_food, self.kc_right,
-                2.0, sparsity=0.05)
+                2.0 * _kbs, sparsity=0.05)
             print(f"    PPC_Goal_Food→KC: 2.0, sparsity=0.05")
         # social_memory → KC
         if self.config.social_brain_enabled and self.config.mirror_enabled and hasattr(self, 'social_memory'):
@@ -9032,20 +9035,20 @@ class ForagerBrain:
             _sms = getattr(self.config, "social_to_kc_sparsity", 0.03)
             self._create_static_synapse(
                 "social_mem_to_kc_l", self.social_memory, self.kc_left,
-                _smw, sparsity=_sms)
+                _smw * _kbs, sparsity=_sms)
             self._create_static_synapse(
                 "social_mem_to_kc_r", self.social_memory, self.kc_right,
-                _smw, sparsity=_sms)
+                _smw * _kbs, sparsity=_sms)
             print(f"    Social_Memory→KC: {_smw}, sparsity={_sms}")
 
         # Assoc_Binding → KC
         if hasattr(self, 'assoc_binding'):
             self._create_static_synapse(
                 "assoc_bind_to_kc_l", self.assoc_binding, self.kc_left,
-                2.0, sparsity=0.05)
+                2.0 * _kbs, sparsity=0.05)
             self._create_static_synapse(
                 "assoc_bind_to_kc_r", self.assoc_binding, self.kc_right,
-                2.0, sparsity=0.05)
+                2.0 * _kbs, sparsity=0.05)
             print(f"    Assoc_Binding→KC: 2.0, sparsity=0.05 (C2: learned category→BG)")
 
         # === C) WTA synapses: single inhibition loop ===

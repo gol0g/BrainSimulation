@@ -254,6 +254,11 @@ def main():
     ap.add_argument("--judge", default="v", choices=("v", "exec"),
                     help="E119: 보상 판정 기준. v=행동 창 이전 조향 v(|v|<=0.02 는 오답, 이전 동작) / "
                          "exec=행동 창에서 실제 실행한 motor(_ex, v 부호) — --act-window 필요")
+    ap.add_argument("--kc-bilateral-scale", type=float, default=1.0,
+                    help="E121 요소 맞바꾸기: 좌우 공통 KC 입력(it_food·assoc_edible·wernicke·ppc_goal·social·assoc_bind → kc_l·kc_r) "
+                         "가중치 배율. 0 = 최소 회로처럼 KC 가 좌/우 눈 입력만 받음. 시냅스 구조(연결)는 그대로 — 가중치만 바뀐다")
+    ap.add_argument("--snap-all-syn", action="store_true",
+                    help="E121 경로 검사(읽기 전용): 학습 전후 **모든** 시냅스 집단의 g 를 비교해 이식 목록 밖에서 변한 집단을 찾는다")
     args = ap.parse_args()
     if args.judge == "exec" and args.act_window <= 0:
         raise SystemExit("--judge exec 는 --act-window 가 필요하다(실행 행동 _ex 가 행동 창에서만 정해진다)")
@@ -273,6 +278,7 @@ def main():
     cfg.genn_seed = 12345 + _bseed   # GeNN 연결 시드도 뇌 시드에 종속
     if args.reflex_w is not None:
         cfg.food_approach_init_w = args.reflex_w
+    cfg.kc_bilateral_scale = args.kc_bilateral_scale
     if args.d1_lateral is not None:
         cfg.d1_lateral_inhibition = args.d1_lateral
     if args.kc_gamma:
@@ -643,6 +649,38 @@ def main():
         return out
 
     reflex_before = snap_reflex()
+
+    def snap_all_syn():
+        """E121 경로 검사(읽기 전용): 모든 시냅스 집단의 g. g 가 변수가 아닌(상수) 집단은 건너뛴다."""
+        out = {}
+        for nm, sg in brain.model.synapse_populations.items():
+            if "g" not in sg.vars:
+                continue
+            try:
+                sg.pull_connectivity_from_device()
+            except Exception:
+                pass          # DENSE 등 연결 당기기가 없는 집단
+            sg.vars["g"].pull_from_device()
+            out[nm] = np.array(sg.vars["g"].values, dtype=np.float64).ravel()
+        if not out:
+            raise RuntimeError("전체 시냅스 스냅숏: 집단 0개 — 측정 도구 실패")
+        return out
+    syn_before = snap_all_syn() if args.snap_all_syn else None
+    # E121 경로 검사(읽기 전용): 좌우 공통 KC 입력 가중치가 설정 배율대로 시냅스에 들어갔는가
+    _kb = []
+    for _src in ("it_food", "assoc_edible", "wernicke_food", "ppc_goal_food", "social_mem", "assoc_bind"):
+        for _sd in ("l", "r"):
+            _pn = "%s_to_kc_%s" % (_src, _sd)
+            _sg = brain.model.synapse_populations.get(_pn)
+            if _sg is None:
+                continue
+            _sg.pull_connectivity_from_device()
+            _sg.vars["g"].pull_from_device()
+            _gv = np.asarray(_sg.vars["g"].values, dtype=np.float64)
+            if _gv.size == 0:
+                raise RuntimeError("KC 공통 입력 %s: 빈 배열 — 측정 도구 실패" % _pn)
+            _kb.append("%s n=%d w=%.3f" % (_pn, _gv.size, _gv.mean()))
+    print("[KC공통입력] scale=%.2f 집단 %d개: %s" % (args.kc_bilateral_scale, len(_kb), "; ".join(_kb)))
     rew = 0
     explored = 0
     eps = args.epsilon
@@ -745,6 +783,24 @@ def main():
     for nm in sorted(reflex_before):
         print("[반사가중치] %-22s n=%d w_mean %.4f→%.4f (학습 뇌; 이식 대상 아님)"
               % (nm, reflex_before[nm][1], reflex_before[nm][0], reflex_after[nm][0]))
+    if syn_before is not None:
+        import transplant_eval as _TEs
+        _tp = {getattr(brain, n).name for n in _TEs.learned_names(brain)}
+        syn_after = snap_all_syn()
+        _chg, _out = [], []
+        for nm in sorted(syn_before):
+            b_, a_ = syn_before[nm], syn_after[nm]
+            if b_.shape != a_.shape:
+                raise RuntimeError("전체 시냅스 스냅숏 %s: 크기 불일치 %s→%s" % (nm, b_.shape, a_.shape))
+            d = np.abs(a_ - b_)
+            if b_.size and (d > 0).any():
+                _chg.append(nm)
+                if nm not in _tp:
+                    _out.append(nm)
+                print("[전체시냅스] %-28s n=%d mean_abs_dg=%.5f changed_frac=%.1f%% w_mean %.4f→%.4f 이식=%s"
+                      % (nm, b_.size, d.mean(), (d > 0).mean() * 100, b_.mean(), a_.mean(), "Y" if nm in _tp else "N"))
+        print("[전체시냅스] 집단 %d개(g 변수) 중 변함 %d개, 이식 목록 %d개, **이식 밖 변함 %d개**: %s"
+              % (len(syn_before), len(_chg), len(_tp), len(_out), ", ".join(_out) if _out else "-"))
     if args.trace_kc_motor and TRACE_ROWS:
         import csv
         with open(args.trace_kc_motor, "w", newline="", encoding="utf-8") as _fh:
