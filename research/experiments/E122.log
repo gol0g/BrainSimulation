@@ -1,0 +1,29 @@
+=== E122 실행: 2026-09-28T13:35:27Z ===
+커맨드: bash scripts/e122_main.sh
+---
+  learn w10 t600: => EXGEN mode=learn seed=10 trialseed=600 proto=100.0 train=95.0 d0.10=100.0 d0.20=97.0 d0.30=99.0 d0.40=80.0 | ties train:0 d0.10:0 d0.20:0 d0.30:2 d0.40:3
+  learn w10 t601: => EXGEN mode=learn seed=10 trialseed=601 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=96.0 d0.40=85.0 | ties train:0 d0.10:0 d0.20:0 d0.30:2 d0.40:0
+  frozen w10 t600: => EXGEN mode=frozen seed=10 trialseed=600 proto=0.0 train=30.0 d0.10=34.0 d0.20=30.0 d0.30=42.0 d0.40=53.0 | ties train:7 d0.10:0 d0.20:0 d0.30:3 d0.40:6
+  learn w11 t600: => EXGEN mode=learn seed=11 trialseed=600 proto=100.0 train=75.0 d0.10=84.0 d0.20=76.0 d0.30=66.0 d0.40=62.0 | ties train:0 d0.10:5 d0.20:2 d0.30:2 d0.40:0
+  learn w11 t601: => EXGEN mode=learn seed=11 trialseed=601 proto=100.0 train=71.0 d0.10=81.0 d0.20=71.0 d0.30=65.0 d0.40=60.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:0
+  frozen w11 t600: => EXGEN mode=frozen seed=11 trialseed=600 proto=48.0 train=43.0 d0.10=48.0 d0.20=42.0 d0.30=50.0 d0.40=48.0 | ties train:0 d0.10:0 d0.20:0 d0.30:8 d0.40:0
+  learn w12 t600: => EXGEN mode=learn seed=12 trialseed=600 proto=100.0 train=95.0 d0.10=100.0 d0.20=100.0 d0.30=98.0 d0.40=95.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:0
+  learn w12 t601: => EXGEN mode=learn seed=12 trialseed=601 proto=100.0 train=95.0 d0.10=100.0 d0.20=100.0 d0.30=100.0 d0.40=91.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:0
+  frozen w12 t600: => EXGEN mode=frozen seed=12 trialseed=600 proto=59.0 train=40.0 d0.10=40.0 d0.20=40.0 d0.30=50.0 d0.40=37.0 | ties train:16 d0.10:7 d0.20:20 d0.30:5 d0.40:0
+  learn w13 t600: => EXGEN mode=learn seed=13 trialseed=600 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=86.0 d0.40=68.0 | ties train:0 d0.10:0 d0.20:0 d0.30:3 d0.40:0
+  learn w13 t601: => EXGEN mode=learn seed=13 trialseed=601 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=83.0 d0.40=63.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:3
+  frozen w13 t600: => EXGEN mode=frozen seed=13 trialseed=600 proto=48.0 train=52.0 d0.10=55.0 d0.20=59.0 d0.30=45.0 d0.40=38.0 | ties train:8 d0.10:6 d0.20:10 d0.30:0 d0.40:8
+  learn w14 t600: => EXGEN mode=learn seed=14 trialseed=600 proto=100.0 train=96.0 d0.10=95.0 d0.20=92.0 d0.30=91.0 d0.40=84.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:0
+  learn w14 t601: => EXGEN mode=learn seed=14 trialseed=601 proto=100.0 train=96.0 d0.10=98.0 d0.20=88.0 d0.30=90.0 d0.40=84.0 | ties train:0 d0.10:5 d0.20:1 d0.30:2 d0.40:0
+  frozen w14 t600: => EXGEN mode=frozen seed=14 trialseed=600 proto=57.0 train=73.0 d0.10=61.0 d0.20=52.0 d0.30=67.0 d0.40=69.0 | ties train:5 d0.10:8 d0.20:2 d0.30:5 d0.40:5
+  learn w15 t600: => EXGEN mode=learn seed=15 trialseed=600 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=100.0 d0.40=94.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:4
+  learn w15 t601: => EXGEN mode=learn seed=15 trialseed=601 proto=100.0 train=100.0 d0.10=100.0 d0.20=98.0 d0.30=100.0 d0.40=85.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:2
+  frozen w15 t600: => EXGEN mode=frozen seed=15 trialseed=600 proto=100.0 train=67.0 d0.10=58.0 d0.20=63.0 d0.30=66.0 d0.40=55.0 | ties train:22 d0.10:4 d0.20:10 d0.30:2 d0.40:0
+  learn w16 t600: => EXGEN mode=learn seed=16 trialseed=600 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=100.0 d0.40=98.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:0
+  learn w16 t601: => EXGEN mode=learn seed=16 trialseed=601 proto=100.0 train=97.0 d0.10=100.0 d0.20=98.0 d0.30=92.0 d0.40=98.0 | ties train:0 d0.10:0 d0.20:3 d0.30:5 d0.40:0
+  frozen w16 t600: => EXGEN mode=frozen seed=16 trialseed=600 proto=100.0 train=58.0 d0.10=72.0 d0.20=69.0 d0.30=77.0 d0.40=74.0 | ties train:0 d0.10:3 d0.20:0 d0.30:0 d0.40:0
+  learn w17 t600: => EXGEN mode=learn seed=17 trialseed=600 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=100.0 d0.40=99.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:1
+  learn w17 t601: => EXGEN mode=learn seed=17 trialseed=601 proto=100.0 train=100.0 d0.10=100.0 d0.20=100.0 d0.30=100.0 d0.40=99.0 | ties train:0 d0.10:0 d0.20:0 d0.30:0 d0.40:1
+  frozen w17 t600: => EXGEN mode=frozen seed=17 trialseed=600 proto=55.0 train=62.0 d0.10=41.0 d0.20=66.0 d0.30=61.0 d0.40=65.0 | ties train:4 d0.10:5 d0.20:6 d0.30:11 d0.40:1
+[E122] 전체 루프 종료
+=== 종료코드 0 ===
