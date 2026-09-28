@@ -247,7 +247,14 @@ def make_samediff(args):
             q[codes[i]] = 1
             q[h + codes[j]] = 1
             key = ("S%d" % i) if i == j else ("D%d_%d" % (i, j))
-            pats[key] = (q, "L" if i == j else "R")
+            if getattr(args, "sd_rule", "samediff") == "half1":
+                # E125: 같은 자극, 선형 분리 가능한 규칙 — 반쪽1 항목이 (훈련·새 항목 각각의) 앞 절반이면 L
+                T = args.sd_train_items
+                lo, n = (0, T) if i < T else (T, args.sd_items - T)
+                lab = "L" if (i - lo) < n // 2 else "R"
+            else:
+                lab = "L" if i == j else "R"
+            pats[key] = (q, lab)
     return codes, pats
 
 
@@ -476,6 +483,8 @@ def main():
     ap.add_argument("--sd-items", type=int, default=8, help="E124: 항목 수(앞 sd-train-items 개만 훈련)")
     ap.add_argument("--sd-train-items", type=int, default=4)
     ap.add_argument("--sd-frac", type=float, default=0.3, help="E124: 반쪽 안 항목 코드 활성 비율")
+    ap.add_argument("--sd-rule", default="samediff", choices=("samediff", "half1"),
+                    help="E125: 라벨 규칙. samediff=같음→L(E124) / half1=반쪽1 항목이 앞 절반이면 L(같은 자극, 선형 분리 가능)")
     ap.add_argument("--probe-sd", action="store_true",
                     help="E124 경로 검사: 학습 전 같음 쌍 S_i 와 반쪽 단독 H1_i·H2_i 의 KC 집합 — 결합(AND) KC 비율 측정 후 종료")
     ap.add_argument("--probe-ex", action="store_true",
@@ -765,7 +774,7 @@ def main():
         _xr = random.Random(9300 + a.seed)
         res = {}
         for setname, lo, hi in (("train", 0, a.sd_train_items), ("novel", a.sd_train_items, a.sd_items)):
-            c = {"S": [0, 0], "D": [0, 0]}; _tie = 0
+            c = {"S": [0, 0], "D": [0, 0]}; _tie = 0; cl = {"L": [0, 0], "R": [0, 0]}
             for i in range(a.eval_trials):
                 same = _xr.random() < 0.5
                 _i = _xr.randrange(lo, hi)
@@ -782,14 +791,22 @@ def main():
                 kk = "S" if same else "D"
                 c[kk][1] += 1
                 c[kk][0] += 1 if RULE[key] == act else 0
+                cl[RULE[key]][1] += 1
+                cl[RULE[key]][0] += 1 if RULE[key] == act else 0
             sa = c["S"][0] / c["S"][1] * 100 if c["S"][1] else float("nan")
             da = c["D"][0] / c["D"][1] * 100 if c["D"][1] else float("nan")
-            res[setname] = (sa, da, (sa + da) / 2, _tie, c["S"][1], c["D"][1])
+            la = cl["L"][0] / cl["L"][1] * 100 if cl["L"][1] else float("nan")
+            ra = cl["R"][0] / cl["R"][1] * 100 if cl["R"][1] else float("nan")
+            res[setname] = (sa, da, (sa + da) / 2, _tie, c["S"][1], c["D"][1], la, ra, (la + ra) / 2)
         apply_stim(pops, a, None)
         print("=> SDGEN mode=%s seed=%d trialseed=%s train_same=%.1f train_diff=%.1f train_bal=%.1f novel_same=%.1f novel_diff=%.1f novel_bal=%.1f | ties train:%d novel:%d | n_same/diff train %d/%d novel %d/%d"
               % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
                  res["train"][0], res["train"][1], res["train"][2], res["novel"][0], res["novel"][1], res["novel"][2],
                  res["train"][3], res["novel"][3], res["train"][4], res["train"][5], res["novel"][4], res["novel"][5]))
+        # E125: 라벨(L/R) 균형 정답률 — 규칙이 samediff 면 위 균형과 같다(라벨 = 같음/다름)
+        print("=> SDLAB rule=%s mode=%s seed=%d trialseed=%s train_accL=%.1f train_accR=%.1f train_lbal=%.1f novel_accL=%.1f novel_accR=%.1f novel_lbal=%.1f"
+              % (a.sd_rule, a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
+                 res["train"][6], res["train"][7], res["train"][8], res["novel"][6], res["novel"][7], res["novel"][8]))
     if EX is not None:
         # E122: 미학습 사례 평가 — 원형 평가(위, 원형은 훈련에 안 나옴) 뒤, 별도 난수열. 탐색·학습 없음.
         _xr = random.Random(9200 + a.seed)
