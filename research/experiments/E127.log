@@ -1,0 +1,5 @@
+=== E127 실행: 2026-09-28T15:33:37Z ===
+커맨드: bash scripts/e127_main.sh
+---
+  cr learn w10 t600: => SDCREDIT mode=learn seed=10 trialseed=600 diff=cyclic | L전용 n=34 dSg=+0.5476 | R전용 n=36 dSg=-1.2898 | 양쪽 n=229 dSg=-0.5213 | margin_sign_ok=5/8 | spec_share(|Σg_L−Σg_R| 중 전용 KC 몫) 평균 0.093 || => SDLAB diff=cyclic rule=samediff mode=learn seed=10 trialseed=600 train_accL=0.0 train_accR=100.0 train_lbal=50.0 novel_accL=30.0 novel_accR=76.0 novel_lbal=53.0
+  cr learn w10 t601: 
