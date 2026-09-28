@@ -1,0 +1,29 @@
+=== E124 실행: 2026-09-28T14:32:12Z ===
+커맨드: bash scripts/e124_main.sh
+---
+  learn w10 t600: => SDGEN mode=learn seed=10 trialseed=600 train_same=0.0 train_diff=100.0 train_bal=50.0 novel_same=32.7 novel_diff=81.2 novel_bal=57.0 | ties train:0 novel:3 | n_same/diff train 49/51 novel 52/48
+  learn w10 t601: => SDGEN mode=learn seed=10 trialseed=601 train_same=0.0 train_diff=100.0 train_bal=50.0 novel_same=32.0 novel_diff=84.0 novel_bal=58.0 | ties train:0 novel:0 | n_same/diff train 49/51 novel 50/50
+  frozen w10 t600: => SDGEN mode=frozen seed=10 trialseed=600 train_same=22.4 train_diff=45.1 train_bal=33.8 novel_same=74.0 novel_diff=44.0 novel_bal=59.0 | ties train:0 novel:0 | n_same/diff train 49/51 novel 50/50
+  learn w11 t600: => SDGEN mode=learn seed=11 trialseed=600 train_same=0.0 train_diff=100.0 train_bal=50.0 novel_same=0.0 novel_diff=100.0 novel_bal=50.0 | ties train:0 novel:0 | n_same/diff train 59/41 novel 52/48
+  learn w11 t601: => SDGEN mode=learn seed=11 trialseed=601 train_same=0.0 train_diff=100.0 train_bal=50.0 novel_same=0.0 novel_diff=100.0 novel_bal=50.0 | ties train:0 novel:0 | n_same/diff train 59/41 novel 52/48
+  frozen w11 t600: => SDGEN mode=frozen seed=11 trialseed=600 train_same=0.0 train_diff=70.7 train_bal=35.4 novel_same=33.9 novel_diff=86.4 novel_bal=60.1 | ties train:0 novel:5 | n_same/diff train 59/41 novel 56/44
+  learn w12 t600: => SDGEN mode=learn seed=12 trialseed=600 train_same=100.0 train_diff=0.0 train_bal=50.0 novel_same=73.2 novel_diff=0.0 novel_bal=36.6 | ties train:0 novel:0 | n_same/diff train 41/59 novel 56/44
+  learn w12 t601: => SDGEN mode=learn seed=12 trialseed=601 train_same=75.6 train_diff=15.3 train_bal=45.4 novel_same=73.1 novel_diff=8.3 novel_bal=40.7 | ties train:0 novel:5 | n_same/diff train 41/59 novel 52/48
+  frozen w12 t600: => SDGEN mode=frozen seed=12 trialseed=600 train_same=60.0 train_diff=50.9 train_bal=55.5 novel_same=51.9 novel_diff=39.1 novel_bal=45.5 | ties train:2 novel:3 | n_same/diff train 45/55 novel 54/46
+  learn w13 t600: => SDGEN mode=learn seed=13 trialseed=600 train_same=52.6 train_diff=60.5 train_bal=56.5 novel_same=69.8 novel_diff=25.5 novel_bal=47.7 | ties train:5 novel:0 | n_same/diff train 57/43 novel 53/47
+  learn w13 t601: => SDGEN mode=learn seed=13 trialseed=601 train_same=32.8 train_diff=73.8 train_bal=53.3 novel_same=70.7 novel_diff=59.5 novel_bal=65.1 | ties train:0 novel:3 | n_same/diff train 58/42 novel 58/42
+  frozen w13 t600: => SDGEN mode=frozen seed=13 trialseed=600 train_same=60.9 train_diff=63.9 train_bal=62.4 novel_same=100.0 novel_diff=27.9 novel_bal=64.0 | ties train:8 novel:0 | n_same/diff train 64/36 novel 57/43
+  learn w14 t600: => SDGEN mode=learn seed=14 trialseed=600 train_same=78.7 train_diff=17.0 train_bal=47.9 novel_same=75.5 novel_diff=33.3 novel_bal=54.4 | ties train:0 novel:0 | n_same/diff train 47/53 novel 49/51
+  learn w14 t601: => SDGEN mode=learn seed=14 trialseed=601 train_same=29.8 train_diff=81.1 train_bal=55.5 novel_same=0.0 novel_diff=88.2 novel_bal=44.1 | ties train:0 novel:0 | n_same/diff train 47/53 novel 49/51
+  frozen w14 t600: => SDGEN mode=frozen seed=14 trialseed=600 train_same=13.0 train_diff=46.3 train_bal=29.7 novel_same=40.4 novel_diff=47.9 novel_bal=44.2 | ties train:25 novel:0 | n_same/diff train 46/54 novel 52/48
+  learn w15 t600: => SDGEN mode=learn seed=15 trialseed=600 train_same=79.0 train_diff=10.5 train_bal=44.8 novel_same=38.0 novel_diff=14.0 novel_bal=26.0 | ties train:29 novel:0 | n_same/diff train 62/38 novel 50/50
+  learn w15 t601: => SDGEN mode=learn seed=15 trialseed=601 train_same=62.1 train_diff=40.5 train_bal=51.3 novel_same=15.4 novel_diff=22.9 novel_bal=19.2 | ties train:3 novel:0 | n_same/diff train 58/42 novel 52/48
+  frozen w15 t600: => SDGEN mode=frozen seed=15 trialseed=600 train_same=39.6 train_diff=21.3 train_bal=30.4 novel_same=62.7 novel_diff=75.5 novel_bal=69.1 | ties train:0 novel:0 | n_same/diff train 53/47 novel 51/49
+  learn w16 t600: => SDGEN mode=learn seed=16 trialseed=600 train_same=72.2 train_diff=45.7 train_bal=58.9 novel_same=36.0 novel_diff=26.0 novel_bal=31.0 | ties train:0 novel:0 | n_same/diff train 54/46 novel 50/50
+  learn w16 t601: => SDGEN mode=learn seed=16 trialseed=601 train_same=20.4 train_diff=82.6 train_bal=51.5 novel_same=36.0 novel_diff=40.0 novel_bal=38.0 | ties train:0 novel:0 | n_same/diff train 54/46 novel 50/50
+  frozen w16 t600: => SDGEN mode=frozen seed=16 trialseed=600 train_same=45.8 train_diff=42.3 train_bal=44.1 novel_same=100.0 novel_diff=30.0 novel_bal=65.0 | ties train:21 novel:0 | n_same/diff train 48/52 novel 50/50
+  learn w17 t600: => SDGEN mode=learn seed=17 trialseed=600 train_same=100.0 train_diff=0.0 train_bal=50.0 novel_same=100.0 novel_diff=0.0 novel_bal=50.0 | ties train:0 novel:0 | n_same/diff train 52/48 novel 54/46
+  learn w17 t601: => SDGEN mode=learn seed=17 trialseed=601 train_same=100.0 train_diff=6.2 train_bal=53.1 novel_same=91.1 novel_diff=13.6 novel_bal=52.4 | ties train:0 novel:17 | n_same/diff train 52/48 novel 56/44
+  frozen w17 t600: => SDGEN mode=frozen seed=17 trialseed=600 train_same=85.2 train_diff=28.3 train_bal=56.7 novel_same=52.8 novel_diff=89.4 novel_bal=71.1 | ties train:4 novel:0 | n_same/diff train 54/46 novel 53/47
+[E124] 전체 루프 종료
+=== 종료코드 0 ===
