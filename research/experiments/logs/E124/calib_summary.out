@@ -1,0 +1,17 @@
+  => SDKC seed=18 sens_kc_p=0.020 sens_kc_w=4.00 | KC(S) 94.2 KC(H1) 27.8 KC(H2) 24.8 | 결합전용 41.8 (44.3% of KC(S)) | S∩(H1∪H2) 52.5 | jaccard(S_i,D_i,i+1) 41.6
+  => SDKC seed=18 sens_kc_p=0.020 sens_kc_w=2.00 | KC(S) 86.2 KC(H1) 27.8 KC(H2) 24.8 | 결합전용 36.2 (42.0% of KC(S)) | S∩(H1∪H2) 50.0 | jaccard(S_i,D_i,i+1) 30.3
+  => SDKC seed=18 sens_kc_p=0.100 sens_kc_w=4.00 | KC(S) 465.0 KC(H1) 363.2 KC(H2) 350.2 | 결합전용 0.0 (0.0% of KC(S)) | S∩(H1∪H2) 465.0 | jaccard(S_i,D_i,i+1) 66.4
+  => SDKC seed=18 sens_kc_p=0.100 sens_kc_w=2.00 | KC(S) 274.8 KC(H1) 112.5 KC(H2) 97.8 | 결합전용 106.8 (38.9% of KC(S)) | S∩(H1∪H2) 168.0 | jaccard(S_i,D_i,i+1) 51.1
+  => SDKC seed=18 sens_kc_p=0.100 sens_kc_w=1.50 | KC(S) 140.0 KC(H1) 41.2 KC(H2) 43.5 | 결합전용 71.2 (50.9% of KC(S)) | S∩(H1∪H2) 68.8 | jaccard(S_i,D_i,i+1) 36.4
+  => SDKC seed=18 sens_kc_p=0.100 sens_kc_w=1.00 | KC(S) 59.2 KC(H1) 99.5 KC(H2) 50.2 | 결합전용 7.2 (12.2% of KC(S)) | S∩(H1∪H2) 52.0 | jaccard(S_i,D_i,i+1) 27.7
+  => SDKC seed=18 sens_kc_p=0.200 sens_kc_w=1.00 | KC(S) 305.8 KC(H1) 71.5 KC(H2) 53.8 | 결합전용 192.5 (63.0% of KC(S)) | S∩(H1∪H2) 113.2 | jaccard(S_i,D_i,i+1) 51.9
+  => SDKC seed=18 sens_kc_p=0.200 sens_kc_w=0.70 | KC(S) 180.0 KC(H1) 130.8 KC(H2) 115.5 | 결합전용 28.0 (15.6% of KC(S)) | S∩(H1∪H2) 152.0 | jaccard(S_i,D_i,i+1) 42.8
+  => SDKC seed=19 sens_kc_p=0.020 sens_kc_w=4.00 | KC(S) 92.0 KC(H1) 27.5 KC(H2) 25.0 | 결합전용 39.8 (43.2% of KC(S)) | S∩(H1∪H2) 52.2 | jaccard(S_i,D_i,i+1) 35.5
+  => SDKC seed=19 sens_kc_p=0.020 sens_kc_w=2.00 | KC(S) 92.0 KC(H1) 27.5 KC(H2) 25.0 | 결합전용 39.8 (43.2% of KC(S)) | S∩(H1∪H2) 52.2 | jaccard(S_i,D_i,i+1) 35.5
+  => SDKC seed=19 sens_kc_p=0.100 sens_kc_w=4.00 | KC(S) 466.2 KC(H1) 362.2 KC(H2) 348.2 | 결합전용 0.0 (0.0% of KC(S)) | S∩(H1∪H2) 466.2 | jaccard(S_i,D_i,i+1) 61.8
+  => SDKC seed=19 sens_kc_p=0.100 sens_kc_w=2.00 | KC(S) 280.2 KC(H1) 131.2 KC(H2) 121.5 | 결합전용 83.5 (29.8% of KC(S)) | S∩(H1∪H2) 196.8 | jaccard(S_i,D_i,i+1) 46.6
+  => SDKC seed=19 sens_kc_p=0.100 sens_kc_w=1.50 | KC(S) 136.0 KC(H1) 40.0 KC(H2) 39.2 | 결합전용 71.2 (52.4% of KC(S)) | S∩(H1∪H2) 64.8 | jaccard(S_i,D_i,i+1) 35.1
+  => SDKC seed=19 sens_kc_p=0.100 sens_kc_w=1.00 | KC(S) 56.2 KC(H1) 55.2 KC(H2) 80.0 | 결합전용 6.8 (12.0% of KC(S)) | S∩(H1∪H2) 49.5 | jaccard(S_i,D_i,i+1) 23.1
+  => SDKC seed=19 sens_kc_p=0.200 sens_kc_w=1.00 | KC(S) 260.5 KC(H1) 55.2 KC(H2) 75.8 | 결합전용 147.0 (56.4% of KC(S)) | S∩(H1∪H2) 113.5 | jaccard(S_i,D_i,i+1) 44.1
+  => SDKC seed=19 sens_kc_p=0.200 sens_kc_w=0.70 | KC(S) 188.2 KC(H1) 132.5 KC(H2) 120.2 | 결합전용 27.2 (14.5% of KC(S)) | S∩(H1∪H2) 161.0 | jaccard(S_i,D_i,i+1) 37.9
+[E124 보정] 종료

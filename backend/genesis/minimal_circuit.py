@@ -251,6 +251,17 @@ def make_samediff(args):
     return codes, pats
 
 
+def samediff_halves(args, codes):
+    """E124 경로 검사용: 항목 i 를 한쪽 반쪽에만 놓은 패턴(훈련·평가에 안 쓴다)."""
+    h = args.n_sens // 2
+    out = {}
+    for i, c in enumerate(codes):
+        q1 = np.zeros(args.n_sens); q1[c] = 1
+        q2 = np.zeros(args.n_sens); q2[h + c] = 1
+        out["H1_%d" % i], out["H2_%d" % i] = q1, q2
+    return out
+
+
 def register_exemplar(key, arr, cat):
     PATTERNS[key] = arr
     RULE[key] = RULE[cat]
@@ -465,6 +476,8 @@ def main():
     ap.add_argument("--sd-items", type=int, default=8, help="E124: 항목 수(앞 sd-train-items 개만 훈련)")
     ap.add_argument("--sd-train-items", type=int, default=4)
     ap.add_argument("--sd-frac", type=float, default=0.3, help="E124: 반쪽 안 항목 코드 활성 비율")
+    ap.add_argument("--probe-sd", action="store_true",
+                    help="E124 경로 검사: 학습 전 같음 쌍 S_i 와 반쪽 단독 H1_i·H2_i 의 KC 집합 — 결합(AND) KC 비율 측정 후 종료")
     ap.add_argument("--probe-ex", action="store_true",
                     help="E122 경로 검사: 학습 전 원형·사례의 KC 집합 자카드만 재고 종료")
     a = ap.parse_args()
@@ -588,6 +601,27 @@ def main():
         m.pull_recording_buffers_from_device()
         return (len(pops["out_l"].spike_recording_data[0][1]), len(pops["out_r"].spike_recording_data[0][1]),
                 set(np.asarray(pops["kc"].spike_recording_data[0][1], dtype=int).tolist()))
+
+    if a.probe_sd:
+        if SD is None:
+            raise SystemExit("--probe-sd 는 --samediff 가 필요하다")
+        for key, q in samediff_halves(a, SD).items():
+            PATTERNS[key] = q
+        rows = []
+        for i in range(a.sd_train_items):
+            kS = present("S%d" % i)[2]; k1 = present("H1_%d" % i)[2]; k2 = present("H2_%d" % i)[2]
+            j = (i + 1) % a.sd_train_items
+            kD = present("D%d_%d" % (i, j))[2]
+            union = k1 | k2
+            conj = kS - union                    # 양쪽이 함께일 때만 켜지는 KC(결합)
+            rows.append((len(kS), len(k1), len(k2), len(conj), len(kS & union),
+                         len(kS & kD) / len(kS | kD) * 100 if (kS | kD) else float("nan")))
+        r = np.array(rows, dtype=float)
+        print("=> SDKC seed=%d sens_kc_p=%.3f sens_kc_w=%.2f | KC(S) %.1f KC(H1) %.1f KC(H2) %.1f | 결합전용 %.1f (%.1f%% of KC(S)) | S∩(H1∪H2) %.1f | jaccard(S_i,D_i,i+1) %.1f"
+              % (a.seed, a.sens_kc_p, a.sens_kc_w, r[:, 0].mean(), r[:, 1].mean(), r[:, 2].mean(), r[:, 3].mean(),
+                 100 * r[:, 3].sum() / max(r[:, 0].sum(), 1), r[:, 4].mean(), r[:, 5].mean()))
+        apply_stim(pops, a, None)
+        return
 
     if a.probe_ex:
         if EX is None:

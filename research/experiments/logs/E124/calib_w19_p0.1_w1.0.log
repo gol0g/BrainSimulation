@@ -1,0 +1,4 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~7(평균 4.5), 새↔훈련 겹침 2~7, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e124_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e124_run/minimal_circuit_CODE'
+=> SDKC seed=19 sens_kc_p=0.100 sens_kc_w=1.00 | KC(S) 56.2 KC(H1) 55.2 KC(H2) 80.0 | 결합전용 6.8 (12.0% of KC(S)) | S∩(H1∪H2) 49.5 | jaccard(S_i,D_i,i+1) 23.1
