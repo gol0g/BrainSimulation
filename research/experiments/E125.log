@@ -1,0 +1,29 @@
+=== E125 실행: 2026-09-28T14:50:47Z ===
+커맨드: bash scripts/e125_main.sh
+---
+  h1 learn w10 t600: => SDLAB rule=half1 mode=learn seed=10 trialseed=600 train_accL=93.2 train_accR=100.0 train_lbal=96.6 novel_accL=68.0 novel_accR=34.0 novel_lbal=51.0
+  h1 learn w10 t601: => SDLAB rule=half1 mode=learn seed=10 trialseed=601 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=68.0 novel_accR=0.0 novel_lbal=34.0
+  h1 frozen w10 t600: => SDLAB rule=half1 mode=frozen seed=10 trialseed=600 train_accL=50.0 train_accR=69.6 train_lbal=59.8 novel_accL=72.0 novel_accR=42.0 novel_lbal=57.0
+  h1 learn w11 t600: => SDLAB rule=half1 mode=learn seed=11 trialseed=600 train_accL=80.0 train_accR=100.0 train_lbal=90.0 novel_accL=12.5 novel_accR=59.6 novel_lbal=36.1
+  h1 learn w11 t601: => SDLAB rule=half1 mode=learn seed=11 trialseed=601 train_accL=92.0 train_accR=100.0 train_lbal=96.0 novel_accL=12.5 novel_accR=69.2 novel_lbal=40.9
+  h1 frozen w11 t600: => SDLAB rule=half1 mode=frozen seed=11 trialseed=600 train_accL=14.0 train_accR=90.0 train_lbal=52.0 novel_accL=51.1 novel_accR=98.1 novel_lbal=74.6
+  h1 learn w12 t600: => SDLAB rule=half1 mode=learn seed=12 trialseed=600 train_accL=100.0 train_accR=38.5 train_lbal=69.2 novel_accL=100.0 novel_accR=0.0 novel_lbal=50.0
+  h1 learn w12 t601: => SDLAB rule=half1 mode=learn seed=12 trialseed=601 train_accL=100.0 train_accR=35.9 train_lbal=67.9 novel_accL=100.0 novel_accR=0.0 novel_lbal=50.0
+  h1 frozen w12 t600: => SDLAB rule=half1 mode=frozen seed=12 trialseed=600 train_accL=44.1 train_accR=31.7 train_lbal=37.9 novel_accL=23.9 novel_accR=16.7 novel_lbal=20.3
+  h1 learn w13 t600: => SDLAB rule=half1 mode=learn seed=13 trialseed=600 train_accL=93.3 train_accR=98.2 train_lbal=95.8 novel_accL=100.0 novel_accR=3.7 novel_lbal=51.9
+  h1 learn w13 t601: => SDLAB rule=half1 mode=learn seed=13 trialseed=601 train_accL=93.3 train_accR=98.2 train_lbal=95.8 novel_accL=100.0 novel_accR=3.7 novel_lbal=51.9
+  h1 frozen w13 t600: => SDLAB rule=half1 mode=frozen seed=13 trialseed=600 train_accL=56.2 train_accR=51.9 train_lbal=54.1 novel_accL=78.3 novel_accR=3.7 novel_lbal=41.0
+  h1 learn w14 t600: => SDLAB rule=half1 mode=learn seed=14 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=56.2 novel_accR=53.8 novel_lbal=55.0
+  h1 learn w14 t601: => SDLAB rule=half1 mode=learn seed=14 trialseed=601 train_accL=100.0 train_accR=66.0 train_lbal=83.0 novel_accL=67.3 novel_accR=0.0 novel_lbal=33.7
+  h1 frozen w14 t600: => SDLAB rule=half1 mode=frozen seed=14 trialseed=600 train_accL=35.3 train_accR=65.3 train_lbal=50.3 novel_accL=51.1 novel_accR=58.5 novel_lbal=54.8
+  h1 learn w15 t600: => SDLAB rule=half1 mode=learn seed=15 trialseed=600 train_accL=100.0 train_accR=63.6 train_lbal=81.8 novel_accL=58.1 novel_accR=10.5 novel_lbal=34.3
+  h1 learn w15 t601: => SDLAB rule=half1 mode=learn seed=15 trialseed=601 train_accL=100.0 train_accR=63.6 train_lbal=81.8 novel_accL=72.1 novel_accR=10.5 novel_lbal=41.3
+  h1 frozen w15 t600: => SDLAB rule=half1 mode=frozen seed=15 trialseed=600 train_accL=88.9 train_accR=67.3 train_lbal=78.1 novel_accL=9.3 novel_accR=29.8 novel_lbal=19.6
+  h1 learn w16 t600: => SDLAB rule=half1 mode=learn seed=16 trialseed=600 train_accL=100.0 train_accR=87.3 train_lbal=93.6 novel_accL=70.0 novel_accR=34.0 novel_lbal=52.0
+  h1 learn w16 t601: => SDLAB rule=half1 mode=learn seed=16 trialseed=601 train_accL=100.0 train_accR=27.5 train_lbal=63.7 novel_accL=100.0 novel_accR=0.0 novel_lbal=50.0
+  h1 frozen w16 t600: => SDLAB rule=half1 mode=frozen seed=16 trialseed=600 train_accL=58.1 train_accR=52.6 train_lbal=55.4 novel_accL=82.4 novel_accR=12.2 novel_lbal=47.3
+  h1 learn w17 t600: => SDLAB rule=half1 mode=learn seed=17 trialseed=600 train_accL=100.0 train_accR=73.2 train_lbal=86.6 novel_accL=97.8 novel_accR=0.0 novel_lbal=48.9
+  h1 learn w17 t601: => SDLAB rule=half1 mode=learn seed=17 trialseed=601 train_accL=100.0 train_accR=0.0 train_lbal=50.0 novel_accL=100.0 novel_accR=0.0 novel_lbal=50.0
+  h1 frozen w17 t600: => SDLAB rule=half1 mode=frozen seed=17 trialseed=600 train_accL=65.9 train_accR=10.7 train_lbal=38.3 novel_accL=32.6 novel_accR=66.7 novel_lbal=49.6
+[E125] 전체 루프 종료
+=== 종료코드 0 ===
