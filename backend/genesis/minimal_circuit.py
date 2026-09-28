@@ -483,6 +483,9 @@ def main():
     ap.add_argument("--sd-items", type=int, default=8, help="E124: 항목 수(앞 sd-train-items 개만 훈련)")
     ap.add_argument("--sd-train-items", type=int, default=4)
     ap.add_argument("--sd-frac", type=float, default=0.3, help="E124: 반쪽 안 항목 코드 활성 비율")
+    ap.add_argument("--sd-diff", default="all", choices=("all", "cyclic"),
+                    help="E126: 훈련 다름 쌍. all=훈련 항목의 모든 다름 쌍(E124, 같음 4 vs 다름 12) / "
+                         "cyclic=순환 짝 (i, i+1 mod T) 만(같음 4 vs 다름 4 균형). 훈련 집합 평가도 훈련 자극만")
     ap.add_argument("--sd-rule", default="samediff", choices=("samediff", "half1"),
                     help="E125: 라벨 규칙. samediff=같음→L(E124) / half1=반쪽1 항목이 앞 절반이면 L(같은 자극, 선형 분리 가능)")
     ap.add_argument("--probe-sd", action="store_true",
@@ -677,6 +680,8 @@ def main():
                 _i = EX_RNG.randrange(a.sd_train_items)
                 if stim == "A":
                     stim = "S%d" % _i
+                elif a.sd_diff == "cyclic":
+                    stim = "D%d_%d" % (_i, (_i + 1) % a.sd_train_items)
                 else:
                     _j = EX_RNG.randrange(a.sd_train_items - 1)
                     stim = "D%d_%d" % (_i, _j if _j < _i else _j + 1)
@@ -780,6 +785,8 @@ def main():
                 _i = _xr.randrange(lo, hi)
                 if same:
                     key = "S%d" % _i
+                elif setname == "train" and a.sd_diff == "cyclic":
+                    key = "D%d_%d" % (_i, lo + ((_i - lo + 1) % (hi - lo)))
                 else:
                     _j = _xr.randrange(lo, hi - 1)
                     _j = _j if _j < _i else _j + 1
@@ -804,8 +811,8 @@ def main():
                  res["train"][0], res["train"][1], res["train"][2], res["novel"][0], res["novel"][1], res["novel"][2],
                  res["train"][3], res["novel"][3], res["train"][4], res["train"][5], res["novel"][4], res["novel"][5]))
         # E125: 라벨(L/R) 균형 정답률 — 규칙이 samediff 면 위 균형과 같다(라벨 = 같음/다름)
-        print("=> SDLAB rule=%s mode=%s seed=%d trialseed=%s train_accL=%.1f train_accR=%.1f train_lbal=%.1f novel_accL=%.1f novel_accR=%.1f novel_lbal=%.1f"
-              % (a.sd_rule, a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
+        print("=> SDLAB diff=%s rule=%s mode=%s seed=%d trialseed=%s train_accL=%.1f train_accR=%.1f train_lbal=%.1f novel_accL=%.1f novel_accR=%.1f novel_lbal=%.1f"
+              % (a.sd_diff, a.sd_rule, a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
                  res["train"][6], res["train"][7], res["train"][8], res["novel"][6], res["novel"][7], res["novel"][8]))
     if EX is not None:
         # E122: 미학습 사례 평가 — 원형 평가(위, 원형은 훈련에 안 나옴) 뒤, 별도 난수열. 탐색·학습 없음.
