@@ -1,0 +1,29 @@
+=== E129 실행: 2026-09-29T00:51:33Z ===
+커맨드: bash scripts/e129_main.sh
+---
+  cp learn w10 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=10 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=80.0 novel_lbal=90.0
+  cp learn w10 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=10 trialseed=601 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=78.0 novel_lbal=89.0
+  cp frozen w10 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=10 trialseed=600 train_accL=35.6 train_accR=83.6 train_lbal=59.6 novel_accL=40.8 novel_accR=49.0 novel_lbal=44.9
+  cp learn w11 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=11 trialseed=600 train_accL=100.0 train_accR=67.4 train_lbal=83.7 novel_accL=100.0 novel_accR=69.6 novel_lbal=84.8
+  cp learn w11 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=11 trialseed=601 train_accL=100.0 train_accR=67.4 train_lbal=83.7 novel_accL=100.0 novel_accR=69.6 novel_lbal=84.8
+  cp frozen w11 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=11 trialseed=600 train_accL=62.7 train_accR=73.2 train_lbal=67.9 novel_accL=55.8 novel_accR=45.8 novel_lbal=50.8
+  cp learn w12 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=12 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=88.2 novel_lbal=94.1
+  cp learn w12 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=12 trialseed=601 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=88.2 novel_lbal=94.1
+  cp frozen w12 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=12 trialseed=600 train_accL=52.2 train_accR=57.4 train_lbal=54.8 novel_accL=76.9 novel_accR=29.2 novel_lbal=53.0
+  cp learn w13 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=13 trialseed=600 train_accL=100.0 train_accR=67.6 train_lbal=83.8 novel_accL=100.0 novel_accR=63.0 novel_lbal=81.5
+  cp learn w13 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=13 trialseed=601 train_accL=100.0 train_accR=67.6 train_lbal=83.8 novel_accL=100.0 novel_accR=66.0 novel_lbal=83.0
+  cp frozen w13 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=13 trialseed=600 train_accL=66.7 train_accR=0.0 train_lbal=33.3 novel_accL=55.6 novel_accR=63.0 novel_lbal=59.3
+  cp learn w14 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=14 trialseed=600 train_accL=100.0 train_accR=86.3 train_lbal=93.1 novel_accL=100.0 novel_accR=83.7 novel_lbal=91.8
+  cp learn w14 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=14 trialseed=601 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=90.0 novel_lbal=95.0
+  cp frozen w14 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=14 trialseed=600 train_accL=22.4 train_accR=86.3 train_lbal=54.4 novel_accL=23.9 novel_accR=64.8 novel_lbal=44.4
+  cp learn w15 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=15 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=91.3 novel_lbal=95.7
+  cp learn w15 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=15 trialseed=601 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=100.0 novel_lbal=100.0
+  cp frozen w15 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=15 trialseed=600 train_accL=0.0 train_accR=64.7 train_lbal=32.4 novel_accL=42.9 novel_accR=91.4 novel_lbal=67.1
+  cp learn w16 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=16 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=94.2 novel_lbal=97.1
+  cp learn w16 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=16 trialseed=601 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=100.0 novel_lbal=100.0
+  cp frozen w16 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=16 trialseed=600 train_accL=68.5 train_accR=56.5 train_lbal=62.5 novel_accL=49.0 novel_accR=56.9 novel_lbal=52.9
+  cp learn w17 t600: => SDLAB diff=cyclic rule=samediff mode=learn seed=17 trialseed=600 train_accL=100.0 train_accR=62.5 train_lbal=81.2 novel_accL=100.0 novel_accR=58.7 novel_lbal=79.3
+  cp learn w17 t601: => SDLAB diff=cyclic rule=samediff mode=learn seed=17 trialseed=601 train_accL=100.0 train_accR=62.5 train_lbal=81.2 novel_accL=100.0 novel_accR=73.3 novel_lbal=86.7
+  cp frozen w17 t600: => SDLAB diff=cyclic rule=samediff mode=frozen seed=17 trialseed=600 train_accL=66.7 train_accR=55.0 train_lbal=60.8 novel_accL=69.0 novel_accR=69.0 novel_lbal=69.0
+[E129] 전체 루프 종료
+=== 종료코드 0 ===
