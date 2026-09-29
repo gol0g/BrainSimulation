@@ -119,6 +119,22 @@ def build(args):
             init_postsynaptic("ExpCurr", {"tau": 5.0}))
         _sg.set_sparse_connections(_pre, _post)
         KCWIRE["pre"], KCWIRE["post"] = _pre, _post
+    elif getattr(args, "kc_wiring", "random") == "developed":
+        # E130: develop_comparator 로 형성한 연결(일치형 흥분 2 / 불일치형 흥분 1·억제 1) — comparator 와 같은 3집단 구조
+        _a, _b, _e, _i, _st = develop_comparator(args)
+        KCWIRE["dev_stats"] = _st
+        _nm = args.n_kc // 2
+        _mk = np.arange(_nm); _xk = np.arange(_nm, args.n_kc)
+        def _mk_pop2(name, pre, post, w):
+            sg_ = m.add_synapse_population(
+                name, "SPARSE", pops["sens"], pops["kc"],
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}))
+            sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
+        _mk_pop2("sens_kc", np.concatenate([_a, _b]), np.concatenate([_mk, _mk]), args.sens_kc_w)
+        _mk_pop2("sens_kc_mx", _e, _xk, args.mismatch_w)
+        _mk_pop2("sens_kc_mi", _i, _xk, -args.mismatch_w)
+        KCWIRE["n_match"], KCWIRE["n_mis"] = int(_nm), int(args.n_kc - _nm)
     elif getattr(args, "kc_wiring", "random") == "comparator":
         # E129: 비교기 배선. KC 앞 절반 = 일치 KC(반쪽1 위치 p + 반쪽2 위치 p, 둘 다 흥분 w=sens_kc_w),
         # 뒤 절반 = 불일치 KC(한 반쪽 위치 p 흥분 +mismatch_w, 다른 반쪽 같은 위치 p 억제 −mismatch_w; 방향은 KC 마다 번갈아).
@@ -304,6 +320,42 @@ def samediff_halves(args, codes):
         q2 = np.zeros(args.n_sens); q2[h + c] = 1
         out["H1_%d" % i], out["H2_%d" % i] = q1, q2
     return out
+
+
+def develop_comparator(args):
+    """E130: 비교 특징의 경험 형성(구조 가소성, 호스트 계산). 과제와 무관한 발달 항목 묶음(RandomState 6000+seed)을
+    두 반쪽에 노출한다 — corr: 같은 항목을 양쪽에(상관 환경), indep: 양쪽 독립 항목. 규칙(KC 자신의 입력 활동만 사용 — 국소):
+      일치형 KC(흥분 a∈반쪽1, 흥분 b∈반쪽2): 라운드마다 a·b 동시활성 비율 < θ 이면 b 를 반쪽2 무작위 위치로 재배선.
+      불일치형 KC(흥분 e, 억제 i, 다른 반쪽): e·i 동시활성 비율 < θ 이면 i 재배선(억제는 흥분과 자주 함께 켜지는 입력에 남는다 — 예측 억제).
+    초기 위치는 무작위(RandomState 5000+seed). 반환: 일치 (a, b) 와 불일치 (e, i) 절대 입력 인덱스, 진단 통계."""
+    h = args.n_sens // 2
+    rs0 = np.random.RandomState(5000 + args.seed)
+    rsd = np.random.RandomState(6000 + args.seed)
+    nm = args.n_kc // 2
+    nx = args.n_kc - nm
+    k = int(round(args.sd_frac * h))
+    items = [np.sort(rsd.choice(h, k, replace=False)) for _ in range(args.dev_items)]
+    a = rs0.randint(0, h, nm); b = h + rs0.randint(0, h, nm)
+    dirx = (np.arange(nm, args.n_kc) % 2 == 0)
+    e = np.where(dirx, rs0.randint(0, h, nx), h + rs0.randint(0, h, nx))
+    i_ = np.where(dirx, h + rs0.randint(0, h, nx), rs0.randint(0, h, nx))
+    for _r in range(args.dev_rounds):
+        X = np.zeros((args.dev_exposures, args.n_sens), dtype=bool)
+        for t in range(args.dev_exposures):
+            x = rsd.randint(args.dev_items)
+            y = x if args.dev_env == "corr" else rsd.randint(args.dev_items)
+            X[t, items[x]] = True
+            X[t, h + items[y]] = True
+        cm = (X[:, a] & X[:, b]).mean(0)
+        bad = cm < args.dev_theta
+        b[bad] = h + rsd.randint(0, h, int(bad.sum()))
+        cx = (X[:, e] & X[:, i_]).mean(0)
+        badx = cx < args.dev_theta
+        other_half = np.where(e < h, h, 0)
+        i_[badx] = other_half[badx] + rsd.randint(0, h, int(badx.sum()))
+    stats = {"match_same_pos": float(np.mean((b - h) == a)),
+             "mis_same_pos": float(np.mean((i_ % h) == (e % h)))}
+    return a, b, e, i_, stats
 
 
 def register_exemplar(key, arr, cat):
@@ -525,7 +577,13 @@ def main():
                          "cyclic=순환 짝 (i, i+1 mod T) 만(같음 4 vs 다름 4 균형). 훈련 집합 평가도 훈련 자극만")
     ap.add_argument("--mismatch-w", type=float, default=8.0,
                     help="E129: comparator 배선의 불일치 KC 흥분/억제 가중치 크기")
-    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator"),
+    ap.add_argument("--dev-env", default="corr", choices=("corr", "indep"),
+                    help="E130: 발달 환경. corr=같은 항목을 두 반쪽에(상관) / indep=두 반쪽 독립 항목")
+    ap.add_argument("--dev-items", type=int, default=20, help="E130: 발달 항목 수(과제 항목과 별도 난수열)")
+    ap.add_argument("--dev-rounds", type=int, default=300, help="E130: 구조 가소성 라운드 수")
+    ap.add_argument("--dev-exposures", type=int, default=200, help="E130: 라운드당 노출 수")
+    ap.add_argument("--dev-theta", type=float, default=0.2, help="E130: 동시활성 비율 문턱(미만이면 재배선)")
+    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator", "developed"),
                     help="E128: 감각→KC 배선. random=FixedProbability(--sens-kc-p, K50) / crosshalf=KC 마다 반쪽1·반쪽2 에서 1개씩(교차 결합)")
     ap.add_argument("--sd-credit", action="store_true",
                     help="E127(읽기 전용, 평가 뒤): 훈련 자극별 KC 반응 집합으로 KC 를 L전용·R전용·양쪽으로 나눠 "
@@ -620,6 +678,22 @@ def main():
         _n2 = np.bincount(_po[_pi >= _h], minlength=a.n_kc)[:a.n_kc]
         print("[KC배선] crosshalf: 연결 %d개, KC %d 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC %d, w=%.2f"
               % (_pi.size, a.n_kc, int(((_n1 == 1) & (_n2 == 1)).sum()), a.sens_kc_w))
+    if a.kc_wiring == "developed":
+        # E130 경로 검사(읽기 전용): 발달 후 같은 위치 짝 비율(장치 연결에서 다시 읽음)
+        _h = a.n_sens // 2
+        def _rd2(nm):
+            sg_ = m.synapse_populations[nm]; sg_.pull_connectivity_from_device()
+            return np.asarray(sg_.get_sparse_pre_inds(), dtype=np.int64), np.asarray(sg_.get_sparse_post_inds(), dtype=np.int64)
+        mp, mq = _rd2("sens_kc"); ep, eq = _rd2("sens_kc_mx"); ip, iq = _rd2("sens_kc_mi")
+        sp = 0
+        for k in range(KCWIRE["n_match"]):
+            pr = np.sort(mp[mq == k]); sp += int(pr.size == 2 and pr[1] - _h == pr[0])
+        eo = np.full(a.n_kc, -1); eo[eq] = ep; io = np.full(a.n_kc, -1); io[iq] = ip
+        xs = np.arange(KCWIRE["n_match"], a.n_kc)
+        sx = int(np.sum((eo[xs] % _h) == (io[xs] % _h)))
+        print("[KC발달] env=%s rounds=%d exposures=%d theta=%.2f items=%d | 일치형 같은 위치 %d/%d | 불일치형 같은 위치 %d/%d | (호스트 계산 %.3f/%.3f)"
+              % (a.dev_env, a.dev_rounds, a.dev_exposures, a.dev_theta, a.dev_items, sp, KCWIRE["n_match"], sx, KCWIRE["n_mis"],
+                 KCWIRE["dev_stats"]["match_same_pos"], KCWIRE["dev_stats"]["mis_same_pos"]))
     if a.kc_wiring == "comparator":
         # E129 경로 검사(읽기 전용): 일치 KC 는 반쪽1 p·반쪽2 p(같은 위치), 불일치 KC 는 흥분 1·억제 1(같은 위치, 다른 반쪽)
         _h = a.n_sens // 2
@@ -930,7 +1004,7 @@ def main():
             print("=> SDRATE mode=%s seed=%d trialseed=%s | kc_spikes_per_stim 평균 %.1f | active_kc_per_stim 평균 %.1f | both_spike_share(양쪽 KC 스파이크/전체) %.3f | rate_margin_ok=%d/%d"
                   % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, float(tot_sp.mean()),
                      float(np.mean([len(ks[k]) for k in tr])), float(both_sp.sum() / max(tot_sp.sum(), 1)), rm_ok, len(tr)))
-            if a.kc_wiring == "comparator":
+            if a.kc_wiring in ("comparator", "developed"):
                 # E129: 같음 자극에서 활성 KC 중 일치 KC 몫, 다름 자극에서 불일치 KC 몫(평균). 새 항목(평가 전용)도 함께.
                 nm_ = KCWIRE["n_match"]
                 def _sh(keys):

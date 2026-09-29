@@ -1,0 +1,6 @@
+[회귀 — E124 learn w10 t600 SDGEN 과 같아야]
+=> SDGEN mode=learn seed=10 trialseed=600 train_same=0.0 train_diff=100.0 train_bal=50.0 novel_same=32.7 novel_diff=81.2 novel_bal=57.0 | ties train:0 novel:3 | n_same/diff train 49/51 novel 52/48
+[developed 표현(학습 없음) — 배선 18]
+  corr: [KC발달] env=corr rounds=1000 exposures=200 theta=0.15 items=20 | 일치형 같은 위치 225/400 | 불일치형 같은 위치 223/400 | (호스트 계산 0.562/0.557) || 훈련 같음: 일치KC 몫 0.647 | 훈련 다름: 불일치KC 몫 0.702 | 새 같음: 일치KC 몫 0.744 | 새 다름: 불일치KC 몫 0.586
+  indep: [KC발달] env=indep rounds=1000 exposures=200 theta=0.15 items=20 | 일치형 같은 위치 9/400 | 불일치형 같은 위치 5/400 | (호스트 계산 0.022/0.013) || 훈련 같음: 일치KC 몫 0.264 | 훈련 다름: 불일치KC 몫 0.760 | 새 같음: 일치KC 몫 0.314 | 새 다름: 불일치KC 몫 0.710
+[E130 경로 검사] 종료

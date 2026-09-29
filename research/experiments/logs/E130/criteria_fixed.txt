@@ -1,0 +1,9 @@
+E130 사전 판정 기준 고정 — 2026-09-29 23:31:07 (GPU 경로 검사·본실험 결과 판독 전)
+설계: --kc-wiring developed(--dev-theta 0.15 --dev-rounds 1000 --dev-exposures 200 --dev-items 20, mismatch-w 8, sens-kc-w 4) × 발달 환경 corr / indep.
+      K50 학습 규칙, 균형 같음/다름 cyclic 800시행. corr learn 배선 10~17 × 600·601(16), indep learn 같은 16, corr frozen 10~17 × 600(8).
+조작검증: 장치 연결의 일치형 같은 위치 비율 corr ≥0.40 (8/8 배선), indep ≤0.05 (8/8). 실패 → 보류.
+주 지표: 처음 보는 항목(4~7) 라벨 균형 novel_lbal ≥75% 런 수.
+  경험 형성 지지: corr learn ≥12/16 그리고 indep learn ≤4/16 그리고 corr frozen ≤2/8.
+  형성 부족: corr learn ≤4/16.
+  그 밖 보류.
+부지표: 훈련 획득(train ≥80%), SDCOMP 분리, E129(배선으로 준 비교기) 대비.
