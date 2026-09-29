@@ -1,0 +1,31 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~8(평균 4.7), 새↔훈련 겹침 3~8, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e128_main_run/minimal_circuit_CODE'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/root/e128_main_run/minimal_circuit_CODE'
+[KC배선] crosshalf: 연결 1600개, KC 800 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC 800, w=4.00
+  시행    1~ 400: 정답률  36.8%
+  시행  401~ 800: 정답률  53.8%
+=> SDGEN mode=learn seed=16 trialseed=601 train_same=100.0 train_diff=68.2 train_bal=84.1 novel_same=61.9 novel_diff=32.8 novel_bal=47.3 | ties train:0 novel:27 | n_same/diff train 56/44 novel 42/58
+=> SDCREDIT mode=learn seed=16 trialseed=601 diff=cyclic | L전용 n=94 dSg=+1.2907 | R전용 n=90 dSg=-0.7555 | 양쪽 n=134 dSg=+0.1249 | margin_sign_ok=8/8 | spec_share(|Σg_L−Σg_R| 중 전용 KC 몫) 평균 0.396
+=> SDRATE mode=learn seed=16 trialseed=601 | kc_spikes_per_stim 평균 67.9 | active_kc_per_stim 평균 67.9 | both_spike_share(양쪽 KC 스파이크/전체) 0.610 | rate_margin_ok=8/8
+=> SDLAB diff=cyclic rule=samediff mode=learn seed=16 trialseed=601 train_accL=100.0 train_accR=68.2 train_lbal=84.1 novel_accL=61.9 novel_accR=32.8 novel_lbal=47.3
+
+=== 평가 (탐색 없음, 학습 없음, 무작위 순서 100시행) : 정답률 28.0% | 동점 53회 ===
+   자극 A: 28/53 (52.8%)
+   자극 B: 0/47 (0.0%)
+
+=== 학습 후 자극별 출력 (선택 이전의 원 신호) ===
+  자극 A → 정답 L | out_L=   7  out_R=   7  차이    +0 | KC 66개
+  자극 B → 정답 R | out_L=  21  out_R=   2  차이   +19 | KC 68개
+
+=== 가중치 구조 (A전용 KC 64개, B전용 KC 66개) ===
+  A전용 KC → out_L 평균 0.5096 | out_R 평균 0.5214 | 차이 -0.0118 (정답은 out_L) **반대**
+  B전용 KC → out_L 평균 0.5152 | out_R 평균 0.5065 | 차이 +0.0087 (정답은 out_R) **반대**
+
+=== 가중치 변화 ===
+  kc_out_l: n=7958 |Δ|평균 0.02568 변화율  40.0% | 평균 0.500→0.517 | std 0.0000→0.0455
+  kc_out_r: n=7861 |Δ|평균 0.01899 변화율  39.8% | 평균 0.500→0.512 | std 0.0000→0.0334
+
+=== 요약 (mode=learn seed=16) ===
+  첫 구간 36.8% → 마지막 구간 53.8% | 변화 +17.0%p | 보상률 45.2%
+=> MINCIRC mode=learn seed=16 first=36.8 last=53.8 delta=+17.0 reward=45.2 **eval=28.0** tie=53 trialseed=601
