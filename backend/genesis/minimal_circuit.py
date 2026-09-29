@@ -46,6 +46,7 @@ PATTERNS = {}
 BASE = [0.0]          # 기대 보상(러닝 평균). 리스트로 둬서 함수 안에서 갱신한다.
 # E102: 시행별 사건 추적(--trace-file). None 이면 아무것도 읽지 않는다 — 동역학 불변(기기에서 읽기만 한다).
 TRACE = None
+KCWIRE = {}          # E128: crosshalf 배선의 명시 연결(경로 검사 출력용)
 
 
 def _pre_sums(s, var, n_pre):
@@ -105,12 +106,26 @@ def build(args):
     pops["out_l"].set_param_dynamic("Ioffset")
     pops["out_r"].set_param_dynamic("Ioffset")
     # 감각 → KC: 고정 스파스. 학습하지 않는다(버섯체: KC 입력은 무작위 고정).
-    m.add_synapse_population(
-        "sens_kc", "SPARSE", pops["sens"], pops["kc"],
-        init_weight_update("StaticPulse", {},
-                           {"g": init_var("Constant", {"constant": args.sens_kc_w})}),
-        init_postsynaptic("ExpCurr", {"tau": 5.0}),
-        init_sparse_connectivity("FixedProbability", {"prob": args.sens_kc_p}))
+    if getattr(args, "kc_wiring", "random") == "crosshalf":
+        # E128: KC 마다 반쪽1 입력 1개 + 반쪽2 입력 1개(교차 결합). 연결은 별도 난수열(RandomState 5000+seed)로 명시 생성.
+        _h = args.n_sens // 2
+        _rs = np.random.RandomState(5000 + args.seed)
+        _pre = np.concatenate([_rs.randint(0, _h, args.n_kc), _h + _rs.randint(0, _h, args.n_kc)]).astype(np.uint32)
+        _post = np.concatenate([np.arange(args.n_kc), np.arange(args.n_kc)]).astype(np.uint32)
+        _sg = m.add_synapse_population(
+            "sens_kc", "SPARSE", pops["sens"], pops["kc"],
+            init_weight_update("StaticPulse", {},
+                               {"g": init_var("Constant", {"constant": args.sens_kc_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}))
+        _sg.set_sparse_connections(_pre, _post)
+        KCWIRE["pre"], KCWIRE["post"] = _pre, _post
+    else:
+        m.add_synapse_population(
+            "sens_kc", "SPARSE", pops["sens"], pops["kc"],
+            init_weight_update("StaticPulse", {},
+                               {"g": init_var("Constant", {"constant": args.sens_kc_w})}),
+            init_postsynaptic("ExpCurr", {"tau": 5.0}),
+            init_sparse_connectivity("FixedProbability", {"prob": args.sens_kc_p}))
 
     # KC 전역 억제 — 스파스 코딩을 강제한다(실제 버섯체의 APL 피드백).
     # 이것이 없으면 KC가 800개 중 798개 발화해 스파스 확장이 무의미해진다(실측).
@@ -486,6 +501,8 @@ def main():
     ap.add_argument("--sd-diff", default="all", choices=("all", "cyclic"),
                     help="E126: 훈련 다름 쌍. all=훈련 항목의 모든 다름 쌍(E124, 같음 4 vs 다름 12) / "
                          "cyclic=순환 짝 (i, i+1 mod T) 만(같음 4 vs 다름 4 균형). 훈련 집합 평가도 훈련 자극만")
+    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf"),
+                    help="E128: 감각→KC 배선. random=FixedProbability(--sens-kc-p, K50) / crosshalf=KC 마다 반쪽1·반쪽2 에서 1개씩(교차 결합)")
     ap.add_argument("--sd-credit", action="store_true",
                     help="E127(읽기 전용, 평가 뒤): 훈련 자극별 KC 반응 집합으로 KC 를 L전용·R전용·양쪽으로 나눠 "
                          "출력 가중치 합 차(Σg_L − Σg_R)와 자극별 예측 구동 여유를 출력")
@@ -568,6 +585,17 @@ def main():
         SHUFFLED = seq
 
     m, pops, syn = build(a)
+    if a.kc_wiring == "crosshalf":
+        # E128 경로 검사(읽기 전용): 장치에 올라간 연결이 KC 마다 반쪽1 1개 + 반쪽2 1개인가
+        _sg = m.synapse_populations["sens_kc"]
+        _sg.pull_connectivity_from_device()
+        _pi = np.asarray(_sg.get_sparse_pre_inds(), dtype=np.int64)
+        _po = np.asarray(_sg.get_sparse_post_inds(), dtype=np.int64)
+        _h = a.n_sens // 2
+        _n1 = np.bincount(_po[_pi < _h], minlength=a.n_kc)[:a.n_kc]
+        _n2 = np.bincount(_po[_pi >= _h], minlength=a.n_kc)[:a.n_kc]
+        print("[KC배선] crosshalf: 연결 %d개, KC %d 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC %d, w=%.2f"
+              % (_pi.size, a.n_kc, int(((_n1 == 1) & (_n2 == 1)).sum()), a.sens_kc_w))
 
     if a.probe_kc:
         # 전제 확인: A와 B가 서로 다른 KC 집합을 켜는가.

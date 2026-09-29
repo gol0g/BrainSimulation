@@ -1,0 +1,3 @@
+  xh w18: L전용 n=102 R전용 n=105 양쪽 n=148 | kc_spikes_per_stim 평균 73.9 | active_kc_per_stim 평균 73.9 | both_spike_share(양쪽 KC 스파이크/전체) 0.650 | rate_margin_ok=3/8
+  xh w19: L전용 n=144 R전용 n=161 양쪽 n=117 | kc_spikes_per_stim 평균 75.0 | active_kc_per_stim 평균 75.0 | both_spike_share(양쪽 KC 스파이크/전체) 0.467 | rate_margin_ok=4/8
+[E128 경로 검사 2] 종료

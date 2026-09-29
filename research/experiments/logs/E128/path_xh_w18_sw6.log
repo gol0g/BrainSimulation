@@ -1,0 +1,5 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 1~8(평균 4.7), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e128_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e128_run/minimal_circuit_CODE'
+[KC배선] crosshalf: 연결 1600개, KC 800 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC 800, w=6.00
+=> SDKC seed=18 sens_kc_p=0.020 sens_kc_w=6.00 | KC(S) 72.5 KC(H1) 250.5 KC(H2) 235.5 | 결합전용 0.0 (0.0% of KC(S)) | S∩(H1∪H2) 72.5 | jaccard(S_i,D_i,i+1) 23.1
