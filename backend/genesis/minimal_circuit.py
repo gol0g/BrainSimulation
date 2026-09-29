@@ -119,6 +119,28 @@ def build(args):
             init_postsynaptic("ExpCurr", {"tau": 5.0}))
         _sg.set_sparse_connections(_pre, _post)
         KCWIRE["pre"], KCWIRE["post"] = _pre, _post
+    elif getattr(args, "kc_wiring", "random") == "comparator":
+        # E129: 비교기 배선. KC 앞 절반 = 일치 KC(반쪽1 위치 p + 반쪽2 위치 p, 둘 다 흥분 w=sens_kc_w),
+        # 뒤 절반 = 불일치 KC(한 반쪽 위치 p 흥분 +mismatch_w, 다른 반쪽 같은 위치 p 억제 −mismatch_w; 방향은 KC 마다 번갈아).
+        # 위치 p 는 KC 마다 RandomState(5000+seed). 같음 쌍 → 일치 KC, 다름 쌍 → 불일치 KC(항목과 무관한 비교 특징).
+        _h = args.n_sens // 2
+        _rs = np.random.RandomState(5000 + args.seed)
+        _pos = _rs.randint(0, _h, args.n_kc)
+        _nm = args.n_kc // 2
+        _mk = np.arange(_nm); _xk = np.arange(_nm, args.n_kc)
+        _dir = (_xk % 2 == 0)                    # True: 반쪽1 흥분·반쪽2 억제, False: 반대
+        def _mk_pop(name, pre, post, w):
+            sg_ = m.add_synapse_population(
+                name, "SPARSE", pops["sens"], pops["kc"],
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}))
+            sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
+        _mpre = np.concatenate([_pos[_mk], _h + _pos[_mk]]); _mpost = np.concatenate([_mk, _mk])
+        _mk_pop("sens_kc", _mpre, _mpost, args.sens_kc_w)
+        _epre = np.where(_dir, _pos[_xk], _h + _pos[_xk]); _ipre = np.where(_dir, _h + _pos[_xk], _pos[_xk])
+        _mk_pop("sens_kc_mx", _epre, _xk, args.mismatch_w)
+        _mk_pop("sens_kc_mi", _ipre, _xk, -args.mismatch_w)
+        KCWIRE["n_match"], KCWIRE["n_mis"] = int(_nm), int(args.n_kc - _nm)
     else:
         m.add_synapse_population(
             "sens_kc", "SPARSE", pops["sens"], pops["kc"],
@@ -501,7 +523,9 @@ def main():
     ap.add_argument("--sd-diff", default="all", choices=("all", "cyclic"),
                     help="E126: 훈련 다름 쌍. all=훈련 항목의 모든 다름 쌍(E124, 같음 4 vs 다름 12) / "
                          "cyclic=순환 짝 (i, i+1 mod T) 만(같음 4 vs 다름 4 균형). 훈련 집합 평가도 훈련 자극만")
-    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf"),
+    ap.add_argument("--mismatch-w", type=float, default=8.0,
+                    help="E129: comparator 배선의 불일치 KC 흥분/억제 가중치 크기")
+    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator"),
                     help="E128: 감각→KC 배선. random=FixedProbability(--sens-kc-p, K50) / crosshalf=KC 마다 반쪽1·반쪽2 에서 1개씩(교차 결합)")
     ap.add_argument("--sd-credit", action="store_true",
                     help="E127(읽기 전용, 평가 뒤): 훈련 자극별 KC 반응 집합으로 KC 를 L전용·R전용·양쪽으로 나눠 "
@@ -596,6 +620,22 @@ def main():
         _n2 = np.bincount(_po[_pi >= _h], minlength=a.n_kc)[:a.n_kc]
         print("[KC배선] crosshalf: 연결 %d개, KC %d 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC %d, w=%.2f"
               % (_pi.size, a.n_kc, int(((_n1 == 1) & (_n2 == 1)).sum()), a.sens_kc_w))
+    if a.kc_wiring == "comparator":
+        # E129 경로 검사(읽기 전용): 일치 KC 는 반쪽1 p·반쪽2 p(같은 위치), 불일치 KC 는 흥분 1·억제 1(같은 위치, 다른 반쪽)
+        _h = a.n_sens // 2
+        def _rd(nm):
+            sg_ = m.synapse_populations[nm]; sg_.pull_connectivity_from_device()
+            return np.asarray(sg_.get_sparse_pre_inds(), dtype=np.int64), np.asarray(sg_.get_sparse_post_inds(), dtype=np.int64)
+        mp, mq = _rd("sens_kc"); ep, eq = _rd("sens_kc_mx"); ip, iq = _rd("sens_kc_mi")
+        ok_m = 0
+        for k in range(KCWIRE["n_match"]):
+            pr = np.sort(mp[mq == k])
+            ok_m += int(pr.size == 2 and pr[0] < _h <= pr[1] and pr[1] - _h == pr[0])
+        eo = np.full(a.n_kc, -1); eo[eq] = ep; io = np.full(a.n_kc, -1); io[iq] = ip
+        xs = np.arange(KCWIRE["n_match"], a.n_kc)
+        ok_x = int(np.sum((eo[xs] >= 0) & (io[xs] >= 0) & ((eo[xs] % _h) == (io[xs] % _h)) & ((eo[xs] < _h) != (io[xs] < _h))))
+        print("[KC배선] comparator: 일치 KC %d 중 같은 위치 두 반쪽 입력 %d, 불일치 KC %d 중 같은 위치 흥분·억제(다른 반쪽) %d, w=%.2f mismatch_w=%.2f"
+              % (KCWIRE["n_match"], ok_m, KCWIRE["n_mis"], ok_x, a.sens_kc_w, a.mismatch_w))
 
     if a.probe_kc:
         # 전제 확인: A와 B가 서로 다른 KC 집합을 켜는가.
@@ -890,6 +930,26 @@ def main():
             print("=> SDRATE mode=%s seed=%d trialseed=%s | kc_spikes_per_stim 평균 %.1f | active_kc_per_stim 평균 %.1f | both_spike_share(양쪽 KC 스파이크/전체) %.3f | rate_margin_ok=%d/%d"
                   % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, float(tot_sp.mean()),
                      float(np.mean([len(ks[k]) for k in tr])), float(both_sp.sum() / max(tot_sp.sum(), 1)), rm_ok, len(tr)))
+            if a.kc_wiring == "comparator":
+                # E129: 같음 자극에서 활성 KC 중 일치 KC 몫, 다름 자극에서 불일치 KC 몫(평균). 새 항목(평가 전용)도 함께.
+                nm_ = KCWIRE["n_match"]
+                def _sh(keys):
+                    ms, xs_ = [], []
+                    for k in keys:
+                        c = kc_cnt[k] if k in kc_cnt else None
+                        if c is None:
+                            _p2 = present(k)
+                            c = np.bincount(np.asarray(pops["kc"].spike_recording_data[0][1], dtype=np.int64), minlength=nk)[:nk].astype(np.float64)
+                        t_ = c.sum()
+                        ms.append(c[:nm_].sum() / t_ if t_ else float("nan")); xs_.append(c[nm_:].sum() / t_ if t_ else float("nan"))
+                    return float(np.nanmean(ms)), float(np.nanmean(xs_))
+                T_ = a.sd_train_items
+                sm, _ = _sh(["S%d" % i for i in range(T_)]); _, dx = _sh([k for k in tr if k.startswith("D")])
+                nsm, _ = _sh(["S%d" % i for i in range(T_, a.sd_items)])
+                _, ndx = _sh(["D%d_%d" % (i, i + 1 if i + 1 < a.sd_items else T_) for i in range(T_, a.sd_items)])
+                apply_stim(pops, a, None)
+                print("=> SDCOMP seed=%d | 훈련 같음: 일치KC 몫 %.3f | 훈련 다름: 불일치KC 몫 %.3f | 새 같음: 일치KC 몫 %.3f | 새 다름: 불일치KC 몫 %.3f"
+                      % (a.seed, sm, dx, nsm, ndx))
         # E125: 라벨(L/R) 균형 정답률 — 규칙이 samediff 면 위 균형과 같다(라벨 = 같음/다름)
         print("=> SDLAB diff=%s rule=%s mode=%s seed=%d trialseed=%s train_accL=%.1f train_accR=%.1f train_lbal=%.1f novel_accL=%.1f novel_accR=%.1f novel_lbal=%.1f"
               % (a.sd_diff, a.sd_rule, a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed,
