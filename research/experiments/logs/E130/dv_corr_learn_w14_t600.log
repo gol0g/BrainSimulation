@@ -1,0 +1,28 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~8(평균 4.6), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e130_main_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e130_main_run/minimal_circuit_CODE'
+[KC발달] env=corr rounds=1000 exposures=200 theta=0.15 items=20 | 일치형 같은 위치 210/400 | 불일치형 같은 위치 230/400 | (호스트 계산 0.525/0.575)
+  시행    1~ 400: 정답률  48.5%
+  시행  401~ 800: 정답률  57.0%
+=> SDGEN mode=learn seed=14 trialseed=600 train_same=81.6 train_diff=68.6 train_bal=75.1 novel_same=78.4 novel_diff=85.7 novel_bal=82.1 | ties train:0 novel:0 | n_same/diff train 49/51 novel 51/49
+=> SDLAB diff=cyclic rule=samediff mode=learn seed=14 trialseed=600 train_accL=81.6 train_accR=68.6 train_lbal=75.1 novel_accL=78.4 novel_accR=85.7 novel_lbal=82.1
+
+=== 평가 (탐색 없음, 학습 없음, 무작위 순서 100시행) : 정답률 43.0% | 동점 0회 ===
+   자극 A: 0/57 (0.0%)
+   자극 B: 43/43 (100.0%)
+
+=== 학습 후 자극별 출력 (선택 이전의 원 신호) ===
+  자극 A → 정답 L | out_L=  15  out_R=  27  차이   -12 | KC 127개
+  자극 B → 정답 R | out_L=  29  out_R=  39  차이   -10 | KC 108개
+
+=== 가중치 구조 (A전용 KC 123개, B전용 KC 104개) ===
+  A전용 KC → out_L 평균 0.5102 | out_R 평균 0.5577 | 차이 -0.0476 (정답은 out_L) **반대**
+  B전용 KC → out_L 평균 0.5443 | out_R 평균 0.5207 | 차이 +0.0237 (정답은 out_R) **반대**
+
+=== 가중치 변화 ===
+  kc_out_l: n=7975 |Δ|평균 0.03903 변화율  65.2% | 평균 0.500→0.528 | std 0.0000→0.0568
+  kc_out_r: n=8075 |Δ|평균 0.04797 변화율  64.8% | 평균 0.500→0.536 | std 0.0000→0.0607
+
+=== 요약 (mode=learn seed=14) ===
+  첫 구간 48.5% → 마지막 구간 57.0% | 변화 +8.5%p | 보상률 52.8%
+=> MINCIRC mode=learn seed=14 first=48.5 last=57.0 delta=+8.5 reward=52.8 **eval=43.0** tie=0 trialseed=600
