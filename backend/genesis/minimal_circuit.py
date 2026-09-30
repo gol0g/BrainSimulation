@@ -119,6 +119,40 @@ def build(args):
             init_postsynaptic("ExpCurr", {"tau": 5.0}))
         _sg.set_sparse_connections(_pre, _post)
         KCWIRE["pre"], KCWIRE["post"] = _pre, _post
+    elif getattr(args, "kc_wiring", "random") in ("candidates", "loaded"):
+        # E133: candidates = 망 스파이크 헤브 발달용(일치형: 반쪽1 고정 1 + 반쪽2 후보 전부, 불일치형: 흥분 고정 1 + 다른 반쪽 억제 후보 전부).
+        #       loaded = 발달 결과(가지치기한 a,b,e,i)를 파일에서 읽어 developed 와 같은 3집단으로.
+        _h = args.n_sens // 2
+        _nm = args.n_kc // 2
+        _mk = np.arange(_nm); _xk = np.arange(_nm, args.n_kc)
+        def _mk_pop3(name, pre, post, w):
+            sg_ = m.add_synapse_population(
+                name, "SPARSE", pops["sens"], pops["kc"],
+                init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": w})}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}))
+            sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
+            return sg_
+        if args.kc_wiring == "loaded":
+            _z = np.load(args.kc_wiring_file)
+            _a, _b, _e, _i = (_z[k].astype(np.int64) for k in ("a", "b", "e", "i"))
+            _mk_pop3("sens_kc", np.concatenate([_a, _b]), np.concatenate([_mk, _mk]), args.sens_kc_w)
+            _mk_pop3("sens_kc_mx", _e, _xk, args.mismatch_w)
+            _mk_pop3("sens_kc_mi", _i, _xk, -args.mismatch_w)
+            KCWIRE["loaded"] = {"a": _a, "b": _b, "e": _e, "i": _i}
+        else:
+            _rs = np.random.RandomState(5000 + args.seed)
+            _a = _rs.randint(0, _h, _nm)
+            _dir = (_xk % 2 == 0)
+            _e = np.where(_dir, _rs.randint(0, _h, _xk.size), _h + _rs.randint(0, _h, _xk.size))
+            _mk_pop3("sens_kc", _a, _mk, args.dev_w_fix)
+            _cpre = np.concatenate([_h + np.arange(_h)] * _nm); _cpost = np.repeat(_mk, _h)
+            _mk_pop3("sens_kc_cand", _cpre, _cpost, args.dev_wc_total / _h)
+            _mk_pop3("sens_kc_mx", _e, _xk, args.mismatch_w)
+            _other = np.where(_e < _h, _h, 0)
+            _ipre = (np.repeat(_other, _h) + np.tile(np.arange(_h), _xk.size)); _ipost = np.repeat(_xk, _h)
+            _mk_pop3("sens_kc_icand", _ipre, _ipost, -args.dev_wi_total / _h)
+            KCWIRE["cand"] = {"a": _a, "e": _e}
+        KCWIRE["n_match"], KCWIRE["n_mis"] = int(_nm), int(args.n_kc - _nm)
     elif getattr(args, "kc_wiring", "random") == "developed":
         # E130: develop_comparator 로 형성한 연결(일치형 흥분 2 / 불일치형 흥분 1·억제 1) — comparator 와 같은 3집단 구조
         _a, _b, _e, _i, _st = develop_comparator(args)
@@ -358,6 +392,18 @@ def develop_comparator(args):
     return a, b, e, i_, stats
 
 
+def hebb_update(w, pre, post, fired, act, eta, total, n_post):
+    """E133: 시행 단위 헤브 갱신 + 후시냅스 별 합 보존(순수 함수). w: 시냅스 가중치 크기(≥0),
+    pre/post: 시냅스별 전·후 인덱스, fired: KC 발화 여부(bool[n_post]), act: 감각 발화 여부(bool[n_pre]).
+    후뉴런이 발화한 시행에서 그 시행에 발화한 전뉴런의 시냅스만 eta 만큼 강화하고, 후뉴런 별 합을 total 로 되돌린다."""
+    w = w.copy()
+    upd = fired[post] & act[pre]
+    w[upd] += eta
+    ssum = np.bincount(post, weights=w, minlength=n_post)
+    scale = np.where(ssum > 0, total / np.maximum(ssum, 1e-12), 1.0)
+    return w * scale[post]
+
+
 def register_exemplar(key, arr, cat):
     PATTERNS[key] = arr
     RULE[key] = RULE[cat]
@@ -583,7 +629,15 @@ def main():
     ap.add_argument("--dev-rounds", type=int, default=300, help="E130: 구조 가소성 라운드 수")
     ap.add_argument("--dev-exposures", type=int, default=200, help="E130: 라운드당 노출 수")
     ap.add_argument("--dev-theta", type=float, default=0.2, help="E130: 동시활성 비율 문턱(미만이면 재배선)")
-    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator", "developed"),
+    ap.add_argument("--dev-hebb-save", default=None,
+                    help="E133: --kc-wiring candidates 로 망 스파이크 헤브 발달을 돌리고 가지치기한 연결(a,b,e,i)을 npz 로 저장한 뒤 종료")
+    ap.add_argument("--dev-hebb-exposures", type=int, default=400, help="E133: 헤브 발달 노출 수")
+    ap.add_argument("--dev-hebb-eta", type=float, default=1.0, help="E133: 헤브 증가량(후보 1개 초기 가중치 단위)")
+    ap.add_argument("--dev-w-fix", type=float, default=4.0, help="E133: 일치형 고정 입력 가중치")
+    ap.add_argument("--dev-wc-total", type=float, default=4.0, help="E133: 일치형 후보 가중치 합(보존)")
+    ap.add_argument("--dev-wi-total", type=float, default=8.0, help="E133: 불일치형 억제 후보 가중치 크기 합(보존)")
+    ap.add_argument("--kc-wiring-file", default=None, help="E133: --kc-wiring loaded 가 읽을 npz")
+    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator", "developed", "candidates", "loaded"),
                     help="E128: 감각→KC 배선. random=FixedProbability(--sens-kc-p, K50) / crosshalf=KC 마다 반쪽1·반쪽2 에서 1개씩(교차 결합)")
     ap.add_argument("--sd-credit", action="store_true",
                     help="E127(읽기 전용, 평가 뒤): 훈련 자극별 KC 반응 집합으로 KC 를 L전용·R전용·양쪽으로 나눠 "
@@ -678,6 +732,12 @@ def main():
         _n2 = np.bincount(_po[_pi >= _h], minlength=a.n_kc)[:a.n_kc]
         print("[KC배선] crosshalf: 연결 %d개, KC %d 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC %d, w=%.2f"
               % (_pi.size, a.n_kc, int(((_n1 == 1) & (_n2 == 1)).sum()), a.sens_kc_w))
+    if a.kc_wiring == "loaded":
+        # E133 경로 검사(읽기 전용): 불러온 연결의 같은 위치 비율
+        _h = a.n_sens // 2; _L = KCWIRE["loaded"]
+        print("[KC불러옴] %s | 일치형 같은 위치 %d/%d | 불일치형 같은 위치 %d/%d"
+              % (a.kc_wiring_file, int(np.sum((_L["b"] - _h) == _L["a"])), _L["a"].size,
+                 int(np.sum((_L["i"] % _h) == (_L["e"] % _h))), _L["e"].size))
     if a.kc_wiring == "developed":
         # E130 경로 검사(읽기 전용): 발달 후 같은 위치 짝 비율(장치 연결에서 다시 읽음)
         _h = a.n_sens // 2
@@ -758,6 +818,55 @@ def main():
         m.pull_recording_buffers_from_device()
         return (len(pops["out_l"].spike_recording_data[0][1]), len(pops["out_r"].spike_recording_data[0][1]),
                 set(np.asarray(pops["kc"].spike_recording_data[0][1], dtype=int).tolist()))
+
+    if a.dev_hebb_save:
+        # E133: 망 스파이크 헤브 발달. 노출(발달 항목, RandomState 6000+배선 — develop_comparator 와 같은 생성 방식)을 GeNN 으로 제시하고
+        # 그 제시의 감각 스파이크(전)·KC 스파이크(후)로 후보 가중치를 갱신(후시냅스 발화 게이트, KC 별 합 보존). 끝에 최강 후보만 남긴다.
+        if a.kc_wiring != "candidates":
+            raise SystemExit("--dev-hebb-save 는 --kc-wiring candidates 가 필요하다")
+        _h = a.n_sens // 2; nk = a.n_kc; nmt = KCWIRE["n_match"]
+        def _conn(nm):
+            sg_ = m.synapse_populations[nm]; sg_.pull_connectivity_from_device()
+            return sg_, np.asarray(sg_.get_sparse_pre_inds(), dtype=np.int64), np.asarray(sg_.get_sparse_post_inds(), dtype=np.int64)
+        cg, cpre, cpost = _conn("sens_kc_cand"); ig, ipre, ipost = _conn("sens_kc_icand")
+        wc = np.full(cpre.size, a.dev_wc_total / _h); wi = np.full(ipre.size, a.dev_wi_total / _h)
+        rsd = np.random.RandomState(6000 + a.seed)
+        kk = int(round(a.sd_frac * _h))
+        items = [np.sort(rsd.choice(_h, kk, replace=False)) for _ in range(a.dev_items)]
+        fire_m = 0; fire_x = 0
+        for n_ in range(a.dev_hebb_exposures):
+            x_ = rsd.randint(a.dev_items); y_ = x_ if a.dev_env == "corr" else rsd.randint(a.dev_items)
+            q = np.zeros(a.n_sens); q[items[x_]] = 1; q[_h + items[y_]] = 1
+            PATTERNS["DEV"] = q
+            _, _, kset = present("DEV")
+            sid = np.asarray(pops["sens"].spike_recording_data[0][1], dtype=np.int64)
+            act = np.zeros(a.n_sens, dtype=bool); act[sid] = True
+            fired = np.zeros(nk, dtype=bool)
+            if kset:
+                fired[np.fromiter(kset, dtype=np.int64)] = True
+            fire_m += int(fired[:nmt].sum()); fire_x += int(fired[nmt:].sum())
+            wc = hebb_update(wc, cpre, cpost, fired, act, a.dev_hebb_eta * a.dev_wc_total / _h, a.dev_wc_total, nk)
+            wi = hebb_update(wi, ipre, ipost, fired, act, a.dev_hebb_eta * a.dev_wi_total / _h, a.dev_wi_total, nk)
+            cg.vars["g"].values = wc.astype(np.float32); cg.vars["g"].push_to_device()
+            ig.vars["g"].values = (-wi).astype(np.float32); ig.vars["g"].push_to_device()
+        apply_stim(pops, a, None)
+        # 가지치기: KC 마다 최강 후보 1개
+        a_fix = KCWIRE["cand"]["a"]; e_fix = KCWIRE["cand"]["e"]
+        b = np.zeros(nmt, dtype=np.int64); i_ = np.zeros(nk - nmt, dtype=np.int64); share_m = []; share_x = []
+        for k in range(nmt):
+            sel = np.flatnonzero(cpost == k); j = sel[np.argmax(wc[sel])]; b[k] = cpre[j]
+            mt = sel[cpre[sel] == _h + a_fix[k]]; share_m.append(float(wc[mt].sum() / wc[sel].sum()))
+        for k in range(nmt, nk):
+            sel = np.flatnonzero(ipost == k); j = sel[np.argmax(wi[sel])]; i_[k - nmt] = ipre[j]
+            mt = sel[(ipre[sel] % _h) == (e_fix[k - nmt] % _h)]; share_x.append(float(wi[mt].sum() / wi[sel].sum()))
+        mf = float(np.mean((b - _h) == a_fix)); xf = float(np.mean((i_ % _h) == (e_fix % _h)))
+        np.savez_compressed(a.dev_hebb_save, a=a_fix, b=b, e=e_fix, i=i_)
+        print("=> DEVHEBB seed=%d env=%s exposures=%d eta=%.2f w_fix=%.2f wc_total=%.2f wi_total=%.2f | 발화율(KC·노출당) 일치형 %.3f 불일치형 %.3f | "
+              "가지치기 후 같은 위치: 일치형 %.3f 불일치형 %.3f | 같은 위치 후보 가중치 몫 평균: 일치형 %.3f 불일치형 %.3f (균등=%.3f) → %s"
+              % (a.seed, a.dev_env, a.dev_hebb_exposures, a.dev_hebb_eta, a.dev_w_fix, a.dev_wc_total, a.dev_wi_total,
+                 fire_m / (nmt * a.dev_hebb_exposures), fire_x / ((nk - nmt) * a.dev_hebb_exposures),
+                 mf, xf, float(np.mean(share_m)), float(np.mean(share_x)), 1.0 / _h, a.dev_hebb_save))
+        return
 
     if a.probe_sd:
         if SD is None:
@@ -1004,7 +1113,7 @@ def main():
             print("=> SDRATE mode=%s seed=%d trialseed=%s | kc_spikes_per_stim 평균 %.1f | active_kc_per_stim 평균 %.1f | both_spike_share(양쪽 KC 스파이크/전체) %.3f | rate_margin_ok=%d/%d"
                   % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, float(tot_sp.mean()),
                      float(np.mean([len(ks[k]) for k in tr])), float(both_sp.sum() / max(tot_sp.sum(), 1)), rm_ok, len(tr)))
-            if a.kc_wiring in ("comparator", "developed"):
+            if a.kc_wiring in ("comparator", "developed", "loaded"):
                 # E129: 같음 자극에서 활성 KC 중 일치 KC 몫, 다름 자극에서 불일치 KC 몫(평균). 새 항목(평가 전용)도 함께.
                 nm_ = KCWIRE["n_match"]
                 def _sh(keys):
