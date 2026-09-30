@@ -1,0 +1,6 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~7(평균 4.5), 새↔훈련 겹침 2~7, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e136_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e136_run/minimal_circuit_CODE'
+[OJA발달] 흥분 후보: 평균 0.0691(초기 0.0800) std 0.0071 상한 도달 0.000 | 억제 후보 크기: 평균 0.0256(초기 0.1600) std 0.0210 상한 도달 0.000
+=> DEVSHIFT seed=19 env=corr dev_shift=0 | 같은 위치: 일치형 0.058 불일치형 0.927 | 0칸 이동 위치: 일치형 0.058 불일치형 0.927
+=> DEVHEBB seed=19 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.002 불일치형 0.296 | 가지치기 후 같은 위치: 일치형 0.058 불일치형 0.927 | 같은 위치 후보 가중치 몫 평균: 일치형 0.023 불일치형 0.067 (균등=0.020) → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E136/calib_eta0.02_b10_w19_corr.npz

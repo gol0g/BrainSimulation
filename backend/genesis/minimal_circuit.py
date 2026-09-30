@@ -38,7 +38,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from pygenn import (GeNNModel, create_neuron_model, init_postsynaptic,
+from pygenn import (GeNNModel, create_neuron_model, create_weight_update_model, init_postsynaptic,
                     init_sparse_connectivity, init_var, init_weight_update)
 from rstdp_model import DEFAULT_PARAMS, make_rstdp_model
 
@@ -58,6 +58,27 @@ RULE = {"A": "L", "B": "R"}
 FLIP = {"A": "R", "B": "L"}
 
 
+def make_oja_model():
+    """E136: Oja 형 망 안 경쟁 가소성(도파민·호스트 갱신 없음). 가중치 크기 m = sgn·g.
+    전 스파이크: 전달 + preTrace 증가. 후 스파이크: m += eta·(preTrace − beta·m) — 발화한 입력은 늘고
+    모든 입력이 자기 크기에 비례해 줄어 합이 저절로 유지된다(Oja 1982 의 스파이크판)."""
+    return create_weight_update_model(
+        "OjaCompetition",
+        params=[("tau_pre", "scalar"), ("eta", "scalar"), ("beta", "scalar"), ("m_max", "scalar"), ("sgn", "scalar")],
+        vars=[("g", "scalar")],
+        pre_vars=[("preTrace", "scalar")],
+        pre_spike_syn_code="addToPost(g);",
+        post_spike_syn_code="""
+        scalar mm = sgn * g;
+        mm += eta * (preTrace - beta * mm);
+        mm = fmin(m_max, fmax(0.0, mm));
+        g = sgn * mm;
+        """,
+        pre_spike_code="preTrace += 1.0;",
+        pre_dynamics_code="preTrace -= preTrace * (dt / tau_pre);",
+    )
+
+
 def build(args):
     """전체 모델과 **같은 rstdp_model**을 쓴다. 최소 회로용 학습 규칙을 새로 만들지 않는다."""
     m = GeNNModel("float", "minimal_circuit")
@@ -65,6 +86,7 @@ def build(args):
     # E135: R-STDP 가중치 모델 객체는 **한 번만** 만들어 모든 집단이 공유한다. 집단마다 make_rstdp_model() 을 새로 부르면
     # 같은 이름("RSTDPEligibility")의 모델이 여럿 생겨 빌드 중 Segmentation fault(2026-10-01 E135 보정 8/8 rc 139).
     wu_rstdp = make_rstdp_model()
+    wu_oja = make_oja_model() if getattr(args, "dev_mode", "hebb") == "oja" else None   # E136: 한 번만 만든다(E135 충돌 교훈)
     # ★INV-A1. 2026-09-20 사고: 이 줄이 없어서 **연결 추첨이 매 실행 달라졌다**.
     # 실측: 같은 조건 3회에 eval = 54.0 / 46.0 / 100.0, frozen과 noreward의 연결 개수가
     # n=7987 vs 8078 로 달랐다(가중치는 양쪽 다 |Δ|=0). E086 25런 전체가 이 위에 있었고,
@@ -151,7 +173,20 @@ def build(args):
             _cpre = np.concatenate([_h + np.arange(_h)] * _nm); _cpost = np.repeat(_mk, _h)
             _other = np.where(_e < _h, _h, 0)
             _ipre = (np.repeat(_other, _h) + np.tile(np.arange(_h), _xk.size)); _ipost = np.repeat(_xk, _h)
-            if getattr(args, "dev_mode", "hebb") == "stdp":
+            if getattr(args, "dev_mode", "hebb") == "oja":
+                def _mk_oja(name, pre, post, w0, sgn, mmax):
+                    sg_ = m.add_synapse_population(
+                        name, "SPARSE", pops["sens"], pops["kc"],
+                        init_weight_update(wu_oja, {"tau_pre": 20.0, "eta": args.dev_oja_eta, "beta": args.dev_oja_beta,
+                                                    "m_max": mmax, "sgn": sgn},
+                                           {"g": init_var("Constant", {"constant": w0})}, {"preTrace": 0.0}),
+                        init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                    sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
+                    return sg_
+                _mk_oja("sens_kc_cand", _cpre, _cpost, args.dev_wc_total / _h, 1.0, args.dev_oja_mmax_c)
+                _mk_pop3("sens_kc_mx", _e, _xk, args.mismatch_w)
+                _mk_oja("sens_kc_icand", _ipre, _ipost, -args.dev_wi_total / _h, -1.0, args.dev_oja_mmax_i)
+            elif getattr(args, "dev_mode", "hebb") == "stdp":
                 # E135: 후보 시냅스 = GeNN 안의 R-STDP(매 스텝). 발달 동안 도파민 상수(흥분 +, 억제 −) → 연속 STDP.
                 # LTD 항(A_minus) = dev_a_minus(기본 0: 감각은 KC 발화 뒤에도 계속 발화해 LTD 가 쌓이면 자주 함께 켜지는 짝이 약해질 수 있다).
                 def _mk_stdp(name, pre, post, w0, wmin, wmax):
@@ -680,7 +715,11 @@ def main():
     ap.add_argument("--dev-hebb-save", default=None,
                     help="E133: --kc-wiring candidates 로 망 스파이크 헤브 발달을 돌리고 가지치기한 연결(a,b,e,i)을 npz 로 저장한 뒤 종료")
     ap.add_argument("--dev-hebb-exposures", type=int, default=400, help="E133: 헤브 발달 노출 수")
-    ap.add_argument("--dev-mode", default="hebb", choices=("hebb", "stdp"),
+    ap.add_argument("--dev-oja-eta", type=float, default=0.005, help="E136: Oja 학습률")
+    ap.add_argument("--dev-oja-beta", type=float, default=10.0, help="E136: Oja 감소 계수")
+    ap.add_argument("--dev-oja-mmax-c", type=float, default=2.0, help="E136: 흥분 후보 크기 상한")
+    ap.add_argument("--dev-oja-mmax-i", type=float, default=4.0, help="E136: 억제 후보 크기 상한")
+    ap.add_argument("--dev-mode", default="hebb", choices=("hebb", "stdp", "oja"),
                     help="E135: 발달 가소성. hebb=시행 단위 호스트 헤브+합 보존(E133) / stdp=GeNN 안 R-STDP 도파민 상수(합 보존 없음)")
     ap.add_argument("--dev-stdp-eta", type=float, default=0.01, help="E135: STDP 학습률")
     ap.add_argument("--dev-tau-e", type=float, default=20.0, help="E135: STDP 자격흔적 시정수")
@@ -912,16 +951,19 @@ def main():
                 cg.vars["g"].values = wc.astype(np.float32); cg.vars["g"].push_to_device()
                 ig.vars["g"].values = (-wi).astype(np.float32); ig.vars["g"].push_to_device()
         apply_stim(pops, a, None)
-        if a.dev_mode == "stdp":
-            # E135: 도파민 0 으로 되돌리고 장치 가중치를 읽는다(가지치기만 호스트)
-            cg.set_dynamic_param_value("dopamine", 0.0); ig.set_dynamic_param_value("dopamine", 0.0)
+        if a.dev_mode in ("stdp", "oja"):
+            # E135/E136: 장치 가중치를 읽는다(가지치기만 호스트). stdp 는 도파민 0 으로 되돌린다.
+            if a.dev_mode == "stdp":
+                cg.set_dynamic_param_value("dopamine", 0.0); ig.set_dynamic_param_value("dopamine", 0.0)
             cg.vars["g"].pull_from_device(); ig.vars["g"].pull_from_device()
             wc = np.asarray(cg.vars["g"].values, dtype=np.float64).ravel().copy()
             wi = -np.asarray(ig.vars["g"].values, dtype=np.float64).ravel().copy()
             w0c = a.dev_wc_total / _h; w0i = a.dev_wi_total / _h
-            print("[STDP발달] 흥분 후보: 평균 %.4f(초기 %.4f) std %.4f 상한 도달 %.3f | 억제 후보 크기: 평균 %.4f(초기 %.4f) std %.4f 상한 도달 %.3f"
-                  % (wc.mean(), w0c, wc.std(), float(np.mean(wc >= a.dev_stdp_wmax_c - 1e-6)),
-                     wi.mean(), w0i, wi.std(), float(np.mean(wi >= a.dev_stdp_wmax_i - 1e-6))))
+            _mc = a.dev_stdp_wmax_c if a.dev_mode == "stdp" else a.dev_oja_mmax_c
+            _mi = a.dev_stdp_wmax_i if a.dev_mode == "stdp" else a.dev_oja_mmax_i
+            print("[%s발달] 흥분 후보: 평균 %.4f(초기 %.4f) std %.4f 상한 도달 %.3f | 억제 후보 크기: 평균 %.4f(초기 %.4f) std %.4f 상한 도달 %.3f"
+                  % ("STDP" if a.dev_mode == "stdp" else "OJA", wc.mean(), w0c, wc.std(), float(np.mean(wc >= _mc - 1e-6)),
+                     wi.mean(), w0i, wi.std(), float(np.mean(wi >= _mi - 1e-6))))
         # 가지치기: KC 마다 최강 후보 1개
         a_fix = KCWIRE["cand"]["a"]; e_fix = KCWIRE["cand"]["e"]
         b = np.zeros(nmt, dtype=np.int64); i_ = np.zeros(nk - nmt, dtype=np.int64); share_m = []; share_x = []
