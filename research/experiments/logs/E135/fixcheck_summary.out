@@ -1,0 +1,11 @@
+[회귀 K50 w0 t100 — 기대 first=60.5 reward=60.5 eval=100.0]
+=> MINCIRC mode=learn seed=0 first=60.5 last=60.5 delta=+0.0 reward=60.5 **eval=100.0** tie=0 trialseed=100
+[회귀 E133 corr learn w46 t600 — 기대 train_lbal=85.4 novel_lbal=69.4]
+=> SDLAB diff=cyclic rule=samediff mode=learn seed=46 trialseed=600 train_accL=100.0 train_accR=70.8 train_lbal=85.4 novel_accL=100.0 novel_accR=38.8 novel_lbal=69.4
+[STDP 정답 아는 검사 eta 0]
+[STDP발달] 흥분 후보: 평균 0.0800(초기 0.0800) std 0.0000 상한 도달 0.000 | 억제 후보 크기: 평균 0.1600(초기 0.1600) std 0.0000 상한 도달 0.000
+=> DEVHEBB seed=18 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.298 불일치형 0.295 | 가지치기 후 같은 위치: 일치형 0.010 불일치형 0.010 | 같은 위치 후보 가중치 몫 평균: 일치형 0.020 불일치형 0.020 (균등=0.020)
+[STDP eta 0.005 배선 18 corr]
+[STDP발달] 흥분 후보: 평균 0.8609(초기 0.0800) std 0.3130 상한 도달 0.000 | 억제 후보 크기: 평균 0.1929(초기 0.1600) std 0.0404 상한 도달 0.000
+=> DEVHEBB seed=18 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.692 불일치형 0.004 | 가지치기 후 같은 위치: 일치형 0.100 불일치형 0.130 | 같은 위치 후보 가중치 몫 평균: 일치형 0.022 불일치형 0.028 (균등=0.020)
+[E135 수정 검사] 종료

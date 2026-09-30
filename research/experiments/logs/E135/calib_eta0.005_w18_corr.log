@@ -1,0 +1,6 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 1~8(평균 4.7), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e135_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e135_run/minimal_circuit_CODE'
+[STDP발달] 흥분 후보: 평균 0.8609(초기 0.0800) std 0.3130 상한 도달 0.000 | 억제 후보 크기: 평균 0.1929(초기 0.1600) std 0.0404 상한 도달 0.000
+=> DEVSHIFT seed=18 env=corr dev_shift=0 | 같은 위치: 일치형 0.100 불일치형 0.130 | 0칸 이동 위치: 일치형 0.100 불일치형 0.130
+=> DEVHEBB seed=18 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.692 불일치형 0.004 | 가지치기 후 같은 위치: 일치형 0.100 불일치형 0.130 | 같은 위치 후보 가중치 몫 평균: 일치형 0.022 불일치형 0.028 (균등=0.020) → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E135/calib_eta0.005_w18_corr.npz

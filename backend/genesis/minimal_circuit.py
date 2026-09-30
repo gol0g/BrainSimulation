@@ -62,6 +62,9 @@ def build(args):
     """전체 모델과 **같은 rstdp_model**을 쓴다. 최소 회로용 학습 규칙을 새로 만들지 않는다."""
     m = GeNNModel("float", "minimal_circuit")
     m.dt = 1.0
+    # E135: R-STDP 가중치 모델 객체는 **한 번만** 만들어 모든 집단이 공유한다. 집단마다 make_rstdp_model() 을 새로 부르면
+    # 같은 이름("RSTDPEligibility")의 모델이 여럿 생겨 빌드 중 Segmentation fault(2026-10-01 E135 보정 8/8 rc 139).
+    wu_rstdp = make_rstdp_model()
     # ★INV-A1. 2026-09-20 사고: 이 줄이 없어서 **연결 추첨이 매 실행 달라졌다**.
     # 실측: 같은 조건 3회에 eval = 54.0 / 46.0 / 100.0, frozen과 noreward의 연결 개수가
     # n=7987 vs 8078 로 달랐다(가중치는 양쪽 다 |Δ|=0). E086 25런 전체가 이 위에 있었고,
@@ -157,7 +160,7 @@ def build(args):
                                 "w_min": wmin, "w_max": wmax, "dopamine": 0.0})
                     sg_ = m.add_synapse_population(
                         name, "SPARSE", pops["sens"], pops["kc"],
-                        init_weight_update(make_rstdp_model(), kp_, {"g": init_var("Constant", {"constant": w0}), "e": 0.0},
+                        init_weight_update(wu_rstdp, kp_, {"g": init_var("Constant", {"constant": w0}), "e": 0.0},
                                            {"preTrace": 0.0}, {"postTrace": 0.0}),
                         init_postsynaptic("ExpCurr", {"tau": 5.0}))
                     sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
@@ -245,7 +248,7 @@ def build(args):
     # frozen: 학습률 0. **배선만으로 나오는 정답률**을 잰다.
     # 첫 구간부터 70%가 나왔다 — 선천 배선이 정답을 만들고 있는지 먼저 갈라야 한다(C47 전례).
     kp["eta"] = 0.0 if args.mode == "frozen" else args.eta
-    wu = make_rstdp_model()
+    wu = wu_rstdp
     syn = {}
     for nm in ("l", "r"):
         syn[nm] = m.add_synapse_population(

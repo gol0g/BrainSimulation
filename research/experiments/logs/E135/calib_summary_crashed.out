@@ -1,0 +1,38 @@
+[회귀 — E133 hb dev corr w46 DEVHEBB 와 같아야]
+=> DEVHEBB seed=46 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.286 불일치형 0.046 | 가지치기 후 같은 위치: 일치형 0.797 불일치형 0.800 | 같은 위치 후보 가중치 몫 평균: 일치형 0.067 불일치형 0.060 (균등=0.020)
+[정답 아는 검사 — stdp eta 0: 가중치 불변]
+scripts/e135_calib.sh: line 20: 1940149 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed 18 --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta 0 --dev-env corr --dev-hebb-save "$WD/eta0_w18.npz" > "$f" 2>&1
+[보정]
+scripts/e135_calib.sh: line 23: 1940166 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.005 w18 corr: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 1~8(평균 4.7), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940192 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.005 w18 indep: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 1~8(평균 4.7), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940209 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.005 w19 corr: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~7(평균 4.5), 새↔훈련 겹침 2~7, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940225 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.005 w19 indep: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~7(평균 4.5), 새↔훈련 겹침 2~7, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940251 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.02 w18 corr: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 1~8(평균 4.7), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940266 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.02 w18 indep: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 1~8(평균 4.7), 새↔훈련 겹침 2~8, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940281 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.02 w19 corr: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~7(평균 4.5), 새↔훈련 겹침 2~7, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+scripts/e135_calib.sh: line 23: 1940296 Segmentation fault      timeout 3600 python minimal_circuit.py --mode frozen --seed $S --trial-seed 600 $K50 --trials 1 $SDO $DEV $STDP --dev-stdp-eta $ETA --dev-env $ENV --dev-hebb-save "$WD/calib_eta${ETA}_w${S}_${ENV}.npz" > "$f" 2>&1
+  eta0.02 w19 indep: [실패 rc=139]
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~7(평균 4.5), 새↔훈련 겹침 2~7, 패턴 64개(S 8, D 56)
+timeout: the monitored command dumped core
+[E135 보정] 종료
