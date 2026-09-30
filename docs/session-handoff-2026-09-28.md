@@ -125,3 +125,15 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - E132 완료(00:41~21:46, 절전 01:07~21:06 포함) → **인과 효과 지지(확증)**. 짝 검정 독립 단위 정정(E125~E131). 분기 종료. 다음: 새 A/B/C/D.
 - 새 분기 "망 스파이크로 비교 특징 형성"(상한 3): `research/abcd-2026-09-30-inetwork.md`. minimal_circuit.py candidates/loaded 배선·헤브 발달(hebb_update, CPU 검사 PASS). E133 보정 21:52 시작(규칙 고정 dev_rule_fixed.txt).
 - **E133**(망 스파이크 헤브 발달, 분기 1/3) 게이트 통과 → 실행(발달 32 + 과제 96 ≈100분). 감시 `watch-exp.sh E133 128 "=> "` 대신 과제 96 + 발달 32 줄 패턴 — 러너 줄 수 확인.
+
+## 10. 재시작 인계 — 2026-09-30 22:26 (Claude Code 업데이트로 세션 재시작)
+**실행 중: E133**(망 스파이크 헤브 발달, 분기 "망 스파이크로 비교 특징 형성" 1/3). 데스크탑 schtasks 로 2026-09-30 22:04 시작, 이 시점 54/128 줄(실패 0). 세션과 무관하게 계속 돈다(데스크탑 절전 시 멈췄다 재개).
+새 세션이 할 일(순서):
+1. 재개 순서 1~6(CLAUDE.md) — 최신 abcd 는 `research/abcd-2026-09-30-inetwork.md`.
+2. **종료 감시부터**: `~/bin/watch-exp.sh E133 128 "=> "`(발달 32줄 + 과제 96줄, 둘 다 "=> " 포함)를 백그라운드로. 이미 끝났으면 건너뜀(`tail -2 research/experiments/E133.log` 에 "전체 루프 종료").
+3. 완료 후 `python3 scripts/judge_e133.py` → 판정(기준 `logs/E133/criteria_fixed.txt`, 독립 단위 = 배선 16).
+4. **독립 대조**: 원 로그(`logs/E133/*.log`)를 별도 코드로 재계산 — 배선 단위 짝(corr−indep, learn−frozen), [KC불러옴] = DEVHEBB, 실패 줄 0.
+5. P9: E133.md 결과 절, H056, current-state(헤더·K 행·§6·§7), DESIGN_RECOVERY append, 이 인계 문서.
+6. 커밋·push(lab_commit_msg.txt → lab_push.sh), **출력 끝이 `## main...origin/main` 이고 ahead 가 없는지 확인**.
+결과별 다음(E133.md 4절): 지지 → K68 범위를 "망 스파이크 기반 헤브 형성"으로 확장, 분기 종료 → 새 abcd. 효과 없음 → 호스트 규칙과 망 헤브 차이 측정(E134). 보류 → 원인 측정.
+주의: 이 세션에서 발견한 반복 오류 — 판정 정규식이 출력 괄호 라벨 안 공백을 \\S* 로 받는 결함(E127·E128 두 번), 시험 입력 결함(learn=frozen 우연 일치), 짝 검정 독립 단위(배선). 커밋 메시지 끝은 "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" 한 줄(Claude-Session 줄은 이제 안 붙인다).
