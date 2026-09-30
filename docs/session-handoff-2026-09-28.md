@@ -139,3 +139,5 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 주의: 이 세션에서 발견한 반복 오류 — 판정 정규식이 출력 괄호 라벨 안 공백을 \\S* 로 받는 결함(E127·E128 두 번), 시험 입력 결함(learn=frozen 우연 일치), 짝 검정 독립 단위(배선). 커밋 메시지 끝은 "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" 한 줄(Claude-Session 줄은 이제 안 붙인다).
 - (재시작 후) E133 완료 22:57 → **지지**(16/16·16/16). P9 반영. 분기 종료. 다음: 새 A/B/C/D(관계의 다른 형태 / 연속 STDP / 전체 모델 중 하나).
 - 새 분기 "경험이 관계를 정하는가"(상한 2): `research/abcd-2026-09-30-dissociation.md`. **E134**(이중 해리) 게이트 통과 → 실행(발달 32 + 과제 128 ≈90분). 감시 `watch-exp.sh E134 160 "=> "`. 완료 후 `python3 scripts/judge_e134.py`.
+- 23:36 백그라운드 Bash 감시가 30분 제한으로 강제 종료됨(업데이트 후 변화) → **Monitor 도구(timeout 1800000)로 watch-exp.sh 를 걸고 만료마다 재무장**. E134 는 23:36 기준 76/160, 실패 0.
+- E134 완료(23:05~00:11) → **이중 해리 지지**(16/16·16/16). P9 반영. 분기 종료. 다음: 새 A/B/C/D.

@@ -1,0 +1,5 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 3~11(평균 4.9), 새↔훈련 겹침 4~7, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e134_main_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e134_main_run/minimal_circuit_CODE'
+=> DEVSHIFT seed=70 env=corr dev_shift=7 | 같은 위치: 일치형 0.897 불일치형 0.890 | 7칸 이동 위치: 일치형 0.022 불일치형 0.010
+=> DEVHEBB seed=70 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.278 불일치형 0.046 | 가지치기 후 같은 위치: 일치형 0.897 불일치형 0.890 | 같은 위치 후보 가중치 몫 평균: 일치형 0.067 불일치형 0.060 (균등=0.020) → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E134/dev_corr_w70.npz
