@@ -138,3 +138,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 결과별 다음(E133.md 4절): 지지 → K68 범위를 "망 스파이크 기반 헤브 형성"으로 확장, 분기 종료 → 새 abcd. 효과 없음 → 호스트 규칙과 망 헤브 차이 측정(E134). 보류 → 원인 측정.
 주의: 이 세션에서 발견한 반복 오류 — 판정 정규식이 출력 괄호 라벨 안 공백을 \\S* 로 받는 결함(E127·E128 두 번), 시험 입력 결함(learn=frozen 우연 일치), 짝 검정 독립 단위(배선). 커밋 메시지 끝은 "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" 한 줄(Claude-Session 줄은 이제 안 붙인다).
 - (재시작 후) E133 완료 22:57 → **지지**(16/16·16/16). P9 반영. 분기 종료. 다음: 새 A/B/C/D(관계의 다른 형태 / 연속 STDP / 전체 모델 중 하나).
+- 새 분기 "경험이 관계를 정하는가"(상한 2): `research/abcd-2026-09-30-dissociation.md`. **E134**(이중 해리) 게이트 통과 → 실행(발달 32 + 과제 128 ≈90분). 감시 `watch-exp.sh E134 160 "=> "`. 완료 후 `python3 scripts/judge_e134.py`.

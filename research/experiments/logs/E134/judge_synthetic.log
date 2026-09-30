@@ -1,0 +1,12 @@
+PASS 이중 해리                              → 이중 해리 지지 — 발달 경험의 대응 구조가 회로가 적용하는 관계를 정한다
+PASS 단일 해리(shift 과제만)                   → 보류(단일 해리)
+PASS 해리 없음                              → 해리 없음 — 경험 대응 구조가 적용 관계를 바꾸지 못함(설계가 관계를 정함)
+PASS shift 과제 14/16                     → 이중 해리 지지 — 발달 경험의 대응 구조가 회로가 적용하는 관계를 정한다
+PASS shift 과제 13/16(p 0.02) → 단일        → 보류(단일 해리)
+PASS 조작: shift 발달 형성 실패                 → 보류(조작검증 실패)
+PASS 조작: identity 발달에 이동 짝              → 보류(조작검증 실패)
+PASS 조작: 파일 불일치                         → 보류(조작검증 실패)
+PASS 결측                                 → [측정 확인] 결측 1/160: [('shift', 'tid', 70, 601)] — **판정 보류, 수치 미출력**
+PASS 실제 DEVHEBB+DEVSHIFT 줄 파싱 → ('18', 'shift', '7', '0.000', '0.000', '0.953', '0.943')
+PASS 실제 [KC불러옴]+이동+SDLAB 줄 파싱 → ('/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E134/path_dev_shift_w18.npz', '7', '7', '68.8', '58.3')
+합성 시험 11/11 통과

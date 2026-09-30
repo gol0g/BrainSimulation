@@ -1,0 +1,28 @@
+[관계] 항목 8개(훈련 4, 새 4), 반쪽 50 중 활성 15, 항목 간 겹침 2~8(평균 4.6), 새↔훈련 겹침 3~7, 패턴 64개(S 8, D 56)
+make: Entering directory '/root/e134_run/minimal_circuit_CODE'
+make: Leaving directory '/root/e134_run/minimal_circuit_CODE'
+[KC불러옴] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E133/dev_corr_w46.npz | 일치형 같은 위치 319/400 | 불일치형 같은 위치 320/400
+  시행    1~ 400: 정답률  54.5%
+  시행  401~ 800: 정답률  65.5%
+=> SDGEN mode=learn seed=46 trialseed=600 train_same=100.0 train_diff=70.8 train_bal=85.4 novel_same=100.0 novel_diff=38.8 novel_bal=69.4 | ties train:0 novel:0 | n_same/diff train 52/48 novel 51/49
+=> SDLAB diff=cyclic rule=samediff mode=learn seed=46 trialseed=600 train_accL=100.0 train_accR=70.8 train_lbal=85.4 novel_accL=100.0 novel_accR=38.8 novel_lbal=69.4
+
+=== 평가 (탐색 없음, 학습 없음, 무작위 순서 100시행) : 정답률 100.0% | 동점 0회 ===
+   자극 A: 57/57 (100.0%)
+   자극 B: 43/43 (100.0%)
+
+=== 학습 후 자극별 출력 (선택 이전의 원 신호) ===
+  자극 A → 정답 L | out_L=  24  out_R=   7  차이   +17 | KC 128개
+  자극 B → 정답 R | out_L=  34  out_R=  46  차이   -12 | KC 113개
+
+=== 가중치 구조 (A전용 KC 116개, B전용 KC 101개) ===
+  A전용 KC → out_L 평균 0.5881 | out_R 평균 0.5300 | 차이 +0.0582 (정답은 out_L) **정답쪽 우세**
+  B전용 KC → out_L 평균 0.5306 | out_R 평균 0.5425 | 차이 -0.0119 (정답은 out_R) **정답쪽 우세**
+
+=== 가중치 변화 ===
+  kc_out_l: n=8099 |Δ|평균 0.06876 변화율  76.2% | 평균 0.500→0.553 | std 0.0000→0.0856
+  kc_out_r: n=7952 |Δ|평균 0.04274 변화율  75.7% | 평균 0.500→0.537 | std 0.0000→0.0477
+
+=== 요약 (mode=learn seed=46) ===
+  첫 구간 54.5% → 마지막 구간 65.5% | 변화 +11.0%p | 보상률 60.0%
+=> MINCIRC mode=learn seed=46 first=54.5 last=65.5 delta=+11.0 reward=60.0 **eval=100.0** tie=0 trialseed=600

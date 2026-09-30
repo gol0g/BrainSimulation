@@ -332,7 +332,7 @@ def make_samediff(args):
         for j in range(args.sd_items):
             q = np.zeros(args.n_sens)
             q[codes[i]] = 1
-            q[h + codes[j]] = 1
+            q[h + (codes[j] + getattr(args, "sd_shift", 0)) % h] = 1   # E134: 반쪽2 는 항목 j 를 k 칸 순환 이동(k=0 이면 이전과 같음)
             key = ("S%d" % i) if i == j else ("D%d_%d" % (i, j))
             if getattr(args, "sd_rule", "samediff") == "half1":
                 # E125: 같은 자극, 선형 분리 가능한 규칙 — 반쪽1 항목이 (훈련·새 항목 각각의) 앞 절반이면 L
@@ -390,6 +390,30 @@ def develop_comparator(args):
     stats = {"match_same_pos": float(np.mean((b - h) == a)),
              "mis_same_pos": float(np.mean((i_ % h) == (e % h)))}
     return a, b, e, i_, stats
+
+
+def dev_pattern(items, x, y, env, h, k, n_sens):
+    """E134: 발달 노출 패턴. corr: 양쪽 같은 항목(반쪽2 = 반쪽1 과 같은 위치), shift: 반쪽2 = 항목 x 를 k 칸 순환 이동,
+    indep: 반쪽2 = 독립 항목 y."""
+    q = np.zeros(n_sens)
+    q[items[x]] = 1
+    if env == "corr":
+        q[h + items[x]] = 1
+    elif env == "shift":
+        q[h + (items[x] + k) % h] = 1
+    else:
+        q[h + items[y]] = 1
+    return q
+
+
+def corr_fracs(a, b, e, i_, h, k):
+    """E134: 형성 연결의 대응 비율. 일치형 (a∈반쪽1, b∈반쪽2), 불일치형 (e, i_ 다른 반쪽).
+    반환: (일치형 같은 위치, 불일치형 같은 위치, 일치형 k 이동 위치, 불일치형 k 이동 위치). 대응: 반쪽1 p ↔ 반쪽2 (p+k) mod h."""
+    ms = float(np.mean((b - h) == a)); xs = float(np.mean((i_ % h) == (e % h)))
+    mk = float(np.mean((b - h) == (a + k) % h))
+    e1 = e < h
+    xk = float(np.mean(np.where(e1, (i_ - h) == (e + k) % h, i_ == (e - h - k) % h)))
+    return ms, xs, mk, xk
 
 
 def hebb_update(w, pre, post, fired, act, eta, total, n_post):
@@ -623,7 +647,9 @@ def main():
                          "cyclic=순환 짝 (i, i+1 mod T) 만(같음 4 vs 다름 4 균형). 훈련 집합 평가도 훈련 자극만")
     ap.add_argument("--mismatch-w", type=float, default=8.0,
                     help="E129: comparator 배선의 불일치 KC 흥분/억제 가중치 크기")
-    ap.add_argument("--dev-env", default="corr", choices=("corr", "indep"),
+    ap.add_argument("--dev-shift", type=int, default=0, help="E134: --dev-env shift 의 이동 칸 수 k")
+    ap.add_argument("--sd-shift", type=int, default=0, help="E134: 과제 반쪽2 를 k 칸 순환 이동(같음 = 반쪽2 가 반쪽1 의 k 칸 이동)")
+    ap.add_argument("--dev-env", default="corr", choices=("corr", "indep", "shift"),
                     help="E130: 발달 환경. corr=같은 항목을 두 반쪽에(상관) / indep=두 반쪽 독립 항목")
     ap.add_argument("--dev-items", type=int, default=20, help="E130: 발달 항목 수(과제 항목과 별도 난수열)")
     ap.add_argument("--dev-rounds", type=int, default=300, help="E130: 구조 가소성 라운드 수")
@@ -738,6 +764,10 @@ def main():
         print("[KC불러옴] %s | 일치형 같은 위치 %d/%d | 불일치형 같은 위치 %d/%d"
               % (a.kc_wiring_file, int(np.sum((_L["b"] - _h) == _L["a"])), _L["a"].size,
                  int(np.sum((_L["i"] % _h) == (_L["e"] % _h))), _L["e"].size))
+        if a.dev_shift or a.sd_shift:
+            _kk = a.sd_shift if a.sd_shift else a.dev_shift
+            _cf = corr_fracs(_L["a"], _L["b"], _L["e"], _L["i"], _h, _kk)
+            print("[KC불러옴이동] k=%d | 일치형 %.3f 불일치형 %.3f (과제 sd_shift=%d)" % (_kk, _cf[2], _cf[3], a.sd_shift))
     if a.kc_wiring == "developed":
         # E130 경로 검사(읽기 전용): 발달 후 같은 위치 짝 비율(장치 연결에서 다시 읽음)
         _h = a.n_sens // 2
@@ -835,9 +865,8 @@ def main():
         items = [np.sort(rsd.choice(_h, kk, replace=False)) for _ in range(a.dev_items)]
         fire_m = 0; fire_x = 0
         for n_ in range(a.dev_hebb_exposures):
-            x_ = rsd.randint(a.dev_items); y_ = x_ if a.dev_env == "corr" else rsd.randint(a.dev_items)
-            q = np.zeros(a.n_sens); q[items[x_]] = 1; q[_h + items[y_]] = 1
-            PATTERNS["DEV"] = q
+            x_ = rsd.randint(a.dev_items); y_ = x_ if a.dev_env in ("corr", "shift") else rsd.randint(a.dev_items)
+            PATTERNS["DEV"] = dev_pattern(items, x_, y_, a.dev_env, _h, a.dev_shift, a.n_sens)
             _, _, kset = present("DEV")
             sid = np.asarray(pops["sens"].spike_recording_data[0][1], dtype=np.int64)
             act = np.zeros(a.n_sens, dtype=bool); act[sid] = True
@@ -860,7 +889,10 @@ def main():
             sel = np.flatnonzero(ipost == k); j = sel[np.argmax(wi[sel])]; i_[k - nmt] = ipre[j]
             mt = sel[(ipre[sel] % _h) == (e_fix[k - nmt] % _h)]; share_x.append(float(wi[mt].sum() / wi[sel].sum()))
         mf = float(np.mean((b - _h) == a_fix)); xf = float(np.mean((i_ % _h) == (e_fix % _h)))
+        _cf = corr_fracs(a_fix, b, e_fix, i_, _h, a.dev_shift)
         np.savez_compressed(a.dev_hebb_save, a=a_fix, b=b, e=e_fix, i=i_)
+        print("=> DEVSHIFT seed=%d env=%s dev_shift=%d | 같은 위치: 일치형 %.3f 불일치형 %.3f | %d칸 이동 위치: 일치형 %.3f 불일치형 %.3f"
+              % (a.seed, a.dev_env, a.dev_shift, _cf[0], _cf[1], a.dev_shift, _cf[2], _cf[3]))
         print("=> DEVHEBB seed=%d env=%s exposures=%d eta=%.2f w_fix=%.2f wc_total=%.2f wi_total=%.2f | 발화율(KC·노출당) 일치형 %.3f 불일치형 %.3f | "
               "가지치기 후 같은 위치: 일치형 %.3f 불일치형 %.3f | 같은 위치 후보 가중치 몫 평균: 일치형 %.3f 불일치형 %.3f (균등=%.3f) → %s"
               % (a.seed, a.dev_env, a.dev_hebb_exposures, a.dev_hebb_eta, a.dev_w_fix, a.dev_wc_total, a.dev_wi_total,

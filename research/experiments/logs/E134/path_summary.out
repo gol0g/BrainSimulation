@@ -1,0 +1,11 @@
+[Q1 회귀 — E133 corr learn w46 t600 와 같아야]
+=> SDLAB diff=cyclic rule=samediff mode=learn seed=46 trialseed=600 train_accL=100.0 train_accR=70.8 train_lbal=85.4 novel_accL=100.0 novel_accR=38.8 novel_lbal=69.4
+[Q2 발달 형성 — identity/shift k=7, 배선 18·19]
+  seed=18 env=corr dev_shift=7 | 같은 위치: 일치형 0.922 불일치형 0.920 | 7칸 이동 위치: 일치형 0.000 불일치형 0.000
+  seed=18 env=shift dev_shift=7 | 같은 위치: 일치형 0.000 불일치형 0.000 | 7칸 이동 위치: 일치형 0.953 불일치형 0.943
+  seed=19 env=corr dev_shift=7 | 같은 위치: 일치형 0.922 불일치형 0.927 | 7칸 이동 위치: 일치형 0.000 불일치형 0.000
+  seed=19 env=shift dev_shift=7 | 같은 위치: 일치형 0.000 불일치형 0.000 | 7칸 이동 위치: 일치형 0.950 불일치형 0.938
+[Q3 출력 경로 — shift 발달 연결을 shift 과제로 불러오기(frozen, trials 1)]
+[KC불러옴] research/experiments/traces/E134/path_dev_shift_w18.npz | 일치형 같은 위치 0/400 | 불일치형 같은 위치 0/400
+[KC불러옴이동] k=7 | 일치형 0.953 불일치형 0.943 (과제 sd_shift=7)
+[E134 경로 검사] 종료
