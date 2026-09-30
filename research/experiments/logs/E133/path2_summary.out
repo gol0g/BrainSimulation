@@ -1,0 +1,5 @@
+  comparator learn w18 t600: train_accL=100.0 train_accR=26.0 train_lbal=63.0 novel_lbal=64.9 
+  loaded corr SDCOMP: 훈련 같음: 일치KC 몫 0.904 | 훈련 다름: 불일치KC 몫 0.649 | 새 같음: 일치KC 몫 1.000 | 새 다름: 불일치KC 몫 0.560 || active_kc_per_stim 평균 124.9
+  loaded indep SDCOMP: 훈련 같음: 일치KC 몫 0.016 | 훈련 다름: 불일치KC 몫 0.935 | 새 같음: 일치KC 몫 0.192 | 새 다름: 불일치KC 몫 0.828 || active_kc_per_stim 평균 113.9
+  comparator SDCOMP: 훈련 같음: 일치KC 몫 1.000 | 훈련 다름: 불일치KC 몫 0.637 | 새 같음: 일치KC 몫 1.000 | 새 다름: 불일치KC 몫 0.564 || active_kc_per_stim 평균 127.1
+[E133 경로 검사 2] 종료

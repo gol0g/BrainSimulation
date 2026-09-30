@@ -1,0 +1,3 @@
+  corr: 400 || train_lbal=65.0 novel_lbal=59.6 
+  indep: 400 || train_lbal=67.0 novel_lbal=51.6 
+[E133 경로 검사] 종료

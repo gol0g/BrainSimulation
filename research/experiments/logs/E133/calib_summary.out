@@ -1,1 +1,14 @@
 [회귀 — E124 learn w10 t600 SDGEN 과 같아야]
+=> SDGEN mode=learn seed=10 trialseed=600 train_same=0.0 train_diff=100.0 train_bal=50.0 novel_same=32.7 novel_diff=81.2 novel_bal=57.0 | ties train:0 novel:3 | n_same/diff train 49/51 novel 52/48
+[회귀 — E130 developed corr w10 t600 SDLAB 과 같아야]
+=> SDLAB diff=cyclic rule=samediff mode=learn seed=10 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=74.0 novel_lbal=87.0
+[헤브 발달 보정]
+  seed=18 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.286 불일치형 0.036 | 가지치기 후 같은 위치: 일치형 0.922 불일치형 0.920 | 같은 위치 후보 가중치 몫 평균: 일치형 0.067 불일치형 0.058 (균등=0.020)
+  seed=18 env=indep exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.257 불일치형 0.214 | 가지치기 후 같은 위치: 일치형 0.013 불일치형 0.020 | 같은 위치 후보 가중치 몫 평균: 일치형 0.024 불일치형 0.025 (균등=0.020)
+  seed=18 env=corr exposures=400 eta=1.00 w_fix=6.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.298 불일치형 0.003 | 가지치기 후 같은 위치: 일치형 0.922 불일치형 0.172 | 같은 위치 후보 가중치 몫 평균: 일치형 0.067 불일치형 0.032 (균등=0.020)
+  seed=18 env=indep exposures=400 eta=1.00 w_fix=6.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.296 불일치형 0.028 | 가지치기 후 같은 위치: 일치형 0.013 불일치형 0.035 | 같은 위치 후보 가중치 몫 평균: 일치형 0.027 불일치형 0.023 (균등=0.020)
+  seed=19 env=corr exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.287 불일치형 0.051 | 가지치기 후 같은 위치: 일치형 0.922 불일치형 0.927 | 같은 위치 후보 가중치 몫 평균: 일치형 0.067 불일치형 0.062 (균등=0.020)
+  seed=19 env=indep exposures=400 eta=1.00 w_fix=4.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.218 불일치형 0.232 | 가지치기 후 같은 위치: 일치형 0.037 불일치형 0.007 | 같은 위치 후보 가중치 몫 평균: 일치형 0.020 불일치형 0.020 (균등=0.020)
+  seed=19 env=corr exposures=400 eta=1.00 w_fix=6.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.302 불일치형 0.006 | 가지치기 후 같은 위치: 일치형 0.938 불일치형 0.517 | 같은 위치 후보 가중치 몫 평균: 일치형 0.067 불일치형 0.040 (균등=0.020)
+  seed=19 env=indep exposures=400 eta=1.00 w_fix=6.00 wc_total=4.00 wi_total=8.00 | 발화율(KC·노출당) 일치형 0.302 불일치형 0.059 | 가지치기 후 같은 위치: 일치형 0.020 불일치형 0.013 | 같은 위치 후보 가중치 몫 평균: 일치형 0.020 불일치형 0.020 (균등=0.020)
+[E133 보정] 종료

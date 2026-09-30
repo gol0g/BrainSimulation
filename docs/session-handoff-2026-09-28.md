@@ -124,3 +124,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - **E132**(큰 새 표본 짝 비교 확증, 분기 2/2) 게이트 통과 → 실행(96런 ≈90분). 감시 `watch-exp.sh E132 96 "SDLAB"`.
 - E132 완료(00:41~21:46, 절전 01:07~21:06 포함) → **인과 효과 지지(확증)**. 짝 검정 독립 단위 정정(E125~E131). 분기 종료. 다음: 새 A/B/C/D.
 - 새 분기 "망 스파이크로 비교 특징 형성"(상한 3): `research/abcd-2026-09-30-inetwork.md`. minimal_circuit.py candidates/loaded 배선·헤브 발달(hebb_update, CPU 검사 PASS). E133 보정 21:52 시작(규칙 고정 dev_rule_fixed.txt).
+- **E133**(망 스파이크 헤브 발달, 분기 1/3) 게이트 통과 → 실행(발달 32 + 과제 96 ≈100분). 감시 `watch-exp.sh E133 128 "=> "` 대신 과제 96 + 발달 32 줄 패턴 — 러너 줄 수 확인.
