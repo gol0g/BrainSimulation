@@ -146,11 +146,30 @@ def build(args):
             _e = np.where(_dir, _rs.randint(0, _h, _xk.size), _h + _rs.randint(0, _h, _xk.size))
             _mk_pop3("sens_kc", _a, _mk, args.dev_w_fix)
             _cpre = np.concatenate([_h + np.arange(_h)] * _nm); _cpost = np.repeat(_mk, _h)
-            _mk_pop3("sens_kc_cand", _cpre, _cpost, args.dev_wc_total / _h)
-            _mk_pop3("sens_kc_mx", _e, _xk, args.mismatch_w)
             _other = np.where(_e < _h, _h, 0)
             _ipre = (np.repeat(_other, _h) + np.tile(np.arange(_h), _xk.size)); _ipost = np.repeat(_xk, _h)
-            _mk_pop3("sens_kc_icand", _ipre, _ipost, -args.dev_wi_total / _h)
+            if getattr(args, "dev_mode", "hebb") == "stdp":
+                # E135: 후보 시냅스 = GeNN 안의 R-STDP(매 스텝). 발달 동안 도파민 상수(흥분 +, 억제 −) → 연속 STDP.
+                # LTD 항(A_minus) = dev_a_minus(기본 0: 감각은 KC 발화 뒤에도 계속 발화해 LTD 가 쌓이면 자주 함께 켜지는 짝이 약해질 수 있다).
+                def _mk_stdp(name, pre, post, w0, wmin, wmax):
+                    kp_ = dict(DEFAULT_PARAMS)
+                    kp_.update({"tau_e": args.dev_tau_e, "A_plus": 1.0, "A_minus": args.dev_a_minus, "eta": args.dev_stdp_eta,
+                                "w_min": wmin, "w_max": wmax, "dopamine": 0.0})
+                    sg_ = m.add_synapse_population(
+                        name, "SPARSE", pops["sens"], pops["kc"],
+                        init_weight_update(make_rstdp_model(), kp_, {"g": init_var("Constant", {"constant": w0}), "e": 0.0},
+                                           {"preTrace": 0.0}, {"postTrace": 0.0}),
+                        init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                    sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
+                    sg_.set_wu_param_dynamic("dopamine")
+                    return sg_
+                _mk_stdp("sens_kc_cand", _cpre, _cpost, args.dev_wc_total / _h, 0.0, args.dev_stdp_wmax_c)
+                _mk_pop3("sens_kc_mx", _e, _xk, args.mismatch_w)
+                _mk_stdp("sens_kc_icand", _ipre, _ipost, -args.dev_wi_total / _h, -args.dev_stdp_wmax_i, 0.0)
+            else:
+                _mk_pop3("sens_kc_cand", _cpre, _cpost, args.dev_wc_total / _h)
+                _mk_pop3("sens_kc_mx", _e, _xk, args.mismatch_w)
+                _mk_pop3("sens_kc_icand", _ipre, _ipost, -args.dev_wi_total / _h)
             KCWIRE["cand"] = {"a": _a, "e": _e}
         KCWIRE["n_match"], KCWIRE["n_mis"] = int(_nm), int(args.n_kc - _nm)
     elif getattr(args, "kc_wiring", "random") == "developed":
@@ -658,6 +677,13 @@ def main():
     ap.add_argument("--dev-hebb-save", default=None,
                     help="E133: --kc-wiring candidates 로 망 스파이크 헤브 발달을 돌리고 가지치기한 연결(a,b,e,i)을 npz 로 저장한 뒤 종료")
     ap.add_argument("--dev-hebb-exposures", type=int, default=400, help="E133: 헤브 발달 노출 수")
+    ap.add_argument("--dev-mode", default="hebb", choices=("hebb", "stdp"),
+                    help="E135: 발달 가소성. hebb=시행 단위 호스트 헤브+합 보존(E133) / stdp=GeNN 안 R-STDP 도파민 상수(합 보존 없음)")
+    ap.add_argument("--dev-stdp-eta", type=float, default=0.01, help="E135: STDP 학습률")
+    ap.add_argument("--dev-tau-e", type=float, default=20.0, help="E135: STDP 자격흔적 시정수")
+    ap.add_argument("--dev-a-minus", type=float, default=0.0, help="E135: STDP LTD 이득")
+    ap.add_argument("--dev-stdp-wmax-c", type=float, default=1.0, help="E135: 흥분 후보 가중치 상한")
+    ap.add_argument("--dev-stdp-wmax-i", type=float, default=2.0, help="E135: 억제 후보 가중치 크기 상한")
     ap.add_argument("--dev-hebb-eta", type=float, default=1.0, help="E133: 헤브 증가량(후보 1개 초기 가중치 단위)")
     ap.add_argument("--dev-w-fix", type=float, default=4.0, help="E133: 일치형 고정 입력 가중치")
     ap.add_argument("--dev-wc-total", type=float, default=4.0, help="E133: 일치형 후보 가중치 합(보존)")
@@ -860,6 +886,9 @@ def main():
             return sg_, np.asarray(sg_.get_sparse_pre_inds(), dtype=np.int64), np.asarray(sg_.get_sparse_post_inds(), dtype=np.int64)
         cg, cpre, cpost = _conn("sens_kc_cand"); ig, ipre, ipost = _conn("sens_kc_icand")
         wc = np.full(cpre.size, a.dev_wc_total / _h); wi = np.full(ipre.size, a.dev_wi_total / _h)
+        if a.dev_mode == "stdp":
+            cg.set_dynamic_param_value("dopamine", 1.0)     # 흥분 후보: pre→post 짝이 강화
+            ig.set_dynamic_param_value("dopamine", -1.0)    # 억제 후보: pre→post 짝이 더 음(억제 강화)
         rsd = np.random.RandomState(6000 + a.seed)
         kk = int(round(a.sd_frac * _h))
         items = [np.sort(rsd.choice(_h, kk, replace=False)) for _ in range(a.dev_items)]
@@ -874,11 +903,22 @@ def main():
             if kset:
                 fired[np.fromiter(kset, dtype=np.int64)] = True
             fire_m += int(fired[:nmt].sum()); fire_x += int(fired[nmt:].sum())
-            wc = hebb_update(wc, cpre, cpost, fired, act, a.dev_hebb_eta * a.dev_wc_total / _h, a.dev_wc_total, nk)
-            wi = hebb_update(wi, ipre, ipost, fired, act, a.dev_hebb_eta * a.dev_wi_total / _h, a.dev_wi_total, nk)
-            cg.vars["g"].values = wc.astype(np.float32); cg.vars["g"].push_to_device()
-            ig.vars["g"].values = (-wi).astype(np.float32); ig.vars["g"].push_to_device()
+            if a.dev_mode == "hebb":
+                wc = hebb_update(wc, cpre, cpost, fired, act, a.dev_hebb_eta * a.dev_wc_total / _h, a.dev_wc_total, nk)
+                wi = hebb_update(wi, ipre, ipost, fired, act, a.dev_hebb_eta * a.dev_wi_total / _h, a.dev_wi_total, nk)
+                cg.vars["g"].values = wc.astype(np.float32); cg.vars["g"].push_to_device()
+                ig.vars["g"].values = (-wi).astype(np.float32); ig.vars["g"].push_to_device()
         apply_stim(pops, a, None)
+        if a.dev_mode == "stdp":
+            # E135: 도파민 0 으로 되돌리고 장치 가중치를 읽는다(가지치기만 호스트)
+            cg.set_dynamic_param_value("dopamine", 0.0); ig.set_dynamic_param_value("dopamine", 0.0)
+            cg.vars["g"].pull_from_device(); ig.vars["g"].pull_from_device()
+            wc = np.asarray(cg.vars["g"].values, dtype=np.float64).ravel().copy()
+            wi = -np.asarray(ig.vars["g"].values, dtype=np.float64).ravel().copy()
+            w0c = a.dev_wc_total / _h; w0i = a.dev_wi_total / _h
+            print("[STDP발달] 흥분 후보: 평균 %.4f(초기 %.4f) std %.4f 상한 도달 %.3f | 억제 후보 크기: 평균 %.4f(초기 %.4f) std %.4f 상한 도달 %.3f"
+                  % (wc.mean(), w0c, wc.std(), float(np.mean(wc >= a.dev_stdp_wmax_c - 1e-6)),
+                     wi.mean(), w0i, wi.std(), float(np.mean(wi >= a.dev_stdp_wmax_i - 1e-6))))
         # 가지치기: KC 마다 최강 후보 1개
         a_fix = KCWIRE["cand"]["a"]; e_fix = KCWIRE["cand"]["e"]
         b = np.zeros(nmt, dtype=np.int64); i_ = np.zeros(nk - nmt, dtype=np.int64); share_m = []; share_x = []

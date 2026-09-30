@@ -141,3 +141,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 새 분기 "경험이 관계를 정하는가"(상한 2): `research/abcd-2026-09-30-dissociation.md`. **E134**(이중 해리) 게이트 통과 → 실행(발달 32 + 과제 128 ≈90분). 감시 `watch-exp.sh E134 160 "=> "`. 완료 후 `python3 scripts/judge_e134.py`.
 - 23:36 백그라운드 Bash 감시가 30분 제한으로 강제 종료됨(업데이트 후 변화) → **Monitor 도구(timeout 1800000)로 watch-exp.sh 를 걸고 만료마다 재무장**. E134 는 23:36 기준 76/160, 실패 0.
 - E134 완료(23:05~00:11) → **이중 해리 지지**(16/16·16/16). P9 반영. 분기 종료. 다음: 새 A/B/C/D.
+- 새 분기 "연속 STDP 로 비교 특징 형성"(상한 2): `research/abcd-2026-10-01-stdp.md`. minimal_circuit.py --dev-mode stdp(후보 = GeNN R-STDP, 도파민 상수 ±). E135 보정 00:15 시작(규칙 고정 stdp_rule_fixed.txt), 감시 = Monitor.
