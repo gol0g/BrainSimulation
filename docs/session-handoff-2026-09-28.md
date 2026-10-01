@@ -144,3 +144,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 새 분기 "연속 STDP 로 비교 특징 형성"(상한 2): `research/abcd-2026-10-01-stdp.md`. minimal_circuit.py --dev-mode stdp(후보 = GeNN R-STDP, 도파민 상수 ±). E135 보정 00:15 시작(규칙 고정 stdp_rule_fixed.txt), 감시 = Monitor.
 - E135 보정(00:15~00:20): STDP 충돌 수정(모델 객체 공유) 후 재보정 → **형성 불충분**(사전 규칙, 본실험 미실행). 다음 E136 Oja 형 망 안 경쟁.
 - E136 보정(00:23~00:27): Oja 형 4 조합 모두 형성 → eta 0.005·beta 5 선택. **E136 본실험** 게이트 통과 → 실행(발달 32 + 과제 96). 감시 Monitor(watch-exp.sh E136 128 "=> "), 30분마다 재무장.
+- E136 완료(00:29~01:21) → **지지**(16/16·16/16). P9 는 01:22 일부 반영 후 데스크탑 절전으로 중단, 23:09 완료.
