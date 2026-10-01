@@ -155,3 +155,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 다음 결정 문서: research/abcd-2026-10-01-dose.md(K72 범위 정정 + E137). E137 = 관계 전이의 용량-반응(헌장 개념 조건 4), 176줄 ≈70분, 러너 scripts/e137_main.sh, 판정 python3 scripts/judge_e137.py(기준 logs/E137/criteria_fixed.txt, 합성 20/20).
 - 경로 검사가 잠복 결함 발견·수리(minimal_circuit.py main() 지역 변수 io → ino, --dump-rewards·--reward-file 복구). 회귀 4종 동일.
 - 감시: Monitor ~/bin/watch-exp.sh E137 176 "e137 " (30분 만료마다 재무장). 끝나면 판정 → 독립 대조(로그 직접 재계산) → P9(E137·H060·current-state) → DESIGN_RECOVERY → push.
+- 2026-10-02 01:06 E137 지지(K73): 61.1→68.2→77.4→88.0%, 무학습 50.7%, 15/16·16/16, 독립 대조 일치. P9 완료. 다음: 새 A/B/C/D(후보: 전체 모델 크기 한계 = KC 표현 희석 / 망 안 승자 선택 / 비교 틀 형성 / 맥락 의존 개념).
