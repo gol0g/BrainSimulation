@@ -846,9 +846,9 @@ def main():
         sp = 0
         for k in range(KCWIRE["n_match"]):
             pr = np.sort(mp[mq == k]); sp += int(pr.size == 2 and pr[1] - _h == pr[0])
-        eo = np.full(a.n_kc, -1); eo[eq] = ep; io = np.full(a.n_kc, -1); io[iq] = ip
+        eo = np.full(a.n_kc, -1); eo[eq] = ep; ino = np.full(a.n_kc, -1); ino[iq] = ip   # E137: 'io' 는 모듈 이름 — 지역 변수로 쓰면 main() 전체에서 io.open 이 UnboundLocalError(--dump-rewards·--reward-file)
         xs = np.arange(KCWIRE["n_match"], a.n_kc)
-        sx = int(np.sum((eo[xs] % _h) == (io[xs] % _h)))
+        sx = int(np.sum((eo[xs] % _h) == (ino[xs] % _h)))
         print("[KC발달] env=%s rounds=%d exposures=%d theta=%.2f items=%d | 일치형 같은 위치 %d/%d | 불일치형 같은 위치 %d/%d | (호스트 계산 %.3f/%.3f)"
               % (a.dev_env, a.dev_rounds, a.dev_exposures, a.dev_theta, a.dev_items, sp, KCWIRE["n_match"], sx, KCWIRE["n_mis"],
                  KCWIRE["dev_stats"]["match_same_pos"], KCWIRE["dev_stats"]["mis_same_pos"]))
@@ -863,9 +863,9 @@ def main():
         for k in range(KCWIRE["n_match"]):
             pr = np.sort(mp[mq == k])
             ok_m += int(pr.size == 2 and pr[0] < _h <= pr[1] and pr[1] - _h == pr[0])
-        eo = np.full(a.n_kc, -1); eo[eq] = ep; io = np.full(a.n_kc, -1); io[iq] = ip
+        eo = np.full(a.n_kc, -1); eo[eq] = ep; ino = np.full(a.n_kc, -1); ino[iq] = ip   # E137: 'io' 는 모듈 이름 — 지역 변수로 쓰면 main() 전체에서 io.open 이 UnboundLocalError(--dump-rewards·--reward-file)
         xs = np.arange(KCWIRE["n_match"], a.n_kc)
-        ok_x = int(np.sum((eo[xs] >= 0) & (io[xs] >= 0) & ((eo[xs] % _h) == (io[xs] % _h)) & ((eo[xs] < _h) != (io[xs] < _h))))
+        ok_x = int(np.sum((eo[xs] >= 0) & (ino[xs] >= 0) & ((eo[xs] % _h) == (ino[xs] % _h)) & ((eo[xs] < _h) != (ino[xs] < _h))))
         print("[KC배선] comparator: 일치 KC %d 중 같은 위치 두 반쪽 입력 %d, 불일치 KC %d 중 같은 위치 흥분·억제(다른 반쪽) %d, w=%.2f mismatch_w=%.2f"
               % (KCWIRE["n_match"], ok_m, KCWIRE["n_mis"], ok_x, a.sens_kc_w, a.mismatch_w))
 

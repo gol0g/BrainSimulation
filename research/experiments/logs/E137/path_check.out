@@ -1,0 +1,16 @@
+[1 회귀 K50 w0 t100 trials 400 block 400 — 기대 first=60.5 reward=60.5 eval=100.0]
+=> MINCIRC mode=learn seed=0 first=60.5 last=60.5 delta=+0.0 reward=60.5 **eval=100.0** tie=0 trialseed=100
+[2 Oja 발달 회귀 w18 corr — 기대(E136 보정) 가지치기 일치형 0.810 불일치형 0.920]
+가지치기 후 같은 위치: 일치형 0.810 불일치형 0.920
+[3/4 learn T100] 블록 1 | dl 0.00597 dr 0.00410 | train_lbal=65.0 novel_lbal=65.1 | 보상 계열 100줄 | 일치형 같은 위치 324/400 | 불일치형 같은 위치 368/400
+[3/4 learn T200] 블록 2 | dl 0.01332 dr 0.00748 | train_lbal=70.8 novel_lbal=65.4 | 보상 계열 200줄 | 일치형 같은 위치 324/400 | 불일치형 같은 위치 368/400
+[3/4 frozen T100] 블록 1 | dl 0.00000 dr 0.00000 | train_lbal=46.7 novel_lbal=66.4 | 보상 계열 100줄 | 일치형 같은 위치 324/400 | 불일치형 같은 위치 368/400
+[3/4 frozen T200] 블록 2 | dl 0.00000 dr 0.00000 | train_lbal=46.7 novel_lbal=66.4 | 보상 계열 200줄 | 일치형 같은 위치 324/400 | 불일치형 같은 위치 368/400
+[3 중첩] T100 보상 계열 = T200 앞 100시행: 같음
+[5 회귀 E129 comparator learn w10 t600(800시행) — 원 로그 cp_learn_w10_t600]
+    같음: [KC배선] comparator: 일치 KC 400 중 같은 위치 두 반쪽 입력 400, 불일치 KC 400 중 같은 위치 흥분·억제(다른 반쪽) 400, w=4.00 mismatch_w=8.00
+    같음: => SDLAB diff=cyclic rule=samediff mode=learn seed=10 trialseed=600 train_accL=100.0 train_accR=100.0 train_lbal=100.0 novel_accL=100.0 novel_accR=80.0 novel_lbal=90.0
+[6 회귀 E130 developed corr frozen w10 t600 — 원 로그 dv_corr_frozen_w10_t600]
+    같음: [KC발달] env=corr rounds=1000 exposures=200 theta=0.15 items=20 | 일치형 같은 위치 222/400 | 불일치형 같은 위치 247/400 | (호스트 계산 0.555/0.618)
+    같음: => SDLAB diff=cyclic rule=samediff mode=frozen seed=10 trialseed=600 train_accL=40.0 train_accR=46.0 train_lbal=43.0 novel_accL=70.0 novel_accR=66.0 novel_lbal=68.0
+[E137 경로 검사] 종료

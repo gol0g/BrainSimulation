@@ -150,3 +150,8 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 사고: 01:22 E136 판정 직후 데스크탑 절전 → sshfs 무응답으로 셸 실행 불가 → "깨우면 알려 달라"며 멈춤 → 깬 뒤에도 재개 신호 없음, ~22시간 정지. 사용자: "깨면 알아서 움직여야 될 거 아니야".
 - 조치: **세션 시작 시 CronCreate 재개 점검**(`7,27,47 * * * *`, 세션 전용·7일 만료) — 셸이 안 뜨면 한 줄 대기, 뜨면 인계·current-state 기준으로 감시 재무장·미판정 판정·다음 수 실행. 이 세션: 작업 ID 158ffc03(23:10).
 - 기억: auto-resume-after-desktop-sleep(하드 룰). 새 세션은 재개 순서 직후 이 예약부터 건다.
+
+## 12. E137 진행 (2026-10-02 00:07)
+- 다음 결정 문서: research/abcd-2026-10-01-dose.md(K72 범위 정정 + E137). E137 = 관계 전이의 용량-반응(헌장 개념 조건 4), 176줄 ≈70분, 러너 scripts/e137_main.sh, 판정 python3 scripts/judge_e137.py(기준 logs/E137/criteria_fixed.txt, 합성 20/20).
+- 경로 검사가 잠복 결함 발견·수리(minimal_circuit.py main() 지역 변수 io → ino, --dump-rewards·--reward-file 복구). 회귀 4종 동일.
+- 감시: Monitor ~/bin/watch-exp.sh E137 176 "e137 " (30분 만료마다 재무장). 끝나면 판정 → 독립 대조(로그 직접 재계산) → P9(E137·H060·current-state) → DESIGN_RECOVERY → push.
