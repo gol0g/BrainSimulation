@@ -15,10 +15,11 @@ MODES = ("none", "all", "kc_only", "kcpop", "kcsel", "kcselonly")
 PRE = {10: 0.0195, 11: 0.0150, 12: 0.0262, 13: 0.0320, 14: 0.0165}      # E119 [사전]
 POST = {10: -0.0838, 11: -0.0574, 12: -0.0428, 13: -0.0489, 14: -0.0442}  # E119 [사후]
 NUM = r"([-+]?(?:[0-9.]+|nan))"
-TRATE = re.compile(r"^\s*e138 b(\d+) kcrate: => KCRATE kc_l \| (.*?) \|\| KCRATE kc_r \| (.*)$")
+TRATE = re.compile(r"^\s*e138(f?) b(\d+) kcrate: => KCRATE kc_l \| (.*?) \|\| KCRATE kc_r \| (.*)$")
 PR = re.compile(r"좌선택 (\d+) 우선택 (\d+) 비선택 (\d+) 무활동 (\d+) \| 희석 " + NUM + r" \| ≥1스파이크 좌전용 (\d+) 우전용 (\d+) 공유 (\d+) 무반응 (\d+)"
                 r" \| 여유합 " + NUM + r" 몫 좌선택 " + NUM + r" 우선택 " + NUM + r" 비선택 " + NUM + r" \| θ0\.3 선택 (\d+) θ0\.7 선택 (\d+) \| 제시 스파이크 (\d+)")
-TEVAL = re.compile(r"^\s*e138 b(\d+) (none|all|kc_only|kcpop|kcsel|kcselonly): => DECOMP mode=(\w+) mod=([-+0-9.]+)")
+TEVAL = re.compile(r"^\s*e138(f?) b(\d+) (none|all|kc_only|kcpop|kcsel|kcselonly): => DECOMP mode=(\w+) mod=([-+0-9.]+)")
+FIXMODES = ("kcsel", "kcselonly")   # 2026-10-03 수리 재실행(e138f)이 대체하는 분류 의존 모드(+ kcrate)
 
 
 def parse_pop(s):
@@ -83,26 +84,35 @@ def report(checks, res, RT=None, EV=None):
     print("Q2(κ = −e_so/|e|): κ ≥ 1.5 %d/5, κ ≤ 1.1 %d/5 → %s" % (res["n_cm"], res["n_ncm"], res["q2"]))
 
 
-def load():
-    RT, EV = {}, {}
+def load(use_fix=True):
+    """1차(태그 e138)와 수리 재실행(태그 e138f, 2026-10-03 — kc_selectivity eps 경계 수리 뒤 kcrate·kcsel·kcselonly)을 읽는다.
+    수리 재실행이 5뇌 × 3모드 모두 있으면 그 값으로 대체한다(판정 규칙 불변, criteria_fixed.txt [수리] 줄)."""
+    RT, EV, RTf, EVf = {}, {}, {}, {}
     try:
         for ln in open(os.path.join(EXP, "E138.log"), encoding="utf-8"):
             m = TRATE.match(ln)
             if m:
-                pl, pr = parse_pop(m.group(2)), parse_pop(m.group(3))
+                pl, pr = parse_pop(m.group(3)), parse_pop(m.group(4))
                 if pl and pr:
-                    RT[int(m.group(1))] = {"l": pl, "r": pr}
+                    (RTf if m.group(1) else RT)[int(m.group(2))] = {"l": pl, "r": pr}
                 continue
             m = TEVAL.match(ln)
             if m:
-                EV[(int(m.group(1)), m.group(2))] = {"mode": m.group(3), "mod": float(m.group(4))}
+                (EVf if m.group(1) else EV)[(int(m.group(2)), m.group(3))] = {"mode": m.group(4), "mod": float(m.group(5))}
     except FileNotFoundError:
         pass
-    return RT, EV
+    complete = all(b in RTf for b in BRAINS) and all((b, mm) in EVf for b in BRAINS for mm in FIXMODES)
+    if use_fix and complete:
+        return dict(RTf), {**EV, **{k: v for k, v in EVf.items() if k[1] in FIXMODES}}, (RT, EV)
+    return RT, EV, None
 
 
 if __name__ == "__main__":
-    RT, EV = load()
+    RT, EV, first = load()
+    if first is not None:
+        c1, r1 = judge(*first)
+        print("[1차(eps 경계 결함 포함) 참고] Q1 %s / Q2 %s" % ((r1["q1"], r1["q2"]) if r1 else ("결측", "결측")))
+        print("[수리 재실행 e138f 사용] kcrate·kcsel·kcselonly 15/15 — 아래가 판정")
     c, r = judge(RT, EV)
     report(c, r, RT, EV)
     sys.exit(0)

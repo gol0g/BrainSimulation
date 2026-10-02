@@ -20,10 +20,13 @@ def classify(cL, cR, c0, n_pres, steps_per_pres, base_steps, theta=0.5, eps=0.02
     tot = eL + eR
     # 소수 9자리 반올림: 정수 계수에서 수학적으로 정확히 θ 인 경계(예: 좌 3·우 1 → 0.5)가 부동소수 오차로 0.4999… 가 되지 않게(합성 시험이 발견)
     SI = np.round(np.where(tot > 0, (eL - eR) / np.maximum(tot, 1e-12), 0.0), 9)
+    # eps 비교도 같은 반올림(E138 독립 대조가 발견: 뇌 10 지속 발화 KC — 좌 292·우 308·기준선 1020/1000스텝 → 유발 합이 정확히 0.02 인데
+    # 부동소수로 0.020000000000000018 > 0.02 가 되어 우선택으로 오분류. 정수 산술 대조로 확인)
+    resp = np.round(tot, 9) > eps
     cls = np.zeros(cL.size, dtype=np.int64)
     cls[(cL + cR) > 0] = CLS_NS
-    cls[(tot > eps) & (SI >= theta)] = CLS_L
-    cls[(tot > eps) & (SI <= -theta)] = CLS_R
+    cls[resp & (SI >= theta)] = CLS_L
+    cls[resp & (SI <= -theta)] = CLS_R
     return rL, rR, b, SI, cls
 
 

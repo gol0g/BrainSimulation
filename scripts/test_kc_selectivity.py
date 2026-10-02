@@ -33,6 +33,12 @@ check("k6 경계 SI = 0.5 → 좌선택", abs(SI[6] - 0.5) < 1e-12 and cls[6] ==
 _, _, _, _, cls7 = K.classify(cL, cR, c0, 100, 3, 500, theta=0.7)
 check("θ 0.7 에서 k6 비선택", cls7[6] == 3)
 
+# 1b) eps 경계(E138 독립 대조가 발견한 실제 사례): 지속 발화 KC 좌 292·우 308·기준선 1020/1000스텝 → e_L 0, e_R 정확히 0.02 → "> 0.02" 아님 → 비선택
+_, _, _, _, clsb = K.classify(np.array([292.]), np.array([308.]), np.array([1020.]), 100, 3, 1000)
+check("eps 경계: 유발 합 정확히 0.02 → 비선택(3)", int(clsb[0]) == 3, str(list(clsb)))
+_, _, _, _, clsb2 = K.classify(np.array([255.]), np.array([263.]), np.array([870.]), 100, 3, 1000)
+check("eps 경계 2(뇌 10 kc_r 사례) → 비선택(3)", int(clsb2[0]) == 3, str(list(clsb2)))
+
 # 2) 희석 지수: 제시 구간 스파이크 중 비선택 몫 = (50+50 + 30+30 + 60+40 + 1+0) / 전체(활동)
 sp = cL + cR
 want = (sp[2] + sp[3] + sp[5] + sp[7]) / sp[cls != 0].sum()

@@ -80,12 +80,32 @@ lines = ["  e138 b10 kcrate: => " + kl + " || " + kr + "\n",
 with tempfile.TemporaryDirectory() as td:
     open(os.path.join(td, "E138.log"), "w", encoding="utf-8").writelines(lines)
     J.EXP = td
-    RTp, EVp = J.load()
+    RTp, EVp, _first = J.load()
 import math
 good = (RTp[10]["l"]["nL"] == 81 and RTp[10]["l"]["D"] == 0.612 and RTp[10]["l"]["sp"] == 4321 and RTp[10]["l"]["shR"] == -0.05
         and RTp[10]["r"]["nR"] == 77 and math.isnan(RTp[10]["r"]["D"]) and math.isnan(RTp[10]["r"]["shL"]) and RTp[10]["l"]["g1"] == (60, 9, 120, 811)
         and EVp[(10, "kcsel")] == {"mode": "kcsel", "mod": -0.1234} and EVp[(10, "none")]["mod"] == 0.0195 and len(EVp) == 2)
 ok_all &= good
 print("%-26s 기대 KCRATE 2집단·DECOMP 2줄 → %s" % ("줄 파싱", "✓" if good else "✗ %s %s" % (RTp, EVp)))
+
+# 수리 재실행(e138f) 대체: 1차 줄 + e138f 15줄이 있으면 kcsel·kcselonly·kcrate 를 e138f 로, 나머지 모드는 1차로
+lines2 = []
+for b in J.BRAINS:
+    lines2.append("  e138 b%d kcrate: => " % b + kl + " || " + kr.replace("희석 nan", "희석 0.100").replace("몫 좌선택 nan", "몫 좌선택 0.000") + "\n")
+    for mm, v in (("none", J.PRE[b]), ("all", J.POST[b]), ("kc_only", J.PRE[b] - 0.08), ("kcpop", J.PRE[b] - 0.55), ("kcsel", J.PRE[b] - 0.16), ("kcselonly", J.PRE[b] - 0.08)):
+        lines2.append("  e138 b%d %s: => DECOMP mode=%s mod=%+.4f acc=1 off=+0 pushed=4 kc_means[x]\n" % (b, mm, mm, v))
+for b in J.BRAINS:
+    lines2.append("  e138f b%d kcrate: => " % b + kl.replace("좌선택 81 우선택 12", "좌선택 80 우선택 11") + " || " + kr.replace("희석 nan", "희석 0.100").replace("몫 좌선택 nan", "몫 좌선택 0.000") + "\n")
+    lines2.append("  e138f b%d kcsel: => DECOMP mode=kcsel mod=%+.4f acc=1 off=+0 pushed=4 kc_means[x]\n" % (b, J.PRE[b] - 0.40))
+    lines2.append("  e138f b%d kcselonly: => DECOMP mode=kcselonly mod=%+.4f acc=1 off=+0 pushed=4 kc_means[x]\n" % (b, J.PRE[b] - 0.08))
+with tempfile.TemporaryDirectory() as td:
+    open(os.path.join(td, "E138.log"), "w", encoding="utf-8").writelines(lines2)
+    J.EXP = td
+    RT2, EV2, first2 = J.load()
+c2, r2 = J.judge(RT2, EV2); c1_, r1_ = J.judge(*first2)
+good = (first2 is not None and RT2[10]["l"]["nL"] == 80 and r2["q1"].startswith("학습 상한") and r1_["q1"].startswith("표현 상한")
+        and EV2[(10, "none")]["mod"] == J.PRE[10])
+ok_all &= good
+print("%-26s 기대 e138f 대체(1차 표현 상한 → 수리 학습 상한) → %s / %s %s" % ("수리 재실행 대체", r1_["q1"][:5] if r1_ else None, r2["q1"][:5] if r2 else None, "✓" if good else "✗"))
 print("전체: %s" % ("통과" if ok_all else "실패"))
 sys.exit(0 if ok_all else 1)
