@@ -156,3 +156,9 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 경로 검사가 잠복 결함 발견·수리(minimal_circuit.py main() 지역 변수 io → ino, --dump-rewards·--reward-file 복구). 회귀 4종 동일.
 - 감시: Monitor ~/bin/watch-exp.sh E137 176 "e137 " (30분 만료마다 재무장). 끝나면 판정 → 독립 대조(로그 직접 재계산) → P9(E137·H060·current-state) → DESIGN_RECOVERY → push.
 - 2026-10-02 01:06 E137 지지(K73): 61.1→68.2→77.4→88.0%, 무학습 50.7%, 15/16·16/16, 독립 대조 일치. P9 완료. 다음: 새 A/B/C/D(후보: 전체 모델 크기 한계 = KC 표현 희석 / 망 안 승자 선택 / 비교 틀 형성 / 맥락 의존 개념).
+
+## 13. E138 진행 (2026-10-02 23:32)
+- 다음 결정 문서: research/abcd-2026-10-02-dilution.md. E138 = 전체 모델 학습 효과 상한의 출처(Q1 표현 vs 학습, Q2 공통 모드 억제) — E119 반사 0 가중치 분해 측정, 학습 런 없음, 35줄(뇌 10~14 × kcrate + 이식 평가 6종).
+- 러너 scripts/e138_main.sh, 판정 python3 scripts/judge_e138.py(기준 logs/E138/criteria_fixed.txt, 합성 13/13), 계산 모듈 backend/genesis/kc_selectivity.py(합성 16/16).
+- 데스크탑 절전(01:06 무렵~23:14)으로 약 22시간 멈췄다가 재개 점검이 이어받음 — 절전 중 다음 A/B/C/D 초안은 Pi 스크래치패드에 써 두고 깬 뒤 원 기록과 대조해 반영.
+- 감시: Monitor ~/bin/watch-exp.sh E138 35 "e138 .*: =>" (30분 만료마다 재무장). 끝나면 판정 → 독립 대조(런별 로그 직접) → P9(E138·H061·current-state) → DESIGN_RECOVERY → push.

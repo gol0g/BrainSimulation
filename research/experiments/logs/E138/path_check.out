@@ -1,0 +1,12 @@
+[1 재현 — 기대 none +0.0195, all −0.0838]
+[b10_none] => DECOMP mode=none mod=+0.0195 acc=7.0 off=+0.0217 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan] 
+[b10_all] => DECOMP mode=all mod=-0.0838 acc=50.0 off=+0.0250 pushed=8 kc_means[kc_l>l=150.3016 kc_l>r=152.1891 kc_r>l=151.2080 kc_r>r=149.3712] 
+[2 권한 재현 — 기대 kcpop ≈ −0.5449 (R = 0.0195 − mod ≈ 0.564)]
+[b10_kcpop] => DECOMP mode=kcpop mod=-0.5449 acc=100.0 off=+0.0446 pushed=4 kc_means[kc_l>l=0.0000 kc_l>r=300.0000 kc_r>l=300.0000 kc_r>r=0.0000] 
+[3 새 모드 — 표본 밖 뇌 15, 기대 none +0.0255]
+[b15_kcrate] => KCRATE kc_l | 좌선택 135 우선택 7 비선택 37 무활동 2821 | 희석 0.123 | ≥1스파이크 좌전용 42 우전용 0 공유 137 무반응 2821 | 여유합 +580575.3 몫 좌선택 1.032 우선택 -0.006 비선택 -0.026 | θ0.3 선택 145 θ0.7 선택 140 | 제시 스파이크 46723 기준선(제시창) 평균 0.0522 | KC별 ΔS 좌선택(→L -2108.2 →R +662.4) 우선택(→L +699.3 => KCRATE kc_r | 좌선택 5 우선택 147 비선택 29 무활동 2819 | 희석 0.142 | ≥1스파이크 좌전용 2 우전용 50 공유 129 무반응 2819 | 여유합 +1030511.6 몫 좌선택 -0.002 우선택 1.023 비선택 -0.021 | θ0.3 선택 153 θ0.7 선택 149 | 제시 스파이크 50936 기준선(제시창) 평균 0.0579 | KC별 ΔS 좌선택(→L +1054.9 →R -507.9) 우선택(→L +4896 [E138] KC 발화 수 저장 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/pathcheck/rate_b15.npz (좌우 각 100회, 기준선 1000스텝) 
+[b15_none] => DECOMP mode=none mod=+0.0255 acc=2.0 off=-0.0201 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan] 
+[b15_kconly] => DECOMP mode=kc_only mod=-0.0799 acc=56.0 off=-0.0470 pushed=4 kc_means[kc_l>l=149.3060 kc_l>r=150.3930 kc_r>l=152.0387 kc_r>r=150.1178] 
+[b15_kcsel] [E138] kcsel: 선택 KC kc_l 좌 135 우 7 / kc_r 좌 5 우 147 (wmax 300, init 150) => DECOMP mode=kcsel mod=-0.5479 acc=100.0 off=-0.0278 pushed=4 kc_means[kc_l>l=143.5672 kc_l>r=156.4355 kc_r>l=157.1205 kc_r>r=142.8329] 
+[b15_kcselonly] [E138] kcselonly: 선택 KC kc_l 좌 135 우 7 / kc_r 좌 5 우 147 (wmax 300, init 150) => DECOMP mode=kcselonly mod=-0.0798 acc=59.0 off=-0.0455 pushed=4 kc_means[kc_l>l=149.2544 kc_l>r=150.2718 kc_r>l=151.9332 kc_r>r=150.1272] 
+[E138 경로 검사] 종료

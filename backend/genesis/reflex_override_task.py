@@ -240,7 +240,10 @@ def main():
     ap.add_argument("--decomp-weights", default=None,
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
-                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets"))
+                    choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
+                             "kcrate", "kcsel", "kcselonly", "kcpop"))
+    ap.add_argument("--kc-rate-file", default=None,
+                    help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
     ap.add_argument("--trace-kc-motor", default=None,
                     help="E111: 매 시행 도파민 직전 KC→motor 4그룹 자격흔적 합·가중치 평균을 CSV로(읽기 전용)")
     ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
@@ -403,9 +406,111 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop"):
+            sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         else:
             raise SystemExit("알 수 없는 분해 모드 %s" % mode)
         _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
+        if mode == "kcrate":
+            # E138: 발화 **수** 기준 KC 선택성(kcsets 의 ≥1 스파이크 기준은 지속·잔여 발화로 "공유"를 부풀릴 수 있다).
+            # 새 뇌(학습 가중치 이식 전 — KC 입력은 감각에서 오므로 반응은 KC→motor 가중치와 무관)에 kcsets 와 같은 제시:
+            # good=왼쪽/오른쪽 교대 args.trials 회(각 3처리 스텝), 사이 무자극 10처리 스텝 중 **뒤 5스텝**을 기준선으로 센다.
+            # 정의·분류·여유 분해는 kc_selectivity.py(합성 정답 시험 scripts/test_kc_selectivity.py) — 판정 기준 logs/E138/criteria_fixed.txt.
+            import kc_selectivity as KS
+            if not args.kc_rate_file:
+                raise SystemExit("kcrate 는 --kc-rate-file 이 필요하다")
+            n_k = int(cfg.n_kc_per_side)
+            cnt = {sd: {"l": np.zeros(n_k), "r": np.zeros(n_k)} for sd in ("left", "right")}
+            c0 = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+            n_pres = {"left": 0, "right": 0}
+            _b2.reset()
+            for _ in range(30):
+                _b2.process(_obs2)
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+                neu[_k] = np.zeros(nh)
+
+            def _count(dst):
+                for kn, pop in (("l", _b2.kc_left), ("r", _b2.kc_right)):
+                    ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+                    if ids.size:
+                        dst[kn] += np.bincount(ids, minlength=n_k)[:n_k]
+            for rep_i in range(args.trials):
+                sd = "left" if rep_i % 2 == 0 else "right"
+                n_pres[sd] += 1
+                for _ in range(3):
+                    _b2.process(stim(_obs2, nh, sd))
+                    _count(cnt[sd])
+                for j in range(10):
+                    _b2.process(neu)
+                    if j >= 5:
+                        _count(c0)
+            if n_pres["left"] != n_pres["right"]:
+                raise SystemExit("kcrate: 좌우 제시 수가 다르다(--trials 짝수)")
+            base_steps = 5 * args.trials
+            tot_sp = sum(float(cnt[sd][kn].sum()) for sd in cnt for kn in "lr")
+            if tot_sp == 0:
+                raise RuntimeError("KC 스파이크 0 — 측정 도구 실패(기록 버퍼 확인)")
+            init_w = float(cfg.kc_motor_init_w)
+            for kn in ("l", "r"):
+                rL, rR, b, SI, cls = KS.classify(cnt["left"][kn], cnt["right"][kn], c0[kn], n_pres["left"], 3, base_steps)
+                D = KS.dilution(cnt["left"][kn], cnt["right"][kn], cls)
+                g1 = KS.sets_ge1(cnt["left"][kn], cnt["right"][kn])
+                dS = {}
+                for m in ("l", "r"):
+                    nm = "kc_%s_to_motor_%s" % (kn, m)
+                    sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
+                    pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                    if pre.size != W[nm].size:
+                        raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, pre.size, W[nm].size))
+                    dS[m] = KS.per_kc_sum(pre, W[nm] - init_w, n_k)
+                mk = KS.margin(rL, rR, dS["r"], dS["l"])
+                M = float(mk.sum())
+                sh = [float(mk[cls == c].sum() / M) if M != 0 else float("nan") for c in (KS.CLS_L, KS.CLS_R, KS.CLS_NS)]
+                ncls = [int((cls == c).sum()) for c in (KS.CLS_L, KS.CLS_R, KS.CLS_NS, KS.CLS_NONE)]
+                nsel = {th: int(np.isin(KS.classify(cnt["left"][kn], cnt["right"][kn], c0[kn], n_pres["left"], 3, base_steps, theta=th)[4],
+                                        (KS.CLS_L, KS.CLS_R)).sum()) for th in (0.3, 0.7)}
+                mds = " ".join("%s(→L %+.1f →R %+.1f)" % (lab, float(dS["l"][cls == c].mean()) if (cls == c).any() else float("nan"),
+                                                       float(dS["r"][cls == c].mean()) if (cls == c).any() else float("nan"))
+                               for lab, c in (("좌선택", KS.CLS_L), ("우선택", KS.CLS_R), ("비선택", KS.CLS_NS)))
+                print("=> KCRATE kc_%s | 좌선택 %d 우선택 %d 비선택 %d 무활동 %d | 희석 %.3f | ≥1스파이크 좌전용 %d 우전용 %d 공유 %d 무반응 %d"
+                      " | 여유합 %+.1f 몫 좌선택 %.3f 우선택 %.3f 비선택 %.3f | θ0.3 선택 %d θ0.7 선택 %d | 제시 스파이크 %d 기준선(제시창) 평균 %.4f | KC별 ΔS %s"
+                      % (kn, ncls[0], ncls[1], ncls[2], ncls[3], D, g1[0], g1[1], g1[2], g1[3], M, sh[0], sh[1], sh[2],
+                         nsel[0.3], nsel[0.7], int(cnt["left"][kn].sum() + cnt["right"][kn].sum()), float(b.mean()), mds))
+            np.savez_compressed(args.kc_rate_file, cL_l=cnt["left"]["l"], cR_l=cnt["right"]["l"], c0_l=c0["l"],
+                                cL_r=cnt["left"]["r"], cR_r=cnt["right"]["r"], c0_r=c0["r"],
+                                n_pres=np.int64(n_pres["left"]), base_steps=np.int64(base_steps))
+            print("[E138] KC 발화 수 저장 → %s (좌우 각 %d회, 기준선 %d스텝)" % (args.kc_rate_file, n_pres["left"], base_steps))
+            return
+        if mode in ("kcsel", "kcselonly", "kcpop"):
+            # E138: KC→motor 4집단만 바꿔 이식(D1 등 나머지 학습 경로는 초기값 — kc_only 기준과 같은 범위).
+            # kcpop = 모든 KC 집단 교차(E119 P2 rev 와 같은 값) / kcsel = 선택 KC 만 선호 쪽 교차, 나머지 초기 / kcselonly = 선택 KC 만 학습값, 나머지 초기.
+            import kc_selectivity as KS
+            n_k = int(cfg.n_kc_per_side); init_w = float(cfg.kc_motor_init_w); wmax = float(cfg.kc_motor_w_max)
+            cls = {}
+            if mode != "kcpop":
+                if not args.kc_rate_file or not os.path.exists(args.kc_rate_file):
+                    raise SystemExit("%s 는 kcrate 가 저장한 --kc-rate-file 이 필요하다" % mode)
+                Z = np.load(args.kc_rate_file)
+                for kn in ("l", "r"):
+                    cls[kn] = KS.classify(Z["cL_" + kn], Z["cR_" + kn], Z["c0_" + kn], int(Z["n_pres"]), 3, int(Z["base_steps"]))[4]
+            for kn in ("l", "r"):
+                for m in ("l", "r"):
+                    nm = "kc_%s_to_motor_%s" % (kn, m)
+                    sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
+                    pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                    if pre.size != W[nm].size:
+                        raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, pre.size, W[nm].size))
+                    if mode == "kcpop":
+                        sub[nm] = KS.ideal_weights(pre, None, kn, m, wmax, init_w, "pop")
+                    elif mode == "kcsel":
+                        sub[nm] = KS.ideal_weights(pre, cls[kn], kn, m, wmax, init_w, "sel")
+                    else:
+                        sub[nm] = KS.selonly_weights(pre, cls[kn], W[nm], init_w)
+            if cls:
+                print("[E138] %s: 선택 KC kc_l 좌 %d 우 %d / kc_r 좌 %d 우 %d (wmax %.0f, init %.0f)"
+                      % (mode, int((cls["l"] == KS.CLS_L).sum()), int((cls["l"] == KS.CLS_R).sum()),
+                         int((cls["r"] == KS.CLS_L).sum()), int((cls["r"] == KS.CLS_R).sum()), wmax, init_w))
         if mode == "kcsets":
             # E117: KC 반응 집합(자극 good=왼쪽/오른쪽) — 새 뇌(학습 가중치 이식 전)에 steer 와 같은 3스텝 제시 × N, 사이 무자극 10스텝.
             # KC 입력은 감각에서 오므로 반응 집합은 KC→motor 가중치와 무관하다. 집합별로 저장된 학습 Δg 를 분해한다.
