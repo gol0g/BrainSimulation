@@ -19,9 +19,10 @@ PRE = {10: 0.0195, 11: 0.0150, 12: 0.0262, 13: 0.0320, 14: 0.0165}
 POST = {10: -0.0838, 11: -0.0574, 12: -0.0428, 13: -0.0489, 14: -0.0442}
 
 mod, bad = {}, []
+FIXD = os.path.join(L, "fix")   # 2026-10-03 수리 재실행(kcrate·kcsel·kcselonly) — 있으면 그 원 로그를 쓴다
 for b in BR:
     for m in MODES:
-        p = os.path.join(L, "b%d_%s.log" % (b, m))
+        p = os.path.join(FIXD if (m in ("kcsel", "kcselonly") and os.path.isdir(FIXD)) else L, "b%d_%s.log" % (b, m))
         s = open(p, encoding="utf-8").read() if os.path.exists(p) else ""
         g = re.search(r"^=> DECOMP mode=(\w+) mod=([-+0-9.]+)", s, flags=re.M)
         if not g or g.group(1) != m:
@@ -49,9 +50,11 @@ def cls_int(cL, cR, c0, P, Bs, num, den):
 print("뇌  집단  좌선택 우선택 비선택 무활동  희석    (원 로그 KCRATE 와 비교)")
 agree = 0
 for b in BR:
-    Z = np.load(os.path.join(T, "rate_b%d.npz" % b))
+    Z = np.load(os.path.join(T, "fix", "rate_b%d.npz" % b)); Z1 = np.load(os.path.join(T, "rate_b%d.npz" % b))
+    same_counts = all(np.array_equal(Z[k], Z1[k]) for k in Z.files)
     P, Bs = int(Z["n_pres"]), int(Z["base_steps"])
-    s = open(os.path.join(L, "b%d_kcrate.log" % b), encoding="utf-8").read()
+    s = open(os.path.join(FIXD, "b%d_kcrate.log" % b), encoding="utf-8").read()
+    print("b%d 발화 수 npz 1차 = 수리 재실행: %s" % (b, same_counts))
     for p in "lr":
         c = cls_int(Z["cL_" + p], Z["cR_" + p], Z["c0_" + p], P, Bs, 1, 2)
         sp = (Z["cL_" + p] + Z["cR_" + p]).astype(np.float64)

@@ -162,3 +162,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 러너 scripts/e138_main.sh, 판정 python3 scripts/judge_e138.py(기준 logs/E138/criteria_fixed.txt, 합성 13/13), 계산 모듈 backend/genesis/kc_selectivity.py(합성 16/16).
 - 데스크탑 절전(01:06 무렵~23:14)으로 약 22시간 멈췄다가 재개 점검이 이어받음 — 절전 중 다음 A/B/C/D 초안은 Pi 스크래치패드에 써 두고 깬 뒤 원 기록과 대조해 반영.
 - 감시: Monitor ~/bin/watch-exp.sh E138 35 "e138 .*: =>" (30분 만료마다 재무장). 끝나면 판정 → 독립 대조(런별 로그 직접) → P9(E138·H061·current-state) → DESIGN_RECOVERY → push.
+- 2026-10-03 00:21 E138 판정: 학습 상한·공통 모드 억제 없음(K74). 측정 도구 eps 경계 결함(독립 대조 발견) 수리 재실행으로 판정 동일. P9 완료. 다음: E139(선택 KC 시냅스의 시행 유형별 변화 추적 — 원인 측정).
