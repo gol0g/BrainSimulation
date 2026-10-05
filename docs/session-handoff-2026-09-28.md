@@ -171,3 +171,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - E141 = 보상 창 동안 KC→motor A_plus = A_minus = 0(--rw-apm-scale 0). 기준 logs/E141/criteria_fixed.txt(22:19:56), 판정 python3 scripts/judge_e141.py(합성 19/19, 비교 traces/E139/tr_b*.npz 필요).
 - 경로 검사: bash scripts/e141_path_check.sh → logs/E141/path_check.out(뇌 15, 배율 1 회귀 + 배율 0). 통과하면 E141.md §7 기록 → 게이트 → 본실험(lab_run.cmd: run_experiment.sh E141 "bash scripts/e141_main.sh") → 감시 Monitor ~/bin/watch-exp.sh E141 5 "e141 b.*: =>"(30분 만료마다 재무장).
 - 끝나면 판정 → 독립 대조(런별 로그·추적 직접 재계산) → P9(E141·H064·current-state) → DESIGN_RECOVERY → push. 결과와 무관하게 분기 종료 → 새 A/B/C/D.
+- 2026-10-05 23:01 E141 **지지**(K75): 효과 −0.077 → −0.259(5/5), 독립 대조 일치, P9 완료. 분기 종료. 다음 결정 문서 research/abcd-2026-10-05-l2.md — E142(반사 25 + 동결, F500·F1500, 헌장 L2).
