@@ -244,6 +244,9 @@ def main():
                              "kcrate", "kcsel", "kcselonly", "kcpop"))
     ap.add_argument("--kc-rate-file", default=None,
                     help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
+    ap.add_argument("--trace-kc-class", default=None,
+                    help="E139(읽기 전용): 학습 중 시행마다 선택 KC(--kc-rate-file 분류) 시냅스의 교차·같은 쪽 Δg 합과 "
+                         "도파민 직전 자격흔적 합을 npz 로. 난수 소비 없음 — 학습 경로 불변(경로 검사: 가중치 정확 일치)")
     ap.add_argument("--trace-kc-motor", default=None,
                     help="E111: 매 시행 도파민 직전 KC→motor 4그룹 자격흔적 합·가중치 평균을 CSV로(읽기 전용)")
     ap.add_argument("--reward-stim", default="same", choices=("same", "none"),
@@ -790,11 +793,59 @@ def main():
     explored = 0
     eps = args.epsilon
     TRACE_ROWS = []
+    # E139 KC 계층 추적(읽기 전용): KC→motor 시냅스마다 역할 0 교차·1 같은 쪽(선택 KC, 선호 기준)·2 비선택·3 무활동.
+    # 좌선택 KC 의 교차 = motor_r, 우선택 KC 의 교차 = motor_l (반사 0 정답 = good 반대쪽, K57). 분류 = kc_selectivity(E138 과 같음).
+    KCT = None
+    if args.trace_kc_class:
+        import kc_selectivity as KS
+        _ksyn = getattr(brain, "kc_motor_syn", None)
+        if not _ksyn or not args.kc_rate_file:
+            raise SystemExit("--trace-kc-class 는 --kc-motor 와 --kc-rate-file 이 필요하다")
+        _Zc = np.load(args.kc_rate_file)
+        _kcls = {kn: KS.classify(_Zc["cL_" + kn], _Zc["cR_" + kn], _Zc["c0_" + kn], int(_Zc["n_pres"]), 3, int(_Zc["base_steps"]))[4]
+                 for kn in ("l", "r")}
+        KCT = {"role": {}, "rows": [], "g_prev": None, "gap": 0.0}
+        for (_k, _m), _s in _ksyn.items():
+            _s.pull_connectivity_from_device()
+            _pre = np.asarray(_s.get_sparse_pre_inds(), dtype=np.int64)
+            if _pre.size == 0:
+                raise RuntimeError("KC 계층 추적: %s%s 연결 0 — 측정 도구 실패" % (_k, _m))
+            _c = _kcls[_k][_pre]
+            _role = np.full(_pre.size, 2, dtype=np.int64)
+            if _m == "r":
+                _role[_c == KS.CLS_L] = 0; _role[_c == KS.CLS_R] = 1
+            else:
+                _role[_c == KS.CLS_R] = 0; _role[_c == KS.CLS_L] = 1
+            _role[_c == KS.CLS_NONE] = 3
+            KCT["role"][(_k, _m)] = _role
+
+        def _kct_read(var):
+            out = {}
+            for (_k, _m), _s in _ksyn.items():
+                _s.vars[var].pull_from_device()
+                _a = np.asarray(_s.vars[var].values, dtype=np.float64).ravel()
+                if _a.size != KCT["role"][(_k, _m)].size:
+                    raise RuntimeError("KC 계층 추적: %s%s %s 크기 %d ≠ %d — 측정 도구 실패" % (_k, _m, var, _a.size, KCT["role"][(_k, _m)].size))
+                out[(_k, _m)] = _a.copy()
+            return out
+
+        def _kct_sum(arrs):
+            r_ = np.zeros(4)
+            for key_, a_ in arrs.items():
+                r_ += np.bincount(KCT["role"][key_], weights=a_, minlength=4)[:4]
+            return r_
+        print("[E139] KC 계층 추적: 시냅스 역할 교차 %d 같은쪽 %d 비선택 %d 무활동 %d (분류 %s)"
+              % (tuple(sum(int((r_ == i).sum()) for r_ in KCT["role"].values()) for i in range(4)) + (args.kc_rate_file,)))
     # E119 판정 경로 계수(읽기 전용): 행동 창이 있을 때 v 판정과 실행 행동 판정을 시행마다 비교한다.
     J = {"n": 0, "small": 0, "v_ok_ex_no": 0, "v_no_ex_ok": 0}
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5)
         for t in range(args.steps):
+            if KCT is not None:
+                # E139: 시행 시작 g(난수 소비 없음). 직전 시행 끝 g 와 같아야 한다(도파민 0 구간엔 g 불변) — 연속성 검사.
+                _kg0 = _kct_read("g")
+                if KCT["g_prev"] is not None:
+                    KCT["gap"] = max(KCT["gap"], max(float(np.abs(_kg0[k_] - KCT["g_prev"][k_]).max()) for k_ in _kg0))
             side = "left" if (np.random.random() > 0.5) else "right"
             # 정답 = good의 반대쪽. ε 확률로 그 행동을 실제로 유도해 표본을 만든다.
             do_explore = (np.random.random() < eps)
@@ -845,6 +896,10 @@ def main():
                     act_window_current(brain, stim(obs, nh, side), _ex, args.act_current, args.act_window)
                 else:
                     steer(brain, stim(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
+            if KCT is not None:
+                _ke = _kct_sum(_kct_read("e"))      # E139: 도파민 직전(행동 창 뒤) 자격흔적 역할별 합
+                _kgda = _kct_read("g")               # E139 수정: 도파민 직전 g — 도파민 전 변화 분리(V4)
+                _kee = np.zeros(4); _mrw = [0.0, 0.0]   # 보상 창 끝 흔적·보상 창 중 motor 발화율 합(보상 창이 있으면 아래에서 채움)
             if args.no_reward:
                 continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
             if correct:
@@ -871,7 +926,12 @@ def main():
                     for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
                         _o[_k] = np.zeros(nh)
                 for _ in range(args.reward_window):
-                    brain.process(_o)
+                    _a_rw, _inf_rw = brain.process(_o)
+                    if KCT is not None and isinstance(_inf_rw, dict):
+                        # E139 수정(읽기 전용): 보상 창 중 좌/우 motor 발화율 — 보상 창에 양쪽 motor 가 발화하면 비선택 흔적이 생긴다
+                        _mrw[0] += float(_inf_rw.get("motor_left_rate", 0.0)); _mrw[1] += float(_inf_rw.get("motor_right_rate", 0.0))
+                if KCT is not None:
+                    _kee = _kct_sum(_kct_read("e"))      # E139 수정: 보상 창 끝(도파민 0 직전) 자격흔적
                 brain.dopamine_level = 0.0
                 brain._push_dopamine_to_rstdp()
                 _neu = stim(obs, nh, "left")
@@ -879,11 +939,53 @@ def main():
                     _neu[_k] = np.zeros(nh)
                 for _ in range(args.trial_gap):
                     brain.process(_neu)
+            if KCT is not None:
+                # E139: 시행 끝(보상 창 → 도파민 0 → 간격 뒤) g. Δg = 이 시행의 도파민이 만든 변화.
+                _kg1 = _kct_read("g")
+                _dg = {k_: _kg1[k_] - _kg0[k_] for k_ in _kg1}
+                _rs = _kct_sum(_dg)
+                _tot = float(sum(float(d_.sum()) for d_ in _dg.values()))
+                _rpre = _kct_sum({k_: _kgda[k_] - _kg0[k_] for k_ in _kgda})
+                KCT["rows"].append([ep, t, int(side == "right"), int(do_explore), (int(probe_side == "right") if do_explore else -1),
+                                    float(v), (int(_ex == "right") if args.act_window > 0 else -1), int(correct)]
+                                   + [float(x) for x in _rs] + [_tot] + [float(x) for x in _ke]
+                                   + [float(x) for x in _rpre] + [float(x) for x in _kee] + [float(_mrw[0]), float(_mrw[1])])
+                KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
     if J["n"]:
         print("[판정경로] judge=%s 시행=%d abs_v_le_0.02=%d (%.1f%%) v정답_실행오답=%d v오답_실행정답=%d 불일치율=%.1f%%"
               % (args.judge, J["n"], J["small"], 100.0 * J["small"] / J["n"], J["v_ok_ex_no"], J["v_no_ex_ok"],
                  100.0 * (J["v_ok_ex_no"] + J["v_no_ex_ok"]) / J["n"]))
+    if KCT is not None and KCT["rows"]:
+        # E139 요약(정의: logs/E139/criteria_fixed.txt — 수정 기준). 열: 0 ep 1 t 2 side_r 3 explore 4 probe_r 5 v 6 ex_r 7 correct
+        # 8 dg_교차 9 dg_같은쪽 10 dg_비선택 11 dg_무활동 12 dg_전체 13~16 e(도파민 직전, 같은 순서)
+        # 17~20 dg_도파민전(g 도파민 직전 − g 시작) 21~24 e(보상 창 끝) 25 보상창 motor_left 발화율 합 26 motor_right
+        _R = np.array(KCT["rows"], dtype=np.float64)
+        np.savez_compressed(args.trace_kc_class, rows=_R)
+        _rw = _R[:, 7] == 1
+
+        def _abcp(msk):
+            return (_R[msk & _rw, 8].sum(), _R[msk & _rw, 9].sum(), _R[msk & ~_rw, 8].sum(), _R[msk & ~_rw, 9].sum())
+        _all = np.ones(len(_R), dtype=bool)
+        _A, _B, _C, _P = _abcp(_all)
+        _Bp = max(_B, 0.0); _Cm = -min(_C, 0.0)
+        _shB = _Bp / (_Bp + _Cm) if (_Bp + _Cm) > 0 else float("nan")
+        _cons = float(np.max(np.abs(_R[:, 8:12].sum(1) - _R[:, 12]) / np.maximum(np.abs(_R[:, 12]), 1.0)))
+        _blk = [float((_R[i * 100:(i + 1) * 100, 8] - _R[i * 100:(i + 1) * 100, 9]).sum()) for i in range(int(np.ceil(len(_R) / 100)))]
+        _er, _es = _R[_rw, 13].sum(), _R[_rw, 14].sum()
+        print("=> KCTRACE 시행 %d 보상 %d | A %+.1f B %+.1f C %+.1f P %+.1f | ΔD %+.1f | share_B %.3f B+/A %.3f C-/A %.3f | 합일관성 최대 %.2e | g연속 최대 %.3g | 블록 ΔD %s | 보상시행 e_same/e_cross %.3f"
+              % (len(_R), int(_rw.sum()), _A, _B, _C, _P, (_A + _C) - (_B + _P), _shB, (_Bp / _A) if _A else float("nan"),
+                 (_Cm / _A) if _A else float("nan"), _cons, KCT["gap"], " ".join("%+.0f" % x for x in _blk), (_es / _er) if _er else float("nan")))
+        _ex_ = _R[:, 3] == 1
+        print("=> KCTRACE2 탐색 A %+.1f B %+.1f C %+.1f P %+.1f | 탐욕 A %+.1f B %+.1f C %+.1f P %+.1f | 비선택 Δg 보상 %+.1f 처벌 %+.1f → %s"
+              % (*_abcp(_ex_), *_abcp(~_ex_), _R[_rw, 10].sum(), _R[~_rw, 10].sum(), args.trace_kc_class))
+        # E139 수정 기준 요약: 단계 분리(V4), 두 도파민 부호의 공동 움직임, 흔적 부호 양상(도파민 직전 vs 보상 창 끝), 보상 창 motor 발화
+        _pre_tot = float(np.abs(_R[:, 17:21].sum())); _all_tot = float(np.abs(_R[:, 12].sum()))
+        _eda = _R[_rw, 14].sum() / _R[_rw, 13].sum() if _R[_rw, 13].sum() else float("nan")
+        _eend = _R[_rw, 22].sum() / _R[_rw, 21].sum() if _R[_rw, 21].sum() else float("nan")
+        print("=> KCTRACE3 도파민전 |Σ|/|Σ시행| %.2e | B/A %.3f C/P %.3f | 보상시행 e_da 같은쪽/교차 %+.3f e_end 같은쪽/교차 %+.3f | 보상창 motor 발화율 평균 보상(좌 %.4f 우 %.4f) 처벌(좌 %.4f 우 %.4f)"
+              % ((_pre_tot / _all_tot) if _all_tot else float("nan"), (_B / _A) if _A else float("nan"), (_C / _P) if _P else float("nan"),
+                 _eda, _eend, _R[_rw, 25].mean(), _R[_rw, 26].mean(), _R[~_rw, 25].mean(), _R[~_rw, 26].mean()))
     reflex_after = snap_reflex()
     for nm in sorted(reflex_before):
         print("[반사가중치] %-22s n=%d w_mean %.4f→%.4f (학습 뇌; 이식 대상 아님)"

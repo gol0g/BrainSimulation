@@ -1,0 +1,14 @@
+[1~3] 뇌 15 학습 + 계층 추적(판정 v — 원 경로 검사와 같음)
+[사전] 오프셋 -0.020 | 정답률 2.0% | **변조폭 +0.0255** (양수=반사방향, 음수=역전)
+[E139] KC 계층 추적: 시냅스 역할 교차 36913 같은쪽 37022 비선택 16316 무활동 1409564 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/pathcheck/rate_b15.npz)
+[학습] 5ep 완료, 보상 237회 (탐색 주입 296회, ε=0.60)
+=> KCTRACE 시행 500 보상 237 | A +5298248.5 B +4412036.5 C -4486692.0 P -4628735.2 | ΔD +1028255.2 | share_B 0.496 B+/A 0.833 C-/A 0.847 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +523528 +407955 +156734 -76806 +16845 | 보상시행 e_same/e_cross -1.024
+=> KCTRACE2 탐색 A +3213541.2 B +2651928.0 C -2468849.7 P -3020353.0 | 탐욕 A +2084707.2 B +1760108.5 C -2017842.3 P -1608382.2 | 비선택 Δg 보상 +1281244.4 처벌 -1186925.1 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E139/pathcheck/tr_b15.npz
+[사후] 오프셋 -0.027 | 정답률 54.0% | **변조폭 -0.0734**
+[1 비간섭] 저장 가중치 vs E119 path_rw0_b15.npz
+    집단 8/8, 정확히 같음: False
+    다름: kc_l_to_motor_l 0.2528076171875
+    다름: kc_l_to_motor_r 0.30218505859375
+    다름: kc_r_to_motor_l 0.231475830078125
+    다름: kc_r_to_motor_r 0.32147216796875
+[E139 경로 검사] 종료
