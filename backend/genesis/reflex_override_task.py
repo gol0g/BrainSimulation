@@ -244,6 +244,11 @@ def main():
                              "kcrate", "kcsel", "kcselonly", "kcpop"))
     ap.add_argument("--kc-rate-file", default=None,
                     help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
+    ap.add_argument("--rw-motor-silence", type=float, default=0.0,
+                    help="E140: 보상 창 동안 양쪽 motor Ioffset 을 −값으로(침묵). 0 = 이전 동작. motor Ioffset 동적화 자동")
+    ap.add_argument("--rw-apm-scale", type=float, default=-1.0,
+                    help="E141: 보상 창(도파민 켜짐) 동안 KC→motor R-STDP 의 A_plus·A_minus 배율. 0 = 흔적 생성 동결(흔적은 감쇠만), "
+                         "1 = 동적화만(회귀 검사). 음수 = 끔(이전 동작, 생성 코드도 그대로). 보상 창 루프 직후 원래 값으로 되돌린다")
     ap.add_argument("--trace-kc-class", default=None,
                     help="E139(읽기 전용): 학습 중 시행마다 선택 KC(--kc-rate-file 분류) 시냅스의 교차·같은 쪽 Δg 합과 "
                          "도파민 직전 자격흔적 합을 npz 로. 난수 소비 없음 — 학습 경로 불변(경로 검사: 가중치 정확 일치)")
@@ -318,7 +323,7 @@ def main():
         cfg.direct_inhibition = args.direct_inhib
     if args.hippo_eta is not None:
         cfg.place_to_food_memory_eta = args.hippo_eta
-    if args.act_current > 0 or args.calib_act_current:
+    if args.act_current > 0 or args.calib_act_current or args.rw_motor_silence > 0:
         cfg.motor_ioffset_dynamic = True
     if args.kc_motor:
         cfg.kc_motor_rstdp = True
@@ -326,6 +331,10 @@ def main():
         cfg.kc_motor_init_w = args.kc_motor_init_w
         cfg.kc_motor_eta = args.kc_motor_eta
         cfg.kc_motor_sparsity = args.kc_motor_sparsity
+    if args.rw_apm_scale >= 0:
+        if not args.kc_motor:
+            raise SystemExit("--rw-apm-scale 은 --kc-motor 가 필요하다")
+        cfg.kc_motor_apm_dynamic = True
     brain = ForagerBrain(cfg)
 
     # 2) 뇌 생성 후: 환경 시드로 재고정 (먹이 배치·워밍업이 여기서 결정된다)
@@ -925,11 +934,29 @@ def main():
                     # 뇌 자신의 반사 반응이 도파민과 겹쳐 반사 연합이 강화된다(E109 첫 런 +0.25).
                     for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
                         _o[_k] = np.zeros(nh)
+                if args.rw_motor_silence > 0:
+                    # E140: 보상 창(도파민 켜짐) 동안 양쪽 motor 침묵(지속 음 전류) — 새 post 스파이크가 없으면 보상 창의 비선택 LTP 흔적이 생기지 않는다.
+                    # 행동 창·평가에는 걸지 않는다(보상 창 루프 직후 0 으로 되돌림).
+                    brain.motor_left.set_dynamic_param_value("Ioffset", -args.rw_motor_silence)
+                    brain.motor_right.set_dynamic_param_value("Ioffset", -args.rw_motor_silence)
+                if args.rw_apm_scale >= 0:
+                    # E141: 보상 창 동안 KC→motor 흔적 생성 배율(0 = 동결 — 새 pre·post 스파이크가 흔적을 만들지 않고,
+                    # 결정·행동 창 흔적이 감쇠만 하며 가중치로 굳는다). E140 침묵은 생성 부호만 LTD 로 바꿨다(경로 검사).
+                    for _s in brain.kc_motor_syn.values():
+                        _s.set_dynamic_param_value("A_plus", args.rw_apm_scale * brain.kc_motor_apm[0])
+                        _s.set_dynamic_param_value("A_minus", args.rw_apm_scale * brain.kc_motor_apm[1])
                 for _ in range(args.reward_window):
                     _a_rw, _inf_rw = brain.process(_o)
                     if KCT is not None and isinstance(_inf_rw, dict):
                         # E139 수정(읽기 전용): 보상 창 중 좌/우 motor 발화율 — 보상 창에 양쪽 motor 가 발화하면 비선택 흔적이 생긴다
                         _mrw[0] += float(_inf_rw.get("motor_left_rate", 0.0)); _mrw[1] += float(_inf_rw.get("motor_right_rate", 0.0))
+                if args.rw_motor_silence > 0:
+                    brain.motor_left.set_dynamic_param_value("Ioffset", 0.0)
+                    brain.motor_right.set_dynamic_param_value("Ioffset", 0.0)
+                if args.rw_apm_scale >= 0:
+                    for _s in brain.kc_motor_syn.values():
+                        _s.set_dynamic_param_value("A_plus", brain.kc_motor_apm[0])
+                        _s.set_dynamic_param_value("A_minus", brain.kc_motor_apm[1])
                 if KCT is not None:
                     _kee = _kct_sum(_kct_read("e"))      # E139 수정: 보상 창 끝(도파민 0 직전) 자격흔적
                 brain.dopamine_level = 0.0

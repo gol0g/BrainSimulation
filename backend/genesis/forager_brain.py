@@ -1204,6 +1204,7 @@ class ForagerBrainConfig:
     kc_motor_eta: float = 0.001
     kc_motor_tau_e: float = 12.0
     kc_motor_sparsity: float = 0.05
+    kc_motor_apm_dynamic: bool = False   # E141: KC→motor A_plus·A_minus 동적화(보상 창 흔적 생성 동결용)
     kc_rstdp_eta: float = 0.0003
     kc_rstdp_w_max: float = 5.0
     kc_rstdp_w_rest: float = 0.5
@@ -9087,12 +9088,17 @@ class ForagerBrain:
                         init_postsynaptic("ExpCurr", {"tau": 5.0}),
                         init_sparse_connectivity("FixedProbability", {"prob": _msp}))
                     _syn.set_wu_param_dynamic("dopamine")
+                    if getattr(self.config, "kc_motor_apm_dynamic", False):
+                        # E141: 보상 창 흔적 생성 동결용 — A_plus·A_minus 를 런타임에 바꿀 수 있게. 기본 꺼짐 = 이전 생성 코드 그대로.
+                        _syn.set_wu_param_dynamic("A_plus")
+                        _syn.set_wu_param_dynamic("A_minus")
                     self.kc_motor_syn[(_kn, _mn)] = _syn
                     # 이식 평가(transplant_eval.learned_names)는 학습 시냅스를 **속성 이름**으로 찾는다 — 딕셔너리만으로는 누락된다(E109 첫 실행 실패).
                     setattr(self, "kc_%s_to_motor_%s" % (_kn, _mn), _syn)
             if not hasattr(self, "_rstdp_synapses"):
                 self._rstdp_synapses = []
             self._rstdp_synapses += list(self.kc_motor_syn.values())
+            self.kc_motor_apm = (float(_mp["A_plus"]), float(_mp["A_minus"]))   # E141: 보상 창 뒤 되돌릴 값(생성 때 쓴 값 그대로)
             print(f"    KC→motor [E109 R-STDP 4방향]: init_w={_mw}, w_max={_mp['w_max']}, eta={_mp['eta']}, "
                   f"tau_e={_mp['tau_e']}, sparsity={_msp}")
 

@@ -165,3 +165,9 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-03 00:21 E138 판정: 학습 상한·공통 모드 억제 없음(K74). 측정 도구 eps 경계 결함(독립 대조 발견) 수리 재실행으로 판정 동일. P9 완료. 다음: E139(선택 KC 시냅스의 시행 유형별 변화 추적 — 원인 측정).
 - 2026-10-05 21:36 데스크탑 복귀 후 E139 재개: 경로 검사 통과(뇌 15), 기준 수정 2(V1' 최대값 삭제), audit.sh 수리, 기록 반영 → 본실험(e139_main.sh, 뇌 10~14) 띄움. 세션은 로컬 ~/brain/brainsim-session, 재개 점검 1시간(SSH 만).
 - 2026-10-05 22:02 E139 보류(V1' 뇌 13 0.3007%) — 분기 미해결 종료. 다음: 새 A/B/C/D(보상 창 motor 침묵 인과 조작).
+
+## 14. E140 폐기 → E141 진행 (2026-10-05 22:25)
+- 결정 문서: research/abcd-2026-10-05-rwsilence.md(추가 절). E140(보상 창 motor 침묵)은 경로 검사에서 조작 부적합(흔적 생성이 LTD 로 남음) → 폐기, 본실험 미실행.
+- E141 = 보상 창 동안 KC→motor A_plus = A_minus = 0(--rw-apm-scale 0). 기준 logs/E141/criteria_fixed.txt(22:19:56), 판정 python3 scripts/judge_e141.py(합성 19/19, 비교 traces/E139/tr_b*.npz 필요).
+- 경로 검사: bash scripts/e141_path_check.sh → logs/E141/path_check.out(뇌 15, 배율 1 회귀 + 배율 0). 통과하면 E141.md §7 기록 → 게이트 → 본실험(lab_run.cmd: run_experiment.sh E141 "bash scripts/e141_main.sh") → 감시 Monitor ~/bin/watch-exp.sh E141 5 "e141 b.*: =>"(30분 만료마다 재무장).
+- 끝나면 판정 → 독립 대조(런별 로그·추적 직접 재계산) → P9(E141·H064·current-state) → DESIGN_RECOVERY → push. 결과와 무관하게 분기 종료 → 새 A/B/C/D.
