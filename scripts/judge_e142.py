@@ -130,7 +130,9 @@ def report(checks, res, T=None, S=None):
 def load():
     T = {a: {} for a in ARMS}; S = {a: {} for a in ARMS}; RF = {a: {} for a in ARMS}
     try:
-        for ln in open(os.path.join(EXP, "E142.log"), encoding="utf-8"):
+        # 2026-10-06 수리: 러너의 `cut -c1-200` 이 바이트 단위라 요약 줄 끝 한글을 반쯤 자른다(E142.log 3918바이트) —
+        # 읽는 칸(사전·사후·보상)은 줄 앞부분이라 영향 없음, 디코딩만 관대하게.
+        for ln in open(os.path.join(EXP, "E142.log"), encoding="utf-8", errors="replace"):
             mm = TL.match(ln)
             if mm:
                 T[mm.group(1)][int(mm.group(2))] = {"pre": float(mm.group(3)), "post": float(mm.group(4)), "rew": int(mm.group(5))}

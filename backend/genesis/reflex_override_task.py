@@ -249,6 +249,9 @@ def main():
     ap.add_argument("--rw-apm-scale", type=float, default=-1.0,
                     help="E141: 보상 창(도파민 켜짐) 동안 KC→motor R-STDP 의 A_plus·A_minus 배율. 0 = 흔적 생성 동결(흔적은 감쇠만), "
                          "1 = 동적화만(회귀 검사). 음수 = 끔(이전 동작, 생성 코드도 그대로). 보상 창 루프 직후 원래 값으로 되돌린다")
+    ap.add_argument("--dec-apm-scale", type=float, default=-1.0,
+                    help="E143: 학습 시행의 결정 단계(steer 3처리) 동안 KC→motor A_plus·A_minus 배율. 0 = 결정 단계 흔적 생성 동결 "
+                         "(흔적은 행동 창에서만 생긴다). 음수 = 끔. steer 직후 원래 값으로 되돌린다")
     ap.add_argument("--trace-kc-class", default=None,
                     help="E139(읽기 전용): 학습 중 시행마다 선택 KC(--kc-rate-file 분류) 시냅스의 교차·같은 쪽 Δg 합과 "
                          "도파민 직전 자격흔적 합을 npz 로. 난수 소비 없음 — 학습 경로 불변(경로 검사: 가중치 정확 일치)")
@@ -331,9 +334,9 @@ def main():
         cfg.kc_motor_init_w = args.kc_motor_init_w
         cfg.kc_motor_eta = args.kc_motor_eta
         cfg.kc_motor_sparsity = args.kc_motor_sparsity
-    if args.rw_apm_scale >= 0:
+    if args.rw_apm_scale >= 0 or args.dec_apm_scale >= 0:
         if not args.kc_motor:
-            raise SystemExit("--rw-apm-scale 은 --kc-motor 가 필요하다")
+            raise SystemExit("--rw-apm-scale·--dec-apm-scale 은 --kc-motor 가 필요하다")
         cfg.kc_motor_apm_dynamic = True
     brain = ForagerBrain(cfg)
 
@@ -853,11 +856,18 @@ def main():
             if KCT is not None:
                 # E139: 시행 시작 g(난수 소비 없음). 직전 시행 끝 g 와 같아야 한다(도파민 0 구간엔 g 불변) — 연속성 검사.
                 _kg0 = _kct_read("g")
+                _ke0 = _kct_sum(_kct_read("e"))   # E143(읽기 전용): 시행 시작 흔적 — 결정 단계 동결 검사용
                 if KCT["g_prev"] is not None:
                     KCT["gap"] = max(KCT["gap"], max(float(np.abs(_kg0[k_] - KCT["g_prev"][k_]).max()) for k_ in _kg0))
             side = "left" if (np.random.random() > 0.5) else "right"
             # 정답 = good의 반대쪽. ε 확률로 그 행동을 실제로 유도해 표본을 만든다.
             do_explore = (np.random.random() < eps)
+            if args.dec_apm_scale >= 0:
+                # E143: 결정 단계(steer 3처리) 동안 KC→motor 흔적 생성 배율(0 = 동결). E142 탐색적 분해: 결정 단계에 반사 쪽·학습된 교차 쪽
+                # motor 가 함께 발화해 섞인 부호 흔적이 생기고, 연성 상한이 그것을 틀린 방향 변화로 바꿔 차이 성장이 정체했다.
+                for _s in brain.kc_motor_syn.values():
+                    _s.set_dynamic_param_value("A_plus", args.dec_apm_scale * brain.kc_motor_apm[0])
+                    _s.set_dynamic_param_value("A_minus", args.dec_apm_scale * brain.kc_motor_apm[1])
             if do_explore:
                 # C38 수정: 이전 판은 **항상 정답 방향으로** 유도해 보상률이 98%가 됐다.
                 # 도파민이 상수가 되니 전 시냅스가 균일하게 천장까지 자라고 std가 0으로 붕괴
@@ -870,6 +880,12 @@ def main():
                           bias_at_d1=args.bias_at_d1) - off
             else:
                 v = steer(brain, stim(obs, nh, side), steps=3) - off
+            if args.dec_apm_scale >= 0:
+                for _s in brain.kc_motor_syn.values():
+                    _s.set_dynamic_param_value("A_plus", brain.kc_motor_apm[0])
+                    _s.set_dynamic_param_value("A_minus", brain.kc_motor_apm[1])
+            if KCT is not None:
+                _ked = _kct_sum(_kct_read("e"))   # E143(읽기 전용): 결정 단계 끝(행동 창 전) 흔적
             correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
             if args.act_window > 0:
                 # K52: v<0 = motor_left 우세. v==0 이면 무작위. (E119: 판정 비교를 위해 행동 창 앞으로 옮김 —
@@ -976,7 +992,8 @@ def main():
                 KCT["rows"].append([ep, t, int(side == "right"), int(do_explore), (int(probe_side == "right") if do_explore else -1),
                                     float(v), (int(_ex == "right") if args.act_window > 0 else -1), int(correct)]
                                    + [float(x) for x in _rs] + [_tot] + [float(x) for x in _ke]
-                                   + [float(x) for x in _rpre] + [float(x) for x in _kee] + [float(_mrw[0]), float(_mrw[1])])
+                                   + [float(x) for x in _rpre] + [float(x) for x in _kee] + [float(_mrw[0]), float(_mrw[1])]
+                                   + [float(x) for x in _ke0] + [float(x) for x in _ked])   # E143: 27~30 시행 시작 흔적, 31~34 결정 단계 끝 흔적
                 KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
     if J["n"]:
