@@ -243,7 +243,11 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap"))
+    ap.add_argument("--decomp-swap-weights", default=None,
+                    help="E145: swap 모드에서 --decomp-weights 의 가중치에 이 파일의 집단(--decomp-swap-pops)을 바꿔 끼운다")
+    ap.add_argument("--decomp-swap-pops", default="",
+                    help="E145: 바꿔 끼울 집단 이름(쉼표 구분, 예: kc_l_to_motor_l,kc_r_to_motor_r). 빈 값 = 바꿈 없음(= all)")
     ap.add_argument("--kc-rate-file", default=None,
                     help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
     ap.add_argument("--rw-motor-silence", type=float, default=0.0,
@@ -428,6 +432,22 @@ def main():
             sub = dict(W)
         elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
+        elif mode == "swap":
+            # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
+            # 같은 뇌 시드면 연결이 같아 집단 배열 크기가 같아야 한다(다르면 측정 도구 실패).
+            sub = dict(W)
+            _pops = [p_ for p_ in args.decomp_swap_pops.split(",") if p_]
+            if _pops:
+                if not args.decomp_swap_weights:
+                    raise SystemExit("swap 은 --decomp-swap-weights 가 필요하다")
+                W2 = dict(np.load(args.decomp_swap_weights))
+                for p_ in _pops:
+                    if p_ not in W or p_ not in W2:
+                        raise SystemExit("swap 집단 %s 이 두 가중치 파일 모두에 있어야 한다" % p_)
+                    if W2[p_].shape != W[p_].shape:
+                        raise RuntimeError("swap 집단 %s 크기 불일치 %s vs %s — 측정 도구 실패" % (p_, W2[p_].shape, W[p_].shape))
+                    sub[p_] = W2[p_]
+            print("[E145 swap] 바꾼 집단 %s (원본 %s ← %s)" % (_pops or "없음", args.decomp_weights, args.decomp_swap_weights))
         else:
             raise SystemExit("알 수 없는 분해 모드 %s" % mode)
         _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)

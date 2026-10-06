@@ -1,0 +1,6 @@
+[A_all]  => DECOMP mode=all mod=+0.1459 acc=0.0 off=+0.0002 pushed=8 kc_means[kc_l>l=149.3504 kc_l>r=151.4300 kc_r>l=151.0847 kc_r>r=149.6018]
+[B_all]  => DECOMP mode=all mod=+0.1372 acc=0.0 off=+0.0001 pushed=8 kc_means[kc_l>l=149.4086 kc_l>r=151.4819 kc_r>l=151.1448 kc_r>r=149.6559]
+[A_sameA] [E145 swap] 바꾼 집단 ['kc_l_to_motor_l', 'kc_r_to_motor_r'] (원본 /mnt/c/Users/Jung => DECOMP mode=swap mod=+0.1459 acc=0.0 off=+0.0002 pushed=8 kc_means[kc_l>l=149.3504 kc_l>r=151.4300 kc_r>l=151.0847 kc_r>r=149.6018]
+[A_sameB] [E145 swap] 바꾼 집단 ['kc_l_to_motor_l', 'kc_r_to_motor_r'] (원본 /mnt/c/Users/Jung => DECOMP mode=swap mod=+0.1420 acc=0.0 off=+0.0002 pushed=8 kc_means[kc_l>l=149.4086 kc_l>r=151.4300 kc_r>l=151.0847 kc_r>r=149.6559]
+[A_crossB] [E145 swap] 바꾼 집단 ['kc_l_to_motor_r', 'kc_r_to_motor_l'] (원본 /mnt/c/Users/Jung => DECOMP mode=swap mod=+0.1407 acc=0.0 off=+0.0002 pushed=8 kc_means[kc_l>l=149.3504 kc_l>r=151.4819 kc_r>l=151.1448 kc_r>r=149.6018]
+[E145 경로 검사] 종료
