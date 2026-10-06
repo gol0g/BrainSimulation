@@ -376,6 +376,7 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e145_main_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e145_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
@@ -759,4 +760,4 @@ make: Entering directory '/root/e145_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e145_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-=> DECOMP mode=all mod=+0.1026 acc=19.0 off=+0.0011 pushed=8 kc_means[kc_l>l=149.0505 kc_l>r=151.7065 kc_r>l=151.8357 kc_r>r=149.7652]
+=> DECOMP mode=all mod=+0.1333 acc=0.0 off=+0.0000 pushed=8 kc_means[kc_l>l=148.4425 kc_l>r=151.8413 kc_r>l=151.5986 kc_r>r=148.6444]

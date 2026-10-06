@@ -376,8 +376,10 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e145_main_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e145_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
+[E145 swap] 바꾼 집단 ['kc_l_to_motor_l', 'kc_r_to_motor_r'] (원본 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E142/w_F1500_b14.npz ← /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E144/w_b14.npz)
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -759,4 +761,4 @@ make: Entering directory '/root/e145_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e145_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-=> DECOMP mode=all mod=+0.1026 acc=19.0 off=+0.0011 pushed=8 kc_means[kc_l>l=149.0505 kc_l>r=151.7065 kc_r>l=151.8357 kc_r>r=149.7652]
+=> DECOMP mode=swap mod=+0.1515 acc=0.0 off=+0.0003 pushed=8 kc_means[kc_l>l=148.1619 kc_l>r=151.8840 kc_r>l=151.7783 kc_r>r=148.4869]

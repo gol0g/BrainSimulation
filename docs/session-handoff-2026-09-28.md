@@ -177,3 +177,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-06 13:46 E143 **결정 단계 흔적 무관**(K77) — 분기 L2 미해결 종료. 다음 결정 문서 research/abcd-2026-10-06-actwin.md — E144(반사 25 행동 창 반대쪽 음 전류 보정 → 1,500시행, 짝 E142 F1500).
 - 2026-10-06 13:56 E144(반사 25 행동 창 반대쪽 침묵 N = 10000) 실행 중 — 로그 13:56:04 시작, 5런 ≈60분. 보정(뇌 15)이 기전을 직접 확인(반대쪽 발화 0.2106 → 0.0000, 같은 쪽 흔적 LTP → LTD). 감시 watch-exp.sh E144 5 "e144 b.*: =>". 끝나면 python3 scripts/judge_e144.py → python3 scripts/verify_e144_independent.py → P9(E144·H067·current-state) → push.
 - 2026-10-06 15:05 E144 **반대**(K78): 반대쪽 침묵이 거스름을 줄임(d +0.047~+0.071), 시냅스 차이는 +30% — 판독 가정 의문. E145(집단 맞바꿈 이식 분해, 학습 없음 25평가) 등록·경로 검사 중 — 통과하면 게이트 → run_experiment.sh E145 "bash scripts/e145_main.sh" → 감시 watch-exp.sh E145 25 "e145 b.*: =>" → python3 scripts/judge_e145.py.
+- 2026-10-06 15:24 E145 **보류**(K79) — 분기 종료, 헌장 L2 미해결 종료. 다음 결정 문서 research/abcd-2026-10-06-rulegen.md — E146(반사 0·동결: 무학습·500·1,500시행 × 자극 변형 5종 이식 평가).

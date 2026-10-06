@@ -1,4 +1,30 @@
 === E145 실행: 2026-10-06T06:07:21Z ===
 커맨드: bash scripts/e145_main.sh
 ---
-  e145 b10 A_all: 
+  e145 b10 A_all: => mod +0.1026
+  e145 b10 B_all: => mod +0.1735
+  e145 b10 A_sameB: => mod +0.1361
+  e145 b10 A_crossB: => mod +0.1241
+  e145 b10 A_d1B: => mod +0.1028
+  e145 b11 A_all: => mod +0.1141
+  e145 b11 B_all: => mod +0.1612
+  e145 b11 A_sameB: => mod +0.1383
+  e145 b11 A_crossB: => mod +0.1319
+  e145 b11 A_d1B: => mod +0.1141
+  e145 b12 A_all: => mod +0.0953
+  e145 b12 B_all: => mod +0.1464
+  e145 b12 A_sameB: => mod +0.1217
+  e145 b12 A_crossB: => mod +0.1147
+  e145 b12 A_d1B: => mod +0.0953
+  e145 b13 A_all: => mod +0.0833
+  e145 b13 B_all: => mod +0.1333
+  e145 b13 A_sameB: => mod +0.1096
+  e145 b13 A_crossB: => mod +0.1013
+  e145 b13 A_d1B: => mod +0.0836
+  e145 b14 A_all: => mod +0.1266
+  e145 b14 B_all: => mod +0.1735
+  e145 b14 A_sameB: => mod +0.1515
+  e145 b14 A_crossB: => mod +0.1435
+  e145 b14 A_d1B: => mod +0.1268
+[E145] 전체 루프 종료
+=== 종료코드 0 ===
