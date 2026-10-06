@@ -184,3 +184,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-06 19:21 E147 **반전 성공**(K81). E148(간섭 하 유지) 등록·경로 검사 중 → 통과하면 게이트 → run_experiment.sh E148 "bash scripts/e148_main.sh"(학습 5 × 3,000시행 + 평가 20, ≈2.3시간) → 감시 watch-exp.sh E148 25 "e148 .*b.*: =>" → judge_e148.py.
 - 2026-10-06 21:26 E148 **간섭**(K82) — 분기 종료. 다음 결정 문서 research/abcd-2026-10-06-overlap.md — E149(good·bad KC 겹침 측정, 기본 vs 공통 입력 차단).
 - 2026-10-06 21:46 E149 **보류**(K83, 중간 겹침). E150(차단 상태 간섭 하 유지) 등록·경로 검사 중 → 통과하면 게이트 → run_experiment.sh E150 "bash scripts/e150_main.sh"(학습 10런 ≈3시간 + 평가 25) → 감시 watch-exp.sh E150 35 "e150 .*b.*: =>" → judge_e150.py.
+- 2026-10-07 00:58 E150 **유지**(K84, 약한 학습 교란) — 분기 종료. 다음 결정 문서 research/abcd-2026-10-07-retention.md — E151(차단 + eta 상향, 뇌 15 보정 → 본실험 뇌 10~14).
