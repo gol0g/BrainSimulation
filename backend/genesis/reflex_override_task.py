@@ -64,13 +64,15 @@ def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False
     return tot
 
 
-def act_window_current(brain, o, ex_side, current, steps):
+def act_window_current(brain, o, ex_side, current, steps, neg=None):
     """E115: 행동 창 — 실행 motor 에 +current, 반대 motor 에 −current 를 **지속 전류**로(Ioffset) 넣고 steps 처리.
     motor Ioffset 이 동적 파라미터여야 한다(cfg.motor_ioffset_dynamic). 끝나면 0으로 되돌린다.
+    E144: neg 를 주면 반대 motor 에는 −neg(실행 쪽 +current 는 그대로). None = 이전 동작(−current).
     반환: 창 동안 (실행 motor 발화율 합, 반대 motor 발화율 합)."""
+    _neg = current if neg is None else neg
     ml, mr = brain.motor_left, brain.motor_right
-    ml.set_dynamic_param_value("Ioffset", current if ex_side == "left" else -current)
-    mr.set_dynamic_param_value("Ioffset", current if ex_side == "right" else -current)
+    ml.set_dynamic_param_value("Ioffset", current if ex_side == "left" else -_neg)
+    mr.set_dynamic_param_value("Ioffset", current if ex_side == "right" else -_neg)
     ex_r = ot_r = 0.0
     try:
         for _ in range(steps):
@@ -249,6 +251,9 @@ def main():
     ap.add_argument("--rw-apm-scale", type=float, default=-1.0,
                     help="E141: 보상 창(도파민 켜짐) 동안 KC→motor R-STDP 의 A_plus·A_minus 배율. 0 = 흔적 생성 동결(흔적은 감쇠만), "
                          "1 = 동적화만(회귀 검사). 음수 = 끔(이전 동작, 생성 코드도 그대로). 보상 창 루프 직후 원래 값으로 되돌린다")
+    ap.add_argument("--act-current-neg", type=float, default=None,
+                    help="E144: 행동 창 반대(실행 안 한) motor 의 음 전류 크기. 기본 None = --act-current 와 같음(이전 동작). "
+                         "실행 쪽 +act-current 는 그대로")
     ap.add_argument("--dec-apm-scale", type=float, default=-1.0,
                     help="E143: 학습 시행의 결정 단계(steer 3처리) 동안 KC→motor A_plus·A_minus 배율. 0 = 결정 단계 흔적 생성 동결 "
                          "(흔적은 행동 창에서만 생긴다). 음수 = 끔. steer 직후 원래 값으로 되돌린다")
@@ -918,9 +923,13 @@ def main():
                 # _ex 는 위(판정 직후)에서 정했다.
                 if args.act_current > 0:
                     # E115: 지속 전류(Ioffset) — 창 전체 동안 실행 motor +I, 반대 −I. 최소 회로 act_drive 와 같은 방식.
-                    act_window_current(brain, stim(obs, nh, side), _ex, args.act_current, args.act_window)
+                    # E144: 반환값(실행·반대 motor 발화율 합)을 추적에 남긴다(이전에는 버렸다). 반대쪽 전류는 --act-current-neg.
+                    _aw = act_window_current(brain, stim(obs, nh, side), _ex, args.act_current, args.act_window, neg=args.act_current_neg)
                 else:
                     steer(brain, stim(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
+                    _aw = (float("nan"), float("nan"))
+            else:
+                _aw = (float("nan"), float("nan"))
             if KCT is not None:
                 _ke = _kct_sum(_kct_read("e"))      # E139: 도파민 직전(행동 창 뒤) 자격흔적 역할별 합
                 _kgda = _kct_read("g")               # E139 수정: 도파민 직전 g — 도파민 전 변화 분리(V4)
@@ -993,7 +1002,8 @@ def main():
                                     float(v), (int(_ex == "right") if args.act_window > 0 else -1), int(correct)]
                                    + [float(x) for x in _rs] + [_tot] + [float(x) for x in _ke]
                                    + [float(x) for x in _rpre] + [float(x) for x in _kee] + [float(_mrw[0]), float(_mrw[1])]
-                                   + [float(x) for x in _ke0] + [float(x) for x in _ked])   # E143: 27~30 시행 시작 흔적, 31~34 결정 단계 끝 흔적
+                                   + [float(x) for x in _ke0] + [float(x) for x in _ked]    # E143: 27~30 시행 시작 흔적, 31~34 결정 단계 끝 흔적
+                                   + [float(_aw[0]), float(_aw[1])])                          # E144: 35 행동 창 실행 motor 발화율 합, 36 반대 motor
                 KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
     if J["n"]:
