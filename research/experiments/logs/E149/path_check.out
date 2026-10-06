@@ -1,0 +1,5 @@
+[base] [E149 입력 가중치] food_eye_l_to_kc_l=3.000(n=120566) good_food_eye_l_to_kc_l=4.000(n=59869) bad_food_eye_l_to_kc_l=4.000(n=60116) it_food_to_kc_l=2.000(n=30198)
+[base] => KCOVERLAP side=l good=99 bad=103 jac=0.4225 cos=0.6414 jac025=0.4591 jac100=0.3303 split_jac=0.9223 split_cos=0.9965 | side=r good=103 bad=103 jac=0.4014 cos=0.6156 jac025=0.4663 jac100=0.3186 split_jac=0.9434 split_cos=0.9971 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[block] [E149 입력 가중치] food_eye_l_to_kc_l=0.000(n=120566) good_food_eye_l_to_kc_l=4.000(n=59869) bad_food_eye_l_to_kc_l=4.000(n=60116) it_food_to_kc_l=0.000(n=30198)
+[block] => KCOVERLAP side=l good=788 bad=446 jac=0.1157 cos=0.2182 jac025=0.1157 jac100=0.0235 split_jac=1.0000 split_cos=0.9999 | side=r good=808 bad=415 jac=0.1008 cos=0.1934 jac025=0.1008 jac100=0.1008 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50
+[E149 경로 검사] 종료

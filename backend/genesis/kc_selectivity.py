@@ -77,3 +77,19 @@ def sets_ge1(cL, cR):
     """E117 식(≥1 스파이크) 집합 수: (좌전용, 우전용, 공유, 무반응)."""
     aL = np.asarray(cL) > 0; aR = np.asarray(cR) > 0
     return int((aL & ~aR).sum()), int((aR & ~aL).sum()), int((aL & aR).sum()), int((~aL & ~aR).sum())
+
+
+def overlap_stats(cnt_a, cnt_b, c0, n_pres, steps, base_steps, thr=0.5):
+    """E149: 두 자극(a·b)의 KC 반응 겹침. cnt_* = 자극별 KC 발화 수 합(n_pres 제시 × steps 스텝), c0 = 기준선 발화 수 합(base_steps 스텝).
+    유발 e = cnt/n_pres − steps·c0/base_steps (제시당 기준선 뺀 발화 수). 반응 = e ≥ thr.
+    반환 (반응 수 a, 반응 수 b, 자카드, 유발 벡터 코사인(음수 유발은 0으로))."""
+    base = steps * np.asarray(c0, dtype=np.float64) / max(base_steps, 1)
+    ea = np.asarray(cnt_a, dtype=np.float64) / max(n_pres, 1) - base
+    eb = np.asarray(cnt_b, dtype=np.float64) / max(n_pres, 1) - base
+    ra, rb = ea >= thr, eb >= thr
+    union = int((ra | rb).sum())
+    jac = float((ra & rb).sum() / union) if union else float("nan")
+    pa, pb = np.clip(ea, 0, None), np.clip(eb, 0, None)
+    na, nb = float(np.linalg.norm(pa)), float(np.linalg.norm(pb))
+    cos = float(pa @ pb / (na * nb)) if na > 0 and nb > 0 else float("nan")
+    return int(ra.sum()), int(rb.sum()), jac, cos

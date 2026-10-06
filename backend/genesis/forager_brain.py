@@ -8960,13 +8960,14 @@ class ForagerBrain:
 
         # === B) Input synapses: all inputs → single KC ===
 
-        # food_eye → KC
+        # food_eye → KC (E149: kc_food_eye_scale 배율 — 0 이면 good·bad 공유 입력 차단. 연결은 그대로 만든다(난수 소비 불변))
+        _kfs = float(getattr(self.config, "kc_food_eye_scale", 1.0))
         self._create_static_synapse(
             "food_eye_l_to_kc_l", self.food_eye_left, self.kc_left,
-            self.config.kc_food_eye_weight, sparsity=self.config.kc_food_eye_sparsity)
+            self.config.kc_food_eye_weight * _kfs, sparsity=self.config.kc_food_eye_sparsity)
         self._create_static_synapse(
             "food_eye_r_to_kc_r", self.food_eye_right, self.kc_right,
-            self.config.kc_food_eye_weight, sparsity=self.config.kc_food_eye_sparsity)
+            self.config.kc_food_eye_weight * _kfs, sparsity=self.config.kc_food_eye_sparsity)
         # good_food_eye → KC
         self._create_static_synapse(
             "good_food_eye_l_to_kc_l", self.good_food_eye_left, self.kc_left,
