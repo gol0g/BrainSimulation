@@ -1,0 +1,13 @@
+[none base] [E146 변형] variant=base vseed=0 => DECOMP mode=none mod=+0.0255 acc=2.0 off=-0.0201 pushed=0 kc_means[
+[none int05] [E146 변형] variant=int05 vseed=0 => DECOMP mode=none mod=+0.0182 acc=7.0 off=-0.0201 pushed=0 kc_means[
+[none int07] [E146 변형] variant=int07 vseed=0 => DECOMP mode=none mod=+0.0196 acc=8.0 off=-0.0201 pushed=0 kc_means[
+[none occ] [E146 변형] variant=occ vseed=0 => DECOMP mode=none mod=+0.0179 acc=7.0 off=-0.0201 pushed=0 kc_means[
+[none noise] [E146 변형] variant=noise vseed=0 => DECOMP mode=none mod=+0.0184 acc=2.0 off=-0.0201 pushed=0 kc_means[
+[none noise] [E146 변형] variant=noise vseed=0 => DECOMP mode=none mod=+0.0184 acc=2.0 off=-0.0201 pushed=0 kc_means[
+[E141 base] [E146 변형] variant=base vseed=0 => DECOMP mode=all mod=-0.2103 acc=81.0 off=+0.0421 pushed=8 kc_means[
+[E141 int05] [E146 변형] variant=int05 vseed=0 => DECOMP mode=all mod=-0.2161 acc=86.0 off=+0.0421 pushed=8 kc_means[
+[E141 int07] [E146 변형] variant=int07 vseed=0 => DECOMP mode=all mod=-0.2160 acc=85.0 off=+0.0421 pushed=8 kc_means[
+[E141 occ] [E146 변형] variant=occ vseed=0 => DECOMP mode=all mod=-0.2170 acc=87.0 off=+0.0421 pushed=8 kc_means[
+[E141 noise] [E146 변형] variant=noise vseed=0 => DECOMP mode=all mod=-0.1141 acc=61.0 off=+0.0421 pushed=8 kc_means[
+[E141 noise] [E146 변형] variant=noise vseed=0 => DECOMP mode=all mod=-0.1141 acc=61.0 off=+0.0421 pushed=8 kc_means[
+[E146 경로 검사] 종료

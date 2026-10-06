@@ -99,7 +99,35 @@ def measure_offset(brain, obs, nh, n=20):
     return float(np.mean(vals))
 
 
-def evaluate(brain, obs, nh, trials=100, stab=30):
+EVAL_VARIANTS = ("base", "int05", "int07", "occ", "noise")
+
+
+def stim_variant(obs, nh, good_side, variant, rng):
+    """E146: 평가 시행 자극 변형(헌장 개념 조건 3 — 훈련에 없던 잡음·가림·강도 변화). 학습·안정화·오프셋 측정에는 쓰지 않는다.
+    base = stim(훈련과 같음, 한쪽 광선 전부 0.9). int05·int07 = 강도 0.5·0.7. occ = 자극 쪽 광선 앞 절반만 0.9(나머지 가림).
+    noise = 자극 쪽 0.9 + N(0, 0.2), 반대쪽 0 + N(0, 0.2), [0, 1] 로 자름 — rng 는 호출자가 준 지역 생성기(전역 난수 소비 없음)."""
+    if variant in (None, "base"):
+        return stim(obs, nh, good_side)
+    o = stim(obs, nh, good_side)
+    on = np.zeros(nh); off_ = np.zeros(nh)
+    if variant == "int05":
+        on[:] = 0.5
+    elif variant == "int07":
+        on[:] = 0.7
+    elif variant == "occ":
+        on[: nh // 2] = 0.9
+    elif variant == "noise":
+        on = np.clip(0.9 + rng.normal(0.0, 0.2, nh), 0.0, 1.0)
+        off_ = np.clip(rng.normal(0.0, 0.2, nh), 0.0, 1.0)
+    else:
+        raise ValueError("알 수 없는 평가 변형 %s" % variant)
+    L, R = (on, off_) if good_side == "left" else (off_, on)
+    for k_, v_ in (("good_food_rays_left", L), ("good_food_rays_right", R), ("food_rays_left", L), ("food_rays_right", R)):
+        o[k_] = np.array(v_, dtype=float)
+    return o
+
+
+def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0):
     """정답률과 **변조폭**을 함께 반환.
 
     C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
@@ -124,9 +152,10 @@ def evaluate(brain, obs, nh, trials=100, stab=30):
     off = measure_offset(brain, obs, nh)
     ok = 0
     vs_left, vs_right = [], []
+    _vrng = np.random.RandomState(vseed)    # E146: 변형 잡음 전용 지역 생성기(전역 난수열 불변)
     for t in range(trials):
         side = "left" if (t % 2 == 0) else "right"     # 좌우 균형
-        v = steer(brain, stim(obs, nh, side)) - off     # 오프셋 보정
+        v = steer(brain, stim_variant(obs, nh, side, variant, _vrng)) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음)
         (vs_left if side == "left" else vs_right).append(v)
         # 정답 = good의 **반대쪽**
         if side == "left" and v > 0.02:
@@ -244,6 +273,10 @@ def main():
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
                              "kcrate", "kcsel", "kcselonly", "kcpop", "swap"))
+    ap.add_argument("--eval-variant", default=None, choices=EVAL_VARIANTS,
+                    help="E146: 분해(이식) 평가의 시행 자극 변형 — base(훈련과 같음)·int05·int07·occ(가림)·noise. 학습에는 쓰지 않는다")
+    ap.add_argument("--eval-vseed", type=int, default=0,
+                    help="E146: noise 변형의 지역 난수 시드(전역 난수 소비 없음)")
     ap.add_argument("--decomp-swap-weights", default=None,
                     help="E145: swap 모드에서 --decomp-weights 의 가중치에 이 파일의 집단(--decomp-swap-pops)을 바꿔 끼운다")
     ap.add_argument("--decomp-swap-pops", default="",
@@ -653,7 +686,9 @@ def main():
         if sub:
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
-        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials)
+        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed)
+        if args.eval_variant:
+            print("[E146 변형] variant=%s vseed=%d" % (args.eval_variant, args.eval_vseed))
         gms = " ".join("%s=%.4f" % (n.replace("_to_motor_", ">"), float(sub[n].mean()) if n in sub else float("nan")) for n in kc)
         print("=> DECOMP mode=%s mod=%+.4f acc=%.1f off=%+.4f pushed=%d kc_means[%s]" % (mode, mod, acc, off, len(sub), gms))
         return
