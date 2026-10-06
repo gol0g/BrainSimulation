@@ -1,0 +1,10 @@
+[A]  변조폭 +0.0341 → 변조폭 +0.0117 보상 94회
+[AB] [과제 B] 시행 200 부터 자극 = bad food, 정답 = 같은 쪽 변조폭 +0.0341 → 변조폭 +0.0137 보상 195회
+[A base] => DECOMP mode=all mod=+0.0117 acc=0.0 off=-0.0157 pushed=8 
+[AB base] => DECOMP mode=all mod=+0.0137 acc=0.0 off=-0.0118 pushed=8 
+[AB bad] => DECOMP mode=all mod=+0.0307 acc=0.0 off=-0.0118 pushed=8 
+[none base] => DECOMP mode=none mod=+0.0341 acc=0.0 off=-0.0295 pushed=0
+[none bad] => DECOMP mode=none mod=+0.0270 acc=0.0 off=-0.0295 pushed=0
+  A 추적: 시행 200 규칙 일치 1.0000 동결 잔차 1.37e-08 도파민전 0.0e+00
+  AB 추적: 시행 400 규칙 일치 1.0000 동결 잔차 1.37e-08 도파민전 0.0e+00
+[E150 경로 검사] 종료

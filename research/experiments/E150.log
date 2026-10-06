@@ -1,0 +1,4 @@
+=== E150 실행: 2026-10-06T12:54:49Z ===
+커맨드: bash scripts/e150_main.sh
+---
+  e150 train A b10: 

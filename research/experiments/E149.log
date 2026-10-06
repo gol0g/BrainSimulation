@@ -1,4 +1,15 @@
 === E149 실행: 2026-10-06T12:32:19Z ===
 커맨드: bash scripts/e149_main.sh
 ---
-  e149 b10 base: 
+  e149 b10 base: => KCOVERLAP side=l good=104 bad=113 jac=0.4371 cos=0.5901 jac025=0.4528 jac100=0.3040 split_jac=0.9717 split_cos=0.9978 | side=r good=99 bad=100 jac=0.4632 cos=0.6577 jac025=0.5329 jac100=0.4234 split_jac=0.9320 split_cos=0.9972 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e149 b10 block: => KCOVERLAP side=l good=812 bad=449 jac=0.1081 cos=0.2057 jac025=0.1081 jac100=0.0209 split_jac=1.0000 split_cos=0.9999 | side=r good=806 bad=445 jac=0.1140 cos=0.2137 jac025=0.1140 jac100=0.1140 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50
+  e149 b11 base: => KCOVERLAP side=l good=106 bad=113 jac=0.4314 cos=0.6689 jac025=0.4551 jac100=0.4175 split_jac=0.9541 split_cos=0.9977 | side=r good=106 bad=105 jac=0.4653 cos=0.6044 jac025=0.4937 jac100=0.3545 split_jac=0.9626 split_cos=0.9973 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e149 b11 block: => KCOVERLAP side=l good=842 bad=415 jac=0.1017 cos=0.1994 jac025=0.1017 jac100=0.0207 split_jac=1.0000 split_cos=0.9999 | side=r good=821 bad=403 jac=0.1137 cos=0.2173 jac025=0.1137 jac100=0.1137 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50
+  e149 b12 base: => KCOVERLAP side=l good=97 bad=100 jac=0.4593 cos=0.6382 jac025=0.4966 jac100=0.3796 split_jac=0.9208 split_cos=0.9977 | side=r good=94 bad=102 jac=0.4101 cos=0.5967 jac025=0.4558 jac100=0.3153 split_jac=0.9691 split_cos=0.9976 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e149 b12 block: => KCOVERLAP side=l good=838 bad=456 jac=0.1233 cos=0.2320 jac025=0.1233 jac100=0.0249 split_jac=1.0000 split_cos=0.9999 | side=r good=812 bad=410 jac=0.1089 cos=0.2080 jac025=0.1089 jac100=0.1089 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50
+  e149 b13 base: => KCOVERLAP side=l good=103 bad=104 jac=0.4082 cos=0.6306 jac025=0.4479 jac100=0.4299 split_jac=0.9619 split_cos=0.9973 | side=r good=106 bad=107 jac=0.4589 cos=0.6126 jac025=0.5125 jac100=0.3097 split_jac=0.9364 split_cos=0.9974 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e149 b13 block: => KCOVERLAP side=l good=795 bad=514 jac=0.1150 cos=0.2125 jac025=0.1150 jac100=0.0177 split_jac=1.0000 split_cos=0.9999 | side=r good=812 bad=455 jac=0.1075 cos=0.2024 jac025=0.1075 jac100=0.1075 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50
+  e149 b14 base: => KCOVERLAP side=l good=115 bad=103 jac=0.3625 cos=0.5819 jac025=0.4643 jac100=0.2787 split_jac=0.9224 split_cos=0.9970 | side=r good=111 bad=104 jac=0.3782 cos=0.5802 jac025=0.4343 jac100=0.3091 split_jac=0.9138 split_cos=0.9962 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e149 b14 block: => KCOVERLAP side=l good=811 bad=507 jac=0.1265 cos=0.2318 jac025=0.1265 jac100=0.0144 split_jac=1.0000 split_cos=0.9999 | side=r good=781 bad=444 jac=0.1066 cos=0.2004 jac025=0.1066 jac100=0.1066 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50
+[E149] 전체 루프 종료
+=== 종료코드 0 ===

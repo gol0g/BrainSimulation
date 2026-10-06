@@ -759,5 +759,5 @@ make: Entering directory '/root/e149_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e149_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[E149 입력 가중치] food_eye_l_to_kc_l=3.000(n=120209) good_food_eye_l_to_kc_l=4.000(n=60151) bad_food_eye_l_to_kc_l=4.000(n=60518) it_food_to_kc_l=2.000(n=30037)
-=> KCOVERLAP side=l good=104 bad=113 jac=0.4371 cos=0.5901 jac025=0.4528 jac100=0.3040 split_jac=0.9717 split_cos=0.9978 | side=r good=99 bad=100 jac=0.4632 cos=0.6577 jac025=0.5329 jac100=0.4234 split_jac=0.9320 split_cos=0.9972 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[E149 입력 가중치] food_eye_l_to_kc_l=0.000(n=120665) good_food_eye_l_to_kc_l=4.000(n=60690) bad_food_eye_l_to_kc_l=4.000(n=60114) it_food_to_kc_l=0.000(n=29985)
+=> KCOVERLAP side=l good=838 bad=456 jac=0.1233 cos=0.2320 jac025=0.1233 jac100=0.0249 split_jac=1.0000 split_cos=0.9999 | side=r good=812 bad=410 jac=0.1089 cos=0.2080 jac025=0.1089 jac100=0.1089 split_jac=1.0000 split_cos=1.0000 | food_eye_scale=0.00 bilateral_scale=0.00 n_pres=50

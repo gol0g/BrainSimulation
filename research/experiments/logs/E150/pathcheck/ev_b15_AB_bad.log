@@ -375,8 +375,9 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e149_main_run/forager_brain_CODE'
-make: Leaving directory '/root/e149_main_run/forager_brain_CODE'
+make: Entering directory '/root/e150_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/root/e150_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -755,9 +756,9 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e149_main_run/forager_brain_CODE'
+make: Entering directory '/root/e150_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e149_main_run/forager_brain_CODE'
+make: Leaving directory '/root/e150_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[E149 입력 가중치] food_eye_l_to_kc_l=3.000(n=120209) good_food_eye_l_to_kc_l=4.000(n=60151) bad_food_eye_l_to_kc_l=4.000(n=60518) it_food_to_kc_l=2.000(n=30037)
-=> KCOVERLAP side=l good=104 bad=113 jac=0.4371 cos=0.5901 jac025=0.4528 jac100=0.3040 split_jac=0.9717 split_cos=0.9978 | side=r good=99 bad=100 jac=0.4632 cos=0.6577 jac025=0.5329 jac100=0.4234 split_jac=0.9320 split_cos=0.9972 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[E146 변형] variant=bad vseed=0
+=> DECOMP mode=all mod=+0.0307 acc=0.0 off=-0.0118 pushed=8 kc_means[kc_l>l=150.3330 kc_l>r=150.4586 kc_r>l=150.7071 kc_r>r=150.8254]
