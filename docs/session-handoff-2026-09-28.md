@@ -179,3 +179,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-06 15:05 E144 **반대**(K78): 반대쪽 침묵이 거스름을 줄임(d +0.047~+0.071), 시냅스 차이는 +30% — 판독 가정 의문. E145(집단 맞바꿈 이식 분해, 학습 없음 25평가) 등록·경로 검사 중 — 통과하면 게이트 → run_experiment.sh E145 "bash scripts/e145_main.sh" → 감시 watch-exp.sh E145 25 "e145 b.*: =>" → python3 scripts/judge_e145.py.
 - 2026-10-06 15:24 E145 **보류**(K79) — 분기 종료, 헌장 L2 미해결 종료. 다음 결정 문서 research/abcd-2026-10-06-rulegen.md — E146(반사 0·동결: 무학습·500·1,500시행 × 자극 변형 5종 이식 평가).
 - 2026-10-06 15:35 E146(반사 0 규칙 일반화·용량) 실행 중 — 학습 5런(1,500시행) + 평가 75회 ≈2시간. 감시 watch-exp.sh E146 80 "e146 .*b.*: =>". 끝나면 python3 scripts/judge_e146.py → python3 scripts/verify_e146_independent.py(합성 4/4) → P9(E146·H069·current-state) → push.
+- 2026-10-06 17:21 E146 **충족**(K80, 가림 범위 정정 — 쪽별 광선 평균 입력). 분기 종료. 헌장 현황 열 갱신. 다음 결정 문서 research/abcd-2026-10-06-reversal.md — E147(전체 모델 규칙 반전: 1,500 교차 + 1,500 반전, --reverse-after 신설).

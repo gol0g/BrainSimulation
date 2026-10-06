@@ -1,4 +1,85 @@
 === E146 실행: 2026-10-06T06:35:47Z ===
 커맨드: bash scripts/e146_main.sh
 ---
-  e146 train b10: 
+  e146 train b10: => 사전 +0.0195 사후 -0.3194 보상 987 || => KCTRACE 시행 1500 보상 987 | A +649477.9 B -1162416.2 C +489195.8 P -647110.9 | ΔD +2948200.7 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 
+  e146 train b11: => 사전 +0.0150 사후 -0.3309 보상 1040 || => KCTRACE 시행 1500 보상 1040 | A +816865.0 B -1125371.9 C +300887.5 P -647501.6 | ΔD +2890626.1 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0
+  e146 train b12: => 사전 +0.0262 사후 -0.3215 보상 1039 || => KCTRACE 시행 1500 보상 1039 | A +777629.3 B -841998.7 C +230099.5 P -605361.1 | ΔD +2455088.6 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 
+  e146 train b13: => 사전 +0.0320 사후 -0.3217 보상 995 || => KCTRACE 시행 1500 보상 995 | A +737077.7 B -969385.0 C +343331.5 P -686410.6 | ΔD +2736204.7 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 |
+  e146 train b14: => 사전 +0.0165 사후 -0.3486 보상 1036 || => KCTRACE 시행 1500 보상 1036 | A +998222.1 B -1217455.8 C +299153.7 P -738809.4 | ΔD +3253641.0 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0
+  e146 b10 none base: => mod +0.0195
+  e146 b10 none int05: => mod +0.0150
+  e146 b10 none int07: => mod +0.0158
+  e146 b10 none occ: => mod +0.0143
+  e146 b10 none noise: => mod +0.0134
+  e146 b10 E141 base: => mod -0.2189
+  e146 b10 E141 int05: => mod -0.2210
+  e146 b10 E141 int07: => mod -0.2209
+  e146 b10 E141 occ: => mod -0.2220
+  e146 b10 E141 noise: => mod -0.1236
+  e146 b10 R0F1500 base: => mod -0.3194
+  e146 b10 R0F1500 int05: => mod -0.3225
+  e146 b10 R0F1500 int07: => mod -0.3227
+  e146 b10 R0F1500 occ: => mod -0.3232
+  e146 b10 R0F1500 noise: => mod -0.2052
+  e146 b11 none base: => mod +0.0150
+  e146 b11 none int05: => mod +0.0105
+  e146 b11 none int07: => mod +0.0140
+  e146 b11 none occ: => mod +0.0093
+  e146 b11 none noise: => mod +0.0114
+  e146 b11 E141 base: => mod -0.2433
+  e146 b11 E141 int05: => mod -0.2474
+  e146 b11 E141 int07: => mod -0.2447
+  e146 b11 E141 occ: => mod -0.2491
+  e146 b11 E141 noise: => mod -0.1384
+  e146 b11 R0F1500 base: => mod -0.3309
+  e146 b11 R0F1500 int05: => mod -0.3326
+  e146 b11 R0F1500 int07: => mod -0.3311
+  e146 b11 R0F1500 occ: => mod -0.3342
+  e146 b11 R0F1500 noise: => mod -0.2116
+  e146 b12 none base: => mod +0.0262
+  e146 b12 none int05: => mod +0.0134
+  e146 b12 none int07: => mod +0.0217
+  e146 b12 none occ: => mod +0.0145
+  e146 b12 none noise: => mod +0.0146
+  e146 b12 E141 base: => mod -0.2471
+  e146 b12 E141 int05: => mod -0.2601
+  e146 b12 E141 int07: => mod -0.2507
+  e146 b12 E141 occ: => mod -0.2590
+  e146 b12 E141 noise: => mod -0.1326
+  e146 b12 R0F1500 base: => mod -0.3215
+  e146 b12 R0F1500 int05: => mod -0.3337
+  e146 b12 R0F1500 int07: => mod -0.3250
+  e146 b12 R0F1500 occ: => mod -0.3320
+  e146 b12 R0F1500 noise: => mod -0.1951
+  e146 b13 none base: => mod +0.0320
+  e146 b13 none int05: => mod +0.0299
+  e146 b13 none int07: => mod +0.0324
+  e146 b13 none occ: => mod +0.0282
+  e146 b13 none noise: => mod +0.0215
+  e146 b13 E141 base: => mod -0.2194
+  e146 b13 E141 int05: => mod -0.2221
+  e146 b13 E141 int07: => mod -0.2196
+  e146 b13 E141 occ: => mod -0.2242
+  e146 b13 E141 noise: => mod -0.1127
+  e146 b13 R0F1500 base: => mod -0.3217
+  e146 b13 R0F1500 int05: => mod -0.3241
+  e146 b13 R0F1500 int07: => mod -0.3212
+  e146 b13 R0F1500 occ: => mod -0.3256
+  e146 b13 R0F1500 noise: => mod -0.1877
+  e146 b14 none base: => mod +0.0165
+  e146 b14 none int05: => mod +0.0073
+  e146 b14 none int07: => mod +0.0122
+  e146 b14 none occ: => mod +0.0070
+  e146 b14 none noise: => mod +0.0171
+  e146 b14 E141 base: => mod -0.2550
+  e146 b14 E141 int05: => mod -0.2631
+  e146 b14 E141 int07: => mod -0.2588
+  e146 b14 E141 occ: => mod -0.2643
+  e146 b14 E141 noise: => mod -0.1449
+  e146 b14 R0F1500 base: => mod -0.3486
+  e146 b14 R0F1500 int05: => mod -0.3558
+  e146 b14 R0F1500 int07: => mod -0.3521
+  e146 b14 R0F1500 occ: => mod -0.3555
+  e146 b14 R0F1500 noise: => mod -0.2280
+[E146] 전체 루프 종료
+=== 종료코드 0 ===
