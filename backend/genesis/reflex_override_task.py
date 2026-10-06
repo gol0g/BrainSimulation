@@ -273,6 +273,8 @@ def main():
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
                              "kcrate", "kcsel", "kcselonly", "kcpop", "swap"))
+    ap.add_argument("--reverse-after", type=int, default=0,
+                    help="E147: 전체 시행 번호(ep*steps+t) N 부터 보상 규칙 반전 — 정답 = 같은 쪽(good 쪽). 0 = 끔(이전 동작)")
     ap.add_argument("--eval-variant", default=None, choices=EVAL_VARIANTS,
                     help="E146: 분해(이식) 평가의 시행 자극 변형 — base(훈련과 같음)·int05·int07·occ(가림)·noise. 학습에는 쓰지 않는다")
     ap.add_argument("--eval-vseed", type=int, default=0,
@@ -910,6 +912,7 @@ def main():
               % (tuple(sum(int((r_ == i).sum()) for r_ in KCT["role"].values()) for i in range(4)) + (args.kc_rate_file,)))
     # E119 판정 경로 계수(읽기 전용): 행동 창이 있을 때 v 판정과 실행 행동 판정을 시행마다 비교한다.
     J = {"n": 0, "small": 0, "v_ok_ex_no": 0, "v_no_ex_ok": 0}
+    _rev_announced = False
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5)
         for t in range(args.steps):
@@ -946,12 +949,23 @@ def main():
                     _s.set_dynamic_param_value("A_minus", brain.kc_motor_apm[1])
             if KCT is not None:
                 _ked = _kct_sum(_kct_read("e"))   # E143(읽기 전용): 결정 단계 끝(행동 창 전) 흔적
-            correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
+            # E147: --reverse-after N 이면 전체 시행 번호 N 부터 정답 = 같은 쪽(good 쪽). 난수 소비 없음 — 난수열은 이전과 같다.
+            _rev = args.reverse_after > 0 and (ep * args.steps + t) >= args.reverse_after
+            if _rev and not _rev_announced:
+                print("[반전] 시행 %d 부터 정답 = 같은 쪽(good 쪽)" % (ep * args.steps + t))
+                _rev_announced = True
+            if _rev:
+                correct = (side == "left" and v < -0.02) or (side == "right" and v > 0.02)
+            else:
+                correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
             if args.act_window > 0:
                 # K52: v<0 = motor_left 우세. v==0 이면 무작위. (E119: 판정 비교를 위해 행동 창 앞으로 옮김 —
                 # 사이에 np.random 소비가 없어 난수열은 이전과 같다)
                 _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
-                correct_ex = (side == "left" and _ex == "right") or (side == "right" and _ex == "left")
+                if _rev:
+                    correct_ex = (side == "left" and _ex == "left") or (side == "right" and _ex == "right")
+                else:
+                    correct_ex = (side == "left" and _ex == "right") or (side == "right" and _ex == "left")
                 J["n"] += 1
                 J["small"] += int(abs(v) <= 0.02)
                 J["v_ok_ex_no"] += int(correct and not correct_ex)

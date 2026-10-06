@@ -180,3 +180,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-06 15:24 E145 **보류**(K79) — 분기 종료, 헌장 L2 미해결 종료. 다음 결정 문서 research/abcd-2026-10-06-rulegen.md — E146(반사 0·동결: 무학습·500·1,500시행 × 자극 변형 5종 이식 평가).
 - 2026-10-06 15:35 E146(반사 0 규칙 일반화·용량) 실행 중 — 학습 5런(1,500시행) + 평가 75회 ≈2시간. 감시 watch-exp.sh E146 80 "e146 .*b.*: =>". 끝나면 python3 scripts/judge_e146.py → python3 scripts/verify_e146_independent.py(합성 4/4) → P9(E146·H069·current-state) → push.
 - 2026-10-06 17:21 E146 **충족**(K80, 가림 범위 정정 — 쪽별 광선 평균 입력). 분기 종료. 헌장 현황 열 갱신. 다음 결정 문서 research/abcd-2026-10-06-reversal.md — E147(전체 모델 규칙 반전: 1,500 교차 + 1,500 반전, --reverse-after 신설).
+- 2026-10-06 17:28 E147(전체 모델 규칙 반전) 실행 중 — 5런 × 3,000시행 ≈2시간. 감시 watch-exp.sh E147 5 "e147 b.*: =>". 끝나면 python3 scripts/judge_e147.py → python3 scripts/verify_e147_independent.py(합성 5/5) → P9 → push.
