@@ -33,6 +33,18 @@ def stim(obs, nh, good_side):
     return o
 
 
+def stim_bad(obs, nh, bad_side):
+    """E148: 과제 B 자극 — bad food 가 한쪽(bad_food_rays·food_rays 0.9), good food 없음. stim 과 같은 키 구성."""
+    o = stim(obs, nh, bad_side)
+    L = 0.9 if bad_side == "left" else 0.0
+    R = 0.9 if bad_side == "right" else 0.0
+    o["good_food_rays_left"] = np.zeros(nh)
+    o["good_food_rays_right"] = np.zeros(nh)
+    o["bad_food_rays_left"] = np.ones(nh) * L
+    o["bad_food_rays_right"] = np.ones(nh) * R
+    return o
+
+
 def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False):
     """bias_side가 주어지면 **매 스텝** 운동 집단에 편향을 주입한다.
     C37 1차 실패 원인: 편향을 호출 전 한 번만 넣었더니 감각 입력이 다음 스텝에 덮어써서
@@ -99,7 +111,7 @@ def measure_offset(brain, obs, nh, n=20):
     return float(np.mean(vals))
 
 
-EVAL_VARIANTS = ("base", "int05", "int07", "occ", "noise")
+EVAL_VARIANTS = ("base", "int05", "int07", "occ", "noise", "bad")
 
 
 def stim_variant(obs, nh, good_side, variant, rng):
@@ -108,6 +120,8 @@ def stim_variant(obs, nh, good_side, variant, rng):
     noise = 자극 쪽 0.9 + N(0, 0.2), 반대쪽 0 + N(0, 0.2), [0, 1] 로 자름 — rng 는 호출자가 준 지역 생성기(전역 난수 소비 없음)."""
     if variant in (None, "base"):
         return stim(obs, nh, good_side)
+    if variant == "bad":
+        return stim_bad(obs, nh, good_side)     # E148: 과제 B 평가 자극(bad food 쪽 = good_side 자리)
     o = stim(obs, nh, good_side)
     on = np.zeros(nh); off_ = np.zeros(nh)
     if variant == "int05":
@@ -273,6 +287,8 @@ def main():
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
                              "kcrate", "kcsel", "kcselonly", "kcpop", "swap"))
+    ap.add_argument("--task-b-after", type=int, default=0,
+                    help="E148: 전체 시행 번호 N 부터 과제 B — 학습 자극 = bad food(stim_bad), 정답 = 같은 쪽. 0 = 끔(이전 동작)")
     ap.add_argument("--reverse-after", type=int, default=0,
                     help="E147: 전체 시행 번호(ep*steps+t) N 부터 보상 규칙 반전 — 정답 = 같은 쪽(good 쪽). 0 = 끔(이전 동작)")
     ap.add_argument("--eval-variant", default=None, choices=EVAL_VARIANTS,
@@ -913,6 +929,7 @@ def main():
     # E119 판정 경로 계수(읽기 전용): 행동 창이 있을 때 v 판정과 실행 행동 판정을 시행마다 비교한다.
     J = {"n": 0, "small": 0, "v_ok_ex_no": 0, "v_no_ex_ok": 0}
     _rev_announced = False
+    _taskb_announced = False
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5)
         for t in range(args.steps):
@@ -925,6 +942,12 @@ def main():
             side = "left" if (np.random.random() > 0.5) else "right"
             # 정답 = good의 반대쪽. ε 확률로 그 행동을 실제로 유도해 표본을 만든다.
             do_explore = (np.random.random() < eps)
+            # E148: --task-b-after N 이면 전체 시행 N 부터 과제 B — 자극 = bad food, 정답 = 같은 쪽. 난수 소비 없음.
+            _taskb = args.task_b_after > 0 and (ep * args.steps + t) >= args.task_b_after
+            if _taskb and not _taskb_announced:
+                print("[과제 B] 시행 %d 부터 자극 = bad food, 정답 = 같은 쪽" % (ep * args.steps + t))
+                _taskb_announced = True
+            _stimf = stim_bad if _taskb else stim
             if args.dec_apm_scale >= 0:
                 # E143: 결정 단계(steer 3처리) 동안 KC→motor 흔적 생성 배율(0 = 동결). E142 탐색적 분해: 결정 단계에 반사 쪽·학습된 교차 쪽
                 # motor 가 함께 발화해 섞인 부호 흔적이 생기고, 연성 상한이 그것을 틀린 방향 변화로 바꿔 차이 성장이 정체했다.
@@ -938,11 +961,11 @@ def main():
                 # 보상해야 대비가 생겨 시냅스별 변별이 학습된다.
                 explored += 1
                 probe_side = "left" if (np.random.random() < 0.5) else "right"
-                v = steer(brain, stim(obs, nh, side), steps=3,
+                v = steer(brain, _stimf(obs, nh, side), steps=3,
                           bias_side=probe_side, bias_strength=args.bias,
                           bias_at_d1=args.bias_at_d1) - off
             else:
-                v = steer(brain, stim(obs, nh, side), steps=3) - off
+                v = steer(brain, _stimf(obs, nh, side), steps=3) - off
             if args.dec_apm_scale >= 0:
                 for _s in brain.kc_motor_syn.values():
                     _s.set_dynamic_param_value("A_plus", brain.kc_motor_apm[0])
@@ -954,7 +977,7 @@ def main():
             if _rev and not _rev_announced:
                 print("[반전] 시행 %d 부터 정답 = 같은 쪽(good 쪽)" % (ep * args.steps + t))
                 _rev_announced = True
-            if _rev:
+            if _rev or _taskb:
                 correct = (side == "left" and v < -0.02) or (side == "right" and v > 0.02)
             else:
                 correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
@@ -962,7 +985,7 @@ def main():
                 # K52: v<0 = motor_left 우세. v==0 이면 무작위. (E119: 판정 비교를 위해 행동 창 앞으로 옮김 —
                 # 사이에 np.random 소비가 없어 난수열은 이전과 같다)
                 _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
-                if _rev:
+                if _rev or _taskb:
                     correct_ex = (side == "left" and _ex == "left") or (side == "right" and _ex == "right")
                 else:
                     correct_ex = (side == "left" and _ex == "right") or (side == "right" and _ex == "left")
@@ -993,9 +1016,9 @@ def main():
                 if args.act_current > 0:
                     # E115: 지속 전류(Ioffset) — 창 전체 동안 실행 motor +I, 반대 −I. 최소 회로 act_drive 와 같은 방식.
                     # E144: 반환값(실행·반대 motor 발화율 합)을 추적에 남긴다(이전에는 버렸다). 반대쪽 전류는 --act-current-neg.
-                    _aw = act_window_current(brain, stim(obs, nh, side), _ex, args.act_current, args.act_window, neg=args.act_current_neg)
+                    _aw = act_window_current(brain, _stimf(obs, nh, side), _ex, args.act_current, args.act_window, neg=args.act_current_neg)
                 else:
-                    steer(brain, stim(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
+                    steer(brain, _stimf(obs, nh, side), steps=args.act_window, bias_side=_ex, bias_strength=args.act_drive)
                     _aw = (float("nan"), float("nan"))
             else:
                 _aw = (float("nan"), float("nan"))
@@ -1022,11 +1045,13 @@ def main():
                 # E109: 보상 타이밍 수리. 이 과제는 decay_dopamine()을 부르지 않아 도파민이 **다음 시행**의
                 # 처리 스텝 동안 가중치에 반영됐다(시행 t 보상 → 시행 t+1 활동에 배정). 최소 회로처럼
                 # (1) 같은 자극을 유지한 채 보상 창 K스텝 → (2) 도파민 0 → (3) 무자극 간격 G스텝.
-                _o = stim(obs, nh, side)
+                _o = _stimf(obs, nh, side)
                 if args.reward_stim == "none":
                     # E110: 보상 구간에 **자극을 끈다**(최소 회로 apply_stim None 과 같음). 자극을 유지하면
                     # 뇌 자신의 반사 반응이 도파민과 겹쳐 반사 연합이 강화된다(E109 첫 런 +0.25).
-                    for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+                    # E148: bad food 광선도 끈다(과제 B). 기존 자극은 bad food 가 0 이라 동작 불변.
+                    for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right",
+                               "bad_food_rays_left", "bad_food_rays_right"):
                         _o[_k] = np.zeros(nh)
                 if args.rw_motor_silence > 0:
                     # E140: 보상 창(도파민 켜짐) 동안 양쪽 motor 침묵(지속 음 전류) — 새 post 스파이크가 없으면 보상 창의 비선택 LTP 흔적이 생기지 않는다.
