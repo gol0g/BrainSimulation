@@ -376,24 +376,10 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e154_main_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e154_main_run/forager_brain_CODE'
-[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=241509.08 bad_food_eye_l_to_kc_l=241166.92 good_food_eye_r_to_kc_r=239216.65 bad_food_eye_r_to_kc_r=239559.35
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b13.npz 검증 일치 — good_food_eye_l_to_kc_l=238715.17 bad_food_eye_l_to_kc_l=238872.83 good_food_eye_r_to_kc_r=240257.88 bad_food_eye_r_to_kc_r=239246.12
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 +0.001 | 정답률 32.0% | **변조폭 +0.0117** (양수=반사방향, 음수=역전)
-[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30037 w=2.000; it_food_to_kc_r n=30112 w=2.000; assoc_edible_to_kc_l n=17668 w=2.000; assoc_edible_to_kc_r n=17929 w=2.000; wernicke_food_to_kc_l n=12193 w=3.000; wernicke_food_to_kc_r n=11975 w=3.000; ppc_goal_food_to_kc_l n=22281 w=2.000; ppc_goal_food_to_kc_r n=22573 w=2.000; social_mem_to_kc_l n=13472 w=1.500; social_mem_to_kc_r n=13645 w=1.500; assoc_bind_to_kc_l n=14847 w=2.000; assoc_bind_to_kc_r n=14907 w=2.000
-[E139] KC 계층 추적: 시냅스 역할 교차 37914 같은쪽 37616 비선택 15062 무활동 1408096 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/fix/rate_b10.npz)
-[학습] 15ep 완료, 보상 1049회 (탐색 주입 878회, ε=0.60)
-[판정경로] judge=exec 시행=1500 abs_v_le_0.02=15 (1.0%) v정답_실행오답=0 v오답_실행정답=8 불일치율=0.5%
-=> KCTRACE 시행 1500 보상 1049 | A +2169563.3 B -237432.1 C -1243793.5 P -1661519.4 | ΔD +2824721.3 | share_B 0.000 B+/A 0.000 C-/A 0.573 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +779221 +613527 +417125 +262696 +205133 +156720 +84886 +116812 +73788 +12715 +53337 +21572 -17612 +30529 +14269 | 보상시행 e_same/e_cross -1.634
-=> KCTRACE2 탐색 A +402478.2 B -174188.7 C -1283662.2 P -1617399.3 | 탐욕 A +1767085.1 B -63243.4 C +39868.6 P -44120.1 | 비선택 Δg 보상 +514941.7 처벌 -515062.2 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E154/tr_A_b10.npz
-=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -0.109 C/P 0.749 | 보상시행 e_da 같은쪽/교차 -1.634 e_end 같은쪽/교차 -1.634 | 보상창 motor 발화율 평균 보상(좌 0.9320 우 1.0068) 처벌(좌 1.0464 우 1.0894)
-[반사가중치] food_explore_motor_l   n=30103 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] food_explore_motor_r   n=29736 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_l   n=15139 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_r   n=14818 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=7.25317 변화율=50.8% | 평균 1.000→8.253 | std 0.0000→10.6811
-[D1가중치] food_to_d1_r   |Δ|평균=11.14554 변화율=64.4% | 평균 1.000→12.145 | std 0.0000→11.5665
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E154/w_A_b10.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -774,8 +760,7 @@ Building model...
 make: Entering directory '/root/e154_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e154_main_run/forager_brain_CODE'
-[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=241509.08 bad_food_eye_l_to_kc_l=241166.92 good_food_eye_r_to_kc_r=239216.65 bad_food_eye_r_to_kc_r=239559.35
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b13.npz 검증 일치 — good_food_eye_l_to_kc_l=238715.17 bad_food_eye_l_to_kc_l=238872.83 good_food_eye_r_to_kc_r=240257.88 bad_food_eye_r_to_kc_r=239246.12
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 +0.004 | 정답률 100.0% | **변조폭 -0.6015**
-=> 정답률 +68.0%p | **변조폭 변화 -0.6132** | 판정: 학습이 조향을 역전 방향으로 이동
+[E146 변형] variant=bad vseed=0
+=> DECOMP mode=all mod=+0.6201 acc=0.0 off=+0.0005 pushed=8 kc_means[kc_l>l=148.9434 kc_l>r=148.4295 kc_r>l=148.4297 kc_r>r=149.1968]
