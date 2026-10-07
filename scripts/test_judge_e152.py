@@ -50,6 +50,27 @@ for name, data, want in cases:
     good = r is not None and r["verdict"].startswith(want) and (want != "혼합(보류)" or r["verdict"] == "혼합(보류)")
     ok_all &= good
     print("%-30s 기대 %-22s → %s %s" % (name, want, r["verdict"][:22] if r else c[0][:30], "✓" if good else "✗"))
+# 수정 1(M2'): 먹이 반응이 작으면(100·F ≤ 15·O) 반분 자카드가 낮아도 통과 — 원래 기준은 실패
+M, Jb = build(OF=3)
+for b_ in J.BRAINS:
+    for k_ in "lr":
+        M[b_][k_].update({"F": 9, "FS": 5000})          # O 60: 100·9=900 ≤ 15·60=900 (경계 통과)
+c, r = J.judge(M, Jb)
+g = r["verdict"].startswith("결합 주도(H075-conj)") and r["verdict0"] == "보류(측정 검증 실패)" and r["ok_m0"] == 0 and r["ok_m"] == 5
+ok_all &= g; print("%-30s → 수정 %s / 원래 %s %s" % ("M2' 작은 F 경계 통과", r["verdict"][:16], r["verdict0"], "✓" if g else "✗"))
+M, Jb = build(OF=3)
+for b_ in J.BRAINS:
+    for k_ in "lr":
+        M[b_][k_].update({"F": 10, "FS": 5000})         # 100·10=1000 > 900 → M2' 실패
+c, r = J.judge(M, Jb)
+g = r["verdict"] == "보류(측정 검증 실패)" and r["verdict0"] == "보류(측정 검증 실패)"
+ok_all &= g; print("%-30s → %s %s" % ("M2' 경계 바로 위 실패", r["verdict"], "✓" if g else "✗"))
+M, Jb = build(OF=45)
+for b_ in J.BRAINS:
+    M[b_]["l"].update({"F": 80, "FS": 5000})            # 먹이 반응 크고 불안정 → M2·M2' 둘 다 실패
+c, r = J.judge(M, Jb)
+g = r["verdict"] == "보류(측정 검증 실패)" and r["verdict0"] == "보류(측정 검증 실패)"
+ok_all &= g; print("%-30s → %s %s" % ("큰 F 불안정 → 둘 다 실패", r["verdict"], "✓" if g else "✗"))
 M, Jb = build(); del Jb[12]
 c, r = J.judge(M, Jb); g = r is None and "결측" in c[0]; ok_all &= g; print("%-30s → %s" % ("결측(E149 기준)", "✓" if g else "✗"))
 # 줄 파싱

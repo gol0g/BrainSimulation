@@ -1,0 +1,10 @@
+=== E152 실행: 2026-10-07T10:08:04Z ===
+커맨드: bash scripts/e152_main.sh
+---
+  e152 b10: => KCOVERLAP3 side=l good=103 bad=111 food=6 both=64 both_food=3 food_in=5 jac_gb=0.4267 food_split_jac=0.5714 | side=r good=99 bad=102 food=3 both=63 both_food=2 food_in=3 jac_gb=0.4565 food_split_jac=0.4000 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e152 b11: => KCOVERLAP3 side=l good=108 bad=111 food=4 both=66 both_food=3 food_in=4 jac_gb=0.4314 food_split_jac=0.6667 | side=r good=106 bad=105 food=0 both=68 both_food=0 food_in=0 jac_gb=0.4755 food_split_jac=nan | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e152 b12: => KCOVERLAP3 side=l good=97 bad=99 food=1 both=60 both_food=1 food_in=1 jac_gb=0.4412 food_split_jac=0.2500 | side=r good=94 bad=100 food=4 both=56 both_food=1 food_in=4 jac_gb=0.4058 food_split_jac=0.3333 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e152 b13: => KCOVERLAP3 side=l good=103 bad=103 food=1 both=62 both_food=0 food_in=1 jac_gb=0.4306 food_split_jac=0.0000 | side=r good=105 bad=108 food=5 both=67 both_food=4 food_in=5 jac_gb=0.4589 food_split_jac=0.7143 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+  e152 b14: => KCOVERLAP3 side=l good=111 bad=102 food=7 both=59 both_food=6 food_in=7 jac_gb=0.3831 food_split_jac=0.6364 | side=r good=111 bad=104 food=1 both=59 both_food=1 food_in=1 jac_gb=0.3782 food_split_jac=0.2500 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[E152] 전체 루프 종료
+=== 종료코드 0 ===

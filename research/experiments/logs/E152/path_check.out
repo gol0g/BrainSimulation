@@ -1,0 +1,2 @@
+[base] => KCOVERLAP3 side=l good=101 bad=103 food=3 both=61 both_food=3 food_in=3 jac_gb=0.4266 food_split_jac=0.5000 | side=r good=101 bad=103 food=5 both=55 both_food=3 food_in=4 jac_gb=0.3691 food_split_jac=0.5000 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[E152 경로 검사] 종료

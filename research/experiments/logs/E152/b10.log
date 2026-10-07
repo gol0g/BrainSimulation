@@ -375,8 +375,8 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e152_run/forager_brain_CODE'
-make: Leaving directory '/root/e152_run/forager_brain_CODE'
+make: Entering directory '/root/e152_main_run/forager_brain_CODE'
+make: Leaving directory '/root/e152_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -755,8 +755,7 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e152_run/forager_brain_CODE'
-make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e152_run/forager_brain_CODE'
+make: Entering directory '/root/e152_main_run/forager_brain_CODE'
+make: Leaving directory '/root/e152_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-=> KCOVERLAP3 side=l good=101 bad=103 food=3 both=61 both_food=3 food_in=3 jac_gb=0.4266 food_split_jac=0.5000 | side=r good=101 bad=103 food=5 both=55 both_food=3 food_in=4 jac_gb=0.3691 food_split_jac=0.5000 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+=> KCOVERLAP3 side=l good=103 bad=111 food=6 both=64 both_food=3 food_in=5 jac_gb=0.4267 food_split_jac=0.5714 | side=r good=99 bad=102 food=3 both=63 both_food=2 food_in=3 jac_gb=0.4565 food_split_jac=0.4000 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
