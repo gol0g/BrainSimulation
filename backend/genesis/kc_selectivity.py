@@ -107,3 +107,37 @@ def overlap3_stats(cnt_g, cnt_b, cnt_f, c0, n_pres, steps, base_steps, thr=0.5):
     union = int((rg | rb).sum())
     return {"nG": int(rg.sum()), "nB": int(rb.sum()), "nF": int(rf.sum()), "nO": int(o.sum()), "nOF": int((o & rf).sum()),
             "nFin": int((rf & (rg | rb)).sum()), "jac_gb": float(o.sum() / union) if union else float("nan")}
+
+
+def type_redistribute(g_good, g_bad, post_good, post_bad, counts, presented, eta, s0):
+    """E153: 종류 입력 합 보존 헤브 재분배(호스트 적용, 최소 회로 K69 형). 제시된 종류(presented = 'good' | 'bad')의
+    시냅스 가중치에 (1 + eta·c[post]) 를 곱하고(c = 그 제시 동안 KC 발화 수), KC 별 종류 입력 합(good + bad)을 s0(처음 값)로 되돌린다.
+    발화하지 않은 KC(c=0)는 곱 1 → 합 그대로 → 변화 없음. 균형(두 종류에 같은 발화)이면 번갈아 같은 배율 → 몫 불변.
+    반환 (새 g_good, 새 g_bad) — float64 로 계산(장치에는 호출자가 float32 로 싣는다)."""
+    gg = np.asarray(g_good, dtype=np.float64).copy()
+    gb = np.asarray(g_bad, dtype=np.float64).copy()
+    c = np.asarray(counts, dtype=np.float64)
+    if presented == "good":
+        gg *= 1.0 + eta * c[post_good]
+    elif presented == "bad":
+        gb *= 1.0 + eta * c[post_bad]
+    else:
+        raise ValueError("presented 는 good|bad: %r" % presented)
+    s0 = np.asarray(s0, dtype=np.float64)
+    n = s0.size
+    s = np.bincount(post_good, weights=gg, minlength=n)[:n] + np.bincount(post_bad, weights=gb, minlength=n)[:n]
+    f = np.ones(n)
+    m = s > 0
+    f[m] = s0[m] / s[m]
+    return gg * f[post_good], gb * f[post_bad]
+
+
+def type_share(g_good, g_bad, post_good, post_bad, n):
+    """E153: KC 별 종류 입력 중 good 몫 = Σgood / (Σgood + Σbad). 종류 입력이 없는(합 0) KC 는 nan."""
+    sg = np.bincount(post_good, weights=np.asarray(g_good, dtype=np.float64), minlength=n)[:n]
+    sb = np.bincount(post_bad, weights=np.asarray(g_bad, dtype=np.float64), minlength=n)[:n]
+    tot = sg + sb
+    out = np.full(n, np.nan)
+    m = tot > 0
+    out[m] = sg[m] / tot[m]
+    return out

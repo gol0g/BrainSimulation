@@ -294,7 +294,12 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev"))
+    ap.add_argument("--kc-type-weights", default=None,
+                    help="E153: 경험 형성 KC 종류 입력(good·bad 눈 → KC) 가중치 npz — 모든 뇌에 싣는다(연결이 저장본과 같아야 함)")
+    ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
+    ap.add_argument("--kc-dev-eta", type=float, default=0.1, help="E153 kcdev: 합 보존 헤브 재분배 배율 eta(발화 1개당)")
+    ap.add_argument("--kc-dev-save", default=None, help="E153 kcdev: 형성된 종류 입력 가중치 저장 npz")
     ap.add_argument("--kc-food-eye-scale", type=float, default=1.0,
                     help="E149: food_eye→KC(좌우 각) 가중치 배율 — good·bad 자극이 공유하는 food 입력. 0 = 차단. 연결은 그대로 만든다(난수 소비 불변)")
     ap.add_argument("--task-b-after", type=int, default=0,
@@ -364,6 +369,7 @@ def main():
         cfg.food_approach_init_w = args.reflex_w
     cfg.kc_bilateral_scale = args.kc_bilateral_scale
     cfg.kc_food_eye_scale = args.kc_food_eye_scale
+    cfg.kc_type_weights_file = args.kc_type_weights or ""   # E153: 경험 형성 종류 입력 가중치 — 이 cfg 로 만드는 모든 뇌(학습·이식 평가·측정)에 싣는다
     if args.d1_lateral is not None:
         cfg.d1_lateral_inhibition = args.d1_lateral
     if args.kc_gamma:
@@ -492,7 +498,7 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
-        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3"):
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         elif mode == "swap":
             # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
@@ -572,6 +578,82 @@ def main():
                 _wg.append("%s=%.3f(n=%d)" % (_nm, float(_gv.mean()) if _gv.size else float("nan"), _gv.size))
             print("[E149 입력 가중치] %s" % " ".join(_wg))   # 조작검증: 차단 배율이 실제 시냅스에 닿았는가
             print("=> KCOVERLAP %s | food_eye_scale=%.2f bilateral_scale=%.2f n_pres=%d" % (" | ".join(out), args.kc_food_eye_scale, args.kc_bilateral_scale, n_pres))
+            return
+        if mode == "kcdev":
+            # E153: 종류 입력 합 보존 헤브 재분배(경험 형성, 보상 없음 — 도파민 0 이라 KC→motor 등 학습 없음). kcoverlap 과 같은 틀로
+            # good-좌·bad-좌·good-우·bad-우를 차례로 args.kc_dev_n 회씩(각 3처리 스텝, 사이 무자극 10스텝) 제시하고, 제시마다 그 쪽 KC 발화 수 c 로
+            # 제시된 종류의 눈 → KC 시냅스에 (1 + eta·c) 를 곱한 뒤 KC 별 종류 입력 합(good + bad)을 처음 값으로 되돌린다(kc_selectivity.type_redistribute).
+            # food·피질 입력은 그대로. 형성 가중치(+ 연결 post 인덱스)를 --kc-dev-save 로 저장 — 다른 뇌는 --kc-type-weights 로 싣는다.
+            import kc_selectivity as KS
+            if not args.kc_dev_save:
+                raise SystemExit("kcdev 는 --kc-dev-save 가 필요하다")
+            n_k = int(cfg.n_kc_per_side)
+            SY = {}
+            for sd in "lr":
+                for ty in ("good", "bad"):
+                    nm = "%s_food_eye_%s_to_kc_%s" % (ty, sd, sd)
+                    sy = _b2.model.synapse_populations[nm]
+                    sy.pull_connectivity_from_device(); sy.vars["g"].pull_from_device()
+                    SY[(ty, sd)] = {"nm": nm, "sy": sy, "post": np.asarray(sy.get_sparse_post_inds(), dtype=np.int64),
+                                    "g": np.asarray(sy.vars["g"].values, dtype=np.float64).ravel().copy()}
+
+            def _sums(sd):
+                return (np.bincount(SY[("good", sd)]["post"], weights=SY[("good", sd)]["g"], minlength=n_k)[:n_k]
+                        + np.bincount(SY[("bad", sd)]["post"], weights=SY[("bad", sd)]["g"], minlength=n_k)[:n_k])
+
+            def _share(sd):
+                return KS.type_share(SY[("good", sd)]["g"], SY[("bad", sd)]["g"], SY[("good", sd)]["post"], SY[("bad", sd)]["post"], n_k)
+            S0 = {sd: _sums(sd) for sd in "lr"}
+            sh0 = {sd: _share(sd) for sd in "lr"}
+            fired = {sd: np.zeros(n_k, dtype=bool) for sd in "lr"}
+            _b2.reset()
+            for _ in range(30):
+                _b2.process(_obs2)
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right", "bad_food_rays_left", "bad_food_rays_right"):
+                neu[_k] = np.zeros(nh)
+            seq = (("good", "left", "l"), ("bad", "left", "l"), ("good", "right", "r"), ("bad", "right", "r"))
+            n_upd = 0
+            for rep_i in range(4 * args.kc_dev_n):
+                ty, side, sd = seq[rep_i % 4]
+                pop = _b2.kc_left if sd == "l" else _b2.kc_right
+                c = np.zeros(n_k)
+                for _ in range(3):
+                    _b2.process(stim(_obs2, nh, side) if ty == "good" else stim_bad(_obs2, nh, side))
+                    ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+                    if ids.size:
+                        c += np.bincount(ids, minlength=n_k)[:n_k]
+                fired[sd] |= c > 0
+                gg, gb = KS.type_redistribute(SY[("good", sd)]["g"], SY[("bad", sd)]["g"], SY[("good", sd)]["post"], SY[("bad", sd)]["post"],
+                                              c, ty, args.kc_dev_eta, S0[sd])
+                SY[("good", sd)]["g"], SY[("bad", sd)]["g"] = gg, gb
+                for t2, arr in (("good", gg), ("bad", gb)):
+                    sy = SY[(t2, sd)]["sy"]
+                    cur = np.asarray(sy.vars["g"].values, dtype=np.float64).ravel()
+                    cur[:] = arr
+                    sy.vars["g"].values = cur
+                    sy.vars["g"].push_to_device()
+                n_upd += 1
+                for j in range(10):
+                    _b2.process(neu)
+            out, save = [], {}
+            for sd in "lr":
+                sh = _share(sd)
+                act = fired[sd] & ~np.isnan(sh)
+                sel, sel0 = np.maximum(sh, 1.0 - sh), np.maximum(sh0[sd], 1.0 - sh0[sd])
+                s_now = _sums(sd)
+                m0 = S0[sd] > 0
+                relerr = float(np.max(np.abs(s_now[m0] - S0[sd][m0]) / S0[sd][m0])) if m0.any() else float("nan")
+                out.append("side=%s fired=%d sel_med0=%.4f sel_med=%.4f frac09=%.4f goodfrac=%.4f relerr=%.2e"
+                           % (sd, int(act.sum()), float(np.median(sel0[act])) if act.any() else float("nan"),
+                              float(np.median(sel[act])) if act.any() else float("nan"),
+                              float(np.mean(sel[act] >= 0.9)) if act.any() else float("nan"),
+                              float(np.mean(sh[act] > 0.5)) if act.any() else float("nan"), relerr))
+                for ty in ("good", "bad"):
+                    save[SY[(ty, sd)]["nm"]] = SY[(ty, sd)]["g"].astype(np.float32)
+                    save[SY[(ty, sd)]["nm"] + "__post"] = SY[(ty, sd)]["post"]
+            np.savez_compressed(args.kc_dev_save, **save)
+            print("=> KCDEV %s | n=%d eta=%g updates=%d save=%s" % (" | ".join(out), args.kc_dev_n, args.kc_dev_eta, n_upd, args.kc_dev_save))
             return
         if mode == "kcoverlap3":
             # E152: good·bad·먹이 단독(food 광선만) × 좌·우 — 같은 쪽 good·bad 겹침(G∩B) 중 먹이 단독에도 반응하는 몫.

@@ -89,5 +89,29 @@ check("overlap3 G·B 합집합 0 → 자카드 nan", np.isnan(r0["jac_gb"]) and 
 ng, nb_, jac, _ = K.overlap_stats(g, bb, c0b, 50, 3, 250)
 check("overlap3 = overlap_stats(G·B 수·자카드)", (ng, nb_, jac) == (r["nG"], r["nB"], r["jac_gb"]), "%s vs %s" % ((ng, nb_, jac), (r["nG"], r["nB"], r["jac_gb"])))
 
+# 4) E153 type_redistribute / type_share — KC 3개. KC0: good 시냅스 2개(1,1)·bad 2개(1,1), KC1: good 1개(2)·bad 1개(2), KC2: 종류 입력 없음.
+pg = np.array([0, 0, 1]); pb = np.array([0, 0, 1]); g0 = np.array([1.0, 1.0, 2.0]); b0 = np.array([1.0, 1.0, 2.0])
+S0 = np.array([4.0, 4.0, 0.0])
+gg, gb = K.type_redistribute(g0, b0, pg, pb, np.array([2.0, 0.0, 5.0]), "good", 0.5, S0)
+check("재분배 1회: KC0 good 4/3·bad 2/3, KC1 불변", np.allclose(gg, [4 / 3, 4 / 3, 2.0]) and np.allclose(gb, [2 / 3, 2 / 3, 2.0]), "%s %s" % (gg, gb))
+sh = K.type_share(gg, gb, pg, pb, 3)
+check("몫: KC0 2/3, KC1 1/2, KC2 nan", np.allclose(sh[:2], [2 / 3, 0.5]) and np.isnan(sh[2]), str(sh))
+# 반복: KC0 은 good 에 3, bad 에 2 발화 → good 쪽으로 수렴, KC1 은 균형(2·2) → 몫 0.5 유지. 합은 매번 보존.
+gg, gb = g0.copy(), b0.copy(); worst = 0.0
+for i in range(200):
+    gg, gb = K.type_redistribute(gg, gb, pg, pb, np.array([3.0, 2.0, 0.0]), "good", 0.1, S0)
+    gg, gb = K.type_redistribute(gg, gb, pg, pb, np.array([2.0, 2.0, 0.0]), "bad", 0.1, S0)
+    s_ = np.bincount(pg, weights=gg, minlength=3) + np.bincount(pb, weights=gb, minlength=3)
+    worst = max(worst, float(np.max(np.abs(s_[:2] - S0[:2]) / S0[:2])))
+sh = K.type_share(gg, gb, pg, pb, 3)
+check("200쌍: KC0 good 몫 > 0.99, KC1 = 0.5", sh[0] > 0.99 and abs(sh[1] - 0.5) < 1e-12, str(sh))
+check("합 보존(상대 오차 ≤ 1e-12)", worst <= 1e-12, "%.2e" % worst)
+check("가중치 음수 없음", bool((gg >= 0).all() and (gb >= 0).all()))
+try:
+    K.type_redistribute(g0, b0, pg, pb, np.zeros(3), "food", 0.1, S0); bad_ok = False
+except ValueError:
+    bad_ok = True
+check("presented 오류 → ValueError", bad_ok)
+
 print("전체: %s" % ("통과" if ok_all else "실패"))
 sys.exit(0 if ok_all else 1)

@@ -2139,6 +2139,11 @@ class ForagerBrain:
         self.model.build()
         self.model.load(num_recording_timesteps=10)
 
+        # E153: 경험 형성 KC 종류 입력 가중치(kc_type_weights_file) — 이 설정으로 만드는 모든 뇌(학습·이식 평가·측정)가 같은 형성 표현을 쓴다.
+        _ktw = getattr(self.config, "kc_type_weights_file", "") or ""
+        if _ktw:
+            self._load_kc_type_weights(_ktw)
+
         # SPARSE 시냅스는 connectivity를 먼저 pull해야 .values가 동작함 (CRITICAL)
         # connectivity 패턴은 고정이므로 최초 1회만 pull
         if self.config.basal_ganglia_enabled:
@@ -2550,6 +2555,33 @@ class ForagerBrain:
                 _syn.set_dynamic_param_value("dopamine", float(self.dopamine_level))
             except Exception:
                 pass
+
+    KC_TYPE_SYN = ("good_food_eye_l_to_kc_l", "bad_food_eye_l_to_kc_l", "good_food_eye_r_to_kc_r", "bad_food_eye_r_to_kc_r")
+
+    def _load_kc_type_weights(self, path):
+        """E153: 저장된 종류 입력(good·bad 눈 → KC) 가중치를 싣는다. 저장본의 연결(post 인덱스)이 이 뇌와 같아야 한다(같은 시드) — 다르면 중단.
+        실은 뒤 장치에서 다시 읽어 정확히 같은지 확인한다(조용한 실패 금지)."""
+        W = np.load(path)
+        tot = []
+        for nm in self.KC_TYPE_SYN:
+            sy = self.model.synapse_populations[nm]
+            sy.pull_connectivity_from_device()
+            post = np.asarray(sy.get_sparse_post_inds(), dtype=np.int64)
+            if not np.array_equal(post, np.asarray(W[nm + "__post"], dtype=np.int64)):
+                raise RuntimeError("E153 종류 입력 적재: %s 연결이 저장본과 다르다 — 같은 시드 뇌가 아니다" % nm)
+            sy.vars["g"].pull_from_device()
+            arr = np.asarray(W[nm], dtype=np.float32)
+            cur = np.asarray(sy.vars["g"].values, dtype=np.float64).ravel()
+            if cur.size != arr.size:
+                raise RuntimeError("E153 종류 입력 적재: %s 크기 불일치 %d vs %d" % (nm, cur.size, arr.size))
+            cur[:] = arr
+            sy.vars["g"].values = cur
+            sy.vars["g"].push_to_device()
+            sy.vars["g"].pull_from_device()
+            if not np.array_equal(np.asarray(sy.vars["g"].values, dtype=np.float32).ravel(), arr):
+                raise RuntimeError("E153 종류 입력 적재 검증 실패: %s" % nm)
+            tot.append("%s=%.2f" % (nm, float(arr.astype(np.float64).sum())))
+        print("[E153 종류 입력 적재] %s 검증 일치 — %s" % (path, " ".join(tot)))
 
     def _create_static_synapse(self, name: str, pre, post, weight: float,
                                sparsity: Optional[float] = None):
