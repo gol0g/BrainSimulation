@@ -1,0 +1,8 @@
+[E153 경로 검사] 시작 2026-10-07 19:29:34
+[dev η 0.1] => KCDEV side=l fired=206 sel_med0=0.5463 sel_med=1.0000 frac09=0.9126 goodfrac=0.5243 relerr=1.42e-15 | side=r fired=191 sel_med0=0.5526 sel_med=1.0000 frac09=0.9634 goodfrac=0.5183 relerr=1.18e-15 | n=100 eta=0.1 updates=400 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/pathcheck/kctype_b15_eta01.npz
+  η = 0.1
+[ov] 적재 2 | => KCOVERLAP side=l good=96 bad=89 jac=0.0000 cos=0.0001 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9996 | side=r good=94 bad=89 jac=0.0000 cos=0.0000 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9996 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[train rc=0] 적재 2 | 변조폭 +0.0125 → 변조폭 -0.1611 보상 53회 | w_mean 10.0000→10.0000 w_mean 10.0000→10.0000 w_mean 0.0000→0.0000 w_mean 0.0000→0.0000 
+[neg 뇌 14 ← 뇌 15 가중치] 중단 메시지 2개(1 이어야 함)
+  추적: 시행 100 규칙 일치 1.0000 동결 잔차 1.37e-08 도파민전 0.0e+00
+[E153 경로 검사] 종료

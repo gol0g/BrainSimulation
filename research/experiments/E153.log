@@ -1,0 +1,6 @@
+=== E153 실행: 2026-10-07T10:37:20Z ===
+커맨드: bash scripts/e153_main.sh
+---
+[E153] η = 0.1
+  e153 b10 dev: => KCDEV side=l fired=200 sel_med0=0.5526 sel_med=1.0000 frac09=0.9050 goodfrac=0.5400 relerr=1.29e-15 | side=r fired=186 sel_med0=0.5518 sel_med=1.0000 frac09=0.9624 goodfrac=0.4839 relerr=1.39e-15 | n=100 eta=0.1 updates=400 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b10.npz
+  e153 b10 ov: 
