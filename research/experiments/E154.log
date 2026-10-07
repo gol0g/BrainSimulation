@@ -1,0 +1,4 @@
+=== E154 실행: 2026-10-07T11:23:47Z ===
+커맨드: bash scripts/e154_main.sh
+---
+  e154 train A b10: 

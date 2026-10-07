@@ -376,24 +376,10 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e154_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e154_run/forager_brain_CODE'
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/pathcheck/kctype_b15_eta01.npz 검증 일치 — good_food_eye_l_to_kc_l=240218.98 bad_food_eye_l_to_kc_l=239721.02 good_food_eye_r_to_kc_r=239711.47 bad_food_eye_r_to_kc_r=238824.53
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 -0.000 | 정답률 15.0% | **변조폭 +0.0125** (양수=반사방향, 음수=역전)
-[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30198 w=2.000; it_food_to_kc_r n=30087 w=2.000; assoc_edible_to_kc_l n=17996 w=2.000; assoc_edible_to_kc_r n=17893 w=2.000; wernicke_food_to_kc_l n=12063 w=3.000; wernicke_food_to_kc_r n=12011 w=3.000; ppc_goal_food_to_kc_l n=22595 w=2.000; ppc_goal_food_to_kc_r n=22545 w=2.000; social_mem_to_kc_l n=13642 w=1.500; social_mem_to_kc_r n=13499 w=1.500; assoc_bind_to_kc_l n=15159 w=2.000; assoc_bind_to_kc_r n=15019 w=2.000
-[E139] KC 계층 추적: 시냅스 역할 교차 36913 같은쪽 37022 비선택 16316 무활동 1409564 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/pathcheck/rate_b15.npz)
-[학습] 2ep 완료, 보상 128회 (탐색 주입 121회, ε=0.60)
-[판정경로] judge=exec 시행=200 abs_v_le_0.02=16 (8.0%) v정답_실행오답=0 v오답_실행정답=10 불일치율=5.0%
-=> KCTRACE 시행 200 보상 128 | A +504719.8 B -511681.0 C +129948.8 P -253657.9 | ΔD +1400007.5 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +791710 +608298 | 보상시행 e_same/e_cross -1.220
-=> KCTRACE2 탐색 A +147926.1 B -217580.7 C +91496.5 P -221063.2 | 탐욕 A +356793.8 B -294100.3 C +38452.3 P -32594.7 | 비선택 Δg 보상 +156599.4 처벌 -80893.5 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E154/pathcheck/tr_A_b15.npz
-=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -1.014 C/P -0.512 | 보상시행 e_da 같은쪽/교차 -1.220 e_end 같은쪽/교차 -1.220 | 보상창 motor 발화율 평균 보상(좌 1.0747 우 1.0340) 처벌(좌 1.0769 우 1.0678)
-[반사가중치] food_explore_motor_l   n=29853 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] food_explore_motor_r   n=29938 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_l   n=14896 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_r   n=15011 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=9.62207 변화율=54.3% | 평균 1.000→10.622 | std 0.0000→11.4303
-[D1가중치] food_to_d1_r   |Δ|평균=8.71854 변화율=57.9% | 평균 1.000→9.719 | std 0.0000→11.1687
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E154/pathcheck/w_A_b15.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -776,6 +762,5 @@ make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e154_run/forager_brain_CODE'
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/pathcheck/kctype_b15_eta01.npz 검증 일치 — good_food_eye_l_to_kc_l=240218.98 bad_food_eye_l_to_kc_l=239721.02 good_food_eye_r_to_kc_r=239711.47 bad_food_eye_r_to_kc_r=238824.53
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 +0.000 | 정답률 100.0% | **변조폭 -0.2925**
-=> 정답률 +85.0%p | **변조폭 변화 -0.3050** | 판정: 학습이 조향을 역전 방향으로 이동
+[E146 변형] variant=bad vseed=0
+=> DECOMP mode=all mod=+0.4144 acc=0.0 off=-0.0002 pushed=8 kc_means[kc_l>l=149.8194 kc_l>r=149.3077 kc_r>l=149.7851 kc_r>r=149.2890]
