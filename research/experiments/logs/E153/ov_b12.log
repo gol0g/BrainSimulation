@@ -378,7 +378,7 @@ Building model...
 make: Entering directory '/root/e153_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e153_main_run/forager_brain_CODE'
-[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=241509.08 bad_food_eye_l_to_kc_l=241166.92 good_food_eye_r_to_kc_r=239216.65 bad_food_eye_r_to_kc_r=239559.35
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b12.npz 검증 일치 — good_food_eye_l_to_kc_l=243130.41 bad_food_eye_l_to_kc_l=240085.59 good_food_eye_r_to_kc_r=240186.43 bad_food_eye_r_to_kc_r=239485.57
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -760,7 +760,7 @@ Building model...
 make: Entering directory '/root/e153_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e153_main_run/forager_brain_CODE'
-[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=241509.08 bad_food_eye_l_to_kc_l=241166.92 good_food_eye_r_to_kc_r=239216.65 bad_food_eye_r_to_kc_r=239559.35
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E153/kctype_b12.npz 검증 일치 — good_food_eye_l_to_kc_l=243130.41 bad_food_eye_l_to_kc_l=240085.59 good_food_eye_r_to_kc_r=240186.43 bad_food_eye_r_to_kc_r=239485.57
 Model ready! Total: 28,323 neurons
-[E149 입력 가중치] food_eye_l_to_kc_l=3.000(n=120209) good_food_eye_l_to_kc_l=4.015(n=60151) bad_food_eye_l_to_kc_l=3.985(n=60518) it_food_to_kc_l=2.000(n=30037)
-=> KCOVERLAP side=l good=95 bad=86 jac=0.0000 cos=0.0000 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9996 | side=r good=87 bad=89 jac=0.0000 cos=0.0000 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9997 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50
+[E149 입력 가중치] food_eye_l_to_kc_l=3.000(n=120665) good_food_eye_l_to_kc_l=4.006(n=60690) bad_food_eye_l_to_kc_l=3.994(n=60114) it_food_to_kc_l=2.000(n=29985)
+=> KCOVERLAP side=l good=86 bad=88 jac=0.0000 cos=0.0000 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9997 | side=r good=86 bad=85 jac=0.0000 cos=0.0000 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9997 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50

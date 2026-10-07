@@ -187,3 +187,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-07 00:58 E150 **유지**(K84, 약한 학습 교란) — 분기 종료. 다음 결정 문서 research/abcd-2026-10-07-retention.md — E151(차단 + eta 상향, 뇌 15 보정 → 본실험 뇌 10~14).
 - 2026-10-07 18:57 E151 **보류(학습 크기 미회복)**(K85, 보정만) — 분기 종료. 다음 결정 문서 research/abcd-2026-10-07-formation.md — E152(기본 표현 겹침 중 먹이 단독 반응 몫, kcoverlap3 측정).
 - 2026-10-07 19:21 E152 **결합 주도**(K86, 수정 1 기준 — 원래 기준 보류). 다음 E153(종류 입력 합 보존 헤브 재분배 형성 — kcdev 개발 단계·가중치 저장/적재 신설 예정).
+- 2026-10-07 20:15 E153 **형성 성공**(K87 — 겹침 0, 학습 효과 약 2배). E154(형성 표현 간섭 하 유지, 분기 마지막) 경로 검사 중 → 게이트 → run_experiment.sh E154 "bash scripts/e154_main.sh"(학습 10런 ≈3시간 + 평가 25) → 감시 watch-exp.sh E154 35 "e154 .*b.*: =>" → judge_e154.py·verify_e154_independent.py.
