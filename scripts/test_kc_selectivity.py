@@ -72,5 +72,22 @@ check("selonly: 선택(0,1,6,0) 학습값, 나머지 150", list(so) == [11, 12, 
 # 7) E117 식 집합
 check("≥1 스파이크 집합(좌전용, 우전용, 공유, 무반응)", K.sets_ge1(cL, cR) == (2, 1, 4, 1), str(K.sets_ge1(cL, cR)))
 
+# 3) E152 overlap3_stats: KC 10개, n_pres 50, 3스텝, 기준선 250스텝. 반응 = 제시당 유발 ≥ 0.5.
+#   k0 G·B·F 모두(먹이 단독 겹침) / k1 G·B 만(결합 겹침) / k2 G 만 / k3 B 만 / k4 F 만 / k5 G·F / k6 무반응
+#   k7 지속 발화(기준선 = 제시 → 유발 0 → 무반응) / k8 경계 유발 정확히 0.5(G·B·F 모두 → 반응) / k9 유발 0.48(무반응)
+g = np.array([50, 50, 50, 0, 0, 50, 0, 30, 25, 24], dtype=float)
+bb = np.array([50, 50, 0, 50, 0, 0, 0, 30, 25, 24], dtype=float)
+f = np.array([50, 0, 0, 0, 50, 50, 0, 30, 25, 24], dtype=float)
+c0b = np.array([0, 0, 0, 0, 0, 0, 0, 50, 0, 0], dtype=float)   # k7: 50/250 × 3 = 0.6 = 30/50
+r = K.overlap3_stats(g, bb, f, c0b, 50, 3, 250)
+want = {"nG": 5, "nB": 4, "nF": 4, "nO": 3, "nOF": 2, "nFin": 3}   # G={0,1,2,5,8} B={0,1,3,8} F={0,4,5,8} O={0,1,8} O∩F={0,8} F∩(G∪B)={0,5,8}
+check("overlap3 집합 수 %s" % want, all(r[k] == v for k, v in want.items()), str(r))
+check("overlap3 자카드 G·B = 3/6", abs(r["jac_gb"] - 0.5) < 1e-12, "%.4f" % r["jac_gb"])
+r0 = K.overlap3_stats(np.zeros(3), np.zeros(3), np.ones(3) * 50, np.zeros(3), 50, 3, 250)
+check("overlap3 G·B 합집합 0 → 자카드 nan", np.isnan(r0["jac_gb"]) and r0["nO"] == 0 and r0["nF"] == 3, str(r0))
+# overlap_stats 와 같은 정의인지(같은 G·B → 같은 반응 수·자카드)
+ng, nb_, jac, _ = K.overlap_stats(g, bb, c0b, 50, 3, 250)
+check("overlap3 = overlap_stats(G·B 수·자카드)", (ng, nb_, jac) == (r["nG"], r["nB"], r["jac_gb"]), "%s vs %s" % ((ng, nb_, jac), (r["nG"], r["nB"], r["jac_gb"])))
+
 print("전체: %s" % ("통과" if ok_all else "실패"))
 sys.exit(0 if ok_all else 1)

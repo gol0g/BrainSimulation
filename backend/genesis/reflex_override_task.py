@@ -45,6 +45,14 @@ def stim_bad(obs, nh, bad_side):
     return o
 
 
+def stim_food(obs, nh, side):
+    """E152: 먹이 단독 자극 — food_rays 한쪽 0.9, good·bad 광선 0(good·bad 가 공유하는 공통 입력만). stim 과 같은 키 구성."""
+    o = stim(obs, nh, side)
+    o["good_food_rays_left"] = np.zeros(nh)
+    o["good_food_rays_right"] = np.zeros(nh)
+    return o
+
+
 def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False):
     """bias_side가 주어지면 **매 스텝** 운동 집단에 편향을 주입한다.
     C37 1차 실패 원인: 편향을 호출 전 한 번만 넣었더니 감각 입력이 다음 스텝에 덮어써서
@@ -286,7 +294,7 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3"))
     ap.add_argument("--kc-food-eye-scale", type=float, default=1.0,
                     help="E149: food_eye→KC(좌우 각) 가중치 배율 — good·bad 자극이 공유하는 food 입력. 0 = 차단. 연결은 그대로 만든다(난수 소비 불변)")
     ap.add_argument("--task-b-after", type=int, default=0,
@@ -484,7 +492,7 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
-        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap"):
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         elif mode == "swap":
             # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
@@ -564,6 +572,55 @@ def main():
                 _wg.append("%s=%.3f(n=%d)" % (_nm, float(_gv.mean()) if _gv.size else float("nan"), _gv.size))
             print("[E149 입력 가중치] %s" % " ".join(_wg))   # 조작검증: 차단 배율이 실제 시냅스에 닿았는가
             print("=> KCOVERLAP %s | food_eye_scale=%.2f bilateral_scale=%.2f n_pres=%d" % (" | ".join(out), args.kc_food_eye_scale, args.kc_bilateral_scale, n_pres))
+            return
+        if mode == "kcoverlap3":
+            # E152: good·bad·먹이 단독(food 광선만) × 좌·우 — 같은 쪽 good·bad 겹침(G∩B) 중 먹이 단독에도 반응하는 몫.
+            # kcoverlap(E149)과 같은 틀·정의: 각 제시 3처리 스텝, 사이 무자극 10스텝 중 뒤 5스텝 기준선, 반응 = 제시당 기준선 뺀 발화 ≥ 0.5. 학습 없음.
+            import kc_selectivity as KS
+            if args.trials % 6:
+                raise SystemExit("kcoverlap3: --trials 는 6의 배수")
+            n_k = int(cfg.n_kc_per_side)
+            types = (("good", "left"), ("bad", "left"), ("food", "left"), ("good", "right"), ("bad", "right"), ("food", "right"))
+            mk = {"good": stim, "bad": stim_bad, "food": stim_food}
+            cnt = {t: {"l": np.zeros(n_k), "r": np.zeros(n_k)} for t in types}
+            cnth = {(t, h): {"l": np.zeros(n_k), "r": np.zeros(n_k)} for t in types for h in (0, 1)}   # 반분 신뢰도(측정 검증)
+            c0 = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+            _b2.reset()
+            for _ in range(30):
+                _b2.process(_obs2)
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right", "bad_food_rays_left", "bad_food_rays_right"):
+                neu[_k] = np.zeros(nh)
+
+            def _count3(dst):
+                for kn, pop in (("l", _b2.kc_left), ("r", _b2.kc_right)):
+                    ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+                    if ids.size:
+                        dst[kn] += np.bincount(ids, minlength=n_k)[:n_k]
+            for rep_i in range(args.trials):
+                ty, sd = types[rep_i % 6]
+                for _ in range(3):
+                    _b2.process(mk[ty](_obs2, nh, sd))
+                    _tmp = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+                    _count3(_tmp)
+                    for kn in "lr":
+                        cnt[(ty, sd)][kn] += _tmp[kn]
+                        cnth[((ty, sd), (rep_i // 6) % 2)][kn] += _tmp[kn]
+                for j in range(10):
+                    _b2.process(neu)
+                    if j >= 5:
+                        _count3(c0)
+            n_pres = args.trials // 6
+            base_steps = 5 * args.trials
+            if sum(float(cnt[t][kn].sum()) for t in types for kn in "lr") == 0:
+                raise RuntimeError("KC 스파이크 0 — 측정 도구 실패(기록 버퍼 확인)")
+            out = []
+            for kn, sd in (("l", "left"), ("r", "right")):
+                r3 = KS.overlap3_stats(cnt[("good", sd)][kn], cnt[("bad", sd)][kn], cnt[("food", sd)][kn], c0[kn], n_pres, 3, base_steps)
+                fs = KS.overlap_stats(cnth[(("food", sd), 0)][kn], cnth[(("food", sd), 1)][kn], c0[kn] / 2.0, n_pres // 2, 3, base_steps / 2.0, thr=0.5)
+                out.append("side=%s good=%d bad=%d food=%d both=%d both_food=%d food_in=%d jac_gb=%.4f food_split_jac=%.4f"
+                           % (kn, r3["nG"], r3["nB"], r3["nF"], r3["nO"], r3["nOF"], r3["nFin"], r3["jac_gb"], fs[2]))
+            print("=> KCOVERLAP3 %s | food_eye_scale=%.2f bilateral_scale=%.2f n_pres=%d" % (" | ".join(out), args.kc_food_eye_scale, args.kc_bilateral_scale, n_pres))
             return
         if mode == "kcrate":
             # E138: 발화 **수** 기준 KC 선택성(kcsets 의 ≥1 스파이크 기준은 지속·잔여 발화로 "공유"를 부풀릴 수 있다).

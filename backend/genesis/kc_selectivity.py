@@ -93,3 +93,17 @@ def overlap_stats(cnt_a, cnt_b, c0, n_pres, steps, base_steps, thr=0.5):
     na, nb = float(np.linalg.norm(pa)), float(np.linalg.norm(pb))
     cos = float(pa @ pb / (na * nb)) if na > 0 and nb > 0 else float("nan")
     return int(ra.sum()), int(rb.sum()), jac, cos
+
+
+def overlap3_stats(cnt_g, cnt_b, cnt_f, c0, n_pres, steps, base_steps, thr=0.5):
+    """E152: good·bad·먹이 단독 세 자극의 KC 반응 집합(E149 정의 그대로: 유발 = 제시당 발화 − 기준선, 반응 = 유발 ≥ thr).
+    겹침 O = G∩B 중 먹이 단독에도 반응하는 몫을 센다. 반환 dict:
+    nG·nB·nF(반응 수), nO = |G∩B|, nOF = |G∩B∩F|, nFin = |F∩(G∪B)|, jac_gb = |G∩B|/|G∪B|(합집합 0 이면 nan)."""
+    base = steps * np.asarray(c0, dtype=np.float64) / max(base_steps, 1)
+    rg = np.asarray(cnt_g, dtype=np.float64) / max(n_pres, 1) - base >= thr
+    rb = np.asarray(cnt_b, dtype=np.float64) / max(n_pres, 1) - base >= thr
+    rf = np.asarray(cnt_f, dtype=np.float64) / max(n_pres, 1) - base >= thr
+    o = rg & rb
+    union = int((rg | rb).sum())
+    return {"nG": int(rg.sum()), "nB": int(rb.sum()), "nF": int(rf.sum()), "nO": int(o.sum()), "nOF": int((o & rf).sum()),
+            "nFin": int((rf & (rg | rb)).sum()), "jac_gb": float(o.sum() / union) if union else float("nan")}
