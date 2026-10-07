@@ -31,13 +31,22 @@ def build(td):
     open(os.path.join(td, "logs", "E148", "judge.out"), "w", encoding="utf-8").write("[조작검증] x\n" + "\n".join(lines) + "\n판정: x\n")
 
 
-with tempfile.TemporaryDirectory() as td:
+def build_as(td, eid):
     build(td)
-    P.EXP = td
+    if eid != "E150":
+        os.rename(os.path.join(td, "logs", "E150"), os.path.join(td, "logs", eid))
+        os.rename(os.path.join(td, "traces", "E150"), os.path.join(td, "traces", eid))
+
+
+ok = True
+for eid in ("E150", "E151"):
+  with tempfile.TemporaryDirectory() as td:
+    build_as(td, eid)
+    P.EXP = td; P.EID = eid
     with contextlib.redirect_stdout(io.StringIO()):
         R = P.main()
-ok = True
-for b in P.BRAINS:
+  print("[%s]" % eid)
+  for b in P.BRAINS:
     r = R[b]
     chk = (abs(r["same"] - 1499 / 1500) < 1e-12, abs(r["dv"] - 0.25) < 1e-9, abs(r["T"] - 0.375) < 1e-9,
            abs(r["T8"] - 0.4 / 0.32) < 1e-9, r["blk"] == [40 + b] * 15, abs(r["eB8"] - 0.32) < 1e-12)
