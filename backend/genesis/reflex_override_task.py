@@ -297,6 +297,8 @@ def main():
                              "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev"))
     ap.add_argument("--kc-type-weights", default=None,
                     help="E153: 경험 형성 KC 종류 입력(good·bad 눈 → KC) 가중치 npz — 모든 뇌에 싣는다(연결이 저장본과 같아야 함)")
+    ap.add_argument("--kc-type-scale", type=float, default=1.0,
+                    help="E157: 종류 입력(good·bad 눈 → KC) 4집단 가중치 배율 — 적재(있으면) 뒤 곱하고 장치에서 재확인, 모든 뇌. 1.0 이면 아무것도 안 함")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
     ap.add_argument("--kc-dev-eta", type=float, default=0.1, help="E153 kcdev: 합 보존 헤브 재분배 배율 eta(발화 1개당)")
     ap.add_argument("--kc-dev-save", default=None, help="E153 kcdev: 형성된 종류 입력 가중치 저장 npz")
@@ -370,6 +372,7 @@ def main():
     cfg.kc_bilateral_scale = args.kc_bilateral_scale
     cfg.kc_food_eye_scale = args.kc_food_eye_scale
     cfg.kc_type_weights_file = args.kc_type_weights or ""   # E153: 경험 형성 종류 입력 가중치 — 이 cfg 로 만드는 모든 뇌(학습·이식 평가·측정)에 싣는다
+    cfg.kc_type_scale = float(args.kc_type_scale)            # E157: 종류 입력 배율(적재 뒤) — 같은 cfg 로 만드는 모든 뇌
     if args.d1_lateral is not None:
         cfg.d1_lateral_inhibition = args.d1_lateral
     if args.kc_gamma:

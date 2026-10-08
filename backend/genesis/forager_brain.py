@@ -2143,6 +2143,10 @@ class ForagerBrain:
         _ktw = getattr(self.config, "kc_type_weights_file", "") or ""
         if _ktw:
             self._load_kc_type_weights(_ktw)
+        # E157: 종류 입력 배율(적재 뒤, 형성·기본 모두) — 1.0 이면 아무것도 안 한다.
+        _kts = float(getattr(self.config, "kc_type_scale", 1.0))
+        if _kts != 1.0:
+            self._scale_kc_type_weights(_kts)
 
         # SPARSE 시냅스는 connectivity를 먼저 pull해야 .values가 동작함 (CRITICAL)
         # connectivity 패턴은 고정이므로 최초 1회만 pull
@@ -2582,6 +2586,29 @@ class ForagerBrain:
                 raise RuntimeError("E153 종류 입력 적재 검증 실패: %s" % nm)
             tot.append("%s=%.2f" % (nm, float(arr.astype(np.float64).sum())))
         print("[E153 종류 입력 적재] %s 검증 일치 — %s" % (path, " ".join(tot)))
+
+    def _scale_kc_type_weights(self, k):
+        """E157: 종류 입력(good·bad 눈 → KC) 4집단 가중치에 k 를 곱한다(형성 적재 뒤 또는 기본값). float32 로 곱해 싣고
+        장치에서 다시 읽어 정확히 같은지 확인한다(조용한 실패 금지)."""
+        kk = np.float32(k)
+        tot = []
+        for nm in self.KC_TYPE_SYN:
+            sy = self.model.synapse_populations[nm]
+            sy.pull_connectivity_from_device()
+            sy.vars["g"].pull_from_device()
+            before = np.asarray(sy.vars["g"].values, dtype=np.float32).ravel().copy()
+            if before.size == 0:
+                raise RuntimeError("E157 종류 입력 배율: %s 시냅스 0개" % nm)
+            arr = (before * kk).astype(np.float32)
+            cur = np.asarray(sy.vars["g"].values, dtype=np.float64).ravel()
+            cur[:] = arr
+            sy.vars["g"].values = cur
+            sy.vars["g"].push_to_device()
+            sy.vars["g"].pull_from_device()
+            if not np.array_equal(np.asarray(sy.vars["g"].values, dtype=np.float32).ravel(), arr):
+                raise RuntimeError("E157 종류 입력 배율 검증 실패: %s" % nm)
+            tot.append("%s=%.2f→%.2f" % (nm, float(before.astype(np.float64).sum()), float(arr.astype(np.float64).sum())))
+        print("[E157 종류 입력 배율] k=%.4f 검증 일치 — %s" % (k, " ".join(tot)))
 
     def _create_static_synapse(self, name: str, pre, post, weight: float,
                                sparsity: Optional[float] = None):
