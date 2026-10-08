@@ -1,0 +1,7 @@
+[none base] 적재 2 [E146 변형] variant=base vseed=0 => DECOMP mode=none mod=+0.0125 acc=15.0 off=-0.0002 pushed=
+[none noise] 적재 2 [E146 변형] variant=noise vseed=0 => DECOMP mode=none mod=+0.0047 acc=6.0 off=-0.0002 pushed=0
+[learn base] 적재 2 [E146 변형] variant=base vseed=0 => DECOMP mode=all mod=-0.1611 acc=82.0 off=-0.0006 pushed=8
+[learn noise] 적재 2 [E146 변형] variant=noise vseed=0 => DECOMP mode=all mod=-0.0605 acc=49.0 off=-0.0006 pushed=8
+[rev rc=0] 적재 2 [반전] 시행 200 부터 정답 = 같� 변조폭 +0.0125 → 변조폭 +0.1515 보상 215회
+  반전 추적: 시행 400 규칙 일치(200 부터 같은 쪽) 1.0000 동결 잔차 1.37e-08 블록 보상 [53, 75, 34, 53]
+[E155 경로 검사] 종료

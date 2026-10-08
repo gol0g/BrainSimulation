@@ -1,0 +1,85 @@
+=== E155 실행: 2026-10-07T14:41:26Z ===
+커맨드: bash scripts/e155_main.sh
+---
+  e155 b10 none base: => mod +0.0117
+  e155 b10 none int05: => mod +0.0096
+  e155 b10 none int07: => mod +0.0096
+  e155 b10 none occ: => mod +0.0091
+  e155 b10 none noise: => mod +0.0094
+  e155 b10 E153 base: => mod -0.4893
+  e155 b10 E153 int05: => mod -0.4912
+  e155 b10 E153 int07: => mod -0.4910
+  e155 b10 E153 occ: => mod -0.4914
+  e155 b10 E153 noise: => mod -0.2482
+  e155 b10 E154A base: => mod -0.6015
+  e155 b10 E154A int05: => mod -0.6016
+  e155 b10 E154A int07: => mod -0.6029
+  e155 b10 E154A occ: => mod -0.6017
+  e155 b10 E154A noise: => mod -0.3409
+  e155 b11 none base: => mod +0.0015
+  e155 b11 none int05: => mod -0.0004
+  e155 b11 none int07: => mod +0.0001
+  e155 b11 none occ: => mod -0.0021
+  e155 b11 none noise: => mod -0.0013
+  e155 b11 E153 base: => mod -0.4801
+  e155 b11 E153 int05: => mod -0.4807
+  e155 b11 E153 int07: => mod -0.4802
+  e155 b11 E153 occ: => mod -0.4812
+  e155 b11 E153 noise: => mod -0.2438
+  e155 b11 E154A base: => mod -0.5886
+  e155 b11 E154A int05: => mod -0.5880
+  e155 b11 E154A int07: => mod -0.5884
+  e155 b11 E154A occ: => mod -0.5883
+  e155 b11 E154A noise: => mod -0.3394
+  e155 b12 none base: => mod +0.0064
+  e155 b12 none int05: => mod +0.0001
+  e155 b12 none int07: => mod +0.0031
+  e155 b12 none occ: => mod +0.0005
+  e155 b12 none noise: => mod +0.0013
+  e155 b12 E153 base: => mod -0.5024
+  e155 b12 E153 int05: => mod -0.5061
+  e155 b12 E153 int07: => mod -0.5030
+  e155 b12 E153 occ: => mod -0.5057
+  e155 b12 E153 noise: => mod -0.2436
+  e155 b12 E154A base: => mod -0.5881
+  e155 b12 E154A int05: => mod -0.5903
+  e155 b12 E154A int07: => mod -0.5878
+  e155 b12 E154A occ: => mod -0.5894
+  e155 b12 E154A noise: => mod -0.3109
+  e155 b13 none base: => mod +0.0231
+  e155 b13 none int05: => mod +0.0223
+  e155 b13 none int07: => mod +0.0234
+  e155 b13 none occ: => mod +0.0217
+  e155 b13 none noise: => mod +0.0098
+  e155 b13 E153 base: => mod -0.4582
+  e155 b13 E153 int05: => mod -0.4589
+  e155 b13 E153 int07: => mod -0.4586
+  e155 b13 E153 occ: => mod -0.4599
+  e155 b13 E153 noise: => mod -0.2181
+  e155 b13 E154A base: => mod -0.5568
+  e155 b13 E154A int05: => mod -0.5572
+  e155 b13 E154A int07: => mod -0.5573
+  e155 b13 E154A occ: => mod -0.5577
+  e155 b13 E154A noise: => mod -0.3009
+  e155 b14 none base: => mod +0.0116
+  e155 b14 none int05: => mod +0.0066
+  e155 b14 none int07: => mod +0.0093
+  e155 b14 none occ: => mod +0.0068
+  e155 b14 none noise: => mod +0.0065
+  e155 b14 E153 base: => mod -0.5143
+  e155 b14 E153 int05: => mod -0.5178
+  e155 b14 E153 int07: => mod -0.5161
+  e155 b14 E153 occ: => mod -0.5178
+  e155 b14 E153 noise: => mod -0.2654
+  e155 b14 E154A base: => mod -0.6153
+  e155 b14 E154A int05: => mod -0.6168
+  e155 b14 E154A int07: => mod -0.6161
+  e155 b14 E154A occ: => mod -0.6165
+  e155 b14 E154A noise: => mod -0.3644
+  e155 rev b10: => 사전 +0.0117 사후 +0.5839 보상 2002 || 적재 2 || => KCTRACE 시행 3000 보상 2002 | A +1745127.2 B +2680040.4 C -3569433.2 P -1775818.0 | ΔD -2728528.4 | share_B 0.429 B+/A 1.536 C-/A 2.045 | 합일관성 �
+  e155 rev b11: => 사전 +0.0015 사후 +0.5900 보상 1992 || 적재 2 || => KCTRACE 시행 3000 보상 1992 | A +1574027.7 B +2537154.8 C -3419368.7 P -1725291.6 | ΔD -2657204.2 | share_B 0.426 B+/A 1.612 C-/A 2.172 | 합일관성 �
+  e155 rev b12: => 사전 +0.0064 사후 +0.5853 보상 2002 || 적재 2 || => KCTRACE 시행 3000 보상 2002 | A +1762371.3 B +2707341.5 C -3353716.8 P -2001182.3 | ΔD -2297504.6 | share_B 0.447 B+/A 1.536 C-/A 1.903 | 합일관성 �
+  e155 rev b13: => 사전 +0.0231 사후 +0.5851 보상 2011 || 적재 2 || => KCTRACE 시행 3000 보상 2011 | A +2321754.2 B +3261161.4 C -4018989.8 P -2424692.0 | ΔD -2533704.9 | share_B 0.448 B+/A 1.405 C-/A 1.731 | 합일관성 �
+  e155 rev b14: => 사전 +0.0116 사후 +0.6051 보상 1999 || 적재 2 || => KCTRACE 시행 3000 보상 1999 | A +1405276.1 B +2390926.8 C -3537950.5 P -1442350.5 | ΔD -3081250.6 | share_B 0.403 B+/A 1.701 C-/A 2.518 | 합일관성 �
+[E155] 전체 루프 종료
+=== 종료코드 0 ===
