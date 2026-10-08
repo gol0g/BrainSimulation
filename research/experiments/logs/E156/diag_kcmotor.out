@@ -1,0 +1,9 @@
+[default zero rc=0] 적재 0 | => CALIBKM1 set=zero wmax=300.00 sp=0.250 mod=+0.5759 acc=0.0 off=-0.0033
+[default rev rc=0] 적재 0 | => CALIBKM1 set=rev wmax=300.00 sp=0.250 mod=-0.0918 acc=52.0 off=-0.0030
+[default ali rc=0] 적재 0 | => CALIBKM1 set=ali wmax=300.00 sp=0.250 mod=+0.7212 acc=0.0 off=+0.0018
+[formed zero rc=0] 적재 1 | => CALIBKM1 set=zero wmax=300.00 sp=0.250 mod=+0.5774 acc=0.0 off=-0.0037
+[formed rev rc=0] 적재 1 | => CALIBKM1 set=rev wmax=300.00 sp=0.250 mod=-0.2273 acc=100.0 off=-0.0002
+[formed ali rc=0] 적재 1 | => CALIBKM1 set=ali wmax=300.00 sp=0.250 mod=+0.7024 acc=0.0 off=-0.0001
+[default kcrate rc=0] 적재 0 | kc_l | 좌선택 131 우선택 7 제시 스파이크 23372 기준선(제시창) 평균 0.0523 kc_r | 좌선택 5 우선택 144 제시 스파이크 25484 기준선(제시창) 평균 0.0576 
+[formed kcrate rc=0] 적재 2 | kc_l | 좌선택 97 우선택 30 제시 스파이크 30159 기준선(제시창) 평균 0.0517 kc_r | 좌선택 21 우선택 95 제시 스파이크 31154 기준선(제시창) 평균 0.0574 
+[E156 KC→motor 진단] 종료
