@@ -1,2 +1,8 @@
 [w0 rc=0] [저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/Br | 파일 있음
 [rate rc=0] KCRATE 2줄 | 파일 있음
+[D 1ep rc=0] 적재 0 | 변조폭 +0.0255 → 변조폭 -0.0594 | KCTRACE3 1 | 분류 [E139] KC 계층 추적: 시냅스 역할 교차 36913 같은쪽 37022
+[dev rc=0] Oja 2 | side=l fired=243 sel_med0=0.5567 sel_med=0.8575 sum_med=0.9734 side=r fired=234 sel_med0=0.5536 sel_med=0.8004 sum_med=0.8821 
+[ov rc=0] 적재 2 | side=l good=55 bad=65 jac=0.0169 side=r good=61 bad=55 jac=0.0087 
+[F 1ep rc=0] 적재 2 | 변조폭 +0.0228 → 변조폭 -0.3198 | KCTRACE3 1
+  비교: 뇌 15 E160 보정 선택 칸(같은 설정) 선택성 0.858/0.800, 자카드 0.0169/0.0087 — 같은 뇌·같은 설정이면 dev·ov 가 같아야 한다(w0 는 연결 확인용)
+[E161 경로 검사] 종료
