@@ -1,0 +1,6 @@
+[none_R25 rc=0] 적재 2 배율 2 | => DECOMP mode=none mod=+0.3877 acc=0.0 off=-0.0001 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=
+[W_R25 rc=0] 적재 2 배율 2 | => DECOMP mode=all mod=+0.1226 acc=0.0 off=+0.0000 pushed=8 kc_means[kc_l>l=149.7853 kc_l>r=150.6468 kc_r>l=15
+[W_R0 rc=0] 적재 2 배율 2 | => DECOMP mode=all mod=-0.1581 acc=99.0 off=+0.0006 pushed=8 kc_means[kc_l>l=149.7853 kc_l>r=150.6468 kc_r>l=1
+[none_R0 rc=0] 적재 2 배율 2 | => DECOMP mode=none mod=+0.0263 acc=19.0 off=-0.0068 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r
+  기대: none_R25 mod=+0.3877, W_R25 mod=+0.1226 (E158 경로 검사)
+[E159 경로 검사] 종료
