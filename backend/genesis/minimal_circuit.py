@@ -144,9 +144,11 @@ def build(args):
             init_postsynaptic("ExpCurr", {"tau": 5.0}))
         _sg.set_sparse_connections(_pre, _post)
         KCWIRE["pre"], KCWIRE["post"] = _pre, _post
-    elif getattr(args, "kc_wiring", "random") in ("candidates", "loaded"):
+    elif getattr(args, "kc_wiring", "random") in ("candidates", "loaded", "ojafull"):
         # E133: candidates = 망 스파이크 헤브 발달용(일치형: 반쪽1 고정 1 + 반쪽2 후보 전부, 불일치형: 흥분 고정 1 + 다른 반쪽 억제 후보 전부).
         #       loaded = 발달 결과(가지치기한 a,b,e,i)를 파일에서 읽어 developed 와 같은 3집단으로.
+        # E167: ojafull = 발달이 끝난 망 그대로 — 호스트 가지치기(승자 선택)·가중치 재부여 없이 고정 a(dev_w_fix)·고정 e(mismatch_w) +
+        #       흥분·억제 후보 전부를 발달이 남긴 가중치로(정적). 가중치는 build 뒤 main 에서 (전, 후) 짝으로 장치에 넣고 다시 읽어 대조한다.
         _h = args.n_sens // 2
         _nm = args.n_kc // 2
         _mk = np.arange(_nm); _xk = np.arange(_nm, args.n_kc)
@@ -157,7 +159,19 @@ def build(args):
                 init_postsynaptic("ExpCurr", {"tau": 5.0}))
             sg_.set_sparse_connections(np.asarray(pre, dtype=np.uint32), np.asarray(post, dtype=np.uint32))
             return sg_
-        if args.kc_wiring == "loaded":
+        if args.kc_wiring == "ojafull":
+            _z = np.load(args.kc_wiring_file)
+            for k_ in ("a", "e", "cpre", "cpost", "wc", "ipre", "ipost", "wi"):
+                if k_ not in _z.files:
+                    raise SystemExit("ojafull: %s 에 '%s' 없음 — 후보 전체를 저장한 발달 파일(E167 이후 --dev-hebb-save)이 필요하다" % (args.kc_wiring_file, k_))
+            _O = {k_: (_z[k_].astype(np.float64) if k_ in ("wc", "wi") else _z[k_].astype(np.int64))
+                  for k_ in ("a", "e", "cpre", "cpost", "wc", "ipre", "ipost", "wi")}
+            _mk_pop3("sens_kc", _O["a"], _mk, args.dev_w_fix)
+            _mk_pop3("sens_kc_cand", _O["cpre"], _O["cpost"], 0.0)
+            _mk_pop3("sens_kc_mx", _O["e"], _xk, args.mismatch_w)
+            _mk_pop3("sens_kc_icand", _O["ipre"], _O["ipost"], 0.0)
+            KCWIRE["ojafull"] = _O
+        elif args.kc_wiring == "loaded":
             _z = np.load(args.kc_wiring_file)
             _a, _b, _e, _i = (_z[k].astype(np.int64) for k in ("a", "b", "e", "i"))
             _mk_pop3("sens_kc", np.concatenate([_a, _b]), np.concatenate([_mk, _mk]), args.sens_kc_w)
@@ -731,7 +745,7 @@ def main():
     ap.add_argument("--dev-wc-total", type=float, default=4.0, help="E133: 일치형 후보 가중치 합(보존)")
     ap.add_argument("--dev-wi-total", type=float, default=8.0, help="E133: 불일치형 억제 후보 가중치 크기 합(보존)")
     ap.add_argument("--kc-wiring-file", default=None, help="E133: --kc-wiring loaded 가 읽을 npz")
-    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator", "developed", "candidates", "loaded"),
+    ap.add_argument("--kc-wiring", default="random", choices=("random", "crosshalf", "comparator", "developed", "candidates", "loaded", "ojafull"),
                     help="E128: 감각→KC 배선. random=FixedProbability(--sens-kc-p, K50) / crosshalf=KC 마다 반쪽1·반쪽2 에서 1개씩(교차 결합)")
     ap.add_argument("--sd-credit", action="store_true",
                     help="E127(읽기 전용, 평가 뒤): 훈련 자극별 KC 반응 집합으로 KC 를 L전용·R전용·양쪽으로 나눠 "
@@ -826,6 +840,27 @@ def main():
         _n2 = np.bincount(_po[_pi >= _h], minlength=a.n_kc)[:a.n_kc]
         print("[KC배선] crosshalf: 연결 %d개, KC %d 중 반쪽1 입력 1개·반쪽2 입력 1개인 KC %d, w=%.2f"
               % (_pi.size, a.n_kc, int(((_n1 == 1) & (_n2 == 1)).sum()), a.sens_kc_w))
+    if a.kc_wiring == "ojafull":
+        # E167: 후보 가중치를 (전, 후) 짝으로 장치 순서에 맞춰 넣고, 다시 읽어 저장본과 대조한다(조작검증). 같은 위치 후보 몫도 출력.
+        _O = KCWIRE["ojafull"]; _h = a.n_sens // 2; _nmt = KCWIRE["n_match"]
+        _dmax = 0.0
+        for nm_, pre_, post_, w_, sg_n in (("sens_kc_cand", _O["cpre"], _O["cpost"], _O["wc"], 1.0),
+                                          ("sens_kc_icand", _O["ipre"], _O["ipost"], _O["wi"], -1.0)):
+            sg_ = m.synapse_populations[nm_]; sg_.pull_connectivity_from_device()
+            dp = np.asarray(sg_.get_sparse_pre_inds(), dtype=np.int64); dq = np.asarray(sg_.get_sparse_post_inds(), dtype=np.int64)
+            key = pre_ * a.n_kc + post_; order = np.argsort(key); ks = key[order]
+            dk = dp * a.n_kc + dq; pos = np.minimum(np.searchsorted(ks, dk), ks.size - 1)
+            if dp.size != pre_.size or np.any(ks[pos] != dk) or np.unique(dk).size != dk.size:
+                raise RuntimeError("ojafull: 장치 연결이 저장본과 다르다(%s)" % nm_)
+            wdev = (sg_n * w_[order][pos]).astype(np.float32)
+            sg_.vars["g"].values = wdev; sg_.vars["g"].push_to_device(); sg_.vars["g"].pull_from_device()
+            _dmax = max(_dmax, float(np.abs(np.asarray(sg_.vars["g"].values, dtype=np.float64).ravel() - wdev.astype(np.float64)).max()))
+        _sm = [float(_O["wc"][(_O["cpost"] == k) & (_O["cpre"] == _h + _O["a"][k])].sum() / _O["wc"][_O["cpost"] == k].sum()) for k in range(_nmt)]
+        _sx = [float(_O["wi"][(_O["ipost"] == k) & ((_O["ipre"] % _h) == (_O["e"][k - _nmt] % _h))].sum() / _O["wi"][_O["ipost"] == k].sum())
+               for k in range(_nmt, a.n_kc)]
+        print("[KC망안] %s | 흥분 후보 %d개 평균 %.4f 같은 위치 몫 %.4f | 억제 후보 %d개 크기 평균 %.4f 같은 위치 몫 %.4f | 균등 %.4f | 장치 대조 최대 |차| %.2e"
+              % (a.kc_wiring_file, _O["wc"].size, float(_O["wc"].mean()), float(np.mean(_sm)), _O["wi"].size, float(_O["wi"].mean()),
+                 float(np.mean(_sx)), 1.0 / _h, _dmax))
     if a.kc_wiring == "loaded":
         # E133 경로 검사(읽기 전용): 불러온 연결의 같은 위치 비율
         _h = a.n_sens // 2; _L = KCWIRE["loaded"]
@@ -975,7 +1010,8 @@ def main():
             mt = sel[(ipre[sel] % _h) == (e_fix[k - nmt] % _h)]; share_x.append(float(wi[mt].sum() / wi[sel].sum()))
         mf = float(np.mean((b - _h) == a_fix)); xf = float(np.mean((i_ % _h) == (e_fix % _h)))
         _cf = corr_fracs(a_fix, b, e_fix, i_, _h, a.dev_shift)
-        np.savez_compressed(a.dev_hebb_save, a=a_fix, b=b, e=e_fix, i=i_)
+        # E167: 가지치기 결과(a,b,e,i — loaded 가 읽음)에 더해 발달 끝 후보 전체(장치 순서 전·후 인덱스와 가중치 크기)도 저장한다(ojafull 이 읽음).
+        np.savez_compressed(a.dev_hebb_save, a=a_fix, b=b, e=e_fix, i=i_, cpre=cpre, cpost=cpost, wc=wc, ipre=ipre, ipost=ipost, wi=wi)
         print("=> DEVSHIFT seed=%d env=%s dev_shift=%d | 같은 위치: 일치형 %.3f 불일치형 %.3f | %d칸 이동 위치: 일치형 %.3f 불일치형 %.3f"
               % (a.seed, a.dev_env, a.dev_shift, _cf[0], _cf[1], a.dev_shift, _cf[2], _cf[3]))
         print("=> DEVHEBB seed=%d env=%s exposures=%d eta=%.2f w_fix=%.2f wc_total=%.2f wi_total=%.2f | 발화율(KC·노출당) 일치형 %.3f 불일치형 %.3f | "
@@ -1230,7 +1266,7 @@ def main():
             print("=> SDRATE mode=%s seed=%d trialseed=%s | kc_spikes_per_stim 평균 %.1f | active_kc_per_stim 평균 %.1f | both_spike_share(양쪽 KC 스파이크/전체) %.3f | rate_margin_ok=%d/%d"
                   % (a.mode, a.seed, a.seed if a.trial_seed is None else a.trial_seed, float(tot_sp.mean()),
                      float(np.mean([len(ks[k]) for k in tr])), float(both_sp.sum() / max(tot_sp.sum(), 1)), rm_ok, len(tr)))
-            if a.kc_wiring in ("comparator", "developed", "loaded"):
+            if a.kc_wiring in ("comparator", "developed", "loaded", "ojafull"):
                 # E129: 같음 자극에서 활성 KC 중 일치 KC 몫, 다름 자극에서 불일치 KC 몫(평균). 새 항목(평가 전용)도 함께.
                 nm_ = KCWIRE["n_match"]
                 def _sh(keys):
