@@ -1,0 +1,13 @@
+[CY dev rc=0] Oja 2 | ] order=cyclic bad_mult=1 good_l=100 bad_l=100 good_r=100 bad_r=100 n=400 int_min=0.9000 int_max=0.9000 int_mean=0.9000 cyc_match=1.0000 seed=15 
+    side=l fired=243 sel_med0=0.5567 sel_med=0.8575 goodfrac=0.4691 sum_med=0.9734 side=r fired=234 sel_med0=0.5536 sel_med=0.8004 goodfrac=0.5000 sum_med=0.8821 
+[CY ov rc=0] 적재 2 | side=l good=55 bad=65 jac=0.0169 side=r good=61 bad=55 jac=0.0087 
+[NR dev rc=0] Oja 2 | ] order=random bad_mult=1 good_l=100 bad_l=100 good_r=100 bad_r=100 n=400 int_min=0.5006 int_max=0.8971 int_mean=0.7010 cyc_match=0.2331 seed=15 
+    side=l fired=250 sel_med0=0.5573 sel_med=0.8514 goodfrac=0.4080 sum_med=0.9819 side=r fired=241 sel_med0=0.5537 sel_med=0.7542 goodfrac=0.4647 sum_med=0.9442 
+[NR ov rc=0] 적재 2 | side=l good=53 bad=69 jac=0.0167 side=r good=57 bad=59 jac=0.0087 
+[NU dev rc=0] Oja 2 | ] order=random bad_mult=3 good_l=100 bad_l=300 good_r=100 bad_r=300 n=800 int_min=0.5012 int_max=0.8987 int_mean=0.7069 cyc_match=0.2240 seed=15 
+    side=l fired=268 sel_med0=0.5553 sel_med=0.9438 goodfrac=0.4478 sum_med=1.0039 side=r fired=251 sel_med0=0.5534 sel_med=0.8882 goodfrac=0.3984 sum_med=0.9925 
+[NU ov rc=0] 적재 2 | side=l good=68 bad=65 jac=0.0000 side=r good=64 bad=53 jac=0.0000 
+  기대 (a) CY = E161 경로 검사: side=l fired=243 sel_med0=0.5567 sel_med=0.8575 sum_med=0.9734 side=r fired=234 sel_med0=0.5536 sel_med=0.8004 sum_med=0.8821 | 자카드 0.0169/0.0087(good 55·61, bad 65·55)
+[(d) NU F 1ep rc=0] 적재 2 | 변조폭 +0.0110 → 변조폭 -0.2675 | KCTRACE3 1
+[(e) 옵션 거부 rc=1] 1줄(기대 1, rc 1)
+[E165 경로 검사] 종료

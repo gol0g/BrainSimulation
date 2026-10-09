@@ -376,8 +376,8 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e165_run/forager_brain_CODE'
-make: Leaving directory '/root/e165_run/forager_brain_CODE'
+make: Entering directory '/root/e165_main_run/forager_brain_CODE'
+make: Leaving directory '/root/e165_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -757,9 +757,8 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e165_run/forager_brain_CODE'
+make: Entering directory '/root/e165_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e165_run/forager_brain_CODE'
+make: Leaving directory '/root/e165_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[E165 노출] order=cyclic bad_mult=1 good_l=100 bad_l=100 good_r=100 bad_r=100 n=400 int_min=0.9000 int_max=0.9000 int_mean=0.9000 cyc_match=1.0000 seed=15
-=> KCDEVOJA side=l fired=243 sel_med0=0.5567 sel_med=0.8575 frac09=0.4733 goodfrac=0.4691 sum_med=0.9734 sum_q10=0.0419 sum_q90=1.7362 dg_good=20954.5 dg_bad=21235.4 | side=r fired=234 sel_med0=0.5536 sel_med=0.8004 frac09=0.4658 goodfrac=0.5000 sum_med=0.8821 sum_q10=0.0441 sum_q90=1.7050 dg_good=22928.6 dg_bad=22259.4 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E165/pathcheck/kctype_CY_b15.npz
+[E165 노출] order=random bad_mult=1 good_l=100 bad_l=100 good_r=100 bad_r=100 n=400 int_min=0.5010 int_max=0.8995 int_mean=0.6930 cyc_match=0.2957 seed=16
