@@ -1,0 +1,35 @@
+=== E159 실행: 2026-10-09T05:39:11Z ===
+커맨드: bash scripts/e159_main.sh
+---
+  e159 none_R0 b10: => mod +0.0169 pushed 0 || 적재 2 배율 2
+  e159 none_R25 b10: => mod +0.3519 pushed 0 || 적재 2 배율 2
+  e159 W0_R0 b10: => mod -0.4316 pushed 8 || 적재 2 배율 2
+  e159 W0_R25 b10: => mod +0.0983 pushed 8 || 적재 2 배율 2
+  e159 W25_R0 b10: => mod -0.2354 pushed 8 || 적재 2 배율 2
+  e159 W25_R25 b10: => mod +0.0528 pushed 8 || 적재 2 배율 2
+  e159 none_R0 b11: => mod +0.0088 pushed 0 || 적재 2 배율 2
+  e159 none_R25 b11: => mod +0.3617 pushed 0 || 적재 2 배율 2
+  e159 W0_R0 b11: => mod -0.4306 pushed 8 || 적재 2 배율 2
+  e159 W0_R25 b11: => mod +0.1071 pushed 8 || 적재 2 배율 2
+  e159 W25_R0 b11: => mod -0.2786 pushed 8 || 적재 2 배율 2
+  e159 W25_R25 b11: => mod +0.0673 pushed 8 || 적재 2 배율 2
+  e159 none_R0 b12: => mod +0.0197 pushed 0 || 적재 2 배율 2
+  e159 none_R25 b12: => mod +0.3513 pushed 0 || 적재 2 배율 2
+  e159 W0_R0 b12: => mod -0.4337 pushed 8 || 적재 2 배율 2
+  e159 W0_R25 b12: => mod +0.1086 pushed 8 || 적재 2 배율 2
+  e159 W25_R0 b12: => mod -0.2639 pushed 8 || 적재 2 배율 2
+  e159 W25_R25 b12: => mod +0.0596 pushed 8 || 적재 2 배율 2
+  e159 none_R0 b13: => mod +0.0326 pushed 0 || 적재 2 배율 2
+  e159 none_R25 b13: => mod +0.3338 pushed 0 || 적재 2 배율 2
+  e159 W0_R0 b13: => mod -0.4114 pushed 8 || 적재 2 배율 2
+  e159 W0_R25 b13: => mod +0.1025 pushed 8 || 적재 2 배율 2
+  e159 W25_R0 b13: => mod -0.2300 pushed 8 || 적재 2 배율 2
+  e159 W25_R25 b13: => mod +0.0501 pushed 8 || 적재 2 배율 2
+  e159 none_R0 b14: => mod +0.0223 pushed 0 || 적재 2 배율 2
+  e159 none_R25 b14: => mod +0.3714 pushed 0 || 적재 2 배율 2
+  e159 W0_R0 b14: => mod -0.4473 pushed 8 || 적재 2 배율 2
+  e159 W0_R25 b14: => mod +0.1193 pushed 8 || 적재 2 배율 2
+  e159 W25_R0 b14: => mod -0.2809 pushed 8 || 적재 2 배율 2
+  e159 W25_R25 b14: => mod +0.0748 pushed 8 || 적재 2 배율 2
+[E159] 전체 루프 종료
+=== 종료코드 0 ===
