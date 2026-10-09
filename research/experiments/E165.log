@@ -1,4 +1,35 @@
 === E165 실행: 2026-10-09T15:00:49Z ===
 커맨드: bash scripts/e165_main.sh
 ---
-  e165 NR dev b16: 
+  e165 NR dev b16: => good_l=100 bad_l=100 int_mean=0.6930 cyc_match=0.2957 | side=l sel_med0=0.5687 sel_med=0.8560 goodfrac=0.4016 side=r sel_med0=0.5532 sel_med=0.8238 goodfrac=0.5527 
+  e165 NR ov b16: => side=l good=56 bad=61 jac=0.0086 side=r good=57 bad=59 jac=0.0087 || 적재 2
+  e165 NR F b16: => 사전 +0.0050 사후 -0.6161 보상 340 || 적재 2
+  e165 NU dev b16: => good_l=100 bad_l=300 int_mean=0.6979 cyc_match=0.1765 | side=l sel_med0=0.5652 sel_med=0.9417 goodfrac=0.3382 side=r sel_med0=0.5528 sel_med=0.8619 goodfrac=0.4405 
+  e165 NU ov b16: => side=l good=58 bad=60 jac=0.0000 side=r good=63 bad=55 jac=0.0000 || 적재 2
+  e165 NU F b16: => 사전 +0.0063 사후 -0.6376 보상 342 || 적재 2
+  e165 NR dev b17: => good_l=100 bad_l=100 int_mean=0.6963 cyc_match=0.2055 | side=l sel_med0=0.5656 sel_med=0.9048 goodfrac=0.5671 side=r sel_med0=0.5532 sel_med=0.9058 goodfrac=0.4815 
+  e165 NR ov b17: => side=l good=62 bad=56 jac=0.0085 side=r good=55 bad=72 jac=0.0000 || 적재 2
+  e165 NR F b17: => 사전 -0.0041 사후 -0.6142 보상 340 || 적재 2
+  e165 NU dev b17: => good_l=100 bad_l=300 int_mean=0.7012 cyc_match=0.1890 | side=l sel_med0=0.5630 sel_med=0.9355 goodfrac=0.4223 side=r sel_med0=0.5530 sel_med=0.9130 goodfrac=0.4122 
+  e165 NU ov b17: => side=l good=70 bad=59 jac=0.0000 side=r good=73 bad=63 jac=0.0000 || 적재 2
+  e165 NU F b17: => 사전 +0.0126 사후 -0.6273 보상 336 || 적재 2
+  e165 NR dev b18: => good_l=100 bad_l=100 int_mean=0.6960 cyc_match=0.2607 | side=l sel_med0=0.5637 sel_med=0.8836 goodfrac=0.3644 side=r sel_med0=0.5603 sel_med=0.8711 goodfrac=0.5678 
+  e165 NR ov b18: => side=l good=53 bad=65 jac=0.0085 side=r good=59 bad=64 jac=0.0082 || 적재 2
+  e165 NR F b18: => 사전 +0.0098 사후 -0.6059 보상 337 || 적재 2
+  e165 NU dev b18: => good_l=100 bad_l=300 int_mean=0.6933 cyc_match=0.1877 | side=l sel_med0=0.5599 sel_med=0.9691 goodfrac=0.3522 side=r sel_med0=0.5548 sel_med=0.9615 goodfrac=0.3655 
+  e165 NU ov b18: => side=l good=61 bad=63 jac=0.0000 side=r good=64 bad=65 jac=0.0000 || 적재 2
+  e165 NU F b18: => 사전 +0.0156 사후 -0.6178 보상 337 || 적재 2
+  e165 NR dev b19: => good_l=100 bad_l=100 int_mean=0.6926 cyc_match=0.2406 | side=l sel_med0=0.5598 sel_med=0.9157 goodfrac=0.4575 side=r sel_med0=0.5482 sel_med=0.8856 goodfrac=0.4267 
+  e165 NR ov b19: => side=l good=53 bad=60 jac=0.0000 side=r good=57 bad=60 jac=0.0263 || 적재 2
+  e165 NR F b19: => 사전 +0.0141 사후 -0.5982 보상 343 || 적재 2
+  e165 NU dev b19: => good_l=100 bad_l=300 int_mean=0.7040 cyc_match=0.1890 | side=l sel_med0=0.5634 sel_med=0.9780 goodfrac=0.3482 side=r sel_med0=0.5460 sel_med=0.9264 goodfrac=0.3675 
+  e165 NU ov b19: => side=l good=59 bad=60 jac=0.0000 side=r good=58 bad=62 jac=0.0000 || 적재 2
+  e165 NU F b19: => 사전 +0.0187 사후 -0.6074 보상 343 || 적재 2
+  e165 NR dev b20: => good_l=100 bad_l=100 int_mean=0.6934 cyc_match=0.2105 | side=l sel_med0=0.5687 sel_med=0.8930 goodfrac=0.4511 side=r sel_med0=0.5578 sel_med=0.9166 goodfrac=0.5826 
+  e165 NR ov b20: => side=l good=56 bad=65 jac=0.0000 side=r good=61 bad=54 jac=0.0000 || 적재 2
+  e165 NR F b20: => 사전 +0.0094 사후 -0.6134 보상 341 || 적재 2
+  e165 NU dev b20: => good_l=100 bad_l=300 int_mean=0.6940 cyc_match=0.1627 | side=l sel_med0=0.5689 sel_med=0.9760 goodfrac=0.3404 side=r sel_med0=0.5578 sel_med=0.9487 goodfrac=0.4391 
+  e165 NU ov b20: => side=l good=61 bad=64 jac=0.0000 side=r good=64 bad=56 jac=0.0000 || 적재 2
+  e165 NU F b20: => 사전 +0.0061 사후 -0.6174 보상 343 || 적재 2
+[E165] 전체 루프 종료
+=== 종료코드 0 ===

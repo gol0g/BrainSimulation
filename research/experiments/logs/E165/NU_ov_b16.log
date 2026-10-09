@@ -331,7 +331,6 @@ Building Forager Brain (28,323 neurons)...
   Prediction Error circuit complete: 200 neurons, 4 learning synapses
     Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
   Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
-[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.02 beta 0.3 m_max 32 (초기 g 4.00, 연결 확률 0.100)
     Assoc_Edible→KC: 2.0, sparsity=0.05
     Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
     Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
@@ -378,6 +377,7 @@ Building Forager Brain (28,323 neurons)...
 Building model...
 make: Entering directory '/root/e165_main_run/forager_brain_CODE'
 make: Leaving directory '/root/e165_main_run/forager_brain_CODE'
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E165/kctype_NU_b16.npz 검증 일치 — good_food_eye_l_to_kc_l=234857.87 bad_food_eye_l_to_kc_l=236970.04 good_food_eye_r_to_kc_r=239356.03 bad_food_eye_r_to_kc_r=237252.89
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -712,7 +712,6 @@ Building Forager Brain (28,323 neurons)...
   Prediction Error circuit complete: 200 neurons, 4 learning synapses
     Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
   Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
-[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.02 beta 0.3 m_max 32 (초기 g 4.00, 연결 확률 0.100)
     Assoc_Edible→KC: 2.0, sparsity=0.05
     Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
     Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
@@ -760,6 +759,7 @@ Building model...
 make: Entering directory '/root/e165_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e165_main_run/forager_brain_CODE'
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E165/kctype_NU_b16.npz 검증 일치 — good_food_eye_l_to_kc_l=234857.87 bad_food_eye_l_to_kc_l=236970.04 good_food_eye_r_to_kc_r=239356.03 bad_food_eye_r_to_kc_r=237252.89
 Model ready! Total: 28,323 neurons
-[E165 노출] order=random bad_mult=1 good_l=100 bad_l=100 good_r=100 bad_r=100 n=400 int_min=0.5010 int_max=0.8995 int_mean=0.6930 cyc_match=0.2957 seed=16
-=> KCDEVOJA side=l fired=254 sel_med0=0.5687 sel_med=0.8560 frac09=0.4724 goodfrac=0.4016 sum_med=0.9671 sum_q10=0.0377 sum_q90=1.8094 dg_good=22267.6 dg_bad=22600.5 | side=r fired=237 sel_med0=0.5532 sel_med=0.8238 frac09=0.4515 goodfrac=0.5527 sum_med=0.9901 sum_q10=0.0385 sum_q90=1.7130 dg_good=22409.0 dg_bad=22436.6 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E165/kctype_NR_b16.npz
+[E149 입력 가중치] food_eye_l_to_kc_l=3.000(n=120199) good_food_eye_l_to_kc_l=3.937(n=59660) bad_food_eye_l_to_kc_l=3.950(n=59997) it_food_to_kc_l=2.000(n=30175)
+=> KCOVERLAP side=l good=58 bad=60 jac=0.0000 cos=0.0002 jac025=0.0000 jac100=0.0000 split_jac=0.9831 split_cos=0.9999 | side=r good=63 bad=55 jac=0.0000 cos=0.0000 jac025=0.0000 jac100=0.0000 split_jac=1.0000 split_cos=0.9999 | food_eye_scale=1.00 bilateral_scale=1.00 n_pres=50

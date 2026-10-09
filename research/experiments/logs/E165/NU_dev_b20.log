@@ -761,5 +761,5 @@ make: Entering directory '/root/e165_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e165_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[E165 노출] order=random bad_mult=1 good_l=100 bad_l=100 good_r=100 bad_r=100 n=400 int_min=0.5010 int_max=0.8995 int_mean=0.6930 cyc_match=0.2957 seed=16
-=> KCDEVOJA side=l fired=254 sel_med0=0.5687 sel_med=0.8560 frac09=0.4724 goodfrac=0.4016 sum_med=0.9671 sum_q10=0.0377 sum_q90=1.8094 dg_good=22267.6 dg_bad=22600.5 | side=r fired=237 sel_med0=0.5532 sel_med=0.8238 frac09=0.4515 goodfrac=0.5527 sum_med=0.9901 sum_q10=0.0385 sum_q90=1.7130 dg_good=22409.0 dg_bad=22436.6 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E165/kctype_NR_b16.npz
+[E165 노출] order=random bad_mult=3 good_l=100 bad_l=300 good_r=100 bad_r=300 n=800 int_min=0.5002 int_max=0.9000 int_mean=0.6940 cyc_match=0.1627 seed=20
+=> KCDEVOJA side=l fired=235 sel_med0=0.5689 sel_med=0.9760 frac09=0.7021 goodfrac=0.3404 sum_med=1.0141 sum_q10=0.0296 sum_q90=1.8841 dg_good=24740.0 dg_bad=21688.9 | side=r fired=230 sel_med0=0.5578 sel_med=0.9487 frac09=0.5435 goodfrac=0.4391 sum_med=1.0050 sum_q10=0.0324 sum_q90=1.7967 dg_good=25172.0 dg_bad=20762.9 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E165/kctype_NU_b20.npz
