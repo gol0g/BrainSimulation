@@ -331,7 +331,7 @@ Building Forager Brain (28,323 neurons)...
   Prediction Error circuit complete: 200 neurons, 4 learning synapses
     Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
   Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
-[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.005 beta 0.3 m_max 32 (초기 g 4.00, 연결 확률 0.100)
+[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.02 beta 0.1 m_max 32 (초기 g 4.00, 연결 확률 0.100)
     Assoc_Edible→KC: 2.0, sparsity=0.05
     Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
     Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
@@ -712,7 +712,7 @@ Building Forager Brain (28,323 neurons)...
   Prediction Error circuit complete: 200 neurons, 4 learning synapses
     Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
   Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
-[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.005 beta 0.3 m_max 32 (초기 g 4.00, 연결 확률 0.100)
+[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.02 beta 0.1 m_max 32 (초기 g 4.00, 연결 확률 0.100)
     Assoc_Edible→KC: 2.0, sparsity=0.05
     Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
     Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
@@ -761,4 +761,4 @@ make: Entering directory '/root/e160_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e160_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-=> KCDEVOJA side=l fired=256 sel_med0=0.5528 sel_med=0.6699 frac09=0.0312 goodfrac=0.4648 sum_med=1.0020 sum_q10=0.0905 sum_q90=1.3831 dg_good=11400.7 dg_bad=11361.7 | side=r fired=243 sel_med0=0.5547 sel_med=0.6779 frac09=0.0370 goodfrac=0.5267 sum_med=1.0013 sum_q10=0.1133 sum_q90=1.4065 dg_good=12375.8 dg_bad=11958.5 | n=100 eta=0.005 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.005_b0.3_b15.npz
+=> KCDEVOJA side=l fired=176 sel_med0=0.5568 sel_med=0.6265 frac09=0.2443 goodfrac=0.5170 sum_med=0.9560 sum_q10=0.1049 sum_q90=3.8629 dg_good=22894.2 dg_bad=21216.2 | side=r fired=177 sel_med0=0.5495 sel_med=0.6563 frac09=0.2373 goodfrac=0.5141 sum_med=0.9799 sum_q10=0.1285 sum_q90=3.4754 dg_good=24795.5 dg_bad=21594.0 | n=100 eta=0.02 beta=0.1 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.02_b0.1_b15.npz
