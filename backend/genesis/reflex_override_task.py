@@ -314,6 +314,13 @@ def main():
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
     ap.add_argument("--kc-dev-eta", type=float, default=0.1, help="E153 kcdev: 합 보존 헤브 재분배 배율 eta(발화 1개당)")
     ap.add_argument("--kc-dev-save", default=None, help="E153 kcdev: 형성된 종류 입력 가중치 저장 npz")
+    ap.add_argument("--kc-dev-order", default="cyclic", choices=("cyclic", "random"),
+                    help="E165 kcdevoja: 노출 순서. cyclic = 고정 순환(good-좌·bad-좌·good-우·bad-우 반복, E160·E161), "
+                         "random = 종류·쪽별 제시 수를 맞춘 무작위 순서(지역 난수, exposure_schedule.py)")
+    ap.add_argument("--kc-dev-bad-mult", type=int, default=1, help="E165 kcdevoja: bad 제시 배수(쪽마다 kc_dev_n × 배수, random 전용). 1 = 균등")
+    ap.add_argument("--kc-dev-int-lo", type=float, default=0.9, help="E165 kcdevoja: 제시 강도 하한(상한과 같으면 고정. 기본 0.9 = 이전 동작)")
+    ap.add_argument("--kc-dev-int-hi", type=float, default=0.9, help="E165 kcdevoja: 제시 강도 상한(제시마다 U[하한, 상한])")
+    ap.add_argument("--kc-dev-seed", type=int, default=None, help="E165 kcdevoja: 노출 일정 지역 난수 시드(기본 = 뇌 시드)")
     ap.add_argument("--kc-food-eye-scale", type=float, default=1.0,
                     help="E149: food_eye→KC(좌우 각) 가중치 배율 — good·bad 자극이 공유하는 food 입력. 0 = 차단. 연결은 그대로 만든다(난수 소비 불변)")
     ap.add_argument("--task-b-after", type=int, default=0,
@@ -365,6 +372,9 @@ def main():
     args = ap.parse_args()
     if args.judge == "exec" and args.act_window <= 0:
         raise SystemExit("--judge exec 는 --act-window 가 필요하다(실행 행동 _ex 가 행동 창에서만 정해진다)")
+    if (args.kc_dev_order != "cyclic" or args.kc_dev_bad_mult != 1 or args.kc_dev_int_lo != 0.9 or args.kc_dev_int_hi != 0.9
+            or args.kc_dev_seed is not None) and not (args.decomp_weights and args.decomp_mode == "kcdevoja"):
+        raise SystemExit("--kc-dev-order·--kc-dev-bad-mult·--kc-dev-int-lo·--kc-dev-int-hi·--kc-dev-seed 는 kcdevoja 노출 전용이다(다른 경로에서는 듣지 않는다)")
 
     # C46: 환경·워밍업 난수 고정. 미고정이면 사전 정답률이 런마다 0%~72%로 흔들려
     # 학습 효과가 잡음에 묻힌다(C43에서 실제로 그랬다).
@@ -708,12 +718,26 @@ def main():
             neu = stim(_obs2, nh, "left")
             for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right", "bad_food_rays_left", "bad_food_rays_right"):
                 neu[_k] = np.zeros(nh)
-            seq = (("good", "left", "l"), ("bad", "left", "l"), ("good", "right", "r"), ("bad", "right", "r"))
-            for rep_i in range(4 * args.kc_dev_n):
-                ty, side, sd = seq[rep_i % 4]
+            # E165: 노출 일정 — 기본(cyclic·배수 1·강도 0.9)은 이전 고정 순환(good-좌·bad-좌·good-우·bad-우 × kc_dev_n)과 같다
+            # (exposure_schedule.py, 합성 시험 scripts/test_exposure_schedule.py). 강도가 0.9 가 아니면 그 쪽 종류 광선·먹이 광선을 강도로 바꾼다.
+            import exposure_schedule as XS
+            _xseed = args.kc_dev_seed if args.kc_dev_seed is not None else _bseed
+            sched = XS.build(args.kc_dev_n, args.kc_dev_order, args.kc_dev_bad_mult, args.kc_dev_int_lo, args.kc_dev_int_hi, seed=_xseed)
+            _xs = XS.summary(sched)
+            print("[E165 노출] order=%s bad_mult=%d good_l=%d bad_l=%d good_r=%d bad_r=%d n=%d int_min=%.4f int_max=%.4f int_mean=%.4f cyc_match=%.4f seed=%d"
+                  % (args.kc_dev_order, args.kc_dev_bad_mult, _xs["good_l"], _xs["bad_l"], _xs["good_r"], _xs["bad_r"], _xs["n"],
+                     _xs["int_min"], _xs["int_max"], _xs["int_mean"], _xs["cyc_match"], _xseed))
+
+            def _dev_stim(ty, side, inten):
+                o_ = stim(_obs2, nh, side) if ty == "good" else stim_bad(_obs2, nh, side)
+                if inten != 0.9:
+                    o_[("good" if ty == "good" else "bad") + "_food_rays_" + side] = np.ones(nh) * inten
+                    o_["food_rays_" + side] = np.ones(nh) * inten
+                return o_
+            for ty, side, sd, inten in sched:
                 pop = _b2.kc_left if sd == "l" else _b2.kc_right
                 for _ in range(3):
-                    _b2.process(stim(_obs2, nh, side) if ty == "good" else stim_bad(_obs2, nh, side))
+                    _b2.process(_dev_stim(ty, side, inten))
                     ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
                     if ids.size:
                         fired[sd][np.unique(ids[ids < n_k])] = True
