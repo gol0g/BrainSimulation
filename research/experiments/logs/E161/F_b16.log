@@ -376,18 +376,25 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e161_main_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e161_main_run/forager_brain_CODE'
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/kctype_oja_b16.npz 검증 일치 — good_food_eye_l_to_kc_l=234371.54 bad_food_eye_l_to_kc_l=237868.80 good_food_eye_r_to_kc_r=237622.84 bad_food_eye_r_to_kc_r=239534.55
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 +0.015 | 정답률 0.0% | **변조폭 +0.0283** (양수=반사방향, 음수=역전)
+[사전] 오프셋 -0.004 | 정답률 22.0% | **변조폭 +0.0149** (양수=반사방향, 음수=역전)
 [KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30175 w=2.000; it_food_to_kc_r n=29867 w=2.000; assoc_edible_to_kc_l n=18050 w=2.000; assoc_edible_to_kc_r n=18020 w=2.000; wernicke_food_to_kc_l n=12111 w=3.000; wernicke_food_to_kc_r n=12076 w=3.000; ppc_goal_food_to_kc_l n=22542 w=2.000; ppc_goal_food_to_kc_r n=22577 w=2.000; social_mem_to_kc_l n=13686 w=1.500; social_mem_to_kc_r n=13458 w=1.500; assoc_bind_to_kc_l n=14902 w=2.000; assoc_bind_to_kc_r n=14982 w=2.000
-[학습] 0ep 완료, 보상 0회 (탐색 주입 0회, ε=0.60)
+[E139] KC 계층 추적: 시냅스 역할 교차 36803 같은쪽 37125 비선택 18705 무활동 1405447 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/rate_b16.npz)
+[학습] 5ep 완료, 보상 341회 (탐색 주입 296회, ε=0.60)
+[판정경로] judge=exec 시행=500 abs_v_le_0.02=5 (1.0%) v정답_실행오답=0 v오답_실행정답=2 불일치율=0.4%
+=> KCTRACE 시행 500 보상 341 | A +614118.4 B -125172.8 C -376254.7 P -654218.6 | ΔD +1017255.1 | share_B 0.000 B+/A 0.000 C-/A 0.613 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +526290 +272254 +128635 +91915 -1839 | 보상시행 e_same/e_cross -2.061
+=> KCTRACE2 탐색 A +148624.9 B -85640.2 C -382690.1 P -644601.7 | 탐욕 A +465493.5 B -39532.6 C +6435.4 P -9616.9 | 비선택 Δg 보상 +247857.2 처벌 -253561.0 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/tr_F_b16.npz
+=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -0.204 C/P 0.575 | 보상시행 e_da 같은쪽/교차 -2.061 e_end 같은쪽/교차 -2.061 | 보상창 motor 발화율 평균 보상(좌 0.9215 우 0.9379) 처벌(좌 1.0583 우 1.0817)
 [반사가중치] food_explore_motor_l   n=29993 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] food_explore_motor_r   n=29987 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] good_food_to_motor_l   n=15080 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] good_food_to_motor_r   n=15045 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[D1가중치] food_to_d1_r   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/w0_b16.npz
+[D1가중치] food_to_d1_l   |Δ|평균=7.24544 변화율=51.2% | 평균 1.000→8.245 | std 0.0000→9.5181
+[D1가중치] food_to_d1_r   |Δ|평균=7.37146 변화율=58.7% | 평균 1.000→8.371 | std 0.0000→9.5319
+[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/w_F_b16.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -768,7 +775,8 @@ Building model...
 make: Entering directory '/root/e161_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e161_main_run/forager_brain_CODE'
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/kctype_oja_b16.npz 검증 일치 — good_food_eye_l_to_kc_l=234371.54 bad_food_eye_l_to_kc_l=237868.80 good_food_eye_r_to_kc_r=237622.84 bad_food_eye_r_to_kc_r=239534.55
 Model ready! Total: 28,323 neurons
 [이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 +0.015 | 정답률 0.0% | **변조폭 +0.0283**
-=> 정답률 +0.0%p | **변조폭 변화 +0.0000** | 판정: 변화 없음
+[사후] 오프셋 -0.013 | 정답률 100.0% | **변조폭 -0.5977**
+=> 정답률 +78.0%p | **변조폭 변화 -0.6126** | 판정: 학습이 조향을 역전 방향으로 이동

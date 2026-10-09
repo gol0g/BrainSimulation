@@ -331,6 +331,7 @@ Building Forager Brain (28,323 neurons)...
   Prediction Error circuit complete: 200 neurons, 4 learning synapses
     Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
   Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
+[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.02 beta 0.3 m_max 32 (초기 g 4.00, 연결 확률 0.100)
     Assoc_Edible→KC: 2.0, sparsity=0.05
     Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
     Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
@@ -378,16 +379,6 @@ Building model...
 make: Entering directory '/root/e161_main_run/forager_brain_CODE'
 make: Leaving directory '/root/e161_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 +0.015 | 정답률 0.0% | **변조폭 +0.0283** (양수=반사방향, 음수=역전)
-[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30175 w=2.000; it_food_to_kc_r n=29867 w=2.000; assoc_edible_to_kc_l n=18050 w=2.000; assoc_edible_to_kc_r n=18020 w=2.000; wernicke_food_to_kc_l n=12111 w=3.000; wernicke_food_to_kc_r n=12076 w=3.000; ppc_goal_food_to_kc_l n=22542 w=2.000; ppc_goal_food_to_kc_r n=22577 w=2.000; social_mem_to_kc_l n=13686 w=1.500; social_mem_to_kc_r n=13458 w=1.500; assoc_bind_to_kc_l n=14902 w=2.000; assoc_bind_to_kc_r n=14982 w=2.000
-[학습] 0ep 완료, 보상 0회 (탐색 주입 0회, ε=0.60)
-[반사가중치] food_explore_motor_l   n=29993 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] food_explore_motor_r   n=29987 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_l   n=15080 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_r   n=15045 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[D1가중치] food_to_d1_r   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/w0_b16.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -721,6 +712,7 @@ Building Forager Brain (28,323 neurons)...
   Prediction Error circuit complete: 200 neurons, 4 learning synapses
     Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
   Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
+[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre 20.0 eta 0.02 beta 0.3 m_max 32 (초기 g 4.00, 연결 확률 0.100)
     Assoc_Edible→KC: 2.0, sparsity=0.05
     Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
     Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
@@ -769,6 +761,4 @@ make: Entering directory '/root/e161_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e161_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 +0.015 | 정답률 0.0% | **변조폭 +0.0283**
-=> 정답률 +0.0%p | **변조폭 변화 +0.0000** | 판정: 변화 없음
+=> KCDEVOJA side=l fired=225 sel_med0=0.5665 sel_med=0.8668 frac09=0.4889 goodfrac=0.4533 sum_med=1.0023 sum_q10=0.0409 sum_q90=1.8661 dg_good=21695.5 dg_bad=21000.8 | side=r fired=207 sel_med0=0.5557 sel_med=0.9404 frac09=0.5266 goodfrac=0.4734 sum_med=0.9620 sum_q10=0.0316 sum_q90=1.7970 dg_good=21037.9 dg_bad=20531.9 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/kctype_oja_b20.npz

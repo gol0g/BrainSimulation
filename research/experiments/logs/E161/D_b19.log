@@ -378,16 +378,21 @@ Building model...
 make: Entering directory '/root/e161_main_run/forager_brain_CODE'
 make: Leaving directory '/root/e161_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 +0.015 | 정답률 0.0% | **변조폭 +0.0283** (양수=반사방향, 음수=역전)
-[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30175 w=2.000; it_food_to_kc_r n=29867 w=2.000; assoc_edible_to_kc_l n=18050 w=2.000; assoc_edible_to_kc_r n=18020 w=2.000; wernicke_food_to_kc_l n=12111 w=3.000; wernicke_food_to_kc_r n=12076 w=3.000; ppc_goal_food_to_kc_l n=22542 w=2.000; ppc_goal_food_to_kc_r n=22577 w=2.000; social_mem_to_kc_l n=13686 w=1.500; social_mem_to_kc_r n=13458 w=1.500; assoc_bind_to_kc_l n=14902 w=2.000; assoc_bind_to_kc_r n=14982 w=2.000
-[학습] 0ep 완료, 보상 0회 (탐색 주입 0회, ε=0.60)
-[반사가중치] food_explore_motor_l   n=29993 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] food_explore_motor_r   n=29987 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_l   n=15080 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_r   n=15045 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[D1가중치] food_to_d1_r   |Δ|평균=0.00000 변화율=0.0% | 평균 1.000→1.000 | std 0.0000→0.0000
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/w0_b16.npz
+[사전] 오프셋 -0.000 | 정답률 0.0% | **변조폭 +0.0196** (양수=반사방향, 음수=역전)
+[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30116 w=2.000; it_food_to_kc_r n=30247 w=2.000; assoc_edible_to_kc_l n=17675 w=2.000; assoc_edible_to_kc_r n=18052 w=2.000; wernicke_food_to_kc_l n=11872 w=3.000; wernicke_food_to_kc_r n=12021 w=3.000; ppc_goal_food_to_kc_l n=22727 w=2.000; ppc_goal_food_to_kc_r n=22350 w=2.000; social_mem_to_kc_l n=13576 w=1.500; social_mem_to_kc_r n=13496 w=1.500; assoc_bind_to_kc_l n=14964 w=2.000; assoc_bind_to_kc_r n=14976 w=2.000
+[E139] KC 계층 추적: 시냅스 역할 교차 34396 같은쪽 34421 비선택 14806 무활동 1415801 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/rate_b19.npz)
+[학습] 5ep 완료, 보상 325회 (탐색 주입 296회, ε=0.60)
+[판정경로] judge=exec 시행=500 abs_v_le_0.02=25 (5.0%) v정답_실행오답=0 v오답_실행정답=22 불일치율=4.4%
+=> KCTRACE 시행 500 보상 325 | A +669771.3 B -668036.3 C +216751.9 P -395941.0 | ΔD +1950500.4 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +605897 +544135 +321338 +220195 +258935 | 보상시행 e_same/e_cross -1.068
+=> KCTRACE2 탐색 A +249168.1 B -257866.2 C +164345.5 P -350603.9 | 탐욕 A +420603.1 B -410170.2 C +52406.4 P -45337.1 | 비선택 Δg 보상 +196023.2 처벌 -143750.2 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/tr_D_b19.npz
+=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -0.997 C/P -0.547 | 보상시행 e_da 같은쪽/교차 -1.068 e_end 같은쪽/교차 -1.068 | 보상창 motor 발화율 평균 보상(좌 1.0090 우 1.0152) 처벌(좌 1.0374 우 1.0235)
+[반사가중치] food_explore_motor_l   n=29955 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
+[반사가중치] food_explore_motor_r   n=29955 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
+[반사가중치] good_food_to_motor_l   n=14802 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
+[반사가중치] good_food_to_motor_r   n=15019 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
+[D1가중치] food_to_d1_l   |Δ|평균=6.60975 변화율=48.7% | 평균 1.000→7.610 | std 0.0000→9.2539
+[D1가중치] food_to_d1_r   |Δ|평균=7.12097 변화율=49.2% | 평균 1.000→8.120 | std 0.0000→9.4902
+[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/w_D_b19.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -770,5 +775,5 @@ make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e161_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 [이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 +0.015 | 정답률 0.0% | **변조폭 +0.0283**
-=> 정답률 +0.0%p | **변조폭 변화 +0.0000** | 판정: 변화 없음
+[사후] 오프셋 +0.002 | 정답률 100.0% | **변조폭 -0.2666**
+=> 정답률 +100.0%p | **변조폭 변화 -0.2862** | 판정: 학습이 조향을 역전 방향으로 이동

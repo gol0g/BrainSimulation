@@ -1,4 +1,45 @@
 === E161 실행: 2026-10-09T07:23:20Z ===
 커맨드: bash scripts/e161_main.sh
 ---
-  e161 w0 b16: 
+  e161 w0 b16: => [저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungH
+  e161 rate b16: => KCRATE 2줄 제시 스파이크 48772 제시 스파이크 49775 
+  e161 D b16: => 사전 +0.0283 사후 -0.2425 보상 321 || 적재 0
+  e161 dev b16: => side=l fired=251 sel_med0=0.5671 sel_med=0.8271 sum_med=0.9589 side=r fired=237 sel_med0=0.5525 sel_med=0.7492 sum_med=0.9305 || Oja 2
+  e161 ov b16: => side=l good=54 bad=62 jac=0.0000 side=r good=55 bad=63 jac=0.0172 || 적재 2
+  e161 F b16: => 사전 +0.0149 사후 -0.5977 보상 341 || 적재 2
+  e161 kcF b16: => 스파이크 27347 28021 || 적재 2
+  e161 kcD b16: => 스파이크 24371 25023 || 적재 0
+  e161 w0 b17: => [저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungH
+  e161 rate b17: => KCRATE 2줄 제시 스파이크 49848 제시 스파이크 51560 
+  e161 D b17: => 사전 +0.0142 사후 -0.2799 보상 328 || 적재 0
+  e161 dev b17: => side=l fired=228 sel_med0=0.5660 sel_med=0.8637 sum_med=1.0087 side=r fired=232 sel_med0=0.5547 sel_med=0.9128 sum_med=1.0063 || Oja 2
+  e161 ov b17: => side=l good=55 bad=57 jac=0.0000 side=r good=59 bad=66 jac=0.0081 || 적재 2
+  e161 F b17: => 사전 +0.0064 사후 -0.6096 보상 340 || 적재 2
+  e161 kcF b17: => 스파이크 29588 30317 || 적재 2
+  e161 kcD b17: => 스파이크 24766 25700 || 적재 0
+  e161 w0 b18: => [저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungH
+  e161 rate b18: => KCRATE 2줄 제시 스파이크 49319 제시 스파이크 53087 
+  e161 D b18: => 사전 +0.0208 사후 -0.2604 보상 326 || 적재 0
+  e161 dev b18: => side=l fired=222 sel_med0=0.5641 sel_med=0.9038 sum_med=0.9996 side=r fired=230 sel_med0=0.5612 sel_med=0.8480 sum_med=0.9934 || Oja 2
+  e161 ov b18: => side=l good=56 bad=63 jac=0.0085 side=r good=59 bad=61 jac=0.0000 || 적재 2
+  e161 F b18: => 사전 +0.0094 사후 -0.6134 보상 337 || 적재 2
+  e161 kcF b18: => 스파이크 29814 30452 || 적재 2
+  e161 kcD b18: => 스파이크 24589 26603 || 적재 0
+  e161 w0 b19: => [저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungH
+  e161 rate b19: => KCRATE 2줄 제시 스파이크 48354 제시 스파이크 51367 
+  e161 D b19: => 사전 +0.0196 사후 -0.2666 보상 325 || 적재 0
+  e161 dev b19: => side=l fired=205 sel_med0=0.5630 sel_med=0.8949 sum_med=1.0165 side=r fired=223 sel_med0=0.5482 sel_med=0.9020 sum_med=0.9653 || Oja 2
+  e161 ov b19: => side=l good=55 bad=56 jac=0.0183 side=r good=57 bad=60 jac=0.0174 || 적재 2
+  e161 F b19: => 사전 +0.0208 사후 -0.5999 보상 342 || 적재 2
+  e161 kcF b19: => 스파이크 28292 30266 || 적재 2
+  e161 kcD b19: => 스파이크 24125 25700 || 적재 0
+  e161 w0 b20: => [저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungH
+  e161 rate b20: => KCRATE 2줄 제시 스파이크 49834 제시 스파이크 48363 
+  e161 D b20: => 사전 +0.0236 사후 -0.2384 보상 291 || 적재 0
+  e161 dev b20: => side=l fired=225 sel_med0=0.5665 sel_med=0.8668 sum_med=1.0023 side=r fired=207 sel_med0=0.5557 sel_med=0.9404 sum_med=0.9620 || Oja 2
+  e161 ov b20: => side=l good=53 bad=61 jac=0.0000 side=r good=54 bad=55 jac=0.0000 || 적재 2
+  e161 F b20: => 사전 +0.0166 사후 -0.6005 보상 341 || 적재 2
+  e161 kcF b20: => 스파이크 28728 28460 || 적재 2
+  e161 kcD b20: => 스파이크 24968 24150 || 적재 0
+[E161] 전체 루프 종료
+=== 종료코드 0 ===
