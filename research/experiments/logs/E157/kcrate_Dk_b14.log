@@ -376,7 +376,9 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e157_main_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e157_main_run/forager_brain_CODE'
+[E157 종류 입력 배율] k=1.5000 검증 일치 — good_food_eye_l_to_kc_l=240184.00→360276.00 bad_food_eye_l_to_kc_l=238632.00→357948.00 good_food_eye_r_to_kc_r=239260.00→358890.00 bad_food_eye_r_to_kc_r=240636.00→360954.00
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -758,7 +760,8 @@ Building model...
 make: Entering directory '/root/e157_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e157_main_run/forager_brain_CODE'
+[E157 종류 입력 배율] k=1.5000 검증 일치 — good_food_eye_l_to_kc_l=240184.00→360276.00 bad_food_eye_l_to_kc_l=238632.00→357948.00 good_food_eye_r_to_kc_r=239260.00→358890.00 bad_food_eye_r_to_kc_r=240636.00→360954.00
 Model ready! Total: 28,323 neurons
-=> KCRATE kc_l | 좌선택 147 우선택 5 비선택 30 무활동 2818 | 희석 0.113 | ≥1스파이크 좌전용 72 우전용 0 공유 110 무반응 2818 | 여유합 +2000621.5 몫 좌선택 0.966 우선택 0.016 비선택 0.018 | θ0.3 선택 157 θ0.7 선택 151 | 제시 스파이크 24823 기준선(제시창) 평균 0.0558 | KC별 ΔS 좌선택(→L -4464.7 →R +3027.3) 우선택(→L +3966.0 →R -1036.3) 비선택(→L +1212.7 →R -676.1)
-=> KCRATE kc_r | 좌선택 9 우선택 140 비선택 21 무활동 2830 | 희석 0.103 | ≥1스파이크 좌전용 0 우전용 52 공유 118 무반응 2830 | 여유합 +1713323.4 몫 좌선택 0.013 우선택 0.924 비선택 0.063 | θ0.3 선택 151 θ0.7 선택 144 | 제시 스파이크 24302 기준선(제시창) 평균 0.0545 | KC별 ΔS 좌선택(→L -2861.4 →R +2994.9) 우선택(→L +3253.1 →R -2746.6) 비선택(→L -2860.6 →R +2857.9)
-[E138] KC 발화 수 저장 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E157/kcrate_D_b10.npz (좌우 각 50회, 기준선 500스텝)
+=> KCRATE kc_l | 좌선택 190 우선택 6 비선택 34 무활동 2770 | 희석 0.065 | ≥1스파이크 좌전용 107 우전용 0 공유 123 무반응 2770 | 여유합 +3325345.3 몫 좌선택 0.970 우선택 0.013 비선택 0.017 | θ0.3 선택 199 θ0.7 선택 194 | 제시 스파이크 31609 기준선(제시창) 평균 0.0558 | KC별 ΔS 좌선택(→L -3483.2 →R +2546.1) 우선택(→L +4210.7 →R -2375.0) 비선택(→L +1934.7 →R -600.5)
+=> KCRATE kc_r | 좌선택 7 우선택 194 비선택 20 무활동 2779 | 희석 0.064 | ≥1스파이크 좌전용 0 우전용 91 공유 130 무반응 2779 | 여유합 +2687569.6 몫 좌선택 0.009 우선택 0.952 비선택 0.039 | θ0.3 선택 203 θ0.7 선택 199 | 제시 스파이크 30153 기준선(제시창) 평균 0.0546 | KC별 ΔS 좌선택(→L -1596.5 →R +4139.8) 우선택(→L +2183.4 →R -2830.8) 비선택(→L -1473.9 →R +3583.0)
+[E138] KC 발화 수 저장 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E157/kcrate_Dk_b14.npz (좌우 각 50회, 기준선 500스텝)

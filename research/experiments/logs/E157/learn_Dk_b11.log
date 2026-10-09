@@ -22,7 +22,7 @@ Building Forager Brain (28,323 neurons)...
     Wall Push: 60.0
     Wall Pull: -40.0
     Food Explore: food_eye→Motor 10.0 (static, weak)
-    Food Approach: good_food_eye→Motor R-STDP (init=25.0, learnable)
+    Food Approach: good_food_eye→Motor R-STDP (init=0.0, learnable)
   Building Obstacle avoidance circuit...
     Obstacle Push: 8.0 (weak, wall=60.0)
     Obstacle Pull: -4.0 (weak, wall=-40.0)
@@ -377,7 +377,23 @@ Building Forager Brain (28,323 neurons)...
 Building model...
 make: Entering directory '/root/e157_main_run/forager_brain_CODE'
 make: Leaving directory '/root/e157_main_run/forager_brain_CODE'
+[E157 종류 입력 배율] k=1.5000 검증 일치 — good_food_eye_l_to_kc_l=240232.00→360348.00 bad_food_eye_l_to_kc_l=238960.00→358440.00 good_food_eye_r_to_kc_r=240212.00→360318.00 bad_food_eye_r_to_kc_r=238944.00→358416.00
 Model ready! Total: 28,323 neurons
+[사전] 오프셋 -0.000 | 정답률 17.0% | **변조폭 +0.0114** (양수=반사방향, 음수=역전)
+[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30070 w=2.000; it_food_to_kc_r n=30184 w=2.000; assoc_edible_to_kc_l n=18022 w=2.000; assoc_edible_to_kc_r n=17964 w=2.000; wernicke_food_to_kc_l n=12004 w=3.000; wernicke_food_to_kc_r n=11853 w=3.000; ppc_goal_food_to_kc_l n=22285 w=2.000; ppc_goal_food_to_kc_r n=22440 w=2.000; social_mem_to_kc_l n=13569 w=1.500; social_mem_to_kc_r n=13412 w=1.500; assoc_bind_to_kc_l n=15207 w=2.000; assoc_bind_to_kc_r n=14914 w=2.000
+[E139] KC 계층 추적: 시냅스 역할 교차 37158 같은쪽 37123 비선택 11797 무활동 1414127 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/fix/rate_b11.npz)
+[학습] 5ep 완료, 보상 319회 (탐색 주입 296회, ε=0.60)
+[판정경로] judge=exec 시행=500 abs_v_le_0.02=31 (6.2%) v정답_실행오답=0 v오답_실행정답=21 불일치율=4.2%
+=> KCTRACE 시행 500 보상 319 | A +1003821.7 B -714031.4 C +86338.3 P -650571.1 | ΔD +2454762.4 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +696662 +653739 +457304 +319808 +327248 | 보상시행 e_same/e_cross -0.962
+=> KCTRACE2 탐색 A +332156.4 B -299847.9 C +9163.6 P -526093.8 | 탐욕 A +671665.3 B -414183.5 C +77174.6 P -124477.2 | 비선택 Δg 보상 +230921.9 처벌 -148731.1 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E157/tr_Dk_b11.npz
+=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -0.711 C/P -0.133 | 보상시행 e_da 같은쪽/교차 -0.962 e_end 같은쪽/교차 -0.962 | 보상창 motor 발화율 평균 보상(좌 1.0793 우 1.0270) 처벌(좌 1.0845 우 1.0589)
+[반사가중치] food_explore_motor_l   n=29991 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
+[반사가중치] food_explore_motor_r   n=30101 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
+[반사가중치] good_food_to_motor_l   n=14919 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
+[반사가중치] good_food_to_motor_r   n=15141 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
+[D1가중치] food_to_d1_l   |Δ|평균=8.12814 변화율=59.1% | 평균 1.000→9.128 | std 0.0000→9.7423
+[D1가중치] food_to_d1_r   |Δ|평균=7.04037 변화율=51.1% | 평균 1.000→8.040 | std 0.0000→9.5296
+[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E157/w_Dk_b11.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -402,7 +418,7 @@ Building Forager Brain (28,323 neurons)...
     Wall Push: 60.0
     Wall Pull: -40.0
     Food Explore: food_eye→Motor 10.0 (static, weak)
-    Food Approach: good_food_eye→Motor R-STDP (init=25.0, learnable)
+    Food Approach: good_food_eye→Motor R-STDP (init=0.0, learnable)
   Building Obstacle avoidance circuit...
     Obstacle Push: 8.0 (weak, wall=60.0)
     Obstacle Pull: -4.0 (weak, wall=-40.0)
@@ -758,7 +774,8 @@ Building model...
 make: Entering directory '/root/e157_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e157_main_run/forager_brain_CODE'
+[E157 종류 입력 배율] k=1.5000 검증 일치 — good_food_eye_l_to_kc_l=240232.00→360348.00 bad_food_eye_l_to_kc_l=238960.00→358440.00 good_food_eye_r_to_kc_r=240212.00→360318.00 bad_food_eye_r_to_kc_r=238944.00→358416.00
 Model ready! Total: 28,323 neurons
-=> KCRATE kc_l | 좌선택 147 우선택 5 비선택 30 무활동 2818 | 희석 0.113 | ≥1스파이크 좌전용 72 우전용 0 공유 110 무반응 2818 | 여유합 +2000621.5 몫 좌선택 0.966 우선택 0.016 비선택 0.018 | θ0.3 선택 157 θ0.7 선택 151 | 제시 스파이크 24823 기준선(제시창) 평균 0.0558 | KC별 ΔS 좌선택(→L -4464.7 →R +3027.3) 우선택(→L +3966.0 →R -1036.3) 비선택(→L +1212.7 →R -676.1)
-=> KCRATE kc_r | 좌선택 9 우선택 140 비선택 21 무활동 2830 | 희석 0.103 | ≥1스파이크 좌전용 0 우전용 52 공유 118 무반응 2830 | 여유합 +1713323.4 몫 좌선택 0.013 우선택 0.924 비선택 0.063 | θ0.3 선택 151 θ0.7 선택 144 | 제시 스파이크 24302 기준선(제시창) 평균 0.0545 | KC별 ΔS 좌선택(→L -2861.4 →R +2994.9) 우선택(→L +3253.1 →R -2746.6) 비선택(→L -2860.6 →R +2857.9)
-[E138] KC 발화 수 저장 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E157/kcrate_D_b10.npz (좌우 각 50회, 기준선 500스텝)
+[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
+[사후] 오프셋 -0.000 | 정답률 100.0% | **변조폭 -0.3414**
+=> 정답률 +83.0%p | **변조폭 변화 -0.3528** | 판정: 학습이 조향을 역전 방향으로 이동
