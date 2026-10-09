@@ -1,0 +1,10 @@
+[A] 적재 2  변조폭 +0.0228 → 변조폭 -0.5094 보상 134회
+[AB] 적재 2 [과제 B] 시행 200 부터 자극 = bad food, 정답 = 같은 쪽 변조폭 +0.0228 → 변조폭 -0.4783 보상 274회
+[A base] 적재 2 => DECOMP mode=all mod=-0.5094 acc=100.0 off=-0.0067 pushed=
+[AB base] 적재 2 => DECOMP mode=all mod=-0.4783 acc=100.0 off=-0.0077 pushed=
+[AB bad] 적재 2 => DECOMP mode=all mod=+0.5105 acc=0.0 off=-0.0077 pushed=8 
+[none base] 적재 2 => DECOMP mode=none mod=+0.0228 acc=7.0 off=-0.0040 pushed=0
+[none bad] 적재 2 => DECOMP mode=none mod=+0.0120 acc=5.0 off=-0.0040 pushed=0
+  A 추적: 시행 200 규칙 일치 1.0000 동결 잔차 1.37e-08 도파민전 0.0e+00
+  AB 추적: 시행 400 규칙 일치 1.0000 동결 잔차 1.38e-08 도파민전 0.0e+00
+[E162 경로 검사] 종료

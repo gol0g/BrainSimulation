@@ -1,0 +1,4 @@
+=== E162 실행: 2026-10-09T08:48:19Z ===
+커맨드: bash scripts/e162_main.sh
+---
+  e162 train A b10: 
