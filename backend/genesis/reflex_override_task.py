@@ -382,6 +382,9 @@ def main():
     cfg.kc_type_oja = bool(args.kc_type_oja)                 # E160: 종류 입력 망 안 Oja 가소성(kcdevoja 노출 전용)
     cfg.kc_oja_eta, cfg.kc_oja_beta = float(args.kc_oja_eta), float(args.kc_oja_beta)
     cfg.kc_oja_mmax, cfg.kc_oja_tau_pre = float(args.kc_oja_mmax), float(args.kc_oja_tau)
+    if args.no_reward:
+        # 외부 검토 2026-10-09: 아래 `continue` 는 도파민·학습뿐 아니라 보상 창·시행 간격 처리까지 건너뛴다(동작은 그대로 둔다 — 과거 결과 재현).
+        print("[경고] --no-reward 는 보상 창·시행 간격 처리까지 건너뛴다 — 처리 시간·노출이 같은 대조가 아니다(이식 평가 무학습 기준은 영향 없음)")
     if args.d1_lateral is not None:
         cfg.d1_lateral_inhibition = args.d1_lateral
     if args.kc_gamma:

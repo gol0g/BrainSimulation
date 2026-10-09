@@ -201,3 +201,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-09 16:23 E161(망 안 Oja 형성 확증, 뇌 16~20) 실행 중 — 16:23 시작, 40런 ≈1.5시간. 경로 검사 logs/E161/path_check.out 통과(E160 값 재현). 게이트 첫 시도는 §7 '같은 경로 직전 실험' 누락으로 거부(본실험 미시작) → 보완 후 통과. 감시 watch-exp.sh E161 40 "e161 .* b(1[6-9]|20): =>"(30분마다 재무장). 끝나면 judge_e161.py → verify_e161_independent.py → P9.
 - 2026-10-09 17:38 E161 **형성 성공 5/5**(K94 확증 — 망 안 Oja 형성, 쓰지 않은 뇌) — 분기 종료. 다음 결정 문서 research/abcd-2026-10-09-innet3.md — E162(망 안 형성 표현 간섭 하 유지, 뇌 10~14, E154 설계 + E160 Oja 가중치, ≈3시간).
 - 2026-10-09 17:48 E162(망 안 형성 표현 간섭 하 유지) 실행 중 — 17:48 시작, 학습 10(1,500 × 5 + 3,000 × 5)·평가 25 ≈3시간. 경로 검사 logs/E162/path_check.out 통과. 감시 watch-exp.sh E162 35 "e162 .*: =>"(30분마다 재무장). 끝나면 judge_e162.py → verify_e162_independent.py → P9(E162·H085·current-state).
+- 2026-10-09 19:13 외부 검토 응답 research/review-response-2026-10-09.md — 구현 지점 ①(보상 창 끝 도파민 뉴런 입력)·③(오프셋 5 대 3)은 E162·E163 뒤 측정 분기로, ②(--no-reward)는 정정·경고. E162 진행 중.
