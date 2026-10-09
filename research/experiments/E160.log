@@ -2,4 +2,25 @@
 커맨드: bash scripts/e160_main.sh
 ---
 [E160] Oja η 0.02 β 0.3
-  e160 dev b10: 
+  e160 dev b10: => side=l fired=233 sel_med=0.8775 sum_med=0.9764 side=r fired=226 sel_med=0.8715 sum_med=0.9908 || Oja 2
+  e160 ov b10: => side=l good=55 bad=61 jac=0.0000 side=r good=59 bad=53 jac=0.0000 || 적재 2
+  e160 learn b10: => 사전 +0.0080 사후 -0.6076 보상 337 || 적재 2
+  e160 kcrate b10: => 스파이크 28914 29589 || 적재 2
+  e160 dev b11: => side=l fired=220 sel_med=0.8247 sum_med=0.9190 side=r fired=227 sel_med=0.8577 sum_med=0.9965 || Oja 2
+  e160 ov b11: => side=l good=52 bad=58 jac=0.0092 side=r good=58 bad=59 jac=0.0086 || 적재 2
+  e160 learn b11: => 사전 +0.0107 사후 -0.5891 보상 337 || 적재 2
+  e160 kcrate b11: => 스파이크 29240 28603 || 적재 2
+  e160 dev b12: => side=l fired=222 sel_med=0.8722 sum_med=1.0042 side=r fired=233 sel_med=0.8625 sum_med=0.7861 || Oja 2
+  e160 ov b12: => side=l good=57 bad=59 jac=0.0175 side=r good=52 bad=57 jac=0.0000 || 적재 2
+  e160 learn b12: => 사전 +0.0008 사후 -0.5978 보상 338 || 적재 2
+  e160 kcrate b12: => 스파이크 30557 28158 || 적재 2
+  e160 dev b13: => side=l fired=220 sel_med=0.8303 sum_med=0.9921 side=r fired=224 sel_med=0.8951 sum_med=1.0027 || Oja 2
+  e160 ov b13: => side=l good=48 bad=60 jac=0.0093 side=r good=58 bad=63 jac=0.0168 || 적재 2
+  e160 learn b13: => 사전 +0.0227 사후 -0.5912 보상 342 || 적재 2
+  e160 kcrate b13: => 스파이크 27614 31083 || 적재 2
+  e160 dev b14: => side=l fired=259 sel_med=0.7454 sum_med=0.9911 side=r fired=236 sel_med=0.7799 sum_med=0.8054 || Oja 2
+  e160 ov b14: => side=l good=57 bad=63 jac=0.0000 side=r good=58 bad=55 jac=0.0273 || 적재 2
+  e160 learn b14: => 사전 +0.0119 사후 -0.6217 보상 345 || 적재 2
+  e160 kcrate b14: => 스파이크 29863 28369 || 적재 2
+[E160] 전체 루프 종료
+=== 종료코드 0 ===

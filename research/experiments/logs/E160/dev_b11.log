@@ -761,4 +761,4 @@ make: Entering directory '/root/e160_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e160_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
-=> KCDEVOJA side=l fired=233 sel_med0=0.5634 sel_med=0.8775 frac09=0.4850 goodfrac=0.4936 sum_med=0.9764 sum_q10=0.0498 sum_q90=1.8013 dg_good=21605.7 dg_bad=21203.3 | side=r fired=226 sel_med0=0.5509 sel_med=0.8715 frac09=0.4823 goodfrac=0.5044 sum_med=0.9908 sum_q10=0.0367 sum_q90=1.6880 dg_good=21343.7 dg_bad=22271.0 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/kctype_oja_b10.npz
+=> KCDEVOJA side=l fired=220 sel_med0=0.5635 sel_med=0.8247 frac09=0.4636 goodfrac=0.4818 sum_med=0.9190 sum_q10=0.0451 sum_q90=1.8824 dg_good=20906.9 dg_bad=20262.8 | side=r fired=227 sel_med0=0.5534 sel_med=0.8577 frac09=0.4493 goodfrac=0.4714 sum_med=0.9965 sum_q10=0.0432 sum_q90=1.7121 dg_good=22083.1 dg_bad=21345.5 | n=100 eta=0.02 beta=0.3 mmax=32 tau=20 save=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/kctype_oja_b11.npz
