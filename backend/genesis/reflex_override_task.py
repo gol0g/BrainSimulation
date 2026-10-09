@@ -106,8 +106,9 @@ def act_window_current(brain, o, ex_side, current, steps, neg=None):
     return ex_r, ot_r
 
 
-def measure_offset(brain, obs, nh, n=20):
-    """좌우 대칭 자극에서 남는 조향 = 런 상수 오프셋(C28b: 런마다 0.3~0.83으로 요동)."""
+def measure_offset(brain, obs, nh, n=20, steps=5):
+    """좌우 대칭 자극에서 남는 조향 = 런 상수 오프셋(C28b: 런마다 0.3~0.83으로 요동).
+    steps: 조향 합의 처리 수(기본 5 = evaluate 의 steer 와 같음). 외부 검토 2026-10-09: 학습 판단은 3처리 합이라 --offset-steps 3 으로 맞출 수 있다."""
     vals = []
     for _ in range(n):
         o = stim(obs, nh, "left")
@@ -115,7 +116,7 @@ def measure_offset(brain, obs, nh, n=20):
         o["good_food_rays_right"] = np.ones(nh) * 0.45
         o["food_rays_left"] = np.ones(nh) * 0.45
         o["food_rays_right"] = np.ones(nh) * 0.45
-        vals.append(steer(brain, o))
+        vals.append(steer(brain, o, steps=steps))
     return float(np.mean(vals))
 
 
@@ -305,6 +306,11 @@ def main():
     ap.add_argument("--kc-oja-beta", type=float, default=1.0, help="E160: Oja 감소 계수")
     ap.add_argument("--kc-oja-mmax", type=float, default=32.0, help="E160: Oja 가중치 상한")
     ap.add_argument("--kc-oja-tau", type=float, default=20.0, help="E160: 전시냅스 흔적 시간상수(ms)")
+    ap.add_argument("--rw-da-reset", action="store_true",
+                    help="구현 점검(외부 검토 2026-10-09 ①): 보상 창 끝에 도파민 뉴런 I_input 도 0 으로(기본은 Python 도파민·시냅스 파라미터만 0 — "
+                         "도파민 뉴런은 다음 보상·처벌 호출까지 보상 시 입력을 유지)")
+    ap.add_argument("--offset-steps", type=int, default=5,
+                    help="구현 점검(외부 검토 2026-10-09 ③): 학습 중 오프셋 측정의 조향 처리 수(기본 5 — 학습 판단은 3처리 합). evaluate 는 바꾸지 않는다")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
     ap.add_argument("--kc-dev-eta", type=float, default=0.1, help="E153 kcdev: 합 보존 헤브 재분배 배율 eta(발화 1개당)")
     ap.add_argument("--kc-dev-save", default=None, help="E153 kcdev: 형성된 종류 입력 가중치 저장 npz")
@@ -382,6 +388,8 @@ def main():
     cfg.kc_type_oja = bool(args.kc_type_oja)                 # E160: 종류 입력 망 안 Oja 가소성(kcdevoja 노출 전용)
     cfg.kc_oja_eta, cfg.kc_oja_beta = float(args.kc_oja_eta), float(args.kc_oja_beta)
     cfg.kc_oja_mmax, cfg.kc_oja_tau_pre = float(args.kc_oja_mmax), float(args.kc_oja_tau)
+    if args.rw_da_reset or args.offset_steps != 5:
+        print("[구현 점검] rw_da_reset=%s offset_steps=%d (외부 검토 2026-10-09 ①·③)" % (bool(args.rw_da_reset), args.offset_steps))
     if args.no_reward:
         # 외부 검토 2026-10-09: 아래 `continue` 는 도파민·학습뿐 아니라 보상 창·시행 간격 처리까지 건너뛴다(동작은 그대로 둔다 — 과거 결과 재현).
         print("[경고] --no-reward 는 보상 창·시행 간격 처리까지 건너뛴다 — 처리 시간·노출이 같은 대조가 아니다(이식 평가 무학습 기준은 영향 없음)")
@@ -1213,8 +1221,11 @@ def main():
     J = {"n": 0, "small": 0, "v_ok_ex_no": 0, "v_no_ex_ok": 0}
     _rev_announced = False
     _taskb_announced = False
+    _dar_done = False       # 구현 점검 ①: 첫 보상 창 끝 도파민 뉴런 입력 0 확인을 한 번만 출력
     for ep in range(args.episodes):
-        off = measure_offset(brain, obs, nh, n=5)
+        off = measure_offset(brain, obs, nh, n=5, steps=args.offset_steps)
+        if args.offset_steps != 5 and ep == 0:
+            print("[구현 점검] 오프셋(조향 %d처리 합) 첫 에피소드 %+.4f" % (args.offset_steps, off))
         for t in range(args.steps):
             if KCT is not None:
                 # E139: 시행 시작 g(난수 소비 없음). 직전 시행 끝 g 와 같아야 한다(도파민 0 구간엔 g 불변) — 연속성 검사.
@@ -1363,6 +1374,17 @@ def main():
                     _kee = _kct_sum(_kct_read("e"))      # E139 수정: 보상 창 끝(도파민 0 직전) 자격흔적
                 brain.dopamine_level = 0.0
                 brain._push_dopamine_to_rstdp()
+                if args.rw_da_reset:
+                    # 외부 검토 2026-10-09 ①: 도파민 뉴런 입력도 0(기본은 다음 release_dopamine 까지 보상 시 입력 유지 → 간격·다음 시행 동안 D1·D2 구동)
+                    _dav = brain.dopamine_neurons.vars["I_input"]
+                    if correct and not _dar_done:
+                        _dav.pull_from_device(); _dar_prev = float(np.max(_dav.view))
+                    _dav.view[:] = 0.0
+                    _dav.push_to_device()
+                    if correct and not _dar_done:
+                        _dav.pull_from_device()   # 조작검증(읽기 전용): 첫 보상 시행의 보상 창 끝에서 실제로 0 이 됐는가
+                        print("[구현 점검] 첫 보상 창 끝 도파민 뉴런 I_input %.1f → %.1f" % (_dar_prev, float(np.max(np.abs(_dav.view)))))
+                        _dar_done = True
                 _neu = stim(obs, nh, "left")
                 for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
                     _neu[_k] = np.zeros(nh)
