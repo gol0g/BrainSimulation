@@ -1,0 +1,2 @@
+[기본 kcrate rc=0] kc_l | 제시 스파이크 23372 kc_r | 제시 스파이크 25484  | Oja 줄 0 (기대 23372+25484=48856, Oja 0줄)
+[η0.005 β0.1 rc=0] Oja 줄 2 | => KCDEVOJA side=l fired=188 sel_med0=0.5507 sel_med=0.6458 frac09=0.0160 goodfrac=0.5160 sum_med=1.0706 sum_q10=0.5261 sum_q90=2.2561 dg_good=10580.0 dg_bad=9396.2 | side=r fired=179 sel_med0=0.5505 sel_med=0.6244 frac09=0.0223 goodfrac=0.5084 sum_med=1.0236 sum_q10=0.5701 sum_q90=2.2616 dg_good=99

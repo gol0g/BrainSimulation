@@ -294,11 +294,17 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja"))
     ap.add_argument("--kc-type-weights", default=None,
                     help="E153: 경험 형성 KC 종류 입력(good·bad 눈 → KC) 가중치 npz — 모든 뇌에 싣는다(연결이 저장본과 같아야 함)")
     ap.add_argument("--kc-type-scale", type=float, default=1.0,
                     help="E157: 종류 입력(good·bad 눈 → KC) 4집단 가중치 배율 — 적재(있으면) 뒤 곱하고 장치에서 재확인, 모든 뇌. 1.0 이면 아무것도 안 함")
+    ap.add_argument("--kc-type-oja", action="store_true",
+                    help="E160: 종류 입력 4집단을 망 안 Oja 경쟁 가소성으로(후 스파이크마다 g += eta·(preTrace − beta·g)). kcdevoja 노출 전용")
+    ap.add_argument("--kc-oja-eta", type=float, default=0.02, help="E160: Oja 학습률")
+    ap.add_argument("--kc-oja-beta", type=float, default=1.0, help="E160: Oja 감소 계수")
+    ap.add_argument("--kc-oja-mmax", type=float, default=32.0, help="E160: Oja 가중치 상한")
+    ap.add_argument("--kc-oja-tau", type=float, default=20.0, help="E160: 전시냅스 흔적 시간상수(ms)")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
     ap.add_argument("--kc-dev-eta", type=float, default=0.1, help="E153 kcdev: 합 보존 헤브 재분배 배율 eta(발화 1개당)")
     ap.add_argument("--kc-dev-save", default=None, help="E153 kcdev: 형성된 종류 입력 가중치 저장 npz")
@@ -373,6 +379,9 @@ def main():
     cfg.kc_food_eye_scale = args.kc_food_eye_scale
     cfg.kc_type_weights_file = args.kc_type_weights or ""   # E153: 경험 형성 종류 입력 가중치 — 이 cfg 로 만드는 모든 뇌(학습·이식 평가·측정)에 싣는다
     cfg.kc_type_scale = float(args.kc_type_scale)            # E157: 종류 입력 배율(적재 뒤) — 같은 cfg 로 만드는 모든 뇌
+    cfg.kc_type_oja = bool(args.kc_type_oja)                 # E160: 종류 입력 망 안 Oja 가소성(kcdevoja 노출 전용)
+    cfg.kc_oja_eta, cfg.kc_oja_beta = float(args.kc_oja_eta), float(args.kc_oja_beta)
+    cfg.kc_oja_mmax, cfg.kc_oja_tau_pre = float(args.kc_oja_mmax), float(args.kc_oja_tau)
     if args.d1_lateral is not None:
         cfg.d1_lateral_inhibition = args.d1_lateral
     if args.kc_gamma:
@@ -501,7 +510,7 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
-        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev"):
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         elif mode == "swap":
             # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
@@ -657,6 +666,72 @@ def main():
                     save[SY[(ty, sd)]["nm"] + "__post"] = SY[(ty, sd)]["post"]
             np.savez_compressed(args.kc_dev_save, **save)
             print("=> KCDEV %s | n=%d eta=%g updates=%d save=%s" % (" | ".join(out), args.kc_dev_n, args.kc_dev_eta, n_upd, args.kc_dev_save))
+            return
+        if mode == "kcdevoja":
+            # E160: kcdev 와 같은 보상 없는 노출(good-좌·bad-좌·good-우·bad-우 × kc_dev_n, 각 3처리 스텝, 사이 무자극 10스텝)을 주되
+            # 호스트 재분배 없이 종류 입력 4집단의 망 안 Oja 가소성만 작동한다(cfg.kc_type_oja). 끝 가중치(+ post 인덱스)를 kcdev 와 같은 형식으로 저장.
+            import kc_selectivity as KS
+            if not getattr(cfg, "kc_type_oja", False):
+                raise SystemExit("kcdevoja 는 --kc-type-oja 가 필요하다")
+            if not args.kc_dev_save:
+                raise SystemExit("kcdevoja 는 --kc-dev-save 가 필요하다")
+            n_k = int(cfg.n_kc_per_side)
+            SY = {}
+            for sd in "lr":
+                for ty in ("good", "bad"):
+                    nm = "%s_food_eye_%s_to_kc_%s" % (ty, sd, sd)
+                    sy = _b2.model.synapse_populations[nm]
+                    sy.pull_connectivity_from_device(); sy.vars["g"].pull_from_device()
+                    SY[(ty, sd)] = {"nm": nm, "sy": sy, "post": np.asarray(sy.get_sparse_post_inds(), dtype=np.int64),
+                                    "g0": np.asarray(sy.vars["g"].values, dtype=np.float64).ravel().copy()}
+
+            def _sums_o(sd, key):
+                return (np.bincount(SY[("good", sd)]["post"], weights=SY[("good", sd)][key], minlength=n_k)[:n_k]
+                        + np.bincount(SY[("bad", sd)]["post"], weights=SY[("bad", sd)][key], minlength=n_k)[:n_k])
+            S0 = {sd: _sums_o(sd, "g0") for sd in "lr"}
+            sh0 = {sd: KS.type_share(SY[("good", sd)]["g0"], SY[("bad", sd)]["g0"], SY[("good", sd)]["post"], SY[("bad", sd)]["post"], n_k) for sd in "lr"}
+            fired = {sd: np.zeros(n_k, dtype=bool) for sd in "lr"}
+            _b2.reset()
+            for _ in range(30):
+                _b2.process(_obs2)
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right", "bad_food_rays_left", "bad_food_rays_right"):
+                neu[_k] = np.zeros(nh)
+            seq = (("good", "left", "l"), ("bad", "left", "l"), ("good", "right", "r"), ("bad", "right", "r"))
+            for rep_i in range(4 * args.kc_dev_n):
+                ty, side, sd = seq[rep_i % 4]
+                pop = _b2.kc_left if sd == "l" else _b2.kc_right
+                for _ in range(3):
+                    _b2.process(stim(_obs2, nh, side) if ty == "good" else stim_bad(_obs2, nh, side))
+                    ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+                    if ids.size:
+                        fired[sd][np.unique(ids[ids < n_k])] = True
+                for j in range(10):
+                    _b2.process(neu)
+            out, save = [], {}
+            for sd in "lr":
+                for ty in ("good", "bad"):
+                    sy = SY[(ty, sd)]["sy"]; sy.vars["g"].pull_from_device()
+                    SY[(ty, sd)]["g"] = np.asarray(sy.vars["g"].values, dtype=np.float64).ravel().copy()
+                sh = KS.type_share(SY[("good", sd)]["g"], SY[("bad", sd)]["g"], SY[("good", sd)]["post"], SY[("bad", sd)]["post"], n_k)
+                act = fired[sd] & ~np.isnan(sh) & ~np.isnan(sh0[sd])
+                sel, sel0 = np.maximum(sh, 1.0 - sh), np.maximum(sh0[sd], 1.0 - sh0[sd])
+                s_now = _sums_o(sd, "g")
+                m0 = act & (S0[sd] > 0)
+                rat = s_now[m0] / S0[sd][m0] if m0.any() else np.array([np.nan])
+                dg = {ty: float(np.abs(SY[(ty, sd)]["g"] - SY[(ty, sd)]["g0"]).sum()) for ty in ("good", "bad")}
+                out.append("side=%s fired=%d sel_med0=%.4f sel_med=%.4f frac09=%.4f goodfrac=%.4f sum_med=%.4f sum_q10=%.4f sum_q90=%.4f dg_good=%.1f dg_bad=%.1f"
+                           % (sd, int(act.sum()), float(np.median(sel0[act])) if act.any() else float("nan"),
+                              float(np.median(sel[act])) if act.any() else float("nan"),
+                              float(np.mean(sel[act] >= 0.9)) if act.any() else float("nan"),
+                              float(np.mean(sh[act] > 0.5)) if act.any() else float("nan"),
+                              float(np.median(rat)), float(np.quantile(rat, 0.1)), float(np.quantile(rat, 0.9)), dg["good"], dg["bad"]))
+                for ty in ("good", "bad"):
+                    save[SY[(ty, sd)]["nm"]] = SY[(ty, sd)]["g"].astype(np.float32)
+                    save[SY[(ty, sd)]["nm"] + "__post"] = SY[(ty, sd)]["post"]
+            np.savez_compressed(args.kc_dev_save, **save)
+            print("=> KCDEVOJA %s | n=%d eta=%g beta=%g mmax=%g tau=%g save=%s" % (" | ".join(out), args.kc_dev_n, cfg.kc_oja_eta, cfg.kc_oja_beta,
+                                                                                    cfg.kc_oja_mmax, cfg.kc_oja_tau_pre, args.kc_dev_save))
             return
         if mode == "kcoverlap3":
             # E152: good·bad·먹이 단독(food 광선만) × 좌·우 — 같은 쪽 good·bad 겹침(G∩B) 중 먹이 단독에도 반응하는 몫.

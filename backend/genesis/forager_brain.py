@@ -2621,6 +2621,40 @@ class ForagerBrain:
             init_sparse_connectivity("FixedProbability", {"prob": sp})
         )
 
+    def _create_kc_type_oja_synapses(self):
+        """E160: KC 종류 입력(good·bad 눈 → KC) 4집단을 망 안 Oja 경쟁 가소성으로 만든다 — 도파민·호스트 갱신 없음.
+        전 스파이크: 전달 + preTrace += 1. 후 스파이크: g += eta·(preTrace − beta·g), [0, m_max](최소 회로 E136 OjaCompetition 과 같은 식, 흥분만).
+        연결 생성(FixedProbability)·초기 g·후시냅스 모델·생성 순서는 정적 판(_create_static_synapse)과 같다. 모델 객체는 한 번만 만든다(E135 교훈)."""
+        from pygenn import create_weight_update_model
+        wu = create_weight_update_model(
+            "KCTypeOja",
+            params=[("tau_pre", "scalar"), ("eta", "scalar"), ("beta", "scalar"), ("m_max", "scalar")],
+            vars=[("g", "scalar")],
+            pre_vars=[("preTrace", "scalar")],
+            pre_spike_syn_code="addToPost(g);",
+            post_spike_syn_code="""
+            scalar mm = g + eta * (preTrace - beta * g);
+            g = fmin(m_max, fmax(0.0, mm));
+            """,
+            pre_spike_code="preTrace += 1.0;",
+            pre_dynamics_code="preTrace -= preTrace * (dt / tau_pre);",
+        )
+        c = self.config
+        p = {"tau_pre": float(getattr(c, "kc_oja_tau_pre", 20.0)), "eta": float(getattr(c, "kc_oja_eta", 0.02)),
+             "beta": float(getattr(c, "kc_oja_beta", 1.0)), "m_max": float(getattr(c, "kc_oja_mmax", 32.0))}
+        sp = c.kc_good_bad_food_sparsity or c.sparsity
+        for name, pre, post in (("good_food_eye_l_to_kc_l", self.good_food_eye_left, self.kc_left),
+                                ("good_food_eye_r_to_kc_r", self.good_food_eye_right, self.kc_right),
+                                ("bad_food_eye_l_to_kc_l", self.bad_food_eye_left, self.kc_left),
+                                ("bad_food_eye_r_to_kc_r", self.bad_food_eye_right, self.kc_right)):
+            self.model.add_synapse_population(
+                name, "SPARSE", pre, post,
+                init_weight_update(wu, p, {"g": init_var("Constant", {"constant": c.kc_good_bad_food_weight})}, {"preTrace": 0.0}),
+                init_postsynaptic("ExpCurr", {"tau": 5.0}),
+                init_sparse_connectivity("FixedProbability", {"prob": sp}))
+        print("[E160 종류 입력 Oja] 4집단 망 안 가소성 — tau_pre %.1f eta %g beta %g m_max %g (초기 g %.2f, 연결 확률 %.3f)"
+              % (p["tau_pre"], p["eta"], p["beta"], p["m_max"], c.kc_good_bad_food_weight, sp))
+
     def _build_hypothalamus_circuit(self):
         """시상하부 회로: Energy Sensors → Hunger/Satiety (이중 센서 방식)"""
         print("  Building Hypothalamus circuit (Dual Sensor)...")
@@ -9027,20 +9061,24 @@ class ForagerBrain:
         self._create_static_synapse(
             "food_eye_r_to_kc_r", self.food_eye_right, self.kc_right,
             self.config.kc_food_eye_weight * _kfs, sparsity=self.config.kc_food_eye_sparsity)
-        # good_food_eye → KC
-        self._create_static_synapse(
-            "good_food_eye_l_to_kc_l", self.good_food_eye_left, self.kc_left,
-            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
-        self._create_static_synapse(
-            "good_food_eye_r_to_kc_r", self.good_food_eye_right, self.kc_right,
-            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
-        # bad_food_eye → KC
-        self._create_static_synapse(
-            "bad_food_eye_l_to_kc_l", self.bad_food_eye_left, self.kc_left,
-            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
-        self._create_static_synapse(
-            "bad_food_eye_r_to_kc_r", self.bad_food_eye_right, self.kc_right,
-            self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+        if getattr(self.config, "kc_type_oja", False):
+            # E160: 종류 입력 4집단을 망 안 Oja 경쟁 가소성으로(같은 순서·같은 연결 생성·같은 초기 g — 정적 판과 연결이 같다)
+            self._create_kc_type_oja_synapses()
+        else:
+            # good_food_eye → KC
+            self._create_static_synapse(
+                "good_food_eye_l_to_kc_l", self.good_food_eye_left, self.kc_left,
+                self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+            self._create_static_synapse(
+                "good_food_eye_r_to_kc_r", self.good_food_eye_right, self.kc_right,
+                self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+            # bad_food_eye → KC
+            self._create_static_synapse(
+                "bad_food_eye_l_to_kc_l", self.bad_food_eye_left, self.kc_left,
+                self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
+            self._create_static_synapse(
+                "bad_food_eye_r_to_kc_r", self.bad_food_eye_right, self.kc_right,
+                self.config.kc_good_bad_food_weight, sparsity=self.config.kc_good_bad_food_sparsity)
         # E121: 좌우 공통(bilateral) KC 입력 배율 — 0 이면 KC 가 좌/우 눈 입력만 받는다(최소 회로 구조). 연결은 그대로 만든다(난수 소비 불변).
         _kbs = float(getattr(self.config, "kc_bilateral_scale", 1.0))
         # it_food_category → KC (bilateral)
