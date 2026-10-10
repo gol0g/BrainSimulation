@@ -765,6 +765,6 @@ Model ready! Total: 28,323 neurons
 [E170 자극] variant=agree side=left good L/R 0.90/0.00 bad L/R 0.00/0.90 food L/R 0.90/0.90
 [E170 자극] variant=agree side=right good L/R 0.00/0.90 bad L/R 0.90/0.00 food L/R 0.90/0.90
 [E146 변형] variant=agree vseed=0
-[E171 평가 진단] variant=agree side=left n=250 motor L/R 0.558843/0.626886 KC L/R 0.003795/0.004083
-[E171 평가 진단] variant=agree side=right n=250 motor L/R 0.631416/0.562557 KC L/R 0.004473/0.004430
-=> DECOMP mode=all mod=-0.3423 acc=100.0 off=-0.0077 pushed=8 kc_means[kc_l>l=149.5246 kc_l>r=149.4175 kc_r>l=149.7527 kc_r>r=149.0080]
+[E171 평가 진단] variant=agree side=left n=250 motor L/R 0.642678/0.641874 KC L/R 0.003795/0.004083
+[E171 평가 진단] variant=agree side=right n=250 motor L/R 0.649114/0.646746 KC L/R 0.004473/0.004430
+=> DECOMP mode=none mod=-0.0039 acc=0.0 off=-0.0040 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]

@@ -375,10 +375,10 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e171_run/forager_brain_CODE'
+make: Entering directory '/root/e171_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e171_run/forager_brain_CODE'
-[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.02_b0.3_b15.npz 검증 일치 — good_food_eye_l_to_kc_l=235550.12 bad_food_eye_l_to_kc_l=238795.59 good_food_eye_r_to_kc_r=238418.47 bad_food_eye_r_to_kc_r=237194.15
+make: Leaving directory '/root/e171_main_run/forager_brain_CODE'
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/kctype_oja_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=238728.37 bad_food_eye_l_to_kc_l=240220.07 good_food_eye_r_to_kc_r=238176.51 bad_food_eye_r_to_kc_r=237701.14
 Model ready! Total: 28,323 neurons
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
@@ -757,14 +757,12 @@ Building Forager Brain (28,323 neurons)...
     Reverse replay: 5 steps backward
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e171_run/forager_brain_CODE'
+make: Entering directory '/root/e171_main_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e171_run/forager_brain_CODE'
-[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.02_b0.3_b15.npz 검증 일치 — good_food_eye_l_to_kc_l=235550.12 bad_food_eye_l_to_kc_l=238795.59 good_food_eye_r_to_kc_r=238418.47 bad_food_eye_r_to_kc_r=237194.15
+make: Leaving directory '/root/e171_main_run/forager_brain_CODE'
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/kctype_oja_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=238728.37 bad_food_eye_l_to_kc_l=240220.07 good_food_eye_r_to_kc_r=238176.51 bad_food_eye_r_to_kc_r=237701.14
 Model ready! Total: 28,323 neurons
-[E170 자극] variant=agree side=left good L/R 0.90/0.00 bad L/R 0.00/0.90 food L/R 0.90/0.90
-[E170 자극] variant=agree side=right good L/R 0.00/0.90 bad L/R 0.90/0.00 food L/R 0.90/0.90
-[E146 변형] variant=agree vseed=0
-[E171 평가 진단] variant=agree side=left n=250 motor L/R 0.558843/0.626886 KC L/R 0.003795/0.004083
-[E171 평가 진단] variant=agree side=right n=250 motor L/R 0.631416/0.562557 KC L/R 0.004473/0.004430
-=> DECOMP mode=all mod=-0.3423 acc=100.0 off=-0.0077 pushed=8 kc_means[kc_l>l=149.5246 kc_l>r=149.4175 kc_r>l=149.7527 kc_r>r=149.0080]
+[E146 변형] variant=bad vseed=0
+[E171 평가 진단] variant=bad side=left n=250 motor L/R 0.636867/0.645061 KC L/R 0.005084/0.001721
+[E171 평가 진단] variant=bad side=right n=250 motor L/R 0.616227/0.630168 KC L/R 0.001648/0.004640
+=> DECOMP mode=none mod=+0.0144 acc=27.0 off=+0.0023 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]

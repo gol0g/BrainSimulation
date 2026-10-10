@@ -1,1 +1,11 @@
 [AB base rc=0] mod=-0.4783
+    [E171 평가 진단] variant=base side=left n=250 motor L/R 0.553954/0.637008 KC L/R 0.004287/0.001691
+    [E171 평가 진단] variant=base side=right n=250 motor L/R 0.653504/0.545219 KC L/R 0.001646/0.005044
+[AB agree rc=0] mod=-0.3423
+    [E171 평가 진단] variant=agree side=left n=250 motor L/R 0.558843/0.626886 KC L/R 0.003795/0.004083
+    [E171 평가 진단] variant=agree side=right n=250 motor L/R 0.631416/0.562557 KC L/R 0.004473/0.004430
+[none agree rc=0] mod=-0.0039
+    [E171 평가 진단] variant=agree side=left n=250 motor L/R 0.642678/0.641874 KC L/R 0.003795/0.004083
+    [E171 평가 진단] variant=agree side=right n=250 motor L/R 0.649114/0.646746 KC L/R 0.004473/0.004430
+  기대: AB base mod=-0.4783 · AB agree mod=-0.3423 · none agree mod=-0.0039(E170 경로 검사), 진단 줄 2개 n=250
+[E171 경로 검사] 종료

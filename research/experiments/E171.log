@@ -1,0 +1,35 @@
+=== E171 실행: 2026-10-10T07:56:14Z ===
+커맨드: bash scripts/e171_main.sh
+---
+  e171 b10 AB base: => mod -0.6086 진단 2
+  e171 b10 AB bad: => mod +0.6558 진단 2
+  e171 b10 AB agree: => mod -0.5916 진단 2
+  e171 b10 none base: => mod +0.0080 진단 2
+  e171 b10 none bad: => mod +0.0144 진단 2
+  e171 b10 none agree: => mod -0.0074 진단 2
+  e171 b11 AB base: => mod -0.6068 진단 2
+  e171 b11 AB bad: => mod +0.6522 진단 2
+  e171 b11 AB agree: => mod -0.6045 진단 2
+  e171 b11 none base: => mod +0.0107 진단 2
+  e171 b11 none bad: => mod +0.0189 진단 2
+  e171 b11 none agree: => mod -0.0020 진단 2
+  e171 b12 AB base: => mod -0.6136 진단 2
+  e171 b12 AB bad: => mod +0.6637 진단 2
+  e171 b12 AB agree: => mod -0.5904 진단 2
+  e171 b12 none base: => mod +0.0008 진단 2
+  e171 b12 none bad: => mod +0.0108 진단 2
+  e171 b12 none agree: => mod -0.0047 진단 2
+  e171 b13 AB base: => mod -0.5875 진단 2
+  e171 b13 AB bad: => mod +0.6653 진단 2
+  e171 b13 AB agree: => mod -0.5671 진단 2
+  e171 b13 none base: => mod +0.0227 진단 2
+  e171 b13 none bad: => mod +0.0142 진단 2
+  e171 b13 none agree: => mod +0.0018 진단 2
+  e171 b14 AB base: => mod -0.6101 진단 2
+  e171 b14 AB bad: => mod +0.6596 진단 2
+  e171 b14 AB agree: => mod -0.5657 진단 2
+  e171 b14 none base: => mod +0.0119 진단 2
+  e171 b14 none bad: => mod +0.0212 진단 2
+  e171 b14 none agree: => mod +0.0008 진단 2
+[E171] 전체 루프 종료
+=== 종료코드 0 ===
