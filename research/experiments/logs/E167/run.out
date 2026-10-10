@@ -6,3 +6,5 @@
       - [~] INV-A6 evaluate 상태 정규화 (사유: 최소 회로 평가는 시행마다 무자극 gap 600스텝 후 제시 — E136·E137 과 같음)
 [게이트] 통과
 [실행] E167 → 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/E167.log
+[실행] 완료(rc=0), 로그 85 줄
+[다음] 결과를 research/experiments/E167.md 에 기록하고 hypotheses/·current-state.md 를 갱신하라(P9).

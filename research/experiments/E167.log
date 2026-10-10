@@ -1,4 +1,85 @@
 === E167 실행: 2026-10-10T05:16:44Z ===
 커맨드: bash scripts/e167_main.sh
 ---
-  e167 dev w78: 
+  e167 dev w78: => 가지치기 후 같은 위치: 일치형 0.792 불일치형 0.835
+  e167 N learn w78 t600: => 같은 위치 몫 0.0272 같은 위치 몫 0.0576 최대 |차| 0.00e+00 || train_lbal=45.9 novel_lbal=54.7 
+  e167 N frozen w78 t600: => 같은 위치 몫 0.0272 같은 위치 몫 0.0576 최대 |차| 0.00e+00 || train_lbal=51.6 novel_lbal=64.5 
+  e167 N learn w78 t601: => 같은 위치 몫 0.0272 같은 위치 몫 0.0576 최대 |차| 0.00e+00 || train_lbal=39.7 novel_lbal=59.3 
+  e167 N frozen w78 t601: => 같은 위치 몫 0.0272 같은 위치 몫 0.0576 최대 |차| 0.00e+00 || train_lbal=51.6 novel_lbal=64.5 
+  e167 dev w79: => 가지치기 후 같은 위치: 일치형 0.865 불일치형 0.912
+  e167 N learn w79 t600: => 같은 위치 몫 0.0279 같은 위치 몫 0.0565 최대 |차| 0.00e+00 || train_lbal=35.8 novel_lbal=52.9 
+  e167 N frozen w79 t600: => 같은 위치 몫 0.0279 같은 위치 몫 0.0565 최대 |차| 0.00e+00 || train_lbal=25.4 novel_lbal=38.9 
+  e167 N learn w79 t601: => 같은 위치 몫 0.0279 같은 위치 몫 0.0565 최대 |차| 0.00e+00 || train_lbal=35.8 novel_lbal=51.2 
+  e167 N frozen w79 t601: => 같은 위치 몫 0.0279 같은 위치 몫 0.0565 최대 |차| 0.00e+00 || train_lbal=25.4 novel_lbal=38.9 
+  e167 dev w80: => 가지치기 후 같은 위치: 일치형 0.882 불일치형 0.890
+  e167 N learn w80 t600: => 같은 위치 몫 0.0271 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=78.7 novel_lbal=65.2 
+  e167 N frozen w80 t600: => 같은 위치 몫 0.0271 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=51.2 novel_lbal=78.3 
+  e167 N learn w80 t601: => 같은 위치 몫 0.0271 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=56.2 novel_lbal=61.0 
+  e167 N frozen w80 t601: => 같은 위치 몫 0.0271 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=51.2 novel_lbal=78.3 
+  e167 dev w81: => 가지치기 후 같은 위치: 일치형 0.835 불일치형 0.935
+  e167 N learn w81 t600: => 같은 위치 몫 0.0280 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=36.2 
+  e167 N frozen w81 t600: => 같은 위치 몫 0.0280 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=54.0 novel_lbal=38.8 
+  e167 N learn w81 t601: => 같은 위치 몫 0.0280 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=41.3 novel_lbal=35.8 
+  e167 N frozen w81 t601: => 같은 위치 몫 0.0280 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=54.0 novel_lbal=38.8 
+  e167 dev w82: => 가지치기 후 같은 위치: 일치형 0.877 불일치형 0.945
+  e167 N learn w82 t600: => 같은 위치 몫 0.0276 같은 위치 몫 0.0568 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=70.3 
+  e167 N frozen w82 t600: => 같은 위치 몫 0.0276 같은 위치 몫 0.0568 최대 |차| 0.00e+00 || train_lbal=64.8 novel_lbal=38.9 
+  e167 N learn w82 t601: => 같은 위치 몫 0.0276 같은 위치 몫 0.0568 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w82 t601: => 같은 위치 몫 0.0276 같은 위치 몫 0.0568 최대 |차| 0.00e+00 || train_lbal=64.8 novel_lbal=38.9 
+  e167 dev w83: => 가지치기 후 같은 위치: 일치형 0.823 불일치형 0.860
+  e167 N learn w83 t600: => 같은 위치 몫 0.0289 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=61.5 novel_lbal=54.0 
+  e167 N frozen w83 t600: => 같은 위치 몫 0.0289 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=87.5 novel_lbal=55.4 
+  e167 N learn w83 t601: => 같은 위치 몫 0.0289 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=55.1 
+  e167 N frozen w83 t601: => 같은 위치 몫 0.0289 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=87.5 novel_lbal=55.4 
+  e167 dev w84: => 가지치기 후 같은 위치: 일치형 0.820 불일치형 0.868
+  e167 N learn w84 t600: => 같은 위치 몫 0.0285 같은 위치 몫 0.0572 최대 |차| 0.00e+00 || train_lbal=45.2 novel_lbal=56.1 
+  e167 N frozen w84 t600: => 같은 위치 몫 0.0285 같은 위치 몫 0.0572 최대 |차| 0.00e+00 || train_lbal=45.2 novel_lbal=49.1 
+  e167 N learn w84 t601: => 같은 위치 몫 0.0285 같은 위치 몫 0.0572 최대 |차| 0.00e+00 || train_lbal=45.2 novel_lbal=29.8 
+  e167 N frozen w84 t601: => 같은 위치 몫 0.0285 같은 위치 몫 0.0572 최대 |차| 0.00e+00 || train_lbal=45.2 novel_lbal=49.1 
+  e167 dev w85: => 가지치기 후 같은 위치: 일치형 0.858 불일치형 0.887
+  e167 N learn w85 t600: => 같은 위치 몫 0.0284 같은 위치 몫 0.0574 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w85 t600: => 같은 위치 몫 0.0284 같은 위치 몫 0.0574 최대 |차| 0.00e+00 || train_lbal=35.6 novel_lbal=33.6 
+  e167 N learn w85 t601: => 같은 위치 몫 0.0284 같은 위치 몫 0.0574 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w85 t601: => 같은 위치 몫 0.0284 같은 위치 몫 0.0574 최대 |차| 0.00e+00 || train_lbal=35.6 novel_lbal=33.6 
+  e167 dev w86: => 가지치기 후 같은 위치: 일치형 0.637 불일치형 0.828
+  e167 N learn w86 t600: => 같은 위치 몫 0.0278 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=39.4 
+  e167 N frozen w86 t600: => 같은 위치 몫 0.0278 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=47.1 novel_lbal=61.4 
+  e167 N learn w86 t601: => 같은 위치 몫 0.0278 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=52.3 
+  e167 N frozen w86 t601: => 같은 위치 몫 0.0278 같은 위치 몫 0.0580 최대 |차| 0.00e+00 || train_lbal=47.1 novel_lbal=61.4 
+  e167 dev w87: => 가지치기 후 같은 위치: 일치형 0.623 불일치형 0.882
+  e167 N learn w87 t600: => 같은 위치 몫 0.0272 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=40.4 novel_lbal=48.5 
+  e167 N frozen w87 t600: => 같은 위치 몫 0.0272 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=86.2 novel_lbal=45.1 
+  e167 N learn w87 t601: => 같은 위치 몫 0.0272 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=38.8 novel_lbal=32.7 
+  e167 N frozen w87 t601: => 같은 위치 몫 0.0272 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=86.2 novel_lbal=45.1 
+  e167 dev w88: => 가지치기 후 같은 위치: 일치형 0.860 불일치형 0.960
+  e167 N learn w88 t600: => 같은 위치 몫 0.0283 같은 위치 몫 0.0585 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w88 t600: => 같은 위치 몫 0.0283 같은 위치 몫 0.0585 최대 |차| 0.00e+00 || train_lbal=56.9 novel_lbal=56.7 
+  e167 N learn w88 t601: => 같은 위치 몫 0.0283 같은 위치 몫 0.0585 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=55.1 
+  e167 N frozen w88 t601: => 같은 위치 몫 0.0283 같은 위치 몫 0.0585 최대 |차| 0.00e+00 || train_lbal=56.9 novel_lbal=56.7 
+  e167 dev w89: => 가지치기 후 같은 위치: 일치형 0.843 불일치형 0.940
+  e167 N learn w89 t600: => 같은 위치 몫 0.0276 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=61.8 novel_lbal=64.7 
+  e167 N frozen w89 t600: => 같은 위치 몫 0.0276 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=62.5 novel_lbal=70.0 
+  e167 N learn w89 t601: => 같은 위치 몫 0.0276 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=42.6 
+  e167 N frozen w89 t601: => 같은 위치 몫 0.0276 같은 위치 몫 0.0582 최대 |차| 0.00e+00 || train_lbal=62.5 novel_lbal=70.0 
+  e167 dev w90: => 가지치기 후 같은 위치: 일치형 0.745 불일치형 0.762
+  e167 N learn w90 t600: => 같은 위치 몫 0.0274 같은 위치 몫 0.0550 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w90 t600: => 같은 위치 몫 0.0274 같은 위치 몫 0.0550 최대 |차| 0.00e+00 || train_lbal=51.5 novel_lbal=44.7 
+  e167 N learn w90 t601: => 같은 위치 몫 0.0274 같은 위치 몫 0.0550 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w90 t601: => 같은 위치 몫 0.0274 같은 위치 몫 0.0550 최대 |차| 0.00e+00 || train_lbal=51.5 novel_lbal=44.7 
+  e167 dev w91: => 가지치기 후 같은 위치: 일치형 0.735 불일치형 0.887
+  e167 N learn w91 t600: => 같은 위치 몫 0.0278 같은 위치 몫 0.0575 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=66.5 
+  e167 N frozen w91 t600: => 같은 위치 몫 0.0278 같은 위치 몫 0.0575 최대 |차| 0.00e+00 || train_lbal=64.0 novel_lbal=45.7 
+  e167 N learn w91 t601: => 같은 위치 몫 0.0278 같은 위치 몫 0.0575 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=60.0 
+  e167 N frozen w91 t601: => 같은 위치 몫 0.0278 같은 위치 몫 0.0575 최대 |차| 0.00e+00 || train_lbal=64.0 novel_lbal=45.7 
+  e167 dev w92: => 가지치기 후 같은 위치: 일치형 0.932 불일치형 0.980
+  e167 N learn w92 t600: => 같은 위치 몫 0.0279 같은 위치 몫 0.0586 최대 |차| 0.00e+00 || train_lbal=50.0 novel_lbal=50.0 
+  e167 N frozen w92 t600: => 같은 위치 몫 0.0279 같은 위치 몫 0.0586 최대 |차| 0.00e+00 || train_lbal=41.1 novel_lbal=64.2 
+  e167 N learn w92 t601: => 같은 위치 몫 0.0279 같은 위치 몫 0.0586 최대 |차| 0.00e+00 || train_lbal=55.0 novel_lbal=50.0 
+  e167 N frozen w92 t601: => 같은 위치 몫 0.0279 같은 위치 몫 0.0586 최대 |차| 0.00e+00 || train_lbal=41.1 novel_lbal=64.2 
+  e167 dev w93: => 가지치기 후 같은 위치: 일치형 0.820 불일치형 0.920
+  e167 N learn w93 t600: => 같은 위치 몫 0.0287 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=36.5 novel_lbal=40.0 
+  e167 N frozen w93 t600: => 같은 위치 몫 0.0287 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=29.5 novel_lbal=50.9 
+  e167 N learn w93 t601: => 같은 위치 몫 0.0287 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=40.2 novel_lbal=45.0 
+  e167 N frozen w93 t601: => 같은 위치 몫 0.0287 같은 위치 몫 0.0579 최대 |차| 0.00e+00 || train_lbal=29.5 novel_lbal=50.9 
+[E167] 전체 루프 종료
+=== 종료코드 0 ===
