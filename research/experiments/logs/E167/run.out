@@ -1,0 +1,8 @@
+[게이트] E167 사전등록 검사
+  ! 선언된 불변식 이탈 4건 - 결과 해석에 반드시 명시하라:
+      - [~] INV-A3 d1_to_direct_weight = 20 (사유: 전체 모델 불변식 — 최소 회로에는 D1·direct 경로가 없다)
+      - [~] INV-A4 d1_inhibition = -400 (사유: 위와 같음)
+      - [~] INV-A5 direct_inhibition = -400 (사유: 템플릿 옛 값이며 최소 회로에는 해당 경로 없음)
+      - [~] INV-A6 evaluate 상태 정규화 (사유: 최소 회로 평가는 시행마다 무자극 gap 600스텝 후 제시 — E136·E137 과 같음)
+[게이트] 통과
+[실행] E167 → 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/E167.log
