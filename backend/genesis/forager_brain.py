@@ -2135,14 +2135,24 @@ class ForagerBrain:
 
         # E168: 보상 창 흔적의 망 안 차단 후보 — 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 연결. 보상으로 도파민 뉴런이 발화하는 동안
         # 망 스스로 KC 를 억제한다(호스트 A± 조작 없음). 기본 0 = 집단을 만들지 않음 = 이전 모델과 같다.
-        # 연결 난수(장치 초기화) 순서를 흐트리지 않도록 다른 모든 집단 생성 뒤(빌드 직전)에 만든다.
+        # 첫 판(장치 FixedProbability 초기화, 이름 'da_to_kc_inh_*', 빌드 직전 생성)은 다른 집단의 연결을 바꿨다 — E168 보정 첫 실행에서
+        # E153 종류 입력 적재 검사가 'good_food_eye_l_to_kc_l 연결이 저장본과 다르다'로 중단(2026-10-10). 장치 연결 초기화 난수는 생성 순서가 아니라
+        # 집단 정렬·병합 순서로 나뉘는 것으로 보인다. 그래서 연결 구조를 호스트의 지역 난수(전역 np.random 불사용)로 만들어 넣는다 — 장치 초기화
+        # 난수를 쓰지 않으므로 다른 집단의 연결은 바뀔 수 없다(경로 검사: 종류 입력 적재 검사·[사전] = 연결 없음).
         _dkw = float(getattr(self.config, "da_kc_inh_w", 0.0))
         if _dkw > 0.0:
             if getattr(self, "dopamine_neurons", None) is None or getattr(self, "kc_inh_left", None) is None:
                 raise RuntimeError("da_kc_inh_w > 0 은 도파민 뉴런과 KC 억제 뉴런이 필요하다")
             _dkp = float(getattr(self.config, "da_kc_inh_p", 0.2))
-            self._create_static_synapse("da_to_kc_inh_l", self.dopamine_neurons, self.kc_inh_left, _dkw, sparsity=_dkp)
-            self._create_static_synapse("da_to_kc_inh_r", self.dopamine_neurons, self.kc_inh_right, _dkw, sparsity=_dkp)
+            _drs = np.random.RandomState(16800 + int(getattr(self.config, "genn_seed", 0)))
+            for _sd, _post in (("l", self.kc_inh_left), ("r", self.kc_inh_right)):
+                _m = _drs.random_sample((int(self.config.n_dopamine), int(self.config.n_kc_inhibitory_per_side))) < _dkp
+                _pi, _qi = np.nonzero(_m)
+                _sg = self.model.add_synapse_population(
+                    "zz_da_to_kc_inh_%s" % _sd, "SPARSE", self.dopamine_neurons, _post,
+                    init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": _dkw})}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
             print(f"  [E168 도파민→KC억제] 도파민 뉴런 {self.config.n_dopamine} → KC 억제 뉴런 좌·우 "
                   f"{self.config.n_kc_inhibitory_per_side}, w={_dkw:.2f}, p={_dkp:.2f}")
 
