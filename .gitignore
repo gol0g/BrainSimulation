@@ -84,4 +84,13 @@ data/flywire/
 !research/experiments/logs/**/*.log
 
 # E102: 시행별 추적 원본(npz, 런당 수십 MB)은 올리지 않는다 — 요약 JSON 만 logs/E102/ 에 둔다
-research/experiments/traces/
+research/experiments/traces/**
+!research/experiments/traces/**/
+# 2026-10-11: 기준선 뇌의 입력 산출물(작음, 합계 약 6 MB)은 추적한다 — 잃으면 재형성의 비트 수준 비결정성 때문에 E162 이후 기준선을 정확히 되살릴 수 없다(2026-07 소실 전례).
+# 망 안 Oja 형성 가중치(E160 뇌 10~14·보정 뇌 15, E161 뇌 16~20)와 그 KC 발화율 파일. 초기 연결 스냅숏(E176/snap)은 시드로 정확 재생성되므로 제외.
+!research/experiments/traces/E160/kctype_oja_b*.npz
+!research/experiments/traces/E160/calib/oja_e0.02_b0.3_b15.npz
+!research/experiments/traces/E161/kctype_oja_b*.npz
+!research/experiments/traces/E161/rate_b*.npz
+!research/experiments/traces/E138/fix/rate_b*.npz
+!research/experiments/traces/E138/pathcheck/rate_b15.npz
