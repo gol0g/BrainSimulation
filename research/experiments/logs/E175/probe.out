@@ -1,0 +1,4 @@
+[I_ab=-500 rc=0] => KCCTX side=l off=54 on=55 ctx=0 keep=54 lost=0 conj=1 jac=0.9818 | side=r off=61 on=60 ctx=0 keep=60 lost=1 conj=0 jac=0.9836 | ctx_i=0.00 | KC 발화 합 good 끔 11591 켬 11598 · 맥락 단독 6580 · 기준선 32924 | n_pres=10 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=-500.00 연합 결합 발화 끔 20000 켬 20000
+[I_ab=-2000 rc=0] => KCCTX side=l off=54 on=55 ctx=0 keep=54 lost=0 conj=1 jac=0.9818 | side=r off=61 on=60 ctx=0 keep=60 lost=1 conj=0 jac=0.9836 | ctx_i=0.00 | KC 발화 합 good 끔 11591 켬 11598 · 맥락 단독 6580 · 기준선 32924 | n_pres=10 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=-2000.00 연합 결합 발화 끔 20000 켬 20000
+[I_ab=-8000 rc=0] => KCCTX side=l off=55 on=55 ctx=5 keep=55 lost=0 conj=0 jac=1.0000 | side=r off=61 on=61 ctx=5 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 11531 켬 11033 · 맥락 단독 6020 · 기준선 32943 | n_pres=10 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=-8000.00 연합 결합 발화 끔 20000 켬 0
+[E175 프로브] 종료

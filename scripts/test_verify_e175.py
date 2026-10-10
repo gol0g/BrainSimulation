@@ -27,14 +27,14 @@ def rows(bad_rule=False):
     return R
 
 
-def run(eoff=-3000, eon=3000, sp_off=0, non=1500, refl="0.0000→0.0000", nld=2, bad_rule=False, on_line=True, off_line=False, miss=False):
+def run(eoff=-3000, eon=3000, sp_off=900, non=1500, refl="0.0000→0.0000", nld=2, bad_rule=False, on_line=True, off_line=False, miss=False):
     f = lambda x: "%+.4f" % (x / 1e4)
     with tempfile.TemporaryDirectory() as td:
         for d in (("logs", "E175"), ("traces", "E175")):
             os.makedirs(os.path.join(td, *d))
         w = lambda p, s: open(os.path.join(td, *p), "w", encoding="utf-8").write(s)
         for b in V.BRAINS:
-            w(("logs", "E175", "kcctx_b%d.log" % b), "x\n=> KCCTX side=l off=60 on=80 ctx=3 | ctx_i=0.00 | KC 발화 합 good 끔 500 켬 450 · 맥락 단독 40 · 기준선 300 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=2.00 연합 결합 발화 끔 %d 켬 700\n" % (sp_off if b == 12 else 300))
+            w(("logs", "E175", "kcctx_b%d.log" % b), "x\n=> KCCTX side=l off=60 on=80 ctx=3 | ctx_i=0.00 | KC 발화 합 good 끔 500 켬 450 · 맥락 단독 40 · 기준선 300 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=2.00 연합 결합 발화 끔 %d 켬 300\n" % (sp_off if b == 12 else 900))
             if miss and b == 14:
                 continue
             w(("logs", "E175", "train_b%d.log" % b), LDL * nld + "[맥락 과제] bicond frac=0.50\n[맥락 과제] 시행 3000 중 맥락 켬 %d\n" % (non if b == 11 else 1500)
@@ -54,7 +54,7 @@ def run(eoff=-3000, eon=3000, sp_off=0, non=1500, refl="0.0000→0.0000", nld=2,
 ok_all = True
 for name, kw, want in (("획득", {}, "획득(H097)"), ("요소식", {"eoff": -2000, "eon": -2000}, "요소식(H097-null)"),
                        ("부분 켬만", {"eoff": -500, "eon": 3000}, "부분(H097-partial)"), ("차 0.10 정확 → 보류", {"eoff": -500, "eon": 500}, "보류"),
-                       ("발화 합 켬 ≤ 끔", {"sp_off": 700}, "보류(조작검증 실패)"), ("맥락 켬 1,700", {"non": 1700}, "보류(조작검증 실패)"),
+                       ("침묵 안 됨(켬 = 끔)", {"sp_off": 300}, "보류(조작검증 실패)"), ("맥락 켬 1,700", {"non": 1700}, "보류(조작검증 실패)"),
                        ("반사 변함", {"refl": "0.0000→1.0000"}, "보류(조작검증 실패)"), ("적재 1줄", {"nld": 1}, "보류(조작검증 실패)"),
                        ("규칙 불일치 1시행", {"bad_rule": True}, "보류(조작검증 실패)"), ("켬 평가 줄 없음", {"on_line": False}, "보류(조작검증 실패)"),
                        ("끔 평가에 맥락 줄", {"off_line": True}, "보류(조작검증 실패)"), ("결측", {"miss": True}, "보류(결측")):

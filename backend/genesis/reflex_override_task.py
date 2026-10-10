@@ -142,8 +142,8 @@ def ctx_apply(brain, on, args):
         set_ctx(brain, args.ctx_i if on else 0.0)
     if args.ctx_inh_i > 0:
         set_ctx_inh(brain, args.ctx_inh_i if on else 0.0)
-    if args.ctx_ab_i > 0:
-        set_ctx_ab(brain, args.ctx_ab_i if on else 0.0)
+    if args.ctx_ab_i != 0:
+        set_ctx_ab(brain, args.ctx_ab_i if on else 0.0)   # E175 정정 1: 음수 = 침묵(assoc_binding 은 맥락 없이도 불응기 한계로 포화)
 
 
 def measure_offset(brain, obs, nh, n=20, steps=5):
@@ -388,7 +388,8 @@ def main():
                     help="맥락 의존 규칙(E174): 맥락 켬 때 KC 억제 뉴런 맥락 부분집합에 더하는 전류. 0 = 없음(이전 모델 — 부분집합도 만들지 않음)")
     ap.add_argument("--ctx-inh-frac", type=float, default=0.1, help="E174: 맥락 부분집합 비율(쪽마다 KC 억제 뉴런 중, 호스트 지역 난수 17400 + genn_seed)")
     ap.add_argument("--ctx-ab-i", type=float, default=0.0,
-                    help="맥락 의존 규칙(E175): 맥락 켬 때 assoc_binding(KC 양측 입력 집단) Ioffset 전류. 0 = 없음(이전 모델 — 동적화도 안 함)")
+                    help="맥락 의존 규칙(E175): 맥락 켬 때 assoc_binding(KC 양측 입력 집단) Ioffset 전류. 0 = 없음(이전 모델 — 동적화도 안 함). "
+                         "정정 1: assoc_binding 은 맥락 없이도 포화(1/3 스파이크/스텝)라 양수는 무효 — 음수(침묵)로 쓴다")
     ap.add_argument("--eval-ctx", action="store_true", help="분해(이식) 평가를 맥락 켬(--ctx-i·--ctx-inh-i·--ctx-ab-i)으로. 기본 끔")
     ap.add_argument("--kc-rw-diag", action="store_true",
                     help="E168(읽기 전용): 학습 중 결정 단계(3처리 끝)·보상 창(보상 시행·처벌 시행) KC 발화율 평균을 출력. 난수 소비 없음")
@@ -482,9 +483,9 @@ def main():
     cfg.da_kc_inh_w, cfg.da_kc_inh_p = float(args.da_kc_inh), float(args.da_kc_inh_p)   # E168: 0 이면 연결 없음(이전 모델)
     cfg.ctx_kc_dynamic = bool(args.ctx_i > 0)   # 맥락 입력(E173): KC Ioffset 동적화 — 0 이면 이전 모델
     cfg.ctx_inh_frac = float(args.ctx_inh_frac) if args.ctx_inh_i > 0 else 0.0   # 맥락 입력(E174): 0 이면 부분집합 없음(이전 모델)
-    cfg.ctx_ab_dynamic = bool(args.ctx_ab_i > 0)   # 맥락 입력(E175): assoc_binding Ioffset 동적화 — 0 이면 이전 모델
-    if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_i <= 0 and args.ctx_inh_i <= 0 and args.ctx_ab_i <= 0:
-        raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-i·--ctx-inh-i·--ctx-ab-i 중 하나 > 0 이 필요하다")
+    cfg.ctx_ab_dynamic = bool(args.ctx_ab_i != 0)   # 맥락 입력(E175): assoc_binding Ioffset 동적화 — 0 이면 이전 모델(정정 1: 음수 허용)
+    if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_i <= 0 and args.ctx_inh_i <= 0 and args.ctx_ab_i == 0:
+        raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-i > 0·--ctx-inh-i > 0·--ctx-ab-i ≠ 0 중 하나가 필요하다")
     if args.rw_da_reset or args.offset_steps != 5:
         print("[구현 점검] rw_da_reset=%s offset_steps=%d (외부 검토 2026-10-09 ①·③)" % (bool(args.rw_da_reset), args.offset_steps))
     if args.no_reward:

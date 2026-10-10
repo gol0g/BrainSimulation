@@ -67,7 +67,7 @@ def main():
                     e = rd("logs", "E175", "ev_b%d_%s_%s.log" % (b, w, c))
                     M[(w, c)] = mod_of(e)
                     ev_ok &= nload(e) >= 1 and (("[맥락 평가]" in e) == (c == "on"))
-            okb = (k_on > k_off and ntr == 3000 and 1350 <= non <= 1650 and refl_ok and nload(t) >= 2 and len(R) == 3000
+            okb = (k_on < k_off and ntr == 3000 and 1350 <= non <= 1650 and refl_ok and nload(t) >= 2 and len(R) == 3000
                    and tot > 0 and good == tot and num <= 1e-3 * den and prer <= 1e-3 and ev_ok)
             ok &= okb
             eo = M[("learn", "off")] - M[("none", "off")]; en = M[("learn", "on")] - M[("none", "on")]

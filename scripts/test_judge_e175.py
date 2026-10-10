@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""judge_e175.py 합성 시험(judge_e173·e175 시험을 옮김 — 조작검증 지표만 연합 결합 발화)(조건 1): 획득·요소식·부분(켬만·끔만)·보류, 경계(e ±0.10 정확, 차 0.10 정확), 조작검증 실패 9종, 결측, bicond_stats(맥락별 규칙), 줄·원 로그 파싱.
+"""judge_e175.py 합성 시험(judge_e173·e174 시험을 옮김 — 조작검증 지표만 연합 결합 발화)(조건 1): 획득·요소식·부분(켬만·끔만)·보류, 경계(e ±0.10 정확, 차 0.10 정확), 조작검증 실패 9종, 결측, bicond_stats(맥락별 규칙), 줄·원 로그 파싱.
 실행: python3 scripts/test_judge_e175.py (저장소 루트에서)"""
 import os
 import sys
@@ -10,7 +10,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import judge_e175 as J
 
-KL = "side=l off=60 on=80 ctx=3 keep=58 lost=2 conj=19 jac=0.7073 | side=r off=61 on=82 ctx=4 keep=60 lost=1 conj=18 jac=0.7229 | ctx_i=0.00 | KC 발화 합 good 끔 500 켬 450 · 맥락 단독 40 · 기준선 300 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=2.00 연합 결합 발화 끔 300 켬 900"
+KL = "side=l off=60 on=80 ctx=3 keep=58 lost=2 conj=19 jac=0.7073 | side=r off=61 on=82 ctx=4 keep=60 lost=1 conj=18 jac=0.7229 | ctx_i=0.00 | KC 발화 합 good 끔 500 켬 450 · 맥락 단독 40 · 기준선 300 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=2.00 연합 결합 발화 끔 900 켬 300"
 
 
 def build(eoff=-0.30, eon=0.30, per=None, bad=None):
@@ -29,9 +29,9 @@ def build(eoff=-0.30, eon=0.30, per=None, bad=None):
     if bad:
         kind, b = bad
         if kind == "kc_off":
-            K[b] = KL.replace("연합 결합 발화 끔 300 켬 900", "연합 결합 발화 끔 900 켬 900")
+            K[b] = KL.replace("연합 결합 발화 끔 900 켬 300", "연합 결합 발화 끔 900 켬 900")
         elif kind == "kc_on0":
-            K[b] = KL.replace("연합 결합 발화 끔 300 켬 900", "연합 결합 발화 끔 300 켬 0")
+            K[b] = KL.replace("연합 결합 발화 끔 900 켬 300", "연합 결합 발화 끔 300 켬 900")
         elif kind == "nctx_range":
             RAW[b] = (1700, 3000, True, 2); TRN[b]["nctx"] = 1700
         elif kind == "nctx_mismatch":

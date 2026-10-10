@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""E175 보정 선택 — 기준 logs/E175/criteria_fixed.txt 규칙. 원 로그 logs/E175/calib/kcctx_a{05,10,15,20,40,80}_b15.log 의 '=> KCCTX' 줄(맥락 = assoc_binding 흥분 I_ab — 이질 흥분).
-조작검증(각 I_ab): assoc_binding 발화 합 켬 > 끔. 선택 = 두 쪽 자카드 합 ≤ 1.60(1e-4 정수 ≤ 16000) · 두 쪽 반응 수 켬 ≤ 2 × 끔(on ≤ 2·off) ·
-두 쪽 맥락 단독 반응 ≤ 10 을 모두 만족하는 I_ab 중 가장 약한 것 = I_ab*. 자카드 nan 이면 그 칸 탈락. 없으면 'none'(본실험 미실행). 결과를 logs/E175/pick.txt 에 'IAB=<값>' 으로.
+"""E175 보정 선택 — 기준 logs/E175/criteria_fixed.txt 규칙. 원 로그 logs/E175/calib/kcctx_a{m5,m10,m20,m40,m80,m160}_b15.log 의 '=> KCCTX' 줄(정정 1: 맥락 = assoc_binding 침묵(음전류 I_ab) — 상시 이질 흥분 제거).
+조작검증(각 I_ab): assoc_binding 발화 합 켬 < 끔(침묵). 선택 = 두 쪽 자카드 합 ≤ 1.60(1e-4 정수 ≤ 16000) · 두 쪽 반응 수 켬 ≥ 0.5 × 끔(2·on ≥ off) ·
+두 쪽 맥락 단독 반응 ≤ 10 을 모두 만족하는 I_ab 중 가장 약한 것(|I_ab| 가장 작은 것) = I_ab*. 자카드 nan 이면 그 칸 탈락. 없으면 'none'(본실험 미실행). 결과를 logs/E175/pick.txt 에 'IAB=<값>' 으로.
 실행: python3 scripts/e175_pick.py (저장소 루트에서)"""
 import os
 import re
 import sys
 
 EXP = "research/experiments"
-GRID = (("05", 0.5), ("10", 1.0), ("15", 1.5), ("20", 2.0), ("40", 4.0), ("80", 8.0))
+GRID = (("m5", -5.0), ("m10", -10.0), ("m20", -20.0), ("m40", -40.0), ("m80", -80.0), ("m160", -160.0))
 SIDE = re.compile(r"side=([lr]) off=(\d+) on=(\d+) ctx=(\d+) keep=(\d+) lost=(\d+) conj=(\d+) jac=([0-9.na]+)")
-INH = re.compile(r"ctx_ab_i=([0-9.]+) 연합 결합 발화 끔 (\d+) 켬 (\d+)")
+INH = re.compile(r"ctx_ab_i=(-?[0-9.]+) 연합 결합 발화 끔 (\d+) 켬 (\d+)")
 
 
 def parse(t):
@@ -43,10 +43,10 @@ def pick(C):
         if c is None:
             man[tag] = cons[tag] = None
             continue
-        man[tag] = c["i_on"] > c["i_off"]
+        man[tag] = c["i_on"] < c["i_off"]
         jl, jr = jac4(c["l"]["jac"]), jac4(c["r"]["jac"])
         cons[tag] = (man[tag] and jl is not None and jr is not None and jl + jr <= 16000
-                     and all(c[s]["on"] <= 2 * c[s]["off"] and c[s]["ctx"] <= 10 for s in "lr"))
+                     and all(2 * c[s]["on"] >= c[s]["off"] and c[s]["ctx"] <= 10 for s in "lr"))
     sel = next((tag for tag, _ in GRID if cons.get(tag)), None)
     return sel, man, cons
 

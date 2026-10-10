@@ -373,27 +373,14 @@ Building Forager Brain (28,323 neurons)...
     Value population: 20 neurons
     Value→D1: 1.0 (gentle)
     Reverse replay: 5 steps backward
+  [맥락 입력] assoc_binding Ioffset 동적(맥락 = 연합 결합 집단 흥분 → KC 이질 흥분)
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e175_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e175_run/forager_brain_CODE'
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.02_b0.3_b15.npz 검증 일치 — good_food_eye_l_to_kc_l=235550.12 bad_food_eye_l_to_kc_l=238795.59 good_food_eye_r_to_kc_r=238418.47 bad_food_eye_r_to_kc_r=237194.15
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 -0.004 | 정답률 7.0% | **변조폭 +0.0228** (양수=반사방향, 음수=역전)
-[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30198 w=2.000; it_food_to_kc_r n=30087 w=2.000; assoc_edible_to_kc_l n=17996 w=2.000; assoc_edible_to_kc_r n=17893 w=2.000; wernicke_food_to_kc_l n=12063 w=3.000; wernicke_food_to_kc_r n=12011 w=3.000; ppc_goal_food_to_kc_l n=22595 w=2.000; ppc_goal_food_to_kc_r n=22545 w=2.000; social_mem_to_kc_l n=13642 w=1.500; social_mem_to_kc_r n=13499 w=1.500; assoc_bind_to_kc_l n=15159 w=2.000; assoc_bind_to_kc_r n=15019 w=2.000
-[E139] KC 계층 추적: 시냅스 역할 교차 36913 같은쪽 37022 비선택 16316 무활동 1409564 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/pathcheck/rate_b15.npz)
-[학습] 2ep 완료, 보상 134회 (탐색 주입 121회, ε=0.60)
-[판정경로] judge=exec 시행=200 abs_v_le_0.02=7 (3.5%) v정답_실행오답=0 v오답_실행정답=5 불일치율=2.5%
-=> KCTRACE 시행 200 보상 134 | A +311654.1 B -255641.3 C -47156.7 P -241441.6 | ΔD +761580.4 | share_B 0.000 B+/A 0.000 C-/A 0.151 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +503205 +258375 | 보상시행 e_same/e_cross -1.627
-=> KCTRACE2 탐색 A +92361.3 B -107293.5 C -50738.3 P -233720.4 | 탐욕 A +219292.8 B -148347.8 C +3581.7 P -7721.3 | 비선택 Δg 보상 +97635.0 처벌 -85786.4 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E175/pathcheck/tr_a_b15.npz
-=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -0.820 C/P 0.195 | 보상시행 e_da 같은쪽/교차 -1.627 e_end 같은쪽/교차 -1.627 | 보상창 motor 발화율 평균 보상(좌 1.0340 우 0.9965) 처벌(좌 1.0860 우 1.0792)
-[반사가중치] food_explore_motor_l   n=29853 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] food_explore_motor_r   n=29938 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_l   n=14896 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_r   n=15011 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=10.05947 변화율=54.3% | 평균 1.000→11.059 | std 0.0000→11.4878
-[D1가중치] food_to_d1_r   |Δ|평균=8.91180 변화율=55.5% | 평균 1.000→9.911 | std 0.0000→11.2044
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E175/pathcheck/w_a_b15.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -769,6 +756,7 @@ Building Forager Brain (28,323 neurons)...
     Value population: 20 neurons
     Value→D1: 1.0 (gentle)
     Reverse replay: 5 steps backward
+  [맥락 입력] assoc_binding Ioffset 동적(맥락 = 연합 결합 집단 흥분 → KC 이질 흥분)
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e175_run/forager_brain_CODE'
@@ -776,6 +764,4 @@ make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e175_run/forager_brain_CODE'
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.02_b0.3_b15.npz 검증 일치 — good_food_eye_l_to_kc_l=235550.12 bad_food_eye_l_to_kc_l=238795.59 good_food_eye_r_to_kc_r=238418.47 bad_food_eye_r_to_kc_r=237194.15
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.007 | 정답률 100.0% | **변조폭 -0.5094**
-=> 정답률 +93.0%p | **변조폭 변화 -0.5322** | 판정: 학습이 조향을 역전 방향으로 이동
+=> KCCTX side=l off=54 on=55 ctx=0 keep=54 lost=0 conj=1 jac=0.9818 | side=r off=61 on=60 ctx=0 keep=60 lost=1 conj=0 jac=0.9836 | ctx_i=0.00 | KC 발화 합 good 끔 11591 켬 11598 · 맥락 단독 6580 · 기준선 32924 | n_pres=10 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=-2000.00 연합 결합 발화 끔 20000 켬 20000

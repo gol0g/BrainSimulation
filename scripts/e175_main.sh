@@ -7,7 +7,7 @@ R=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild
 LOG="$R/research/experiments/E175.log"
 RAW="$R/research/experiments/logs/E175"; mkdir -p "$RAW"
 WD="$R/research/experiments/traces/E175"; mkdir -p "$WD"
-CI=$(grep -oE '^IAB=[0-9.]+' "$RAW/pick.txt" 2>/dev/null | cut -d= -f2)
+CI=$(grep -oE '^IAB=-?[0-9.]+' "$RAW/pick.txt" 2>/dev/null | cut -d= -f2)
 [ -n "$CI" ] || { echo "[E175] 보정 선택 없음(pick.txt: $(cat "$RAW/pick.txt" 2>/dev/null)) — 본실험 미실행"; exit 1; }
 source $R/scripts/cuda_env.sh >/dev/null 2>&1
 source /root/pygenn_wsl/bin/activate
