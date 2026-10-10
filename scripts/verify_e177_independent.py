@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""E176 독립 대조(verify_e173 을 옮김 — 조작검증 지표만 맥락 집단 발화) — judge_e176.py 를 쓰지 않고 뇌별 원 로그(logs/E176/kcctx_b*·train_b*·ev_b*)와 추적(traces/E176/tr_bc_b*)에서
-문자열 분해·정수 계산으로 다시 판정한다(E176.log 요약 줄은 읽지 않는다). 규칙은 logs/E176/criteria_fixed.txt.
-실행: python3 scripts/verify_e176_independent.py (저장소 루트에서)"""
+"""(E176 판으로부터 실험 번호만 바꿔 옮김 — 맥락 세기 w 4 고정) E177 독립 대조(verify_e173 을 옮김 — 조작검증 지표만 맥락 집단 발화) — judge_e177.py 를 쓰지 않고 뇌별 원 로그(logs/E177/kcctx_b*·train_b*·ev_b*)와 추적(traces/E177/tr_bc_b*)에서
+문자열 분해·정수 계산으로 다시 판정한다(E177.log 요약 줄은 읽지 않는다). 규칙은 logs/E177/criteria_fixed.txt.
+실행: python3 scripts/verify_e177_independent.py (저장소 루트에서)"""
 import os
 import sys
 
@@ -39,16 +39,16 @@ def main():
         ok = True
         res = {}
         for b in BRAINS:
-            k = rd("logs", "E176", "kcctx_b%d.log" % b)
+            k = rd("logs", "E177", "kcctx_b%d.log" % b)
             kl = [ln for ln in k.splitlines() if ln.startswith("=> KCCTX")][0]
             sp = kl.split("맥락 집단 발화 끔 ")[1]
             k_off = int(sp.split(" 켬 ")[0]); k_on = int(sp.split(" 켬 ")[1].split()[0])
-            t = rd("logs", "E176", "train_b%d.log" % b)
+            t = rd("logs", "E177", "train_b%d.log" % b)
             cl = [ln for ln in t.splitlines() if ln.startswith("[맥락 과제] 시행 ")][0]
             ntr = int(cl.split("시행 ")[1].split()[0]); non = int(cl.split("맥락 켬 ")[1].split()[0])
             refl = [ln for ln in t.splitlines() if ln.startswith("[반사가중치] good_food_to_motor_")]
             refl_ok = len(refl) == 2 and all("0.0000→0.0000" in ln for ln in refl)
-            R = np.load(os.path.join(EXP, "traces", "E176", "tr_bc_b%d.npz" % b))["rows"]
+            R = np.load(os.path.join(EXP, "traces", "E177", "tr_bc_b%d.npz" % b))["rows"]
             good = tot = 0
             for i in range(len(R)):
                 if R[i, 6] < 0:
@@ -64,7 +64,7 @@ def main():
             ev_ok = True
             for w in ("learn", "none"):
                 for c in ("off", "on"):
-                    e = rd("logs", "E176", "ev_b%d_%s_%s.log" % (b, w, c))
+                    e = rd("logs", "E177", "ev_b%d_%s_%s.log" % (b, w, c))
                     M[(w, c)] = mod_of(e)
                     ev_ok &= nload(e) >= 1 and (("[맥락 평가]" in e) == (c == "on"))
             okb = (k_off == 0 and k_on > 0 and ntr == 3000 and 1350 <= non <= 1650 and refl_ok and nload(t) >= 2 and len(R) == 3000
@@ -79,7 +79,7 @@ def main():
     acq = sum(eo <= -1000 and en >= 1000 for eo, en in res.values())
     elem = sum(abs(en - eo) < 1000 for eo, en in res.values())
     part = sum((en >= 1000 and eo > -1000) or (eo <= -1000 and en < 1000) for eo, en in res.values())
-    v = ("보류(조작검증 실패)" if not ok else "획득(H097)" if acq >= 4 else "요소식(H097-null)" if elem >= 4 else "부분(H097-partial)" if part >= 4 else "보류")
+    v = ("보류(조작검증 실패)" if not ok else "획득(H098)" if acq >= 4 else "요소식(H098-null)" if elem >= 4 else "부분(H098-partial)" if part >= 4 else "보류")
     print("조작검증 %s | 획득 %d/5 요소식 %d/5 부분 %d/5" % ("통과" if ok else "실패", acq, elem, part))
     print("독립 판정: %s" % v)
     return 0

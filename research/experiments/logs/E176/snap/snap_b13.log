@@ -377,6 +377,6 @@ Building Forager Brain (28,323 neurons)...
 Building model...
 make: Entering directory '/root/e176_run/forager_brain_CODE'
 make: Leaving directory '/root/e176_run/forager_brain_CODE'
-  [E176 초기 연결 스냅숏] 저장 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b15.npz — 희소 집단 790 개, 연결 4650731 개
+  [E176 초기 연결 스냅숏] 저장 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b13.npz — 희소 집단 790 개, 연결 4651845 개
 Model ready! Total: 28,323 neurons
-[E176] 초기 연결 스냅숏 저장 뒤 종료 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b15.npz
+[E176] 초기 연결 스냅숏 저장 뒤 종료 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b13.npz

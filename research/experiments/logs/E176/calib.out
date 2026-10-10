@@ -1,0 +1,10 @@
+[w=1 rc=0] => KCCTX side=l off=55 on=56 ctx=32 keep=55 lost=0 conj=1 jac=0.9821 | side=r off=61 on=62 ctx=36 keep=61 lost=0 conj=1 jac=0.9839 | ctx_i=0.00 | KC 발화 합 good 끔 46339 켬 51129 · 맥락 단독 31371 · 기준선 131533 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=1.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+[w=2 rc=0] => KCCTX side=l off=55 on=65 ctx=65 keep=55 lost=0 conj=8 jac=0.8462 | side=r off=61 on=71 ctx=66 keep=61 lost=0 conj=7 jac=0.8592 | ctx_i=0.00 | KC 발화 합 good 끔 46407 켬 57112 · 맥락 단독 37201 · 기준선 131512 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=2.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+[w=4 rc=0] => KCCTX side=l off=54 on=126 ctx=98 keep=54 lost=0 conj=45 jac=0.4286 | side=r off=61 on=125 ctx=102 keep=61 lost=0 conj=45 jac=0.4880 | ctx_i=0.00 | KC 발화 합 good 끔 46473 켬 75167 · 맥락 단독 51354 · 기준선 131551 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+[w=8 rc=0] => KCCTX side=l off=55 on=571 ctx=203 keep=55 lost=0 conj=355 jac=0.0963 | side=r off=61 on=512 ctx=201 keep=61 lost=0 conj=289 jac=0.1191 | ctx_i=0.00 | KC 발화 합 good 끔 46491 켬 200862 · 맥락 단독 102364 · 기준선 131304 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=8.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+w=1 맥락 집단 발화 끔 0 켬 160000(조작 ✓) | 좌 off 55 on 56 ctx 32 lost 0 conj 1 jac 0.9821 | 우 off 61 on 62 ctx 36 lost 0 conj 1 jac 0.9839 | 제약 -
+w=2 맥락 집단 발화 끔 0 켬 160000(조작 ✓) | 좌 off 55 on 65 ctx 65 lost 0 conj 8 jac 0.8462 | 우 off 61 on 71 ctx 66 lost 0 conj 7 jac 0.8592 | 제약 -
+w=4 맥락 집단 발화 끔 0 켬 160000(조작 ✓) | 좌 off 54 on 126 ctx 98 lost 0 conj 45 jac 0.4286 | 우 off 61 on 125 ctx 102 lost 0 conj 45 jac 0.4880 | 제약 -
+w=8 맥락 집단 발화 끔 0 켬 160000(조작 ✓) | 좌 off 55 on 571 ctx 203 lost 0 conj 355 jac 0.0963 | 우 off 61 on 512 ctx 201 lost 0 conj 289 jac 0.1191 | 제약 -
+선택: W=none
+[E176 보정] 종료

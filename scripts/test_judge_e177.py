@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""judge_e176.py 합성 시험(judge_e173 시험을 옮김 — 조작검증 지표만 맥락 집단 발화)(조건 1): 획득·요소식·부분(켬만·끔만)·보류, 경계(e ±0.10 정확, 차 0.10 정확), 조작검증 실패 9종, 결측, bicond_stats(맥락별 규칙), 줄·원 로그 파싱.
-실행: python3 scripts/test_judge_e176.py (저장소 루트에서)"""
+"""(E176 판으로부터 실험 번호만 바꿔 옮김 — 맥락 세기 w 4 고정) judge_e177.py 합성 시험(judge_e173 시험을 옮김 — 조작검증 지표만 맥락 집단 발화)(조건 1): 획득·요소식·부분(켬만·끔만)·보류, 경계(e ±0.10 정확, 차 0.10 정확), 조작검증 실패 9종, 결측, bicond_stats(맥락별 규칙), 줄·원 로그 파싱.
+실행: python3 scripts/test_judge_e177.py (저장소 루트에서)"""
 import os
 import sys
 import tempfile
@@ -8,7 +8,7 @@ import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import judge_e176 as J
+import judge_e177 as J
 
 KL = "side=l off=60 on=80 ctx=3 keep=58 lost=2 conj=19 jac=0.7073 | side=r off=61 on=82 ctx=4 keep=60 lost=1 conj=18 jac=0.7229 | ctx_i=0.00 | KC 발화 합 good 끔 500 켬 700 · 맥락 단독 40 · 기준선 300 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=2.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 2400"
 
@@ -65,15 +65,15 @@ def chk(name, data, want):
     print("%-34s 기대 %-22s → %-30s %s" % (name, want[:22], got[:30], "✓" if good else "✗ %s" % c))
 
 
-chk("획득(e_off −0.30·e_on +0.30)", build(), "획득(H097)")
-chk("경계 e_off −0.10·e_on +0.10 정확 → 획득", build(eoff=-0.10, eon=0.10), "획득(H097)")
-chk("e_on +0.0999 → 획득 아님 → 부분(끔만)", build(eoff=-0.30, eon=0.0999), "부분(H097-partial)")
-chk("요소식(둘 다 −0.20)", build(eoff=-0.20, eon=-0.20), "요소식(H097-null)")
-chk("요소식 경계 차 0.0999", build(eoff=-0.05, eon=0.0499), "요소식(H097-null)")
+chk("획득(e_off −0.30·e_on +0.30)", build(), "획득(H098)")
+chk("경계 e_off −0.10·e_on +0.10 정확 → 획득", build(eoff=-0.10, eon=0.10), "획득(H098)")
+chk("e_on +0.0999 → 획득 아님 → 부분(끔만)", build(eoff=-0.30, eon=0.0999), "부분(H098-partial)")
+chk("요소식(둘 다 −0.20)", build(eoff=-0.20, eon=-0.20), "요소식(H098-null)")
+chk("요소식 경계 차 0.0999", build(eoff=-0.05, eon=0.0499), "요소식(H098-null)")
 chk("차 0.10 정확 → 요소식 아님 → 보류", build(eoff=-0.05, eon=0.05), "보류")
-chk("부분 켬만(e_on +0.30·e_off −0.05)", build(eoff=-0.05, eon=0.30), "부분(H097-partial) — 한 맥락만(켬만 5")
-chk("부분 끔만(e_off −0.30·e_on 0.00)", build(eoff=-0.30, eon=0.0), "부분(H097-partial) — 한 맥락만(켬만 0")
-chk("획득 4/5", build(per={14: (-0.05, 0.30)}), "획득(H097)")
+chk("부분 켬만(e_on +0.30·e_off −0.05)", build(eoff=-0.05, eon=0.30), "부분(H098-partial) — 한 맥락만(켬만 5")
+chk("부분 끔만(e_off −0.30·e_on 0.00)", build(eoff=-0.30, eon=0.0), "부분(H098-partial) — 한 맥락만(켬만 0")
+chk("획득 4/5", build(per={14: (-0.05, 0.30)}), "획득(H098)")
 chk("획득 3/5·요소식 2 → 부분 2 + 보류", build(per={13: (-0.2, -0.2), 14: (-0.2, -0.2)}), "보류")
 for kind, b in (("kc_off", 10), ("kc_on0", 11), ("nctx_range", 12), ("nctx_mismatch", 13), ("agree", 14), ("no_col", 10),
                 ("res", 11), ("refl", 12), ("load", 13), ("ev_noctx", 14), ("ev_ctx_in_off", 10)):
@@ -100,17 +100,17 @@ ok_all &= g and g2 and g3 and g4
 print("%-34s → %s" % ("bicond_stats(맥락별 규칙·불일치·열 없음)", "✓" if (g and g2 and g3 and g4) else "✗ %s" % st))
 # 파싱(load)
 with tempfile.TemporaryDirectory() as td:
-    for d_ in (("logs", "E176"), ("traces", "E176")):
+    for d_ in (("logs", "E177"), ("traces", "E177")):
         os.makedirs(os.path.join(td, *d_))
-    open(os.path.join(td, "E176.log"), "w", encoding="utf-8").write(
-        "  e176 kcctx b10: => KCCTX %s\n  e176 train b10: => 사전 +0.0080 사후 -0.1000 보상 2000 || 맥락 켬 1490 || 적재 2 || x\n"
-        "  e176 b10 learn on: => mod +0.3000\n" % KL)
-    open(os.path.join(td, "logs", "E176", "train_b10.log"), "w", encoding="utf-8").write(
+    open(os.path.join(td, "E177.log"), "w", encoding="utf-8").write(
+        "  e177 kcctx b10: => KCCTX %s\n  e177 train b10: => 사전 +0.0080 사후 -0.1000 보상 2000 || 맥락 켬 1490 || 적재 2 || x\n"
+        "  e177 b10 learn on: => mod +0.3000\n" % KL)
+    open(os.path.join(td, "logs", "E177", "train_b10.log"), "w", encoding="utf-8").write(
         "[E153 종류 입력 적재] k 검증 일치 — x\n[맥락 과제] bicond frac=0.50\n[맥락 과제] 시행 3000 중 맥락 켬 1490\n"
         "[반사가중치] good_food_to_motor_l   n=1 w_mean 0.0000→0.0000 (x)\n[반사가중치] good_food_to_motor_r   n=1 w_mean 0.0000→0.0000 (x)\n[E153 종류 입력 적재] k 검증 일치 — y\n")
-    open(os.path.join(td, "logs", "E176", "ev_b10_learn_on.log"), "w", encoding="utf-8").write(
+    open(os.path.join(td, "logs", "E177", "ev_b10_learn_on.log"), "w", encoding="utf-8").write(
         "[E153 종류 입력 적재] k 검증 일치 — x\n=> DECOMP mode=all mod=+0.3000\n[맥락 평가] ctx=켬 level=0.90\n")
-    np.savez_compressed(os.path.join(td, "traces", "E176", "tr_bc_b10.npz"), rows=R)
+    np.savez_compressed(os.path.join(td, "traces", "E177", "tr_bc_b10.npz"), rows=R)
     J.EXP = td
     K, TRN, EV, S, RAW, EL = J.load()
 g = (K[10].startswith("side=l off=60") and TRN[10] == {"pre": 0.008, "post": -0.1, "rew": 2000, "nctx": 1490, "load": 2}

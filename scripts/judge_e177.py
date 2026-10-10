@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""E176 판정 — 맥락 전용 입력(초기 연결 스냅숏 + zz_ctx → KC)으로 쌍조건 변별(맥락 끔 good → 교차, 켬 → 같은 쪽)을 배우는가. judge_e173.py 를 실험 번호·조작검증(맥락 집단 발화)만 바꿔 옮김. 기준 logs/E176/criteria_fixed.txt.
+"""(E176 판으로부터 실험 번호만 바꿔 옮김 — 맥락 세기 w 4 고정) E177 판정 — 맥락 전용 입력(초기 연결 스냅숏 + zz_ctx → KC)으로 쌍조건 변별(맥락 끔 good → 교차, 켬 → 같은 쪽)을 배우는가. judge_e173.py 를 실험 번호·조작검증(맥락 집단 발화)만 바꿔 옮김. 기준 logs/E177/criteria_fixed.txt.
 뇌 10~14 자료(kcctx 5 + 학습 5 + 평가 20)가 다 모이기 전에는 수치를 출력하지 않는다.
-요약 줄(E176.log): "  e176 kcctx b10: => KCCTX ..." / "  e176 train b10: => 사전 .. 사후 .. 보상 N || 맥락 켬 n || 적재 K || ..." / "  e176 b10 learn on: => mod +0.1000".
+요약 줄(E177.log): "  e177 kcctx b10: => KCCTX ..." / "  e177 train b10: => 사전 .. 사후 .. 보상 N || 맥락 켬 n || 적재 K || ..." / "  e177 b10 learn on: => mod +0.1000".
 e_off = m(learn off) − m(none off), e_on = m(learn on) − m(none on). 1e-4 정수.
-판정(적용 순서): 조작검증 실패 → 보류. 획득(H097) e_off ≤ −0.10 이면서 e_on ≥ +0.10 ≥ 4/5 → 요소식(H097-null) |e_on − e_off| < 0.10 ≥ 4/5
-→ 부분(H097-partial) 한 맥락만(e_on ≥ +0.10·e_off > −0.10, 또는 e_off ≤ −0.10·e_on < +0.10) ≥ 4/5 → 그 밖 보류.
+판정(적용 순서): 조작검증 실패 → 보류. 획득(H098) e_off ≤ −0.10 이면서 e_on ≥ +0.10 ≥ 4/5 → 요소식(H098-null) |e_on − e_off| < 0.10 ≥ 4/5
+→ 부분(H098-partial) 한 맥락만(e_on ≥ +0.10·e_off > −0.10, 또는 e_off ≤ −0.10·e_on < +0.10) ≥ 4/5 → 그 밖 보류.
 조작검증(뇌마다, 모두): kcctx 맥락 전용 집단 발화 끔 0·켬 > 0 / 학습 '[맥락 과제] 시행 3000 중 맥락 켬 n' 1,350~1,650 / 추적 3,000행·열 37 / 맥락별 보상-규칙 일치 1.000 /
 동결 잔차 ≤ 1e-3·도파민 전 ≤ 1e-3 / 반사 0→0 / 학습 적재 줄 ≥ 2 / 평가 적재 줄 ≥ 1 / 켬 평가에만 '[맥락 평가]' 줄.
-실행: python3 scripts/judge_e176.py (저장소 루트에서)"""
+실행: python3 scripts/judge_e177.py (저장소 루트에서)"""
 import os
 import re
 import sys
@@ -18,9 +18,9 @@ EXP = "research/experiments"
 BRAINS = (10, 11, 12, 13, 14)
 R20 = (1.0 - 1.0 / 12.0) ** 20
 EVS = (("learn", "off"), ("learn", "on"), ("none", "off"), ("none", "on"))
-TT = re.compile(r"^\s*e176 train b(\d+): => 사전 ([-+0-9.]+) 사후 ([-+0-9.]+) 보상 (\d+) \|\| 맥락 켬 (\d+) \|\| 적재 (\d+)")
-TE = re.compile(r"^\s*e176 b(\d+) (learn|none) (off|on): => mod ([-+0-9.]+)")
-TK = re.compile(r"^\s*e176 kcctx b(\d+): => KCCTX (.*)$")
+TT = re.compile(r"^\s*e177 train b(\d+): => 사전 ([-+0-9.]+) 사후 ([-+0-9.]+) 보상 (\d+) \|\| 맥락 켬 (\d+) \|\| 적재 (\d+)")
+TE = re.compile(r"^\s*e177 b(\d+) (learn|none) (off|on): => mod ([-+0-9.]+)")
+TK = re.compile(r"^\s*e177 kcctx b(\d+): => KCCTX (.*)$")
 RW = re.compile(r"^\[반사가중치\] good_food_to_motor_([lr])\s+n=\d+ w_mean ([-0-9.]+)→([-0-9.]+)")
 LD = re.compile(r"^\[E153 종류 입력 적재\].*검증 일치")
 CTXN = re.compile(r"^\[맥락 과제\] 시행 (\d+) 중 맥락 켬 (\d+)", re.M)
@@ -89,11 +89,11 @@ def judge(K, TRN, EV, S, RAW, EL):
     if not ok:
         v = "보류(조작검증 실패)"
     elif len(acq) >= 4:
-        v = "획득(H097) — 같은 자극의 정답을 맥락에 따라 반대로 배운다(맥락 의존 규칙)"
+        v = "획득(H098) — 같은 자극의 정답을 맥락에 따라 반대로 배운다(맥락 의존 규칙)"
     elif len(elem) >= 4:
-        v = "요소식(H097-null) — 맥락을 무시하고 두 규칙이 겹친다"
+        v = "요소식(H098-null) — 맥락을 무시하고 두 규칙이 겹친다"
     elif len(p_on) + len(p_off) >= 4:
-        v = "부분(H097-partial) — 한 맥락만(켬만 %d·끔만 %d)" % (len(p_on), len(p_off))
+        v = "부분(H098-partial) — 한 맥락만(켬만 %d·끔만 %d)" % (len(p_on), len(p_off))
     else:
         v = "보류"
     return checks, {"eoff": eoff, "eon": eon, "acq": acq, "elem": elem, "p_on": p_on, "p_off": p_off, "ok": ok, "verdict": v, "m": m}
@@ -114,7 +114,7 @@ def report(checks, res, K=None, TRN=None):
 def load():
     K, TRN, EV, S, RAW, EL = {}, {}, {}, {}, {}, {}
     try:
-        for ln in open(os.path.join(EXP, "E176.log"), encoding="utf-8", errors="replace"):
+        for ln in open(os.path.join(EXP, "E177.log"), encoding="utf-8", errors="replace"):
             m = TT.match(ln)
             if m:
                 TRN[int(m.group(1))] = {"pre": float(m.group(2)), "post": float(m.group(3)), "rew": int(m.group(4)), "nctx": int(m.group(5)), "load": int(m.group(6))}
@@ -129,13 +129,13 @@ def load():
     except FileNotFoundError:
         pass
     for b in BRAINS:
-        f = os.path.join(EXP, "traces", "E176", "tr_bc_b%d.npz" % b)
+        f = os.path.join(EXP, "traces", "E177", "tr_bc_b%d.npz" % b)
         if os.path.exists(f):
             S[b] = bicond_stats(np.load(f)["rows"])
-        g = os.path.join(EXP, "logs", "E176", "train_b%d.log" % b)
+        g = os.path.join(EXP, "logs", "E177", "train_b%d.log" % b)
         RAW[b] = train_raw(open(g, encoding="utf-8", errors="replace").read()) if os.path.exists(g) else None
         for (w, c) in EVS:
-            h = os.path.join(EXP, "logs", "E176", "ev_b%d_%s_%s.log" % (b, w, c))
+            h = os.path.join(EXP, "logs", "E177", "ev_b%d_%s_%s.log" % (b, w, c))
             if os.path.exists(h):
                 t = open(h, encoding="utf-8", errors="replace").read()
                 EL[(b, w, c)] = (sum(bool(LD.match(x)) for x in t.splitlines()), "[맥락 평가]" in t)
