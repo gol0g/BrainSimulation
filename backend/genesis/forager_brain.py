@@ -1197,6 +1197,7 @@ class ForagerBrainConfig:
     da_kc_inh_p: float = 0.2             # E168: 그 연결 확률
     ctx_kc_dynamic: bool = False         # 맥락 의존 규칙(E173): KC 좌·우 Ioffset 을 동적 매개변수로(맥락 = 균일 전류). False = 이전 모델
     ctx_inh_frac: float = 0.0            # 맥락 의존 규칙(E174): 맥락 부분집합으로 쓸 KC 억제 뉴런 비율(쪽마다, 호스트 지역 난수). 0 = 없음(이전 모델)
+    ctx_ab_dynamic: bool = False         # 맥락 의존 규칙(E175): assoc_binding Ioffset 을 동적 매개변수로(맥락 = 연합 결합 집단 흥분 → KC 이질 흥분). False = 이전 모델
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2181,6 +2182,13 @@ class ForagerBrain:
                 _m[_irs.permutation(_nih)[:_k]] = True
                 self.kc_inh_ctx_mask[_sd] = _m
             print(f"  [맥락 입력] KC 억제 뉴런 맥락 부분집합 좌·우 각 {_k}/{_nih}(비율 {_cif:.2f})")
+        # 맥락 입력(E175): KC 양측 입력 집단 assoc_binding(→ KC 좌·우 w 2.0·p 0.05)의 Ioffset 을 동적 매개변수로 — 맥락 켬 때 전류(호스트가 시행마다 설정).
+        # KC 마다 맥락 입력 수가 달라(평균 5) 이질 흥분. 동적화는 연결을 바꾸지 않는다(E173 정정 1 근거·경로 검사). 기본 False = 이전 모델.
+        if getattr(self.config, "ctx_ab_dynamic", False):
+            if getattr(self, "assoc_binding", None) is None:
+                raise RuntimeError("ctx_ab_dynamic 은 assoc_binding 집단이 필요하다")
+            self.assoc_binding.set_param_dynamic("Ioffset")
+            print("  [맥락 입력] assoc_binding Ioffset 동적(맥락 = 연합 결합 집단 흥분 → KC 이질 흥분)")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()

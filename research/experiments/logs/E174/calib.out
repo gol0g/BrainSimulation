@@ -1,0 +1,14 @@
+[I_c=0.5 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 46426 켬 46166 · 맥락 단독 26277 · 기준선 131550 | n_pres=40 | ctx_inh_i=0.50 억제 부분집합 발화 끔 44277 켬 44936
+[I_c=1 rc=0] => KCCTX side=l off=54 on=55 ctx=0 keep=54 lost=0 conj=1 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 46485 켬 46013 · 맥락 단독 25868 · 기준선 131695 | n_pres=40 | ctx_inh_i=1.00 억제 부분집합 발화 끔 44245 켬 45731
+[I_c=1.5 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 46453 켬 45935 · 맥락 단독 25955 · 기준선 131588 | n_pres=40 | ctx_inh_i=1.50 억제 부분집합 발화 끔 44251 켬 46698
+[I_c=2 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 46537 켬 45972 · 맥락 단독 25768 · 기준선 131448 | n_pres=40 | ctx_inh_i=2.00 억제 부분집합 발화 끔 44085 켬 47436
+[I_c=3 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 46534 켬 45770 · 맥락 단독 25634 · 기준선 131445 | n_pres=40 | ctx_inh_i=3.00 억제 부분집합 발화 끔 44114 켬 48755
+[I_c=4 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=0.00 | KC 발화 합 good 끔 46238 켬 45732 · 맥락 단독 25350 · 기준선 131904 | n_pres=40 | ctx_inh_i=4.00 억제 부분집합 발화 끔 44248 켬 49842
+I_c=0.5 억제 부분집합 발화 끔 44277 켬 44936(조작 ✓) | 좌 off 55 on 54 ctx 0 lost 1 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 lost 0 conj 0 jac 1.0000 | 제약 -
+I_c=1.0 억제 부분집합 발화 끔 44245 켬 45731(조작 ✓) | 좌 off 54 on 55 ctx 0 lost 0 conj 1 jac 0.9818 | 우 off 61 on 61 ctx 0 lost 0 conj 0 jac 1.0000 | 제약 -
+I_c=1.5 억제 부분집합 발화 끔 44251 켬 46698(조작 ✓) | 좌 off 55 on 54 ctx 0 lost 1 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 lost 0 conj 0 jac 1.0000 | 제약 -
+I_c=2.0 억제 부분집합 발화 끔 44085 켬 47436(조작 ✓) | 좌 off 55 on 54 ctx 0 lost 1 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 lost 0 conj 0 jac 1.0000 | 제약 -
+I_c=3.0 억제 부분집합 발화 끔 44114 켬 48755(조작 ✓) | 좌 off 55 on 54 ctx 0 lost 1 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 lost 0 conj 0 jac 1.0000 | 제약 -
+I_c=4.0 억제 부분집합 발화 끔 44248 켬 49842(조작 ✓) | 좌 off 55 on 54 ctx 0 lost 1 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 lost 0 conj 0 jac 1.0000 | 제약 -
+선택: IC=none
+[E174 보정] 종료
