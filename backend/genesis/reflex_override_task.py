@@ -136,8 +136,19 @@ def set_ctx_ab(brain, cur):
     brain.assoc_binding.set_dynamic_param_value("Ioffset", float(cur))
 
 
+def set_ctx_pop(brain, level):
+    """맥락 의존 규칙(E176): 맥락 전용 집단 zz_ctx 구동 — I_input = level × good_food_eye 감도(먹이 광선과 같은 단위). 집단이 없으면 아무것도 안 한다."""
+    p = getattr(brain, "ctx_pop", None)
+    if p is None:
+        return
+    p.vars["I_input"].view[:] = float(level) * float(brain.config.good_food_eye_sensitivity)
+    p.vars["I_input"].push_to_device()
+
+
 def ctx_apply(brain, on, args):
-    """맥락 켬/끔 — 균일 전류(--ctx-i, E173), KC 억제 부분집합 전류(--ctx-inh-i, E174), 연합 결합 집단 흥분(--ctx-ab-i, E175) 중 켜진 기전."""
+    """맥락 켬/끔 — 균일 전류(--ctx-i, E173), KC 억제 부분집합 전류(--ctx-inh-i, E174), 연합 결합 집단 흥분(--ctx-ab-i, E175), 맥락 전용 집단(--ctx-n, E176) 중 켜진 기전."""
+    if args.ctx_n > 0:
+        set_ctx_pop(brain, args.ctx_level if on else 0.0)
     if args.ctx_i > 0:
         set_ctx(brain, args.ctx_i if on else 0.0)
     if args.ctx_inh_i > 0:
@@ -390,7 +401,16 @@ def main():
     ap.add_argument("--ctx-ab-i", type=float, default=0.0,
                     help="맥락 의존 규칙(E175): 맥락 켬 때 assoc_binding(KC 양측 입력 집단) Ioffset 전류. 0 = 없음(이전 모델 — 동적화도 안 함). "
                          "정정 1: assoc_binding 은 맥락 없이도 포화(1/3 스파이크/스텝)라 양수는 무효 — 음수(침묵)로 쓴다")
-    ap.add_argument("--eval-ctx", action="store_true", help="분해(이식) 평가를 맥락 켬(--ctx-i·--ctx-inh-i·--ctx-ab-i)으로. 기본 끔")
+    ap.add_argument("--conn-snapshot", default="",
+                    help="E176: 초기 연결 스냅숏 npz — 연결 초기화 인자가 있는 희소 집단을 이 연결로 만든다(새 집단을 넣어도 기존 연결 보존). 이 cfg 로 만드는 모든 뇌")
+    ap.add_argument("--conn-snapshot-save", default="",
+                    help="E176: 뇌를 만든 직후(load 뒤) 모든 희소 집단 연결을 이 npz 로 저장하고 종료(같은 구조·같은 시드 뇌의 스냅숏)")
+    ap.add_argument("--ctx-n", type=int, default=0,
+                    help="E176: 맥락 전용 집단 zz_ctx 크기(→ KC 좌·우). 0 = 없음. --conn-snapshot 필요(새 뉴런 집단은 장치 연결 난수를 바꾼다)")
+    ap.add_argument("--ctx-w", type=float, default=4.0, help="E176: zz_ctx → KC 가중치")
+    ap.add_argument("--ctx-p", type=float, default=0.10, help="E176: zz_ctx → KC 연결 확률(호스트 지역 난수 17300 + genn_seed)")
+    ap.add_argument("--ctx-level", type=float, default=0.9, help="E176: 맥락 켬 세기(zz_ctx I_input = 값 × good_food_eye 감도)")
+    ap.add_argument("--eval-ctx", action="store_true", help="분해(이식) 평가를 맥락 켬(--ctx-i·--ctx-inh-i·--ctx-ab-i·--ctx-n)으로. 기본 끔")
     ap.add_argument("--kc-rw-diag", action="store_true",
                     help="E168(읽기 전용): 학습 중 결정 단계(3처리 끝)·보상 창(보상 시행·처벌 시행) KC 발화율 평균을 출력. 난수 소비 없음")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
@@ -484,8 +504,13 @@ def main():
     cfg.ctx_kc_dynamic = bool(args.ctx_i > 0)   # 맥락 입력(E173): KC Ioffset 동적화 — 0 이면 이전 모델
     cfg.ctx_inh_frac = float(args.ctx_inh_frac) if args.ctx_inh_i > 0 else 0.0   # 맥락 입력(E174): 0 이면 부분집합 없음(이전 모델)
     cfg.ctx_ab_dynamic = bool(args.ctx_ab_i != 0)   # 맥락 입력(E175): assoc_binding Ioffset 동적화 — 0 이면 이전 모델(정정 1: 음수 허용)
-    if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_i <= 0 and args.ctx_inh_i <= 0 and args.ctx_ab_i == 0:
-        raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-i > 0·--ctx-inh-i > 0·--ctx-ab-i ≠ 0 중 하나가 필요하다")
+    cfg.conn_snapshot_load = args.conn_snapshot or ""          # E176: 초기 연결 스냅숏 적재(이 cfg 로 만드는 모든 뇌)
+    cfg.conn_snapshot_save = args.conn_snapshot_save or ""     # E176: 저장 후 종료
+    cfg.ctx_n, cfg.ctx_w, cfg.ctx_p = int(args.ctx_n), float(args.ctx_w), float(args.ctx_p)   # E176: 맥락 전용 집단(스냅숏 필요)
+    if args.ctx_n > 0 and not args.conn_snapshot:
+        raise SystemExit("--ctx-n > 0 은 --conn-snapshot 이 필요하다(새 뉴런 집단은 장치 연결 난수를 바꾼다 — E173 정정 1)")
+    if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_i <= 0 and args.ctx_inh_i <= 0 and args.ctx_ab_i == 0 and args.ctx_n <= 0:
+        raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-i > 0·--ctx-inh-i > 0·--ctx-ab-i ≠ 0·--ctx-n > 0 중 하나가 필요하다")
     if args.rw_da_reset or args.offset_steps != 5:
         print("[구현 점검] rw_da_reset=%s offset_steps=%d (외부 검토 2026-10-09 ①·③)" % (bool(args.rw_da_reset), args.offset_steps))
     if args.no_reward:
@@ -537,6 +562,9 @@ def main():
             raise SystemExit("--rw-apm-scale·--dec-apm-scale 은 --kc-motor 가 필요하다")
         cfg.kc_motor_apm_dynamic = True
     brain = ForagerBrain(cfg)
+    if args.conn_snapshot_save:
+        print("[E176] 초기 연결 스냅숏 저장 뒤 종료 → %s" % args.conn_snapshot_save)
+        return
 
     # 2) 뇌 생성 후: 환경 시드로 재고정 (먹이 배치·워밍업이 여기서 결정된다)
     random.seed(_eseed)
@@ -918,6 +946,7 @@ def main():
             ksum = [0, 0]      # 조작검증: good 제시의 KC 발화 합(맥락 끔·켬) — 흥분 전류가 KC 에 닿으면 켬 > 끔
             isum = [0, 0]      # E174 조작검증: good 제시의 맥락 부분집합 억제 뉴런 발화 합(끔·켬) — 맥락이 억제 뉴런에 닿으면 켬 > 끔
             asum = [0, 0]      # E175 조작검증: good 제시의 assoc_binding 발화 합(끔·켬) — 맥락이 연합 결합 집단에 닿으면 켬 > 끔
+            csum = [0, 0]      # E176 조작검증: good 제시의 맥락 전용 집단 zz_ctx 발화 합(끔·켬) — 끔 0·켬 > 0
             _b2.reset()
             for _ in range(30):
                 _b2.process(_obs2)
@@ -949,6 +978,8 @@ def main():
                                 isum[on] += int(_msk[_s][_iid[_iid < _msk[_s].size]].sum()) if _iid.size else 0
                         if getattr(_b2.config, "ctx_ab_dynamic", False):
                             asum[on] += int(np.asarray(_b2.assoc_binding.spike_recording_data[0][1]).size)   # E175 조작검증
+                        if getattr(_b2, "ctx_pop", None) is not None:
+                            csum[on] += int(np.asarray(_b2.ctx_pop.spike_recording_data[0][1]).size)         # E176 조작검증
                 ctx_apply(_b2, False, args)
                 for j in range(10):
                     _b2.process(neu)
@@ -965,8 +996,10 @@ def main():
                 out.append("side=%s off=%d on=%d ctx=%d keep=%d lost=%d conj=%d jac=%.4f"
                            % (kn, r_["nOff"], r_["nOn"], r_["nCtx"], r_["nKeep"], r_["nLost"], r_["nConj"], r_["jac"]))
             print("=> KCCTX %s | ctx_i=%.2f | KC 발화 합 good 끔 %d 켬 %d · 맥락 단독 %d · 기준선 %d | n_pres=%d | ctx_inh_i=%.2f 억제 부분집합 발화 끔 %d 켬 %d | ctx_ab_i=%.2f 연합 결합 발화 끔 %d 켬 %d"
+                  " | ctx_n=%d w=%.2f p=%.3f level=%.2f 맥락 집단 발화 끔 %d 켬 %d"
                   % (" | ".join(out), args.ctx_i, ksum[0], ksum[1], int(cnt[(None, 1)]["l"].sum() + cnt[(None, 1)]["r"].sum()),
-                     int(c0["l"].sum() + c0["r"].sum()), n_pres, args.ctx_inh_i, isum[0], isum[1], args.ctx_ab_i, asum[0], asum[1]))
+                     int(c0["l"].sum() + c0["r"].sum()), n_pres, args.ctx_inh_i, isum[0], isum[1], args.ctx_ab_i, asum[0], asum[1],
+                     args.ctx_n, args.ctx_w, args.ctx_p, args.ctx_level, csum[0], csum[1]))
             return
         if mode == "kcrate":
             # E138: 발화 **수** 기준 KC 선택성(kcsets 의 ≥1 스파이크 기준은 지속·잔여 발화로 "공유"를 부풀릴 수 있다).
@@ -1174,7 +1207,8 @@ def main():
         acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd,
                                  ctx=((lambda b_, on_: ctx_apply(b_, on_, args)) if args.eval_ctx else None))
         if args.eval_ctx:
-            print("[맥락 평가] ctx=켬 I=%.2f(KC 좌·우 Ioffset) I_inh=%.2f(억제 부분집합 %.2f) I_ab=%.2f(assoc_binding)" % (args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i))
+            print("[맥락 평가] ctx=켬 I=%.2f(KC 좌·우 Ioffset) I_inh=%.2f(억제 부분집합 %.2f) I_ab=%.2f(assoc_binding) ctx_n=%d w=%.2f level=%.2f(맥락 전용 집단)"
+                  % (args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, args.ctx_n, args.ctx_w, args.ctx_level))
         if args.eval_variant:
             print("[E146 변형] variant=%s vseed=%d" % (args.eval_variant, args.eval_vseed))
         if _evd is not None:
@@ -1412,8 +1446,9 @@ def main():
     _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task == "bicond" else None
     _nctx = 0
     if _crng is not None:
-        print("[맥락 과제] bicond frac=%.2f I=%.2f I_inh=%.2f inh_frac=%.2f I_ab=%.2f seed=%d — 맥락 끔 정답 교차, 켬 정답 같은 쪽"
-              % (args.ctx_frac, args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, (args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed)))
+        print("[맥락 과제] bicond frac=%.2f I=%.2f I_inh=%.2f inh_frac=%.2f I_ab=%.2f ctx_n=%d w=%.2f seed=%d — 맥락 끔 정답 교차, 켬 정답 같은 쪽"
+              % (args.ctx_frac, args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, args.ctx_n, args.ctx_w,
+                 (args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed)))
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5, steps=args.offset_steps)
         if args.offset_steps != 5 and ep == 0:

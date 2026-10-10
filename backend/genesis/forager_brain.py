@@ -1198,6 +1198,11 @@ class ForagerBrainConfig:
     ctx_kc_dynamic: bool = False         # 맥락 의존 규칙(E173): KC 좌·우 Ioffset 을 동적 매개변수로(맥락 = 균일 전류). False = 이전 모델
     ctx_inh_frac: float = 0.0            # 맥락 의존 규칙(E174): 맥락 부분집합으로 쓸 KC 억제 뉴런 비율(쪽마다, 호스트 지역 난수). 0 = 없음(이전 모델)
     ctx_ab_dynamic: bool = False         # 맥락 의존 규칙(E175): assoc_binding Ioffset 을 동적 매개변수로(맥락 = 연합 결합 집단 흥분 → KC 이질 흥분). False = 이전 모델
+    conn_snapshot_load: str = ""         # E176: 초기 연결 스냅숏 npz — 주면 연결 초기화 인자가 있는 희소 집단을 그 연결로 만든다(장치 난수 미사용). "" = 이전 경로
+    conn_snapshot_save: str = ""         # E176: load 직후 모든 희소 집단의 연결을 이 npz 로 저장(기존 구조 뇌에서 1회). "" = 저장 안 함
+    ctx_n: int = 0                       # E176: 맥락 전용 집단 zz_ctx 크기(스냅숏 적재가 있을 때만 — 새 뉴런 집단은 장치 연결 난수를 바꾼다). 0 = 없음
+    ctx_w: float = 4.0                   # E176: zz_ctx → KC(좌·우) 가중치
+    ctx_p: float = 0.10                  # E176: zz_ctx → KC 연결 확률(호스트 지역 난수 RandomState(17300 + genn_seed))
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -1613,6 +1618,29 @@ class ForagerBrain:
                 self.model.seed = int(_seed)
             except Exception as _e:
                 print(f"    [WARN] GeNN seed 설정 실패({_e}) — SPARSE 연결 재현 불가")
+        # E176: 초기 연결 스냅숏 적재 — 이 모델에서 장치 난수는 희소 연결 초기화(FixedProbability 계열)에만 쓰인다(뉴런 모델 장치 난수 없음, 2026-10-11 확인).
+        # 스냅숏을 주면 연결 초기화 인자가 있는 SPARSE 집단을 초기화 없이 만들고 저장된 연결(pre·post)을 그대로 싣는다 → 새 집단을 넣어도 기존 연결이 같다.
+        # 스냅숏에 없는 이름이면 구조가 다른 것이므로 중단. 연결 초기화 인자가 없는 집단(호스트 연결)은 그대로 통과. 기본 "" = 이전 경로(장치 초기화).
+        self._conn_snap_load = getattr(self.config, "conn_snapshot_load", "") or ""
+        self._conn_snap_n = 0
+        if self._conn_snap_load:
+            _snap = np.load(self._conn_snap_load)
+            _snames = {k[:-len("__pre")] for k in _snap.files if k.endswith("__pre")}
+            _orig_add = self.model.add_synapse_population
+            _brain = self
+
+            def _add_syn_snap(pop_name, matrix_type, source, target, wu, ps, connectivity_init=None, *a, **kw):
+                if matrix_type == "SPARSE" and connectivity_init is not None:
+                    if pop_name not in _snames:
+                        raise RuntimeError("E176 초기 연결 스냅숏에 %s 가 없다 — 스냅숏과 구조가 다르다" % pop_name)
+                    _sg = _orig_add(pop_name, matrix_type, source, target, wu, ps, *a, **kw)
+                    _sg.set_sparse_connections(np.asarray(_snap[pop_name + "__pre"], dtype=np.uint32),
+                                               np.asarray(_snap[pop_name + "__post"], dtype=np.uint32))
+                    _brain._conn_snap_n += 1
+                    return _sg
+                return _orig_add(pop_name, matrix_type, source, target, wu, ps, connectivity_init, *a, **kw)
+            self.model.add_synapse_population = _add_syn_snap
+            print(f"  [E176 초기 연결 스냅숏] 적재 {self._conn_snap_load} — 스냅숏 희소 집단 {len(_snames)} 개")
 
         # LIF 파라미터
         lif_params = {
@@ -2189,6 +2217,30 @@ class ForagerBrain:
                 raise RuntimeError("ctx_ab_dynamic 은 assoc_binding 집단이 필요하다")
             self.assoc_binding.set_param_dynamic("Ioffset")
             print("  [맥락 입력] assoc_binding Ioffset 동적(맥락 = 연합 결합 집단 흥분 → KC 이질 흥분)")
+        # E176: 맥락 전용 집단 zz_ctx(감각 LIF, 먹이 눈과 같은 매개변수, I_input 호스트 설정) → KC 좌·우(양측, 호스트 지역 난수 연결). 새 뉴런 집단이므로
+        # 초기 연결 스냅숏 적재가 있을 때만 만든다(없으면 다른 집단의 장치 연결 난수가 바뀐다 — E173 정정 1). 기본 0 = 없음.
+        _cn = int(getattr(self.config, "ctx_n", 0))
+        if _cn > 0:
+            if not self._conn_snap_load:
+                raise RuntimeError("ctx_n > 0(맥락 전용 집단)은 초기 연결 스냅숏 적재(conn_snapshot_load)가 필요하다 — 새 뉴런 집단은 장치 연결 난수를 바꾼다")
+            _cw = float(getattr(self.config, "ctx_w", 4.0)); _cp = float(getattr(self.config, "ctx_p", 0.10)); _c = self.config
+            self.ctx_pop = self.model.add_neuron_population(
+                "zz_ctx", _cn, sensory_lif_model,
+                {"C": 1.0, "TauM": _c.tau_m, "Vrest": _c.v_rest, "Vreset": _c.v_reset, "Vthresh": _c.v_thresh, "TauRefrac": _c.tau_refrac},
+                {"V": _c.v_rest, "RefracTime": 0.0, "I_input": 0.0})
+            self.ctx_pop.spike_recording_enabled = True
+            _crs = np.random.RandomState(17300 + int(getattr(self.config, "genn_seed", 0)))
+            self.ctx_syn = {}
+            for _sd, _post in (("l", self.kc_left), ("r", self.kc_right)):
+                _m = _crs.random_sample((_cn, int(self.config.n_kc_per_side))) < _cp
+                _pi, _qi = np.nonzero(_m)
+                _sg = self.model.add_synapse_population(
+                    "zz_ctx_to_kc_%s" % _sd, "SPARSE", self.ctx_pop, _post,
+                    init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": _cw})}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
+                self.ctx_syn[_sd] = (_sg, int(_pi.size))
+            print(f"  [맥락 입력] 맥락 전용 집단 zz_ctx {_cn} → KC 좌·우, w={_cw:.2f}, p={_cp:.3f}, 연결 좌 {self.ctx_syn['l'][1]}·우 {self.ctx_syn['r'][1]}")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
@@ -2197,6 +2249,11 @@ class ForagerBrain:
         print("Building model...")
         self.model.build()
         self.model.load(num_recording_timesteps=10)
+        if self._conn_snap_load:
+            print(f"  [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 {self._conn_snap_n} 개")
+        _css = getattr(self.config, "conn_snapshot_save", "") or ""
+        if _css:
+            self._save_conn_snapshot(_css)
 
         # E153: 경험 형성 KC 종류 입력 가중치(kc_type_weights_file) — 이 설정으로 만드는 모든 뇌(학습·이식 평가·측정)가 같은 형성 표현을 쓴다.
         _ktw = getattr(self.config, "kc_type_weights_file", "") or ""
@@ -2668,6 +2725,18 @@ class ForagerBrain:
                 raise RuntimeError("E157 종류 입력 배율 검증 실패: %s" % nm)
             tot.append("%s=%.2f→%.2f" % (nm, float(before.astype(np.float64).sum()), float(arr.astype(np.float64).sum())))
         print("[E157 종류 입력 배율] k=%.4f 검증 일치 — %s" % (k, " ".join(tot)))
+
+    def _save_conn_snapshot(self, path):
+        """E176: load 직후(학습 전) 모든 SPARSE 시냅스 집단의 연결(pre·post 인덱스)을 npz 로 — 같은 구조 뇌는 이 파일로 같은 연결을 다시 만든다."""
+        out = {}
+        for nm, sg in self.model.synapse_populations.items():
+            if "SPARSE" not in str(sg.matrix_type).upper():
+                continue
+            sg.pull_connectivity_from_device()
+            out[nm + "__pre"] = np.asarray(sg.get_sparse_pre_inds(), dtype=np.uint32)
+            out[nm + "__post"] = np.asarray(sg.get_sparse_post_inds(), dtype=np.uint32)
+        np.savez_compressed(path, **out)
+        print(f"  [E176 초기 연결 스냅숏] 저장 {path} — 희소 집단 {len(out) // 2} 개, 연결 {sum(int(v.size) for k, v in out.items() if k.endswith('__pre'))} 개")
 
     def _create_static_synapse(self, name: str, pre, post, weight: float,
                                sparsity: Optional[float] = None):

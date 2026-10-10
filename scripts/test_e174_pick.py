@@ -47,7 +47,7 @@ C3 = dict(C); C3["15"] = P.parse(line(1.5, (60, 50, 2, "nan"), (60, 52, 1, "0.50
 chk("1.5 자카드 nan → 탈락, 2.0 선택", P.pick(C3)[0], "20")
 C4 = dict(C); C4["20"] = P.parse(line(2.0, (60, 40, 11, "0.6000"), (60, 41, 2, "0.6000"))); C4["15"] = C2["15"]
 chk("2.0 맥락 단독 11 탈락(1.5 조작 실패) → 없음", P.pick(C4)[0], None)
-chk("켬 30 = 0.5×60 정확 → 통과", P.pick({"30": P.parse(line(3.0, (60, 30, 0, "0.4000"), (60, 30, 0, "0.4000")))})[1]["30"], True)
+chk("켬 30 = 0.5×60 정확 → 통과", P.pick({"30": P.parse(line(3.0, (60, 30, 0, "0.4000"), (60, 30, 0, "0.4000")))})[2]["30"], True)
 with tempfile.TemporaryDirectory() as td:
     os.makedirs(os.path.join(td, "logs", "E174", "calib"))
     P.EXP = td
