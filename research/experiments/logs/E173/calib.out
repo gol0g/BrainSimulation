@@ -1,0 +1,16 @@
+[I=1 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=1.00 | KC 발화 합 good 끔 46543 켬 46353 · 맥락 단독 26367 · 기준선 131526 | n_pres=40
+[I=2 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=62 on=61 ctx=0 keep=61 lost=1 conj=0 jac=0.9839 | ctx_i=2.00 | KC 발화 합 good 끔 46313 켬 46800 · 맥락 단독 26807 · 기준선 131296 | n_pres=40
+[I=4 rc=0] => KCCTX side=l off=55 on=55 ctx=0 keep=55 lost=0 conj=0 jac=1.0000 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=4.00 | KC 발화 합 good 끔 46653 켬 46982 · 맥락 단독 26988 · 기준선 131560 | n_pres=40
+[I=8 rc=0] => KCCTX side=l off=54 on=55 ctx=0 keep=54 lost=0 conj=1 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=8.00 | KC 발화 합 good 끔 46426 켬 47498 · 맥락 단독 27577 · 기준선 131821 | n_pres=40
+[I=12 rc=0] => KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=12.00 | KC 발화 합 good 끔 46469 켬 48283 · 맥락 단독 28074 · 기준선 131672 | n_pres=40
+[I=16 rc=0] => KCCTX side=l off=55 on=55 ctx=0 keep=55 lost=0 conj=0 jac=1.0000 | side=r off=61 on=62 ctx=1 keep=61 lost=0 conj=1 jac=0.9839 | ctx_i=16.00 | KC 발화 합 good 끔 46374 켬 49003 · 맥락 단독 28841 · 기준선 131743 | n_pres=40
+[I=20 rc=0] => KCCTX side=l off=55 on=56 ctx=1 keep=55 lost=0 conj=1 jac=0.9821 | side=r off=61 on=62 ctx=5 keep=61 lost=0 conj=1 jac=0.9839 | ctx_i=20.00 | KC 발화 합 good 끔 46483 켬 49518 · 맥락 단독 29574 · 기준선 131595 | n_pres=40
+I=1 KC 발화 합 good 끔 46543 켬 46353(조작 ✗) 단독 26367 기준선 131526 | 좌 off 55 on 54 ctx 0 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 conj 0 jac 1.0000 | 제약 -
+I=2 KC 발화 합 good 끔 46313 켬 46800(조작 ✓) 단독 26807 기준선 131296 | 좌 off 55 on 54 ctx 0 conj 0 jac 0.9818 | 우 off 62 on 61 ctx 0 conj 0 jac 0.9839 | 제약 통과
+I=4 KC 발화 합 good 끔 46653 켬 46982(조작 ✓) 단독 26988 기준선 131560 | 좌 off 55 on 55 ctx 0 conj 0 jac 1.0000 | 우 off 61 on 61 ctx 0 conj 0 jac 1.0000 | 제약 통과
+I=8 KC 발화 합 good 끔 46426 켬 47498(조작 ✓) 단독 27577 기준선 131821 | 좌 off 54 on 55 ctx 0 conj 1 jac 0.9818 | 우 off 61 on 61 ctx 0 conj 0 jac 1.0000 | 제약 통과
+I=12 KC 발화 합 good 끔 46469 켬 48283(조작 ✓) 단독 28074 기준선 131672 | 좌 off 55 on 54 ctx 0 conj 0 jac 0.9818 | 우 off 61 on 61 ctx 0 conj 0 jac 1.0000 | 제약 통과
+I=16 KC 발화 합 good 끔 46374 켬 49003(조작 ✓) 단독 28841 기준선 131743 | 좌 off 55 on 55 ctx 0 conj 0 jac 1.0000 | 우 off 61 on 62 ctx 1 conj 1 jac 0.9839 | 제약 통과
+I=20 KC 발화 합 good 끔 46483 켬 49518(조작 ✓) 단독 29574 기준선 131595 | 좌 off 55 on 56 ctx 1 conj 1 jac 0.9821 | 우 off 61 on 62 ctx 5 conj 1 jac 0.9839 | 제약 통과
+선택: I=none(효과 부족 — I*=20 결합 1·1 자카드 0.9821·0.9839)
+[E173 보정] 종료

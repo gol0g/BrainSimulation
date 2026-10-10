@@ -1196,6 +1196,7 @@ class ForagerBrainConfig:
     da_kc_inh_w: float = 0.0             # E168: 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 가중치. 0 = 끔(집단을 만들지 않음 — 이전 모델과 같다)
     da_kc_inh_p: float = 0.2             # E168: 그 연결 확률
     ctx_kc_dynamic: bool = False         # 맥락 의존 규칙(E173): KC 좌·우 Ioffset 을 동적 매개변수로(맥락 = 균일 전류). False = 이전 모델
+    ctx_inh_frac: float = 0.0            # 맥락 의존 규칙(E174): 맥락 부분집합으로 쓸 KC 억제 뉴런 비율(쪽마다, 호스트 지역 난수). 0 = 없음(이전 모델)
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2165,6 +2166,21 @@ class ForagerBrain:
             self.kc_left.set_param_dynamic("Ioffset")
             self.kc_right.set_param_dynamic("Ioffset")
             print("  [맥락 입력] KC 좌·우 Ioffset 동적(맥락 = 균일 전류)")
+        # 맥락 입력(E174): KC 억제 뉴런 일부(쪽마다 정확히 round(비율 × n), 호스트 지역 난수 RandomState(17400 + genn_seed))를 맥락 부분집합으로 —
+        # 맥락 켬 때 process() 의 항상성 drive 에 그 뉴런들만 전류를 더한다(_kc_inh_ctx). 모델 구조·연결 불변(호스트 변수만). 기본 0 = 이전 경로.
+        self.kc_inh_ctx_mask = None
+        self._kc_inh_ctx = None
+        _cif = float(getattr(self.config, "ctx_inh_frac", 0.0))
+        if _cif > 0.0:
+            _nih = int(self.config.n_kc_inhibitory_per_side)
+            _k = int(round(_cif * _nih))
+            _irs = np.random.RandomState(17400 + int(getattr(self.config, "genn_seed", 0)))
+            self.kc_inh_ctx_mask = {}
+            for _sd in ("l", "r"):
+                _m = np.zeros(_nih, dtype=bool)
+                _m[_irs.permutation(_nih)[:_k]] = True
+                self.kc_inh_ctx_mask[_sd] = _m
+            print(f"  [맥락 입력] KC 억제 뉴런 맥락 부분집합 좌·우 각 {_k}/{_nih}(비율 {_cif:.2f})")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
@@ -11334,9 +11350,10 @@ class ForagerBrain:
                 integral = max(0.0, min(integral, 50.0))
                 self._kc_inh_integral = integral
                 drive = max(0.0, error * 100.0 + integral)
-                self.kc_inh_left.vars["I_input"].view[:] = drive
+                _cx = getattr(self, "_kc_inh_ctx", None)   # E174: 맥락 켬이면 부분집합 억제 뉴런에만 전류를 더함(없으면 이전과 같다)
+                self.kc_inh_left.vars["I_input"].view[:] = drive if _cx is None else drive + _cx["l"]
                 self.kc_inh_left.vars["I_input"].push_to_device()
-                self.kc_inh_right.vars["I_input"].view[:] = drive
+                self.kc_inh_right.vars["I_input"].view[:] = drive if _cx is None else drive + _cx["r"]
                 self.kc_inh_right.vars["I_input"].push_to_device()
 
                 # Traces

@@ -764,4 +764,4 @@ make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e173_run/forager_brain_CODE'
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/calib/oja_e0.02_b0.3_b15.npz 검증 일치 — good_food_eye_l_to_kc_l=235550.12 bad_food_eye_l_to_kc_l=238795.59 good_food_eye_r_to_kc_r=238418.47 bad_food_eye_r_to_kc_r=237194.15
 Model ready! Total: 28,323 neurons
-=> KCCTX side=l off=55 on=54 ctx=0 keep=54 lost=1 conj=0 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=1.00 | KC 발화 합 good 끔 46543 켬 46353 · 맥락 단독 26367 · 기준선 131526 | n_pres=40
+=> KCCTX side=l off=54 on=55 ctx=0 keep=54 lost=0 conj=1 jac=0.9818 | side=r off=61 on=61 ctx=0 keep=61 lost=0 conj=0 jac=1.0000 | ctx_i=8.00 | KC 발화 합 good 끔 46426 켬 47498 · 맥락 단독 27577 · 기준선 131821 | n_pres=40
