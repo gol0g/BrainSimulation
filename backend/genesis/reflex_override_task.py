@@ -111,6 +111,15 @@ def act_window_current(brain, o, ex_side, current, steps, neg=None):
     return ex_r, ot_r
 
 
+def set_ctx(brain, level):
+    """맥락 의존 규칙 분기: 맥락 입력 집단(zz_ctx) 구동 — I_input = level × good_food_eye 감도(먹이 눈과 같은 단위, 0.9 → 45). 집단이 없으면(ctx_n 0) 아무것도 안 한다."""
+    p = getattr(brain, "ctx_pop", None)
+    if p is None:
+        return
+    p.vars["I_input"].view[:] = float(level) * float(brain.config.good_food_eye_sensitivity)
+    p.vars["I_input"].push_to_device()
+
+
 def measure_offset(brain, obs, nh, n=20, steps=5):
     """좌우 대칭 자극에서 남는 조향 = 런 상수 오프셋(C28b: 런마다 0.3~0.83으로 요동).
     steps: 조향 합의 처리 수(기본 5 = evaluate 의 steer 와 같음). 외부 검토 2026-10-09: 학습 판단은 3처리 합이라 --offset-steps 3 으로 맞출 수 있다."""
@@ -163,7 +172,7 @@ def stim_variant(obs, nh, good_side, variant, rng):
     return o
 
 
-def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None):
+def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None, ctx=0.0):
     """정답률과 **변조폭**을 함께 반환.
 
     C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
@@ -179,6 +188,8 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=No
     # 뇌의 동역학 상태(적응·잔류전류·도파민)가 사전과 달랐던 것 = **서로 다른 상태의 뇌를 비교**.
     # 측정 직전에 상태를 초기화하고 동일한 안정화를 거치면, 남는 차이는 **가중치뿐**이다.
     brain.reset()
+    if ctx > 0:
+        set_ctx(brain, ctx)    # 맥락 평가: 안정화·오프셋·시행 내내 맥락 켬(오프셋이 맥락의 상수 치우침을 뺀다). 0 = 이전 동작(아무것도 안 함)
     # 2026-09-18: 안정화 길이를 인자로 뺐다. 30스텝은 **부족하다** — 같은 뇌를 연속 평가하면
     # 1회차만 튀고(변조폭 0.5609) 2회차부터 0.5524~0.5542로 가라앉는다. 사전 측정이 그 1회차라
     # 모든 조건의 '변화'에 음수 편향이 들어간다(pilot에서 무학습 칸도 -0.007).
@@ -206,6 +217,8 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=No
         elif side == "right" and v < -0.02:
             ok += 1
     mod = float(np.mean(vs_right)) - float(np.mean(vs_left))
+    if ctx > 0:
+        set_ctx(brain, 0.0)
     return ok / trials * 100, off, mod
 
 
@@ -315,7 +328,7 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx"))
     ap.add_argument("--kc-type-weights", default=None,
                     help="E153: 경험 형성 KC 종류 입력(good·bad 눈 → KC) 가중치 npz — 모든 뇌에 싣는다(연결이 저장본과 같아야 함)")
     ap.add_argument("--kc-type-scale", type=float, default=1.0,
@@ -337,6 +350,17 @@ def main():
     ap.add_argument("--da-kc-inh-p", type=float, default=0.2, help="E168: 그 연결 확률")
     ap.add_argument("--eval-diag", action="store_true",
                     help="E171(읽기 전용): 분해(이식) 평가 시행의 쪽별 평균 motor·KC 발화율 출력 — 난수 소비 없음, 평가값 불변")
+    ap.add_argument("--ctx-n", type=int, default=0,
+                    help="맥락 의존 규칙 분기: 맥락 입력 집단(zz_ctx → KC 좌·우) 크기. 0 = 집단 없음(이전 모델). 이 cfg 로 만드는 모든 뇌에 같은 집단·연결")
+    ap.add_argument("--ctx-w", type=float, default=4.0, help="맥락 → KC 가중치")
+    ap.add_argument("--ctx-p", type=float, default=0.10, help="맥락 → KC 연결 확률(호스트 지역 난수)")
+    ap.add_argument("--ctx-level", type=float, default=0.9, help="맥락 켬 세기(I_input = 값 × good_food_eye 감도, 먹이 광선과 같은 단위)")
+    ap.add_argument("--ctx-task", default="none", choices=("none", "bicond"),
+                    help="맥락 의존 규칙 학습: bicond = 시행마다 맥락(지역 난수, 확률 --ctx-frac) — 맥락 끔이면 정답 = 교차(과제 A), 켬이면 같은 쪽. "
+                         "맥락은 결정 3처리·행동 창 동안만 켬(보상 창·간격 끔). none = 이전 동작")
+    ap.add_argument("--ctx-frac", type=float, default=0.5, help="bicond: 맥락 켬 시행 비율")
+    ap.add_argument("--ctx-seed", type=int, default=None, help="bicond: 맥락 배정 지역 난수 시드(기본 17300 + 뇌 시드) — 전역 난수열 불변")
+    ap.add_argument("--eval-ctx", action="store_true", help="분해(이식) 평가를 맥락 켬(--ctx-level)으로. 기본 끔")
     ap.add_argument("--kc-rw-diag", action="store_true",
                     help="E168(읽기 전용): 학습 중 결정 단계(3처리 끝)·보상 창(보상 시행·처벌 시행) KC 발화율 평균을 출력. 난수 소비 없음")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
@@ -427,6 +451,9 @@ def main():
     cfg.kc_oja_eta, cfg.kc_oja_beta = float(args.kc_oja_eta), float(args.kc_oja_beta)
     cfg.kc_oja_mmax, cfg.kc_oja_tau_pre = float(args.kc_oja_mmax), float(args.kc_oja_tau)
     cfg.da_kc_inh_w, cfg.da_kc_inh_p = float(args.da_kc_inh), float(args.da_kc_inh_p)   # E168: 0 이면 연결 없음(이전 모델)
+    cfg.ctx_n, cfg.ctx_w, cfg.ctx_p = int(args.ctx_n), float(args.ctx_w), float(args.ctx_p)   # 맥락 입력: 0 이면 집단 없음(이전 모델)
+    if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_n <= 0:
+        raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-n > 0 이 필요하다")
     if args.rw_da_reset or args.offset_steps != 5:
         print("[구현 점검] rw_da_reset=%s offset_steps=%d (외부 검토 2026-10-09 ①·③)" % (bool(args.rw_da_reset), args.offset_steps))
     if args.no_reward:
@@ -560,7 +587,7 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
-        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja"):
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         elif mode == "swap":
             # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
@@ -846,6 +873,58 @@ def main():
                            % (kn, r3["nG"], r3["nB"], r3["nF"], r3["nO"], r3["nOF"], r3["nFin"], r3["jac_gb"], fs[2]))
             print("=> KCOVERLAP3 %s | food_eye_scale=%.2f bilateral_scale=%.2f n_pres=%d" % (" | ".join(out), args.kc_food_eye_scale, args.kc_bilateral_scale, n_pres))
             return
+        if mode == "kcctx":
+            # 맥락 의존 규칙 분기(측정, 학습 없음): good 한쪽 KC 반응을 맥락 끔·켬에서, 맥락 단독(먹이 자극 없음)에서 — kcoverlap 과 같은 틀
+            # (제시 3처리, 사이 무자극·맥락 끔 10처리 중 뒤 5처리 기준선, 반응 = 제시당 기준선 뺀 발화 ≥ 0.5). 순서 good-좌 끔·켬, 맥락 단독, good-우 끔·켬, 맥락 단독.
+            import kc_selectivity as KS
+            if args.trials % 6:
+                raise SystemExit("kcctx: --trials 는 6의 배수")
+            n_k = int(cfg.n_kc_per_side)
+            seq = (("left", 0), ("left", 1), (None, 1), ("right", 0), ("right", 1), (None, 1))
+            cnt = {k_: {"l": np.zeros(n_k), "r": np.zeros(n_k)} for k_ in seq[:3] + seq[3:5]}
+            c0 = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+            nctx_sp = [0, 0]   # 조작검증: 맥락 집단 발화 수(끔·켬 제시)
+            _b2.reset()
+            for _ in range(30):
+                _b2.process(_obs2)
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right", "bad_food_rays_left", "bad_food_rays_right"):
+                neu[_k] = np.zeros(nh)
+
+            def _countc(dst):
+                for kn, pop in (("l", _b2.kc_left), ("r", _b2.kc_right)):
+                    ids = np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+                    if ids.size:
+                        dst[kn] += np.bincount(ids, minlength=n_k)[:n_k]
+            for rep_i in range(args.trials):
+                sd, on = seq[rep_i % 6]
+                set_ctx(_b2, args.ctx_level if on else 0.0)
+                for _ in range(3):
+                    _b2.process(stim(_obs2, nh, sd) if sd else neu)
+                    _tmp = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+                    _countc(_tmp)
+                    for kn in "lr":
+                        cnt[(sd, on)][kn] += _tmp[kn]
+                    nctx_sp[on] += int(np.asarray(_b2.ctx_pop.spike_recording_data[0][1]).size)
+                set_ctx(_b2, 0.0)
+                for j in range(10):
+                    _b2.process(neu)
+                    if j >= 5:
+                        _countc(c0)
+            n_pres = args.trials // 6
+            base_steps = 5 * args.trials
+            if sum(float(cnt[k_][kn].sum()) for k_ in cnt for kn in "lr") == 0:
+                raise RuntimeError("KC 스파이크 0 — 측정 도구 실패(기록 버퍼 확인)")
+            out = []
+            for kn, sd in (("l", "left"), ("r", "right")):
+                # 맥락 단독은 한 주기에 두 번 제시 → 제시당으로 맞추려고 합의 절반을 n_pres 기준으로 쓴다
+                r_ = KS.ctx_stats(cnt[(sd, 0)][kn], cnt[(sd, 1)][kn], cnt[(None, 1)][kn] / 2.0, c0[kn], n_pres, 3, base_steps)
+                out.append("side=%s off=%d on=%d ctx=%d keep=%d lost=%d conj=%d jac=%.4f"
+                           % (kn, r_["nOff"], r_["nOn"], r_["nCtx"], r_["nKeep"], r_["nLost"], r_["nConj"], r_["jac"]))
+            _cs = " ".join("%s=%d" % (s_, _b2.ctx_syn[s_][1]) for s_ in "lr")
+            print("=> KCCTX %s | ctx_n=%d w=%.2f p=%.3f level=%.2f 연결 %s | 맥락 발화 끔 %d 켬 %d | n_pres=%d"
+                  % (" | ".join(out), cfg.ctx_n, cfg.ctx_w, cfg.ctx_p, args.ctx_level, _cs, nctx_sp[0], nctx_sp[1], n_pres))
+            return
         if mode == "kcrate":
             # E138: 발화 **수** 기준 KC 선택성(kcsets 의 ≥1 스파이크 기준은 지속·잔여 발화로 "공유"를 부풀릴 수 있다).
             # 새 뇌(학습 가중치 이식 전 — KC 입력은 감각에서 오므로 반응은 KC→motor 가중치와 무관)에 kcsets 와 같은 제시:
@@ -1049,7 +1128,10 @@ def main():
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
         _evd = {} if args.eval_diag else None
-        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd)
+        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd,
+                                 ctx=(args.ctx_level if args.eval_ctx else 0.0))
+        if args.eval_ctx:
+            print("[맥락 평가] ctx=켬 level=%.2f ctx_n=%d w=%.2f p=%.3f" % (args.ctx_level, cfg.ctx_n, cfg.ctx_w, cfg.ctx_p))
         if args.eval_variant:
             print("[E146 변형] variant=%s vseed=%d" % (args.eval_variant, args.eval_vseed))
         if _evd is not None:
@@ -1283,6 +1365,12 @@ def main():
     _taskb_announced = False
     _dar_done = False       # 구현 점검 ①: 첫 보상 창 끝 도파민 뉴런 입력 0 확인을 한 번만 출력
     KRW = {"dec": [], "rw_rew": [], "rw_pun": []} if args.kc_rw_diag else None   # E168(읽기 전용): KC 발화율 진단
+    # 맥락 의존 규칙(bicond): 시행마다 맥락 배정 — 지역 난수(전역 np.random 열 불변). none 이면 None(이전 동작)
+    _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task == "bicond" else None
+    _nctx = 0
+    if _crng is not None:
+        print("[맥락 과제] bicond frac=%.2f level=%.2f seed=%d ctx_n=%d w=%.2f p=%.3f — 맥락 끔 정답 교차, 켬 정답 같은 쪽"
+              % (args.ctx_frac, args.ctx_level, (args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed), cfg.ctx_n, cfg.ctx_w, cfg.ctx_p))
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5, steps=args.offset_steps)
         if args.offset_steps != 5 and ep == 0:
@@ -1303,6 +1391,10 @@ def main():
                 print("[과제 B] 시행 %d 부터 자극 = bad food, 정답 = 같은 쪽" % (ep * args.steps + t))
                 _taskb_announced = True
             _stimf = stim_bad if _taskb else stim
+            _ctx_on = bool(_crng is not None and _crng.random_sample() < args.ctx_frac)   # 맥락 의존 규칙(지역 난수)
+            if _crng is not None:
+                set_ctx(brain, args.ctx_level if _ctx_on else 0.0)   # 결정 3처리·행동 창 동안
+                _nctx += int(_ctx_on)
             if args.dec_apm_scale >= 0:
                 # E143: 결정 단계(steer 3처리) 동안 KC→motor 흔적 생성 배율(0 = 동결). E142 탐색적 분해: 결정 단계에 반사 쪽·학습된 교차 쪽
                 # motor 가 함께 발화해 섞인 부호 흔적이 생기고, 연성 상한이 그것을 틀린 방향 변화로 바꿔 차이 성장이 정체했다.
@@ -1334,7 +1426,7 @@ def main():
             if _rev and not _rev_announced:
                 print("[반전] 시행 %d 부터 정답 = 같은 쪽(good 쪽)" % (ep * args.steps + t))
                 _rev_announced = True
-            if _rev or _taskb:
+            if _rev or _taskb or _ctx_on:
                 correct = (side == "left" and v < -0.02) or (side == "right" and v > 0.02)
             else:
                 correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
@@ -1342,7 +1434,7 @@ def main():
                 # K52: v<0 = motor_left 우세. v==0 이면 무작위. (E119: 판정 비교를 위해 행동 창 앞으로 옮김 —
                 # 사이에 np.random 소비가 없어 난수열은 이전과 같다)
                 _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
-                if _rev or _taskb:
+                if _rev or _taskb or _ctx_on:
                     correct_ex = (side == "left" and _ex == "left") or (side == "right" and _ex == "right")
                 else:
                     correct_ex = (side == "left" and _ex == "right") or (side == "right" and _ex == "left")
@@ -1379,6 +1471,8 @@ def main():
                     _aw = (float("nan"), float("nan"))
             else:
                 _aw = (float("nan"), float("nan"))
+            if _crng is not None and _ctx_on:
+                set_ctx(brain, 0.0)   # 맥락 의존 규칙: 보상 창·간격에는 맥락 끔(자극과 같이)
             if KCT is not None:
                 _ke = _kct_sum(_kct_read("e"))      # E139: 도파민 직전(행동 창 뒤) 자격흔적 역할별 합
                 _kgda = _kct_read("g")               # E139 수정: 도파민 직전 g — 도파민 전 변화 분리(V4)
@@ -1470,9 +1564,12 @@ def main():
                                    + [float(x) for x in _rs] + [_tot] + [float(x) for x in _ke]
                                    + [float(x) for x in _rpre] + [float(x) for x in _kee] + [float(_mrw[0]), float(_mrw[1])]
                                    + [float(x) for x in _ke0] + [float(x) for x in _ked]    # E143: 27~30 시행 시작 흔적, 31~34 결정 단계 끝 흔적
-                                   + [float(_aw[0]), float(_aw[1])])                          # E144: 35 행동 창 실행 motor 발화율 합, 36 반대 motor
+                                   + [float(_aw[0]), float(_aw[1])]                           # E144: 35 행동 창 실행 motor 발화율 합, 36 반대 motor
+                                   + ([float(_ctx_on)] if _crng is not None else []))          # 맥락 의존 규칙: 37 맥락 켬(bicond 만 — 기본 행 길이 불변)
                 KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
+    if _crng is not None:
+        print("[맥락 과제] 시행 %d 중 맥락 켬 %d" % (args.episodes * args.steps, _nctx))
     if KRW is not None:
         _kmean = lambda a: (float(np.mean(a)) if a else float("nan"), len(a))
         print("[E168 KC 발화] 결정 단계(3처리 끝) 평균 %.6f n=%d | 보상 창 보상 시행 평균 %.6f n=%d | 보상 창 처벌 시행 평균 %.6f n=%d | da_kc_inh=%.2f p=%.2f"

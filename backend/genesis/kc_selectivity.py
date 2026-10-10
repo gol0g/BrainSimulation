@@ -109,6 +109,21 @@ def overlap3_stats(cnt_g, cnt_b, cnt_f, c0, n_pres, steps, base_steps, thr=0.5):
             "nFin": int((rf & (rg | rb)).sum()), "jac_gb": float(o.sum() / union) if union else float("nan")}
 
 
+def ctx_stats(cnt_off, cnt_on, cnt_ctx, c0, n_pres, steps, base_steps, thr=0.5):
+    """맥락 의존 규칙 분기: 같은 자극(good 한쪽)의 KC 반응을 맥락 끔(off)·켬(on)에서, 그리고 맥락 단독(먹이 자극 없음, ctx)에서 센다.
+    E149 정의 그대로(유발 = 제시당 발화 − 기준선(맥락 끔 무자극), 반응 = 유발 ≥ thr). 반환 dict:
+    nOff·nOn·nCtx(반응 수), nKeep = |off∩on|, nLost = |off∖on|, nConj = |on∖(off∪ctx)|(결합 — 자극과 맥락이 함께일 때만),
+    jac = |off∩on|/|off∪on|(합집합 0 이면 nan)."""
+    base = steps * np.asarray(c0, dtype=np.float64) / max(base_steps, 1)
+    r0 = np.asarray(cnt_off, dtype=np.float64) / max(n_pres, 1) - base >= thr
+    r1 = np.asarray(cnt_on, dtype=np.float64) / max(n_pres, 1) - base >= thr
+    rc = np.asarray(cnt_ctx, dtype=np.float64) / max(n_pres, 1) - base >= thr
+    union = int((r0 | r1).sum())
+    return {"nOff": int(r0.sum()), "nOn": int(r1.sum()), "nCtx": int(rc.sum()), "nKeep": int((r0 & r1).sum()),
+            "nLost": int((r0 & ~r1).sum()), "nConj": int((r1 & ~(r0 | rc)).sum()),
+            "jac": float((r0 & r1).sum() / union) if union else float("nan")}
+
+
 def type_redistribute(g_good, g_bad, post_good, post_bad, counts, presented, eta, s0):
     """E153: 종류 입력 합 보존 헤브 재분배(호스트 적용, 최소 회로 K69 형). 제시된 종류(presented = 'good' | 'bad')의
     시냅스 가중치에 (1 + eta·c[post]) 를 곱하고(c = 그 제시 동안 KC 발화 수), KC 별 종류 입력 합(good + bad)을 s0(처음 값)로 되돌린다.
