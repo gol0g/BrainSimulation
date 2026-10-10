@@ -120,7 +120,7 @@ def measure_offset(brain, obs, nh, n=20, steps=5):
     return float(np.mean(vals))
 
 
-EVAL_VARIANTS = ("base", "int05", "int07", "occ", "noise", "bad")
+EVAL_VARIANTS = ("base", "int05", "int07", "occ", "noise", "bad", "agree", "conflict")
 
 
 def stim_variant(obs, nh, good_side, variant, rng):
@@ -131,6 +131,14 @@ def stim_variant(obs, nh, good_side, variant, rng):
         return stim(obs, nh, good_side)
     if variant == "bad":
         return stim_bad(obs, nh, good_side)     # E148: 과제 B 평가 자극(bad food 쪽 = good_side 자리)
+    if variant in ("agree", "conflict"):
+        # E170: 처음 보는 조합 자극(훈련에 없음). agree = good 이 good_side, bad 가 반대쪽(규칙 A good→교차·규칙 B bad→같은 쪽이 같은 방향),
+        # 먹이 광선 양쪽. conflict = good·bad 모두 good_side(두 규칙이 반대 방향), 먹이 광선 그 쪽만. 각 광선 0.9(훈련 자극과 같은 세기).
+        o = stim(obs, nh, good_side)
+        bside = good_side if variant == "conflict" else ("right" if good_side == "left" else "left")
+        o["bad_food_rays_" + bside] = np.ones(nh) * 0.9
+        o["food_rays_" + bside] = np.ones(nh) * 0.9
+        return o
     o = stim(obs, nh, good_side)
     on = np.zeros(nh); off_ = np.zeros(nh)
     if variant == "int05":
@@ -178,7 +186,14 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0):
     _vrng = np.random.RandomState(vseed)    # E146: 변형 잡음 전용 지역 생성기(전역 난수열 불변)
     for t in range(trials):
         side = "left" if (t % 2 == 0) else "right"     # 좌우 균형
-        v = steer(brain, stim_variant(obs, nh, side, variant, _vrng)) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음)
+        _sv = stim_variant(obs, nh, side, variant, _vrng)   # 시행마다 한 번(이전과 같은 호출 순서 — 잡음 변형 난수열 불변)
+        if variant in ("agree", "conflict") and t < 2:
+            # E170 조작검증(읽기 전용): 조합 자극의 쪽별 광선 평균
+            _mn = lambda k: float(np.mean(_sv[k]))
+            print("[E170 자극] variant=%s side=%s good L/R %.2f/%.2f bad L/R %.2f/%.2f food L/R %.2f/%.2f"
+                  % (variant, side, _mn("good_food_rays_left"), _mn("good_food_rays_right"), _mn("bad_food_rays_left"),
+                     _mn("bad_food_rays_right"), _mn("food_rays_left"), _mn("food_rays_right")))
+        v = steer(brain, _sv) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음)
         (vs_left if side == "left" else vs_right).append(v)
         # 정답 = good의 **반대쪽**
         if side == "left" and v > 0.02:
