@@ -377,28 +377,12 @@ Building Forager Brain (28,323 neurons)...
   [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=4.00, p=0.100, 연결 좌 60030·우 59965
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e177_main_run/forager_brain_CODE'
-make: Leaving directory '/root/e177_main_run/forager_brain_CODE'
+make: Entering directory '/root/e177_satcheck_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/root/e177_satcheck_run/forager_brain_CODE'
   [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 790 개
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/kctype_oja_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=238728.37 bad_food_eye_l_to_kc_l=240220.07 good_food_eye_r_to_kc_r=238176.51 bad_food_eye_r_to_kc_r=237701.14
 Model ready! Total: 28,323 neurons
-[사전] 오프셋 +0.002 | 정답률 43.0% | **변조폭 +0.0080** (양수=반사방향, 음수=역전)
-[KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30037 w=2.000; it_food_to_kc_r n=30112 w=2.000; assoc_edible_to_kc_l n=17668 w=2.000; assoc_edible_to_kc_r n=17929 w=2.000; wernicke_food_to_kc_l n=12193 w=3.000; wernicke_food_to_kc_r n=11975 w=3.000; ppc_goal_food_to_kc_l n=22281 w=2.000; ppc_goal_food_to_kc_r n=22573 w=2.000; social_mem_to_kc_l n=13472 w=1.500; social_mem_to_kc_r n=13645 w=1.500; assoc_bind_to_kc_l n=14847 w=2.000; assoc_bind_to_kc_r n=14907 w=2.000
-[E139] KC 계층 추적: 시냅스 역할 교차 37914 같은쪽 37616 비선택 15062 무활동 1408096 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/fix/rate_b10.npz)
-[맥락 과제] bicond frac=0.50 I=0.00 I_inh=0.00 inh_frac=0.00 I_ab=0.00 ctx_n=200 w=4.00 seed=17310 — 맥락 끔 정답 교차, 켬 정답 같은 쪽
-[학습] 30ep 완료, 보상 1743회 (탐색 주입 1807회, ε=0.60)
-[맥락 과제] 시행 3000 중 맥락 켬 1487
-[판정경로] judge=exec 시행=3000 abs_v_le_0.02=627 (20.9%) v정답_실행오답=0 v오답_실행정답=275 불일치율=9.2%
-=> KCTRACE 시행 3000 보상 1743 | A +5759991.7 B +3308805.0 C -5395467.8 P -3532720.4 | ΔD +588439.3 | share_B 0.380 B+/A 0.574 C-/A 0.937 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +113660 +124329 +147989 +86544 +10356 -3850 +55365 +15663 +32903 +30969 -6199 +29544 +23055 -33659 +11867 -41149 +7285 +46829 -47373 +8223 -33860 -5644 +25107 +2335 +47783 -17722 -6363 +6565 -60881 +18769 | 보상시행 e_same/e_cross 0.055
-=> KCTRACE2 탐색 A +2978445.5 B +2119742.6 C -3113142.9 P -2775928.9 | 탐욕 A +2781546.2 B +1189062.4 C -2282325.0 P -756791.4 | 비선택 Δg 보상 +1897910.4 처벌 -1818744.8 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E177/tr_bc_b10.npz
-=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A 0.574 C/P 1.527 | 보상시행 e_da 같은쪽/교차 +0.055 e_end 같은쪽/교차 +0.055 | 보상창 motor 발화율 평균 보상(좌 1.0192 우 1.0767) 처벌(좌 1.0675 우 1.0983)
-[반사가중치] food_explore_motor_l   n=30103 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] food_explore_motor_r   n=29736 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_l   n=15139 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[반사가중치] good_food_to_motor_r   n=14818 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=4.19468 변화율=49.3% | 평균 1.000→5.194 | std 0.0000→6.2874
-[D1가중치] food_to_d1_r   |Δ|평균=6.76969 변화율=63.3% | 평균 1.000→7.769 | std 0.0000→6.9388
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E177/w_bc_b10.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   [E176 초기 연결 스냅숏] 적재 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b10.npz — 스냅숏 희소 집단 790 개
@@ -778,12 +762,13 @@ Building Forager Brain (28,323 neurons)...
   [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=4.00, p=0.100, 연결 좌 60030·우 59965
   Spike recording enabled for all monitored populations
 Building model...
-make: Entering directory '/root/e177_main_run/forager_brain_CODE'
+make: Entering directory '/root/e177_satcheck_run/forager_brain_CODE'
 make: Nothing to be done for 'all'.
-make: Leaving directory '/root/e177_main_run/forager_brain_CODE'
+make: Leaving directory '/root/e177_satcheck_run/forager_brain_CODE'
   [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 790 개
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E160/kctype_oja_b10.npz 검증 일치 — good_food_eye_l_to_kc_l=238728.37 bad_food_eye_l_to_kc_l=240220.07 good_food_eye_r_to_kc_r=238176.51 bad_food_eye_r_to_kc_r=237701.14
 Model ready! Total: 28,323 neurons
-[이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.004 | 정답률 100.0% | **변조폭 -0.4186**
-=> 정답률 +57.0%p | **변조폭 변화 -0.4266** | 판정: 학습이 조향을 역전 방향으로 이동
+[맥락 평가] ctx=켬 I=0.00(KC 좌·우 Ioffset) I_inh=0.00(억제 부분집합 0.00) I_ab=0.00(assoc_binding) ctx_n=200 w=4.00 level=0.90(맥락 전용 집단)
+[E171 평가 진단] variant=base side=left n=250 motor L/R 0.666454/0.666264 KC L/R 0.006926/0.003237
+[E171 평가 진단] variant=base side=right n=250 motor L/R 0.666195/0.666288 KC L/R 0.003227/0.007001
+=> DECOMP mode=none mod=+0.0007 acc=0.0 off=+0.0000 pushed=0 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]

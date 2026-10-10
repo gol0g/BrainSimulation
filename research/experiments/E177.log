@@ -2,4 +2,10 @@
 커맨드: bash scripts/e177_main.sh
 ---
 [E177] 맥락 세기 w=4(고정)
-  e177 train b10: 
+  e177 train b10: => 사전 +0.0080 사후 -0.4186 보상 1743 || 맥락 켬 1487 || 적재 2 || => KCTRACE 시행 3000 보상 1743 | A +5759991.7 B +3308805.0 C -5395467.8 P -3532720.4 |
+  e177 kcctx b10: => KCCTX side=l off=55 on=123 ctx=94 keep=55 lost=0 conj=46 jac=0.4472 | side=r off=60 on=117 ctx=93 keep=60 lost=0 conj=36 jac=0.5128 | ctx_i=0.00 | KC 발화 합 good 끔 47514 켬 75407 · 맥락 단독 51113 · 기준선 132381 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e177 b10 learn off: => mod -0.4186
+  e177 b10 learn on: => mod -0.0000
+  e177 b10 none off: => mod +0.0080
+  e177 b10 none on: => mod +0.0007
+  e177 train b11: 

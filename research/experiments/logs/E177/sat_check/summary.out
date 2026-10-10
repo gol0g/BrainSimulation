@@ -1,0 +1,5 @@
+b10 all off rc=0 | => DECOMP mode=all mod=-0.4186 acc=100.0 off=-0.0037 pushed=8 kc_means | variant=base side=left n=250 motor L/R 0.572370/0.646248 KC L/R 0.004603/0.001772 variant=base side=right n=250 motor L/R 0.645718/0.552170 KC L/R 0.001635/0.004875 
+b10 all on rc=0 | => DECOMP mode=all mod=-0.0000 acc=0.0 off=-0.0000 pushed=8 kc_means[k | variant=base side=left n=250 motor L/R 0.666434/0.666171 KC L/R 0.006926/0.003237 variant=base side=right n=250 motor L/R 0.666330/0.666051 KC L/R 0.003227/0.007001 
+b10 none off rc=0 | => DECOMP mode=none mod=+0.0080 acc=43.0 off=+0.0023 pushed=0 kc_means | variant=base side=left n=250 motor L/R 0.621198/0.637360 KC L/R 0.004603/0.001772 variant=base side=right n=250 motor L/R 0.620907/0.640278 KC L/R 0.001635/0.004875 
+b10 none on rc=0 | => DECOMP mode=none mod=+0.0007 acc=0.0 off=+0.0000 pushed=0 kc_means[ | variant=base side=left n=250 motor L/R 0.666454/0.666264 KC L/R 0.006926/0.003237 variant=base side=right n=250 motor L/R 0.666195/0.666288 KC L/R 0.003227/0.007001 
+[E177 sat_check] 종료 2026-10-11 01:35:57
