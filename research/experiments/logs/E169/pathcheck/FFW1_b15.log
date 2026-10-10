@@ -382,18 +382,18 @@ Model ready! Total: 28,323 neurons
 [사전] 오프셋 -0.004 | 정답률 7.0% | **변조폭 +0.0228** (양수=반사방향, 음수=역전)
 [KC공통입력] scale=1.00 집단 12개: it_food_to_kc_l n=30198 w=2.000; it_food_to_kc_r n=30087 w=2.000; assoc_edible_to_kc_l n=17996 w=2.000; assoc_edible_to_kc_r n=17893 w=2.000; wernicke_food_to_kc_l n=12063 w=3.000; wernicke_food_to_kc_r n=12011 w=3.000; ppc_goal_food_to_kc_l n=22595 w=2.000; ppc_goal_food_to_kc_r n=22545 w=2.000; social_mem_to_kc_l n=13642 w=1.500; social_mem_to_kc_r n=13499 w=1.500; assoc_bind_to_kc_l n=15159 w=2.000; assoc_bind_to_kc_r n=15019 w=2.000
 [E139] KC 계층 추적: 시냅스 역할 교차 36913 같은쪽 37022 비선택 16316 무활동 1409564 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/pathcheck/rate_b15.npz)
-[학습] 1ep 완료, 보상 57회 (탐색 주입 66회, ε=0.60)
-[판정경로] judge=exec 시행=100 abs_v_le_0.02=12 (12.0%) v정답_실행오답=0 v오답_실행정답=8 불일치율=8.0%
-=> KCTRACE 시행 100 보상 57 | A +667538.6 B +419822.9 C -299526.5 P -407710.5 | ΔD +355899.7 | share_B 0.584 B+/A 0.629 C-/A 0.449 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +355900 | 보상시행 e_same/e_cross -1.013
-=> KCTRACE2 탐색 A +306055.4 B +205991.5 C -281416.2 P -370157.3 | 탐욕 A +361483.2 B +213831.4 C -18110.3 P -37553.2 | 비선택 Δg 보상 +164849.4 처벌 -103241.6 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E169/pathcheck/tr_FW1_b15.npz
-=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A 0.629 C/P 0.735 | 보상시행 e_da 같은쪽/교차 -1.013 e_end 같은쪽/교차 +0.756 | 보상창 motor 발화율 평균 보상(좌 0.5434 우 0.5416) 처벌(좌 0.5508 우 0.5446)
+[학습] 1ep 완료, 보상 58회 (탐색 주입 66회, ε=0.60)
+[판정경로] judge=exec 시행=100 abs_v_le_0.02=10 (10.0%) v정답_실행오답=0 v오답_실행정답=7 불일치율=7.0%
+=> KCTRACE 시행 100 보상 58 | A +110250.9 B -135015.8 C +31827.6 P -77291.4 | ΔD +354385.6 | share_B nan B+/A 0.000 C-/A -0.000 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +354386 | 보상시행 e_same/e_cross -1.480
+=> KCTRACE2 탐색 A +37639.7 B -55943.7 C +25941.0 P -71908.7 | 탐욕 A +72611.2 B -79072.0 C +5886.6 P -5382.7 | 비선택 Δg 보상 +30613.6 처벌 -25940.0 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E169/pathcheck/tr_FFW1_b15.npz
+=> KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -1.225 C/P -0.412 | 보상시행 e_da 같은쪽/교차 -1.480 e_end 같은쪽/교차 -1.480 | 보상창 motor 발화율 평균 보상(좌 0.5380 우 0.5306) 처벌(좌 0.5478 우 0.5381)
 [반사가중치] food_explore_motor_l   n=29853 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] food_explore_motor_r   n=29938 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] good_food_to_motor_l   n=14896 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] good_food_to_motor_r   n=15011 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
-[D1가중치] food_to_d1_l   |Δ|평균=6.87852 변화율=54.3% | 평균 1.000→7.878 | std 0.0000→8.3431
-[D1가중치] food_to_d1_r   |Δ|평균=6.78135 변화율=57.6% | 평균 1.000→7.781 | std 0.0000→8.2163
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E169/pathcheck/w_FW1_b15.npz
+[D1가중치] food_to_d1_l   |Δ|평균=6.92033 변화율=54.3% | 평균 1.000→7.920 | std 0.0000→8.4200
+[D1가중치] food_to_d1_r   |Δ|평균=6.94059 변화율=57.6% | 평균 1.000→7.941 | std 0.0000→8.3222
+[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E169/pathcheck/w_FFW1_b15.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -777,5 +777,5 @@ make: Leaving directory '/root/e169_run/forager_brain_CODE'
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/pathcheck/kctype_oja_b15.npz 검증 일치 — good_food_eye_l_to_kc_l=235550.12 bad_food_eye_l_to_kc_l=238795.59 good_food_eye_r_to_kc_r=238418.47 bad_food_eye_r_to_kc_r=237194.15
 Model ready! Total: 28,323 neurons
 [이식] 8개 경로: food_to_d1_cross_lr, food_to_d1_cross_rl, food_to_d1_l, food_to_d1_r, kc_l_to_motor_l, kc_l_to_motor_r, kc_r_to_motor_l, kc_r_to_motor_r
-[사후] 오프셋 -0.004 | 정답률 100.0% | **변조폭 -0.1491**
-=> 정답률 +93.0%p | **변조폭 변화 -0.1719** | 판정: 학습이 조향을 역전 방향으로 이동
+[사후] 오프셋 -0.004 | 정답률 100.0% | **변조폭 -0.2259**
+=> 정답률 +93.0%p | **변조폭 변화 -0.2487** | 판정: 학습이 조향을 역전 방향으로 이동
