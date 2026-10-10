@@ -1,0 +1,45 @@
+=== E170 실행: 2026-10-10T07:29:37Z ===
+커맨드: bash scripts/e170_main.sh
+---
+  e170 b10 AB base: => mod -0.6086 pushed 8 자극줄 0
+  e170 b10 AB bad: => mod +0.6558 pushed 8 자극줄 0
+  e170 b10 AB agree: => mod -0.5916 pushed 8 자극줄 2
+  e170 b10 AB conflict: => mod +0.0460 pushed 8 자극줄 2
+  e170 b10 none base: => mod +0.0080 pushed 0 자극줄 0
+  e170 b10 none bad: => mod +0.0144 pushed 0 자극줄 0
+  e170 b10 none agree: => mod -0.0074 pushed 0 자극줄 2
+  e170 b10 none conflict: => mod +0.0021 pushed 0 자극줄 2
+  e170 b11 AB base: => mod -0.6068 pushed 8 자극줄 0
+  e170 b11 AB bad: => mod +0.6522 pushed 8 자극줄 0
+  e170 b11 AB agree: => mod -0.6045 pushed 8 자극줄 2
+  e170 b11 AB conflict: => mod +0.0470 pushed 8 자극줄 2
+  e170 b11 none base: => mod +0.0107 pushed 0 자극줄 0
+  e170 b11 none bad: => mod +0.0189 pushed 0 자극줄 0
+  e170 b11 none agree: => mod -0.0020 pushed 0 자극줄 2
+  e170 b11 none conflict: => mod +0.0019 pushed 0 자극줄 2
+  e170 b12 AB base: => mod -0.6136 pushed 8 자극줄 0
+  e170 b12 AB bad: => mod +0.6637 pushed 8 자극줄 0
+  e170 b12 AB agree: => mod -0.5904 pushed 8 자극줄 2
+  e170 b12 AB conflict: => mod +0.0592 pushed 8 자극줄 2
+  e170 b12 none base: => mod +0.0008 pushed 0 자극줄 0
+  e170 b12 none bad: => mod +0.0108 pushed 0 자극줄 0
+  e170 b12 none agree: => mod -0.0047 pushed 0 자극줄 2
+  e170 b12 none conflict: => mod -0.0010 pushed 0 자극줄 2
+  e170 b13 AB base: => mod -0.5875 pushed 8 자극줄 0
+  e170 b13 AB bad: => mod +0.6653 pushed 8 자극줄 0
+  e170 b13 AB agree: => mod -0.5671 pushed 8 자극줄 2
+  e170 b13 AB conflict: => mod +0.0642 pushed 8 자극줄 2
+  e170 b13 none base: => mod +0.0227 pushed 0 자극줄 0
+  e170 b13 none bad: => mod +0.0142 pushed 0 자극줄 0
+  e170 b13 none agree: => mod +0.0018 pushed 0 자극줄 2
+  e170 b13 none conflict: => mod +0.0016 pushed 0 자극줄 2
+  e170 b14 AB base: => mod -0.6101 pushed 8 자극줄 0
+  e170 b14 AB bad: => mod +0.6596 pushed 8 자극줄 0
+  e170 b14 AB agree: => mod -0.5657 pushed 8 자극줄 2
+  e170 b14 AB conflict: => mod +0.0432 pushed 8 자극줄 2
+  e170 b14 none base: => mod +0.0119 pushed 0 자극줄 0
+  e170 b14 none bad: => mod +0.0212 pushed 0 자극줄 0
+  e170 b14 none agree: => mod +0.0008 pushed 0 자극줄 2
+  e170 b14 none conflict: => mod +0.0021 pushed 0 자극줄 2
+[E170] 전체 루프 종료
+=== 종료코드 0 ===

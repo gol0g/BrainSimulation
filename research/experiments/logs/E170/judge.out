@@ -1,0 +1,9 @@
+[조작검증] 조합 자극 구성 20/20 · 회귀(E162 base·bad) 20/20 · 적재(pushed) 40/40 · 전제 단독 효과 5/5 통과
+b10 e base -0.6166 bad +0.6414 | agree -0.5842 (가산 예측 -1.2580, ρ 0.464) | conflict +0.0439 (가산 예측 +0.0248) | 학습 m: agree -0.5916 conflict +0.0460 · 무학습 agree -0.0074 conflict +0.0021
+b11 e base -0.6175 bad +0.6333 | agree -0.6025 (가산 예측 -1.2508, ρ 0.482) | conflict +0.0451 (가산 예측 +0.0158) | 학습 m: agree -0.6045 conflict +0.0470 · 무학습 agree -0.0020 conflict +0.0019
+b12 e base -0.6144 bad +0.6529 | agree -0.5857 (가산 예측 -1.2673, ρ 0.462) | conflict +0.0602 (가산 예측 +0.0385) | 학습 m: agree -0.5904 conflict +0.0592 · 무학습 agree -0.0047 conflict -0.0010
+b13 e base -0.6102 bad +0.6511 | agree -0.5689 (가산 예측 -1.2613, ρ 0.451) | conflict +0.0626 (가산 예측 +0.0409) | 학습 m: agree -0.5671 conflict +0.0642 · 무학습 agree +0.0018 conflict +0.0016
+b14 e base -0.6220 bad +0.6384 | agree -0.5665 (가산 예측 -1.2604, ρ 0.449) | conflict +0.0411 (가산 예측 +0.0164) | 학습 m: agree -0.5657 conflict +0.0432 · 무학습 agree +0.0008 conflict +0.0021
+ρ ≥ 0.80 0/5 · |e_agree| < 1.1×max 단독 5/5 | 충돌 가산 상쇄 5/5
+판정 1: 합성 없음(H093-null)
+판정 2: 가산 상쇄

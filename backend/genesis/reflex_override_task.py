@@ -53,7 +53,7 @@ def stim_food(obs, nh, side):
     return o
 
 
-def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False):
+def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False, rec=None):
     """bias_side가 주어지면 **매 스텝** 운동 집단에 편향을 주입한다.
     C37 1차 실패 원인: 편향을 호출 전 한 번만 넣었더니 감각 입력이 다음 스텝에 덮어써서
     탐색 5975회에 정답 표본이 0개였다. 탐색은 실제로 행동이 바뀔 만큼 주입해야 의미가 있다."""
@@ -81,6 +81,11 @@ def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False
                     pass
         a, _i = brain.process(o)
         tot += a
+        if rec is not None:
+            # E171(읽기 전용): 처리마다 motor 좌·우 발화율과 KC 좌·우 발화율
+            rec.append((float(_i.get("motor_left_rate", float("nan"))) if isinstance(_i, dict) else float("nan"),
+                        float(_i.get("motor_right_rate", float("nan"))) if isinstance(_i, dict) else float("nan"),
+                        float(getattr(brain, "last_kc_l_rate", float("nan"))), float(getattr(brain, "last_kc_r_rate", float("nan")))))
     return tot
 
 
@@ -158,7 +163,7 @@ def stim_variant(obs, nh, good_side, variant, rng):
     return o
 
 
-def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0):
+def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None):
     """정답률과 **변조폭**을 함께 반환.
 
     C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
@@ -193,7 +198,7 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0):
             print("[E170 자극] variant=%s side=%s good L/R %.2f/%.2f bad L/R %.2f/%.2f food L/R %.2f/%.2f"
                   % (variant, side, _mn("good_food_rays_left"), _mn("good_food_rays_right"), _mn("bad_food_rays_left"),
                      _mn("bad_food_rays_right"), _mn("food_rays_left"), _mn("food_rays_right")))
-        v = steer(brain, _sv) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음)
+        v = steer(brain, _sv, rec=(diag.setdefault(side, []) if diag is not None else None)) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음). E171: diag 사전이면 쪽별 처리 기록
         (vs_left if side == "left" else vs_right).append(v)
         # 정답 = good의 **반대쪽**
         if side == "left" and v > 0.02:
@@ -330,6 +335,8 @@ def main():
                     help="E168: 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 연결 가중치(망 안 보상 창 KC 억제 후보). 0 = 끔(연결 없음 — 이전 모델). "
                          "이 cfg 로 만드는 모든 뇌(학습·이식 평가)에 같은 연결")
     ap.add_argument("--da-kc-inh-p", type=float, default=0.2, help="E168: 그 연결 확률")
+    ap.add_argument("--eval-diag", action="store_true",
+                    help="E171(읽기 전용): 분해(이식) 평가 시행의 쪽별 평균 motor·KC 발화율 출력 — 난수 소비 없음, 평가값 불변")
     ap.add_argument("--kc-rw-diag", action="store_true",
                     help="E168(읽기 전용): 학습 중 결정 단계(3처리 끝)·보상 창(보상 시행·처벌 시행) KC 발화율 평균을 출력. 난수 소비 없음")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
@@ -1041,9 +1048,16 @@ def main():
         if sub:
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
-        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed)
+        _evd = {} if args.eval_diag else None
+        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd)
         if args.eval_variant:
             print("[E146 변형] variant=%s vseed=%d" % (args.eval_variant, args.eval_vseed))
+        if _evd is not None:
+            # E171(읽기 전용): 평가 시행(조향 5처리)의 쪽별 평균 motor·KC 발화율 — 조합 비가산이 KC 수준인가 motor 출력 수준인가
+            for _sd in ("left", "right"):
+                _r = np.array(_evd.get(_sd, []), dtype=np.float64)
+                print("[E171 평가 진단] variant=%s side=%s n=%d motor L/R %.6f/%.6f KC L/R %.6f/%.6f"
+                      % (args.eval_variant or "base", _sd, len(_r), *(tuple(_r.mean(axis=0)) if len(_r) else (float("nan"),) * 4)))
         gms = " ".join("%s=%.4f" % (n.replace("_to_motor_", ">"), float(sub[n].mean()) if n in sub else float("nan")) for n in kc)
         print("=> DECOMP mode=%s mod=%+.4f acc=%.1f off=%+.4f pushed=%d kc_means[%s]" % (mode, mod, acc, off, len(sub), gms))
         return

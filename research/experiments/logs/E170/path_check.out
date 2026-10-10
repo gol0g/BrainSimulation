@@ -1,0 +1,19 @@
+[AB base rc=0] mode=all mod=-0.4783 pushed=8 
+[AB bad rc=0] mode=all mod=+0.5105 pushed=8 
+[AB agree rc=0] mode=all mod=-0.3423 pushed=8 
+    [E170 자극] variant=agree side=left good L/R 0.90/0.00 bad L/R 0.00/0.90 food L/R 0.90/0.90
+    [E170 자극] variant=agree side=right good L/R 0.00/0.90 bad L/R 0.90/0.00 food L/R 0.90/0.90
+[AB conflict rc=0] mode=all mod=+0.0085 pushed=8 
+    [E170 자극] variant=conflict side=left good L/R 0.90/0.00 bad L/R 0.90/0.00 food L/R 0.90/0.00
+    [E170 자극] variant=conflict side=right good L/R 0.00/0.90 bad L/R 0.00/0.90 food L/R 0.00/0.90
+[none base rc=0] mode=none mod=+0.0228 pushed=0 
+[none bad rc=0] mode=none mod=+0.0120 pushed=0 
+[none agree rc=0] mode=none mod=-0.0039 pushed=0 
+    [E170 자극] variant=agree side=left good L/R 0.90/0.00 bad L/R 0.00/0.90 food L/R 0.90/0.90
+    [E170 자극] variant=agree side=right good L/R 0.00/0.90 bad L/R 0.90/0.00 food L/R 0.90/0.90
+[none conflict rc=0] mode=none mod=+0.0028 pushed=0 
+    [E170 자극] variant=conflict side=left good L/R 0.90/0.00 bad L/R 0.90/0.00 food L/R 0.90/0.00
+    [E170 자극] variant=conflict side=right good L/R 0.00/0.90 bad L/R 0.00/0.90 food L/R 0.00/0.90
+  기대 (a): AB base −0.4783 · AB bad +0.5105 · none base +0.0228 · none bad +0.0120(E162 경로 검사)
+  기대 (b): agree left good 0.90/0.00 bad 0.00/0.90 food 0.90/0.90, right 대칭 / conflict left good 0.90/0.00 bad 0.90/0.00 food 0.90/0.00, right 대칭
+[E170 경로 검사] 종료
