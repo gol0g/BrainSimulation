@@ -41,8 +41,8 @@ def main():
         for b in BRAINS:
             k = rd("logs", "E173", "kcctx_b%d.log" % b)
             kl = [ln for ln in k.splitlines() if ln.startswith("=> KCCTX")][0]
-            sp = kl.split("맥락 발화 끔 ")[1]
-            sp_off = int(sp.split(" 켬 ")[0]); sp_on = int(sp.split(" 켬 ")[1].split()[0])
+            sp = kl.split("KC 발화 합 good 끔 ")[1]
+            k_off = int(sp.split(" 켬 ")[0]); k_on = int(sp.split(" 켬 ")[1].split()[0])
             t = rd("logs", "E173", "train_b%d.log" % b)
             cl = [ln for ln in t.splitlines() if ln.startswith("[맥락 과제] 시행 ")][0]
             ntr = int(cl.split("시행 ")[1].split()[0]); non = int(cl.split("맥락 켬 ")[1].split()[0])
@@ -67,7 +67,7 @@ def main():
                     e = rd("logs", "E173", "ev_b%d_%s_%s.log" % (b, w, c))
                     M[(w, c)] = mod_of(e)
                     ev_ok &= nload(e) >= 1 and (("[맥락 평가]" in e) == (c == "on"))
-            okb = (sp_off == 0 and sp_on > 0 and ntr == 3000 and 1350 <= non <= 1650 and refl_ok and nload(t) >= 2 and len(R) == 3000
+            okb = (k_on > k_off and ntr == 3000 and 1350 <= non <= 1650 and refl_ok and nload(t) >= 2 and len(R) == 3000
                    and tot > 0 and good == tot and num <= 1e-3 * den and prer <= 1e-3 and ev_ok)
             ok &= okb
             eo = M[("learn", "off")] - M[("none", "off")]; en = M[("learn", "on")] - M[("none", "on")]

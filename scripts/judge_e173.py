@@ -5,7 +5,7 @@
 e_off = m(learn off) − m(none off), e_on = m(learn on) − m(none on). 1e-4 정수.
 판정(적용 순서): 조작검증 실패 → 보류. 획득(H097) e_off ≤ −0.10 이면서 e_on ≥ +0.10 ≥ 4/5 → 요소식(H097-null) |e_on − e_off| < 0.10 ≥ 4/5
 → 부분(H097-partial) 한 맥락만(e_on ≥ +0.10·e_off > −0.10, 또는 e_off ≤ −0.10·e_on < +0.10) ≥ 4/5 → 그 밖 보류.
-조작검증(뇌마다, 모두): kcctx 맥락 발화 끔 0·켬 > 0 / 학습 '[맥락 과제] 시행 3000 중 맥락 켬 n' 1,350~1,650 / 추적 3,000행·열 37 / 맥락별 보상-규칙 일치 1.000 /
+조작검증(뇌마다, 모두): kcctx good 제시 KC 발화 합 켬 > 끔(맥락 전류가 KC 에 닿음 — 정정 1) / 학습 '[맥락 과제] 시행 3000 중 맥락 켬 n' 1,350~1,650 / 추적 3,000행·열 37 / 맥락별 보상-규칙 일치 1.000 /
 동결 잔차 ≤ 1e-3·도파민 전 ≤ 1e-3 / 반사 0→0 / 학습 적재 줄 ≥ 2 / 평가 적재 줄 ≥ 1 / 켬 평가에만 '[맥락 평가]' 줄.
 실행: python3 scripts/judge_e173.py (저장소 루트에서)"""
 import os
@@ -24,7 +24,7 @@ TK = re.compile(r"^\s*e173 kcctx b(\d+): => KCCTX (.*)$")
 RW = re.compile(r"^\[반사가중치\] good_food_to_motor_([lr])\s+n=\d+ w_mean ([-0-9.]+)→([-0-9.]+)")
 LD = re.compile(r"^\[E153 종류 입력 적재\].*검증 일치")
 CTXN = re.compile(r"^\[맥락 과제\] 시행 (\d+) 중 맥락 켬 (\d+)", re.M)
-SP = re.compile(r"맥락 발화 끔 (\d+) 켬 (\d+)")
+SP = re.compile(r"KC 발화 합 good 끔 (\d+) 켬 (\d+)")
 
 
 def i4(x):
@@ -70,14 +70,14 @@ def judge(K, TRN, EV, S, RAW, EL):
     for b in BRAINS:
         sp = SP.search(K[b])
         st, rw = S[b], RAW[b]
-        m[b] = {"kc": bool(sp) and int(sp.group(1)) == 0 and int(sp.group(2)) > 0,
+        m[b] = {"kc": bool(sp) and int(sp.group(2)) > int(sp.group(1)),
                 "nctx": rw[0] is not None and rw[1] == 3000 and 1350 <= rw[0] <= 1650 and rw[0] == TRN[b]["nctx"],
                 "trace": st["has_ctx"] and st["n"] == 3000 and st["agree"] == 1.0 and st["res"] <= 1e-3 and st["pre_ratio"] <= 1e-3,
                 "refl": rw[2], "load": rw[3] >= 2 and TRN[b]["load"] >= 2,
                 "ev": all(EL[(b, w, c)][0] >= 1 and EL[(b, w, c)][1] == (c == "on") for (w, c) in EVS)}
     ok = all(all(v.values()) for v in m.values())
     cnt = {k: sum(m[b][k] for b in BRAINS) for k in ("kc", "nctx", "trace", "refl", "load", "ev")}
-    checks = ["[조작검증] 맥락 발화 %d/5 · 맥락 켬 수 %d/5 · 추적(3,000·열37·맥락별 규칙 일치·동결·도파민전) %d/5 · 반사 0 %d/5 · 학습 적재 %d/5 · 평가(적재·맥락 평가 줄) %d/5 → %s"
+    checks = ["[조작검증] 맥락 KC 도달 %d/5 · 맥락 켬 수 %d/5 · 추적(3,000·열37·맥락별 규칙 일치·동결·도파민전) %d/5 · 반사 0 %d/5 · 학습 적재 %d/5 · 평가(적재·맥락 평가 줄) %d/5 → %s"
               % (cnt["kc"], cnt["nctx"], cnt["trace"], cnt["refl"], cnt["load"], cnt["ev"], "통과" if ok else "실패")]
     I = {k: i4(v) for k, v in EV.items()}
     eoff = {b: I[(b, "learn", "off")] - I[(b, "none", "off")] for b in BRAINS}

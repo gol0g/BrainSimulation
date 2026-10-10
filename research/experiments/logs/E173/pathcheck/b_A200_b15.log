@@ -373,6 +373,7 @@ Building Forager Brain (28,323 neurons)...
     Value population: 20 neurons
     Value→D1: 1.0 (gentle)
     Reverse replay: 5 steps backward
+  [맥락 입력] KC 좌·우 Ioffset 동적(맥락 = 균일 전류)
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e173_run/forager_brain_CODE'
@@ -384,8 +385,8 @@ Model ready! Total: 28,323 neurons
 [E139] KC 계층 추적: 시냅스 역할 교차 36913 같은쪽 37022 비선택 16316 무활동 1409564 (분류 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E138/pathcheck/rate_b15.npz)
 [학습] 2ep 완료, 보상 134회 (탐색 주입 121회, ε=0.60)
 [판정경로] judge=exec 시행=200 abs_v_le_0.02=7 (3.5%) v정답_실행오답=0 v오답_실행정답=5 불일치율=2.5%
-=> KCTRACE 시행 200 보상 134 | A +311667.9 B -255631.8 C -47159.1 P -241442.8 | ΔD +761583.4 | share_B 0.000 B+/A 0.000 C-/A 0.151 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +503206 +258378 | 보상시행 e_same/e_cross -1.627
-=> KCTRACE2 탐색 A +92361.8 B -107293.3 C -50740.7 P -233721.5 | 탐욕 A +219306.1 B -148338.4 C +3581.7 P -7721.3 | 비선택 Δg 보상 +97638.9 처벌 -85786.5 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E173/pathcheck/tr_a_b15.npz
+=> KCTRACE 시행 200 보상 134 | A +311680.9 B -255625.2 C -47177.6 P -241447.4 | ΔD +761575.9 | share_B 0.000 B+/A 0.000 C-/A 0.151 | 합일관성 최대 0.00e+00 | g연속 최대 0 | 블록 ΔD +503201 +258375 | 보상시행 e_same/e_cross -1.627
+=> KCTRACE2 탐색 A +92362.0 B -107293.1 C -50759.2 P -233726.1 | 탐욕 A +219318.9 B -148332.1 C +3581.7 P -7721.3 | 비선택 Δg 보상 +97642.7 처벌 -85789.8 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E173/pathcheck/tr_b_b15.npz
 => KCTRACE3 도파민전 |Σ|/|Σ시행| 0.00e+00 | B/A -0.820 C/P 0.195 | 보상시행 e_da 같은쪽/교차 -1.627 e_end 같은쪽/교차 -1.627 | 보상창 motor 발화율 평균 보상(좌 1.0340 우 0.9965) 처벌(좌 1.0860 우 1.0792)
 [반사가중치] food_explore_motor_l   n=29853 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
 [반사가중치] food_explore_motor_r   n=29938 w_mean 10.0000→10.0000 (학습 뇌; 이식 대상 아님)
@@ -393,7 +394,7 @@ Model ready! Total: 28,323 neurons
 [반사가중치] good_food_to_motor_r   n=15011 w_mean 0.0000→0.0000 (학습 뇌; 이식 대상 아님)
 [D1가중치] food_to_d1_l   |Δ|평균=10.05947 변화율=54.3% | 평균 1.000→11.059 | std 0.0000→11.4878
 [D1가중치] food_to_d1_r   |Δ|평균=8.91180 변화율=55.5% | 평균 1.000→9.911 | std 0.0000→11.2044
-[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E173/pathcheck/w_a_b15.npz
+[저장] 학습 가중치 8개 경로 → /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E173/pathcheck/w_b_b15.npz
 Building Forager Brain (28,323 neurons)...
   Phase 2a: Hypothalamus Circuit
   Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
@@ -769,6 +770,7 @@ Building Forager Brain (28,323 neurons)...
     Value population: 20 neurons
     Value→D1: 1.0 (gentle)
     Reverse replay: 5 steps backward
+  [맥락 입력] KC 좌·우 Ioffset 동적(맥락 = 균일 전류)
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e173_run/forager_brain_CODE'

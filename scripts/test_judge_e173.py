@@ -10,7 +10,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import judge_e173 as J
 
-KL = "side=l off=60 on=80 ctx=3 keep=58 lost=2 conj=19 jac=0.7073 | side=r off=61 on=82 ctx=4 keep=60 lost=1 conj=18 jac=0.7229 | ctx_n=200 w=3.00 p=0.100 level=0.90 연결 l=60000 r=60000 | 맥락 발화 끔 0 켬 2400 | n_pres=40"
+KL = "side=l off=60 on=80 ctx=3 keep=58 lost=2 conj=19 jac=0.7073 | side=r off=61 on=82 ctx=4 keep=60 lost=1 conj=18 jac=0.7229 | ctx_i=4.00 | KC 발화 합 good 끔 500 켬 700 · 맥락 단독 40 · 기준선 300 | n_pres=40"
 
 
 def build(eoff=-0.30, eon=0.30, per=None, bad=None):
@@ -29,9 +29,9 @@ def build(eoff=-0.30, eon=0.30, per=None, bad=None):
     if bad:
         kind, b = bad
         if kind == "kc_off":
-            K[b] = KL.replace("맥락 발화 끔 0", "맥락 발화 끔 7")
+            K[b] = KL.replace("good 끔 500 켬 700", "good 끔 700 켬 700")
         elif kind == "kc_on0":
-            K[b] = KL.replace("켬 2400", "켬 0")
+            K[b] = KL.replace("good 끔 500 켬 700", "good 끔 500 켬 400")
         elif kind == "nctx_range":
             RAW[b] = (1700, 3000, True, 2); TRN[b]["nctx"] = 1700
         elif kind == "nctx_mismatch":

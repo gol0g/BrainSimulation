@@ -1,5 +1,5 @@
 #!/bin/bash
-# E173 본실험 — 기준 logs/E173/criteria_fixed.txt. 맥락 세기는 보정 선택 logs/E173/pick.txt(W=<값>). 뇌 10~14, E160 망 안 형성 가중치.
+# E173 본실험 — 기준 logs/E173/criteria_fixed.txt(정정 1 — 맥락 = KC 좌·우 균일 전류 I). 맥락 세기는 보정 선택 logs/E173/pick.txt(I=<값>). 뇌 10~14, E160 망 안 형성 가중치.
 # 뇌마다: kcctx(측정, 240 제시) → 쌍조건 학습(--ctx-task bicond, 3,000시행, 맥락 50%, 추적) → 이식 평가 4(학습·무학습 × 맥락 끔·켬).
 # 요약 줄(judge_e173.py 와 맞춤): "  e173 kcctx b10: => KCCTX ..." / "  e173 train b10: => 사전 .. 사후 .. 보상 N || 맥락 켬 n || 적재 K || ..." / "  e173 b10 learn on: => mod +0.1000". 재개 가능(P13).
 set -u
@@ -7,17 +7,17 @@ R=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild
 LOG="$R/research/experiments/E173.log"
 RAW="$R/research/experiments/logs/E173"; mkdir -p "$RAW"
 WD="$R/research/experiments/traces/E173"; mkdir -p "$WD"
-W=$(grep -oE '^W=[0-9.]+' "$RAW/pick.txt" 2>/dev/null | cut -d= -f2)
-[ -n "$W" ] || { echo "[E173] 보정 선택 없음(pick.txt: $(cat "$RAW/pick.txt" 2>/dev/null)) — 본실험 미실행"; exit 1; }
+CI=$(grep -oE '^I=[0-9.]+' "$RAW/pick.txt" 2>/dev/null | cut -d= -f2)
+[ -n "$CI" ] || { echo "[E173] 보정 선택 없음(pick.txt: $(cat "$RAW/pick.txt" 2>/dev/null)) — 본실험 미실행"; exit 1; }
 source $R/scripts/cuda_env.sh >/dev/null 2>&1
 source /root/pygenn_wsl/bin/activate
 mkdir -p /root/e173_main_run && cd /root/e173_main_run
 cp $R/backend/genesis/*.py . 2>/dev/null
 BASE="--real-rstdp --crossed --d1-inhib -400 --direct-inhib -100 --kc-motor --kc-motor-sparsity 0.25 --kc-motor-w-max 300 --kc-motor-init-w 150 --kc-motor-eta 0.15 --tau-e 12 --reward-window 2 --reward-stim none --trial-gap 10 --epsilon 0.6 --bias 25 --env-seed 0"
 ACT="--act-window 3 --act-current 5000 --judge exec --reflex-w 0 --rw-apm-scale 0"
-CTX="--ctx-n 200 --ctx-w $W --ctx-p 0.10"
+CTX="--ctx-i $CI"
 LD='^\[E153 종류 입력 적재\].*검증 일치'
-echo "[E173] 맥락 세기 w*=$W (logs/E173/pick.txt)"
+echo "[E173] 맥락 세기 I*=$CI (logs/E173/pick.txt)"
 for B in 10 11 12 13 14; do
   KW="$R/research/experiments/traces/E160/kctype_oja_b$B.npz"
   [ -s "$KW" ] || { echo "  e173 b$B: [실패 rc=형성 가중치 없음]"; continue; }

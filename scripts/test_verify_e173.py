@@ -34,7 +34,7 @@ def run(eoff=-3000, eon=3000, sp_off=0, non=1500, refl="0.0000→0.0000", nld=2,
             os.makedirs(os.path.join(td, *d))
         w = lambda p, s: open(os.path.join(td, *p), "w", encoding="utf-8").write(s)
         for b in V.BRAINS:
-            w(("logs", "E173", "kcctx_b%d.log" % b), "x\n=> KCCTX side=l off=60 on=80 ctx=3 | ctx_n=200 w=3.00 | 맥락 발화 끔 %d 켬 2400 | n_pres=40\n" % (sp_off if b == 12 else 0))
+            w(("logs", "E173", "kcctx_b%d.log" % b), "x\n=> KCCTX side=l off=60 on=80 ctx=3 | ctx_i=4.00 | KC 발화 합 good 끔 %d 켬 700 · 맥락 단독 40 · 기준선 300 | n_pres=40\n" % (sp_off if b == 12 else 500))
             if miss and b == 14:
                 continue
             w(("logs", "E173", "train_b%d.log" % b), LDL * nld + "[맥락 과제] bicond frac=0.50\n[맥락 과제] 시행 3000 중 맥락 켬 %d\n" % (non if b == 11 else 1500)
@@ -54,7 +54,7 @@ def run(eoff=-3000, eon=3000, sp_off=0, non=1500, refl="0.0000→0.0000", nld=2,
 ok_all = True
 for name, kw, want in (("획득", {}, "획득(H097)"), ("요소식", {"eoff": -2000, "eon": -2000}, "요소식(H097-null)"),
                        ("부분 켬만", {"eoff": -500, "eon": 3000}, "부분(H097-partial)"), ("차 0.10 정확 → 보류", {"eoff": -500, "eon": 500}, "보류"),
-                       ("끔 발화 > 0", {"sp_off": 3}, "보류(조작검증 실패)"), ("맥락 켬 1,700", {"non": 1700}, "보류(조작검증 실패)"),
+                       ("발화 합 켬 ≤ 끔", {"sp_off": 700}, "보류(조작검증 실패)"), ("맥락 켬 1,700", {"non": 1700}, "보류(조작검증 실패)"),
                        ("반사 변함", {"refl": "0.0000→1.0000"}, "보류(조작검증 실패)"), ("적재 1줄", {"nld": 1}, "보류(조작검증 실패)"),
                        ("규칙 불일치 1시행", {"bad_rule": True}, "보류(조작검증 실패)"), ("켬 평가 줄 없음", {"on_line": False}, "보류(조작검증 실패)"),
                        ("끔 평가에 맥락 줄", {"off_line": True}, "보류(조작검증 실패)"), ("결측", {"miss": True}, "보류(결측")):

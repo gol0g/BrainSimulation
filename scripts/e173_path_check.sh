@@ -1,9 +1,10 @@
 #!/bin/bash
 # E173 경로 검사(조건 2) — 기준 logs/E173/criteria_fixed.txt 고정 뒤. 표본 밖 뇌 15, E160 보정 칸 형성 가중치(E162 경로 검사와 같음).
-# (a) 기본 경로 회귀(--ctx-n 0): E162 경로 검사 A 200 → [사전] +0.0228 [사후] −0.5094 보상 134(코드 추가 뒤 기본 경로 불변).
-# (b) 맥락 집단을 만들되 켜지 않음(--ctx-n 200 --ctx-w 3, 과제 none): 같은 값이어야 한다(새 집단이 다른 집단의 연결·난수를 바꾸지 않음 — E168 교훈).
-# (c) kcctx(w 3, 60 제시): 맥락 발화 끔 0·켬 > 0, KC 반응 변화.
-# (d) 쌍조건 짧은 학습(w 3, 4ep = 400시행): '[맥락 과제]' 줄, 맥락 켬 약 반, 추적 열 37·맥락별 보상-규칙 일치 1.000·동결 잔차.
+# (a) 기본 경로 회귀(--ctx-i 0 기본 — 맥락 기전 없음): E162 경로 검사 A 200 → [사전] +0.0228 [사후] −0.5094 보상 134(코드 추가 뒤 기본 경로 불변).
+# (b) 맥락 기전을 켜되(KC Ioffset 동적, --ctx-i 4) 맥락은 켜지 않음(과제 none): 같은 값이어야 한다(동적화가 연결·난수·궤적을 바꾸지 않음 — 정정 1).
+# 첫 판(새 뉴런 집단 zz_ctx)은 (b)에서 연결 적재 검사로 중단(2026-10-10 22:52 실행, logs/E173/pathcheck_try1/).
+# (c) kcctx(I 4, 60 제시): good 제시 KC 발화 합 켬 > 끔, KC 반응 변화.
+# (d) 쌍조건 짧은 학습(I 4, 4ep = 400시행): '[맥락 과제]' 줄, 맥락 켬 약 반, 추적 열 37·맥락별 보상-규칙 일치 1.000·동결 잔차.
 # (e) 이식 평가 학습 × 맥락 끔·켬: 켬에만 '[맥락 평가]' 줄.
 set -u
 R=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild
@@ -17,7 +18,7 @@ cp $R/backend/genesis/*.py . 2>/dev/null
 BASE="--real-rstdp --crossed --d1-inhib -400 --direct-inhib -100 --kc-motor --kc-motor-sparsity 0.25 --kc-motor-w-max 300 --kc-motor-init-w 150 --kc-motor-eta 0.15 --tau-e 12 --reward-window 2 --reward-stim none --trial-gap 10 --epsilon 0.6 --bias 25 --env-seed 0"
 ACT="--act-window 3 --act-current 5000 --judge exec --reflex-w 0 --rw-apm-scale 0"
 LD='^\[E153 종류 입력 적재\].*검증 일치'
-CTX="--ctx-n 200 --ctx-w 3 --ctx-p 0.10"
+CTX="--ctx-i 4"
 for ARM in a b; do
   [ "$ARM" = "a" ] && XC="" || XC="$CTX"
   f="$OUT/${ARM}_A200_b15.log"

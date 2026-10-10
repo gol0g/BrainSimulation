@@ -1,0 +1,13 @@
+[(a) rc=0] 맥락 입력 줄 0 적재 2 | 변조폭 +0.0228 → 변조폭 -0.5094 보상 134회 | 기대 +0.0228 → -0.5094 보상 134회
+[(b) rc=1] 맥락 입력 줄 1 적재 0 |  →   | 기대 +0.0228 → -0.5094 보상 134회
+[(c) kcctx rc=1] 
+[(d) bicond rc=1]  | 적재 0 |  →  
+[(e) learn off rc=1] 적재 0 맥락 평가 줄 0 | 
+[(e) learn on rc=1] 적재 0 맥락 평가 줄 0 | 
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+  File "/root/pygenn_wsl/lib/python3.12/site-packages/numpy/lib/_npyio_impl.py", line 454, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'research/experiments/traces/E173/pathcheck/tr_bc_b15.npz'
+[E173 경로 검사] 종료

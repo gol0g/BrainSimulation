@@ -1195,9 +1195,7 @@ class ForagerBrainConfig:
     kc_inh_to_kc_sparsity: float = 0.08
     da_kc_inh_w: float = 0.0             # E168: 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 가중치. 0 = 끔(집단을 만들지 않음 — 이전 모델과 같다)
     da_kc_inh_p: float = 0.2             # E168: 그 연결 확률
-    ctx_n: int = 0                       # 맥락 입력 집단(zz_ctx) 크기. 0 = 집단·연결을 만들지 않음(이전 모델과 같다)
-    ctx_w: float = 4.0                   # 맥락 → KC(좌·우 양측) 가중치(종류 입력 kc_good_bad_food_weight 와 같은 단위)
-    ctx_p: float = 0.10                  # 맥락 → KC 연결 확률(호스트 지역 난수 — 장치 연결 난수 불변)
+    ctx_kc_dynamic: bool = False         # 맥락 의존 규칙(E173): KC 좌·우 Ioffset 을 동적 매개변수로(맥락 = 균일 전류). False = 이전 모델
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2159,30 +2157,14 @@ class ForagerBrain:
             print(f"  [E168 도파민→KC억제] 도파민 뉴런 {self.config.n_dopamine} → KC 억제 뉴런 좌·우 "
                   f"{self.config.n_kc_inhibitory_per_side}, w={_dkw:.2f}, p={_dkp:.2f}")
 
-        # 맥락 입력(맥락 의존 규칙 분기): 호스트가 I_input 을 정하는 감각 LIF 집단 zz_ctx(먹이 눈과 같은 매개변수) → KC 좌·우(양측).
-        # 기본 0 = 만들지 않음 = 이전 모델. E168 교훈대로 연결은 호스트 지역 난수, 초기값은 상수(장치 난수 미사용) — 다른 집단의 연결·초기화 불변
-        # (경로 검사: ctx_n > 0 이고 맥락을 켜지 않으면 ctx_n 0 과 같은 궤적).
-        _cn = int(getattr(self.config, "ctx_n", 0))
-        if _cn > 0:
-            _cw = float(getattr(self.config, "ctx_w", 4.0)); _cp = float(getattr(self.config, "ctx_p", 0.10))
-            _c = self.config
-            self.ctx_pop = self.model.add_neuron_population(
-                "zz_ctx", _cn, sensory_lif_model,
-                {"C": 1.0, "TauM": _c.tau_m, "Vrest": _c.v_rest, "Vreset": _c.v_reset, "Vthresh": _c.v_thresh, "TauRefrac": _c.tau_refrac},
-                {"V": _c.v_rest, "RefracTime": 0.0, "I_input": 0.0})
-            self.ctx_pop.spike_recording_enabled = True   # kcctx 조작검증(맥락 발화 수)용 — 동역학 불변
-            _crs = np.random.RandomState(17300 + int(getattr(self.config, "genn_seed", 0)))
-            self.ctx_syn = {}
-            for _sd, _post in (("l", self.kc_left), ("r", self.kc_right)):
-                _m = _crs.random_sample((_cn, int(self.config.n_kc_per_side))) < _cp
-                _pi, _qi = np.nonzero(_m)
-                _sg = self.model.add_synapse_population(
-                    "zz_ctx_to_kc_%s" % _sd, "SPARSE", self.ctx_pop, _post,
-                    init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": _cw})}),
-                    init_postsynaptic("ExpCurr", {"tau": 5.0}))
-                _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
-                self.ctx_syn[_sd] = (_sg, int(_pi.size))
-            print(f"  [맥락 입력] zz_ctx {_cn} → KC 좌·우, w={_cw:.2f}, p={_cp:.3f}, 연결 좌 {self.ctx_syn['l'][1]}·우 {self.ctx_syn['r'][1]}")
+        # 맥락 입력(E173): KC 좌·우 Ioffset 을 동적 매개변수로 — 맥락 켬 = 두 쪽 KC 에 같은 전류(호스트가 시행마다 설정). 기본 False = 이전 모델.
+        # 첫 판(새 뉴런 집단 zz_ctx → KC, 호스트 연결)은 경로 검사(2026-10-10 22:52)에서 'good_food_eye_l_to_kc_l 연결이 저장본과 다르다'로 중단 —
+        # 새 뉴런 집단은 장치 초기화 스레드 배치를 밀어 다른 집단의 연결 난수를 바꾼다(E168 은 시냅스 집단만이라 호스트 연결로 피했다).
+        # 동적 매개변수 전환은 연결을 바꾸지 않는다(E161 형성 가중치(KC→motor A± 동적)를 E166(동적 끔)에서 연결 검증 일치로 실음).
+        if getattr(self.config, "ctx_kc_dynamic", False):
+            self.kc_left.set_param_dynamic("Ioffset")
+            self.kc_right.set_param_dynamic("Ioffset")
+            print("  [맥락 입력] KC 좌·우 Ioffset 동적(맥락 = 균일 전류)")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
