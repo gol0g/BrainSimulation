@@ -1193,6 +1193,8 @@ class ForagerBrainConfig:
     kc_to_inh_sparsity: float = 0.05
     kc_inh_to_kc_weight: float = -15.0
     kc_inh_to_kc_sparsity: float = 0.08
+    da_kc_inh_w: float = 0.0             # E168: 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 가중치. 0 = 끔(집단을 만들지 않음 — 이전 모델과 같다)
+    da_kc_inh_p: float = 0.2             # E168: 그 연결 확률
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2130,6 +2132,19 @@ class ForagerBrain:
                 self._create_static_synapse(f"ei_to_{_t}", _inh, _pop, _gei, sparsity=0.10)
                 _n += 1
             print(f"  [C16] 전역 E/I 균형: {_n}개 집단에 억제 {_gei} 적용")
+
+        # E168: 보상 창 흔적의 망 안 차단 후보 — 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 연결. 보상으로 도파민 뉴런이 발화하는 동안
+        # 망 스스로 KC 를 억제한다(호스트 A± 조작 없음). 기본 0 = 집단을 만들지 않음 = 이전 모델과 같다.
+        # 연결 난수(장치 초기화) 순서를 흐트리지 않도록 다른 모든 집단 생성 뒤(빌드 직전)에 만든다.
+        _dkw = float(getattr(self.config, "da_kc_inh_w", 0.0))
+        if _dkw > 0.0:
+            if getattr(self, "dopamine_neurons", None) is None or getattr(self, "kc_inh_left", None) is None:
+                raise RuntimeError("da_kc_inh_w > 0 은 도파민 뉴런과 KC 억제 뉴런이 필요하다")
+            _dkp = float(getattr(self.config, "da_kc_inh_p", 0.2))
+            self._create_static_synapse("da_to_kc_inh_l", self.dopamine_neurons, self.kc_inh_left, _dkw, sparsity=_dkp)
+            self._create_static_synapse("da_to_kc_inh_r", self.dopamine_neurons, self.kc_inh_right, _dkw, sparsity=_dkp)
+            print(f"  [E168 도파민→KC억제] 도파민 뉴런 {self.config.n_dopamine} → KC 억제 뉴런 좌·우 "
+                  f"{self.config.n_kc_inhibitory_per_side}, w={_dkw:.2f}, p={_dkp:.2f}")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()

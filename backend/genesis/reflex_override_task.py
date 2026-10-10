@@ -311,6 +311,12 @@ def main():
                          "도파민 뉴런은 다음 보상·처벌 호출까지 보상 시 입력을 유지)")
     ap.add_argument("--offset-steps", type=int, default=5,
                     help="구현 점검(외부 검토 2026-10-09 ③): 학습 중 오프셋 측정의 조향 처리 수(기본 5 — 학습 판단은 3처리 합). evaluate 는 바꾸지 않는다")
+    ap.add_argument("--da-kc-inh", type=float, default=0.0,
+                    help="E168: 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 연결 가중치(망 안 보상 창 KC 억제 후보). 0 = 끔(연결 없음 — 이전 모델). "
+                         "이 cfg 로 만드는 모든 뇌(학습·이식 평가)에 같은 연결")
+    ap.add_argument("--da-kc-inh-p", type=float, default=0.2, help="E168: 그 연결 확률")
+    ap.add_argument("--kc-rw-diag", action="store_true",
+                    help="E168(읽기 전용): 학습 중 결정 단계(3처리 끝)·보상 창(보상 시행·처벌 시행) KC 발화율 평균을 출력. 난수 소비 없음")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
     ap.add_argument("--kc-dev-eta", type=float, default=0.1, help="E153 kcdev: 합 보존 헤브 재분배 배율 eta(발화 1개당)")
     ap.add_argument("--kc-dev-save", default=None, help="E153 kcdev: 형성된 종류 입력 가중치 저장 npz")
@@ -398,6 +404,7 @@ def main():
     cfg.kc_type_oja = bool(args.kc_type_oja)                 # E160: 종류 입력 망 안 Oja 가소성(kcdevoja 노출 전용)
     cfg.kc_oja_eta, cfg.kc_oja_beta = float(args.kc_oja_eta), float(args.kc_oja_beta)
     cfg.kc_oja_mmax, cfg.kc_oja_tau_pre = float(args.kc_oja_mmax), float(args.kc_oja_tau)
+    cfg.da_kc_inh_w, cfg.da_kc_inh_p = float(args.da_kc_inh), float(args.da_kc_inh_p)   # E168: 0 이면 연결 없음(이전 모델)
     if args.rw_da_reset or args.offset_steps != 5:
         print("[구현 점검] rw_da_reset=%s offset_steps=%d (외부 검토 2026-10-09 ①·③)" % (bool(args.rw_da_reset), args.offset_steps))
     if args.no_reward:
@@ -1246,6 +1253,7 @@ def main():
     _rev_announced = False
     _taskb_announced = False
     _dar_done = False       # 구현 점검 ①: 첫 보상 창 끝 도파민 뉴런 입력 0 확인을 한 번만 출력
+    KRW = {"dec": [], "rw_rew": [], "rw_pun": []} if args.kc_rw_diag else None   # E168(읽기 전용): KC 발화율 진단
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5, steps=args.offset_steps)
         if args.offset_steps != 5 and ep == 0:
@@ -1288,6 +1296,8 @@ def main():
                 for _s in brain.kc_motor_syn.values():
                     _s.set_dynamic_param_value("A_plus", brain.kc_motor_apm[0])
                     _s.set_dynamic_param_value("A_minus", brain.kc_motor_apm[1])
+            if KRW is not None:
+                KRW["dec"].append(float(brain.last_kc_l_rate + brain.last_kc_r_rate))   # E168(읽기 전용): 결정 단계 3처리 끝 KC 발화율
             if KCT is not None:
                 _ked = _kct_sum(_kct_read("e"))   # E143(읽기 전용): 결정 단계 끝(행동 창 전) 흔적
             # E147: --reverse-after N 이면 전체 시행 번호 N 부터 정답 = 같은 쪽(good 쪽). 난수 소비 없음 — 난수열은 이전과 같다.
@@ -1382,11 +1392,16 @@ def main():
                     for _s in brain.kc_motor_syn.values():
                         _s.set_dynamic_param_value("A_plus", args.rw_apm_scale * brain.kc_motor_apm[0])
                         _s.set_dynamic_param_value("A_minus", args.rw_apm_scale * brain.kc_motor_apm[1])
+                _kcw = 0.0
                 for _ in range(args.reward_window):
                     _a_rw, _inf_rw = brain.process(_o)
                     if KCT is not None and isinstance(_inf_rw, dict):
                         # E139 수정(읽기 전용): 보상 창 중 좌/우 motor 발화율 — 보상 창에 양쪽 motor 가 발화하면 비선택 흔적이 생긴다
                         _mrw[0] += float(_inf_rw.get("motor_left_rate", 0.0)); _mrw[1] += float(_inf_rw.get("motor_right_rate", 0.0))
+                    if KRW is not None:
+                        _kcw += float(brain.last_kc_l_rate + brain.last_kc_r_rate)   # E168(읽기 전용): 보상 창 KC 발화율
+                if KRW is not None and args.reward_window > 0:
+                    KRW["rw_rew" if correct else "rw_pun"].append(_kcw / args.reward_window)
                 if args.rw_motor_silence > 0:
                     brain.motor_left.set_dynamic_param_value("Ioffset", 0.0)
                     brain.motor_right.set_dynamic_param_value("Ioffset", 0.0)
@@ -1429,6 +1444,10 @@ def main():
                                    + [float(_aw[0]), float(_aw[1])])                          # E144: 35 행동 창 실행 motor 발화율 합, 36 반대 motor
                 KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
+    if KRW is not None:
+        _kmean = lambda a: (float(np.mean(a)) if a else float("nan"), len(a))
+        print("[E168 KC 발화] 결정 단계(3처리 끝) 평균 %.6f n=%d | 보상 창 보상 시행 평균 %.6f n=%d | 보상 창 처벌 시행 평균 %.6f n=%d | da_kc_inh=%.2f p=%.2f"
+              % (_kmean(KRW["dec"]) + _kmean(KRW["rw_rew"]) + _kmean(KRW["rw_pun"]) + (args.da_kc_inh, args.da_kc_inh_p)))
     if J["n"]:
         print("[판정경로] judge=%s 시행=%d abs_v_le_0.02=%d (%.1f%%) v정답_실행오답=%d v오답_실행정답=%d 불일치율=%.1f%%"
               % (args.judge, J["n"], J["small"], 100.0 * J["small"] / J["n"], J["v_ok_ex_no"], J["v_no_ex_ok"],
