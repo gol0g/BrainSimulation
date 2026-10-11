@@ -1,0 +1,9 @@
+[(a) X0 none_R25 rc=0] 동작점 줄 0 적재 2 배율 2 | mod=+0.3877 pushed=0 
+[(a) X0 W_R25 rc=0] 동작점 줄 0 적재 2 배율 2 | mod=+0.1226 pushed=8 
+  기대 (a): none_R25 mod=+0.3877, W_R25 mod=+0.1226(E158·E159 경로 검사), 동작점 줄 0
+[(b) X-4000 none_R25 rc=0] 동작점 줄 2 적재 2 배율 2 | mod=+0.9649 pushed=0  | side=left n=250 motor L/R 0.398546/0.191234 side=right n=250 motor L/R 0.204029/0.382677 
+[(b) X-4000 W_R25 rc=0] 동작점 줄 2 적재 2 배율 2 | mod=+0.4905 pushed=8  | side=left n=250 motor L/R 0.413019/0.311242 side=right n=250 motor L/R 0.311040/0.405475 
+[(b) X-4000 W_R0 rc=0] 동작점 줄 2 적재 2 배율 2 | mod=-0.3470 pushed=8  | side=left n=250 motor L/R 0.242997/0.295538 side=right n=250 motor L/R 0.304547/0.218299 
+[(b) X-4000 none_R0 rc=0] 동작점 줄 2 적재 2 배율 2 | mod=+0.0538 pushed=0  | side=left n=250 motor L/R 0.216101/0.181381 side=right n=250 motor L/R 0.197216/0.184006 
+  기대 (b): 동작점 줄 ≥ 1(= −4000), 적재 ≥ 2·배율 ≥ 2, 진단 줄 좌·우, motor 4개 모두 ≥ 0.66 아님, pushed W 8·none 0
+[E181 경로 검사] 종료 2026-10-11 19:45:19

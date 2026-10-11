@@ -1,0 +1,35 @@
+=== E181 실행: 2026-10-11T10:45:46Z ===
+커맨드: bash scripts/e181_main.sh
+---
+  e181 none_R0 b10: => mod +0.0447 pushed 0 || 적재 2 배율 2
+  e181 none_R25 b10: => mod +0.9268 pushed 0 || 적재 2 배율 2
+  e181 W0_R0 b10: => mod -0.8923 pushed 8 || 적재 2 배율 2
+  e181 W0_R25 b10: => mod +0.1373 pushed 8 || 적재 2 배율 2
+  e181 W25_R0 b10: => mod -0.5663 pushed 8 || 적재 2 배율 2
+  e181 W25_R25 b10: => mod +0.2249 pushed 8 || 적재 2 배율 2
+  e181 none_R0 b11: => mod +0.0383 pushed 0 || 적재 2 배율 2
+  e181 none_R25 b11: => mod +0.9412 pushed 0 || 적재 2 배율 2
+  e181 W0_R0 b11: => mod -0.8703 pushed 8 || 적재 2 배율 2
+  e181 W0_R25 b11: => mod +0.1834 pushed 8 || 적재 2 배율 2
+  e181 W25_R0 b11: => mod -0.6091 pushed 8 || 적재 2 배율 2
+  e181 W25_R25 b11: => mod +0.2721 pushed 8 || 적재 2 배율 2
+  e181 none_R0 b12: => mod +0.0564 pushed 0 || 적재 2 배율 2
+  e181 none_R25 b12: => mod +0.9401 pushed 0 || 적재 2 배율 2
+  e181 W0_R0 b12: => mod -0.8661 pushed 8 || 적재 2 배율 2
+  e181 W0_R25 b12: => mod +0.2004 pushed 8 || 적재 2 배율 2
+  e181 W25_R0 b12: => mod -0.5826 pushed 8 || 적재 2 배율 2
+  e181 W25_R25 b12: => mod +0.2807 pushed 8 || 적재 2 배율 2
+  e181 none_R0 b13: => mod +0.0791 pushed 0 || 적재 2 배율 2
+  e181 none_R25 b13: => mod +0.9337 pushed 0 || 적재 2 배율 2
+  e181 W0_R0 b13: => mod -0.8379 pushed 8 || 적재 2 배율 2
+  e181 W0_R25 b13: => mod +0.1876 pushed 8 || 적재 2 배율 2
+  e181 W25_R0 b13: => mod -0.5400 pushed 8 || 적재 2 배율 2
+  e181 W25_R25 b13: => mod +0.2798 pushed 8 || 적재 2 배율 2
+  e181 none_R0 b14: => mod +0.0601 pushed 0 || 적재 2 배율 2
+  e181 none_R25 b14: => mod +0.9578 pushed 0 || 적재 2 배율 2
+  e181 W0_R0 b14: => mod -0.8989 pushed 8 || 적재 2 배율 2
+  e181 W0_R25 b14: => mod +0.1620 pushed 8 || 적재 2 배율 2
+  e181 W25_R0 b14: => mod -0.6173 pushed 8 || 적재 2 배율 2
+  e181 W25_R25 b14: => mod +0.2678 pushed 8 || 적재 2 배율 2
+[E181] 전체 루프 종료
+=== 종료코드 0 ===

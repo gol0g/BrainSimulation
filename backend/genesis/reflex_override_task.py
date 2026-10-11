@@ -226,7 +226,7 @@ def stim_variant(obs, nh, good_side, variant, rng):
     return o
 
 
-def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None, ctx=None):
+def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None, ctx=None, ctx_trial=False, ctx_gap=10):
     """정답률과 **변조폭**을 함께 반환.
 
     C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
@@ -242,8 +242,15 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=No
     # 뇌의 동역학 상태(적응·잔류전류·도파민)가 사전과 달랐던 것 = **서로 다른 상태의 뇌를 비교**.
     # 측정 직전에 상태를 초기화하고 동일한 안정화를 거치면, 남는 차이는 **가중치뿐**이다.
     brain.reset()
-    if ctx is not None:
+    if ctx is not None and not ctx_trial:
         ctx(brain, True)       # 맥락 평가: 안정화·오프셋·시행 내내 맥락 켬(오프셋이 맥락의 상수 치우침을 뺀다). None = 이전 동작(아무것도 안 함)
+    # E182 시행 맞춤 맥락 평가(ctx_trial): 학습과 같은 시간 구조 — 안정화·오프셋은 맥락 없이, 시행마다 조향 처리 동안만 맥락 켬, 사이 ctx_gap 처리는 맥락 끔·무자극.
+    _ctr = {"on": 0, "off": 0}
+    _neu_e = None
+    if ctx is not None and ctx_trial:
+        _neu_e = stim(obs, nh, "left")
+        for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right"):
+            _neu_e[_k] = np.zeros(nh)
     # 2026-09-18: 안정화 길이를 인자로 뺐다. 30스텝은 **부족하다** — 같은 뇌를 연속 평가하면
     # 1회차만 튀고(변조폭 0.5609) 2회차부터 0.5524~0.5542로 가라앉는다. 사전 측정이 그 1회차라
     # 모든 조건의 '변화'에 음수 편향이 들어간다(pilot에서 무학습 칸도 -0.007).
@@ -263,7 +270,13 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=No
             print("[E170 자극] variant=%s side=%s good L/R %.2f/%.2f bad L/R %.2f/%.2f food L/R %.2f/%.2f"
                   % (variant, side, _mn("good_food_rays_left"), _mn("good_food_rays_right"), _mn("bad_food_rays_left"),
                      _mn("bad_food_rays_right"), _mn("food_rays_left"), _mn("food_rays_right")))
+        if ctx is not None and ctx_trial:
+            ctx(brain, True); _ctr["on"] += 1
         v = steer(brain, _sv, rec=(diag.setdefault(side, []) if diag is not None else None)) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음). E171: diag 사전이면 쪽별 처리 기록
+        if ctx is not None and ctx_trial:
+            ctx(brain, False); _ctr["off"] += 1
+            for _ in range(ctx_gap):
+                brain.process(_neu_e)
         (vs_left if side == "left" else vs_right).append(v)
         # 정답 = good의 **반대쪽**
         if side == "left" and v > 0.02:
@@ -271,8 +284,11 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=No
         elif side == "right" and v < -0.02:
             ok += 1
     mod = float(np.mean(vs_right)) - float(np.mean(vs_left))
-    if ctx is not None:
+    if ctx is not None and not ctx_trial:
         ctx(brain, False)
+    if ctx is not None and ctx_trial:
+        print("[맥락 평가 시행] 시행 %d · 맥락 켬 %d회·끔 %d회(조향 처리 동안만 켬), 사이 간격 %d처리 맥락 끔·무자극, 안정화·오프셋 맥락 없음"
+              % (trials, _ctr["on"], _ctr["off"], ctx_gap))
     return ok / trials * 100, off, mod
 
 
@@ -434,6 +450,9 @@ def main():
     ap.add_argument("--ctx2-w", type=float, default=4.0, help="E179: zz_ctx2 → KC 가중치")
     ap.add_argument("--ctx2-p", type=float, default=0.10, help="E179: zz_ctx2 → KC 연결 확률(호스트 지역 난수 17700 + genn_seed)")
     ap.add_argument("--eval-ctx2", action="store_true", help="E179: 분해(이식) 평가를 맥락 A(zz_ctx2) 켬으로. --eval-ctx(맥락 B)와 함께 쓸 수 없다")
+    ap.add_argument("--eval-ctx-trial", action="store_true",
+                    help="E182: 맥락 평가(--eval-ctx·--eval-ctx2)를 학습과 같은 시간 구조로 — 안정화·오프셋 맥락 없음, 시행마다 조향 처리 동안만 맥락 켬, 사이 --eval-ctx-gap 처리 맥락 끔·무자극. 기본 꺼짐 = 이전(맥락 내내 켬)")
+    ap.add_argument("--eval-ctx-gap", type=int, default=10, help="E182: 시행 맞춤 맥락 평가의 시행 사이 간격 처리 수(학습의 --trial-gap 과 같은 10)")
     ap.add_argument("--motor-tonic", type=float, default=0.0,
                     help="motor 동작점(E178): motor 좌·우 Ioffset 기저값(음수 = 긴장성 억제 — 불응기 상한 아래로). 0 = 이전 모델(정적 Ioffset 0). "
                          "이 cfg 로 만드는 모든 뇌(학습·이식 평가). 행동 창·보상 창 침묵은 기저값 ± 전류로 바꾸고 기저값으로 되돌린다. motor Ioffset 동적화 자동")
@@ -542,6 +561,8 @@ def main():
         raise SystemExit("--ctx-task bicond2 는 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 B = zz_ctx, A = zz_ctx2)")
     if args.eval_ctx2 and (args.ctx2_n <= 0 or args.eval_ctx):
         raise SystemExit("--eval-ctx2 는 --ctx2-n > 0 이 필요하고 --eval-ctx 와 함께 쓸 수 없다")
+    if args.eval_ctx_trial and not (args.eval_ctx or args.eval_ctx2):
+        raise SystemExit("--eval-ctx-trial 은 --eval-ctx 또는 --eval-ctx2 가 필요하다")
     if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_i <= 0 and args.ctx_inh_i <= 0 and args.ctx_ab_i == 0 and args.ctx_n <= 0:
         raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-i > 0·--ctx-inh-i > 0·--ctx-ab-i ≠ 0·--ctx-n > 0 중 하나가 필요하다")
     if args.rw_da_reset or args.offset_steps != 5:
@@ -1257,7 +1278,8 @@ def main():
             _ectx = (lambda b_, on_: ctx_apply(b_, on_, args))
         else:
             _ectx = None
-        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd, ctx=_ectx)
+        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd, ctx=_ectx,
+                                 ctx_trial=bool(args.eval_ctx_trial), ctx_gap=int(args.eval_ctx_gap))
         if args.eval_ctx:
             print("[맥락 평가] ctx=켬 I=%.2f(KC 좌·우 Ioffset) I_inh=%.2f(억제 부분집합 %.2f) I_ab=%.2f(assoc_binding) ctx_n=%d w=%.2f level=%.2f(맥락 전용 집단)"
                   % (args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, args.ctx_n, args.ctx_w, args.ctx_level))
