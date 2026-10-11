@@ -1,0 +1,23 @@
+[(a) X0 AB base rc=0] 동작점 줄 0 | mode=all mod=-0.4783 pushed=8 
+[(a) X0 AB bad rc=0] 동작점 줄 0 | mode=all mod=+0.5105 pushed=8 
+[(a) X0 none base rc=0] 동작점 줄 0 | mode=none mod=+0.0228 pushed=0 
+[(a) X0 none bad rc=0] 동작점 줄 0 | mode=none mod=+0.0120 pushed=0 
+  기대 (a): AB base −0.4783 · AB bad +0.5105 · none base +0.0228 · none bad +0.0120(E170·E162 경로 검사), 동작점 줄 0
+[(b) X-4000 AB base rc=0] 동작점 줄 2 | mode=all mod=-1.1300 pushed=8  | side=left n=250 motor L/R 0.128258/0.317091 side=right n=250 motor L/R 0.376674/0.113515 
+[(b) X-4000 AB bad rc=0] 동작점 줄 2 | mode=all mod=+1.1752 pushed=8  | side=left n=250 motor L/R 0.380824/0.119454 side=right n=250 motor L/R 0.111547/0.320253 
+[(b) X-4000 AB agree rc=0] 동작점 줄 2 | mode=all mod=-1.2573 pushed=8  | side=left n=250 motor L/R 0.155499/0.389782 side=right n=250 motor L/R 0.432610/0.163979 
+    [E170 자극] variant=agree side=left good L/R 0.90/0.00 bad L/R 0.00/0.90 food L/R 0.90/0.90
+    [E170 자극] variant=agree side=right good L/R 0.00/0.90 bad L/R 0.90/0.00 food L/R 0.90/0.90
+[(b) X-4000 AB conflict rc=0] 동작점 줄 2 | mode=all mod=+0.0679 pushed=8  | side=left n=250 motor L/R 0.468821/0.421485 side=right n=250 motor L/R 0.454816/0.434634 
+    [E170 자극] variant=conflict side=left good L/R 0.90/0.00 bad L/R 0.90/0.00 food L/R 0.90/0.00
+    [E170 자극] variant=conflict side=right good L/R 0.00/0.90 bad L/R 0.00/0.90 food L/R 0.00/0.90
+[(b) X-4000 none base rc=0] 동작점 줄 2 | mode=none mod=+0.0605 pushed=0  | side=left n=250 motor L/R 0.268718/0.239294 side=right n=250 motor L/R 0.305830/0.300616 
+[(b) X-4000 none bad rc=0] 동작점 줄 2 | mode=none mod=+0.0358 pushed=0  | side=left n=250 motor L/R 0.325370/0.297814 side=right n=250 motor L/R 0.277493/0.264274 
+[(b) X-4000 none agree rc=0] 동작점 줄 2 | mode=none mod=+0.0075 pushed=0  | side=left n=250 motor L/R 0.388261/0.375018 side=right n=250 motor L/R 0.424874/0.414645 
+    [E170 자극] variant=agree side=left good L/R 0.90/0.00 bad L/R 0.00/0.90 food L/R 0.90/0.90
+    [E170 자극] variant=agree side=right good L/R 0.00/0.90 bad L/R 0.90/0.00 food L/R 0.90/0.90
+[(b) X-4000 none conflict rc=0] 동작점 줄 2 | mode=none mod=+0.0304 pushed=0  | side=left n=250 motor L/R 0.481387/0.466958 side=right n=250 motor L/R 0.480538/0.478258 
+    [E170 자극] variant=conflict side=left good L/R 0.90/0.00 bad L/R 0.90/0.00 food L/R 0.90/0.00
+    [E170 자극] variant=conflict side=right good L/R 0.00/0.90 bad L/R 0.00/0.90 food L/R 0.00/0.90
+  기대 (b): 동작점 줄 ≥ 1(= −4000), 진단 줄 좌·우, motor 4개 모두 ≥ 0.66 아님, 자극 줄 설계 구성, pushed AB 8·none 0
+[E180 경로 검사] 종료 2026-10-11 19:16:10
