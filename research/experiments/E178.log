@@ -2,4 +2,35 @@
 커맨드: bash scripts/e178_main.sh
 ---
 [E178] 맥락 세기 w=4(고정) · motor 긴장성 억제 X=-4000 (logs/E178/pick.txt)
-  e178 train b10: 
+  e178 train b10: => 사전 +0.0283 사후 +0.2857 보상 1556 || 맥락 켬 1487 || 적재 2 || => KCTRACE 시행 3000 보상 1556 | A +7200710.2 B +9400893.0 C -6967511.6 P -9297358.8 |
+  e178 kcctx b10: => KCCTX side=l off=55 on=124 ctx=93 keep=55 lost=0 conj=48 jac=0.4435 | side=r off=58 on=115 ctx=92 keep=58 lost=0 conj=37 jac=0.5043 | ctx_i=0.00 | KC 발화 합 good 끔 47384 켬 75368 · 맥락 단독 51219 · 기준선 132597 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e178 b10 learn off: => mod +0.2857
+  e178 b10 learn on: => mod +0.2909
+  e178 b10 none off: => mod +0.0283
+  e178 b10 none on: => mod +0.0153
+  e178 train b11: => 사전 +0.0384 사후 +0.2146 보상 1500 || 맥락 켬 1479 || 적재 2 || => KCTRACE 시행 3000 보상 1500 | A +8052635.7 B +9901040.7 C -7729036.3 P -9780225.3 |
+  e178 kcctx b11: => KCCTX side=l off=52 on=131 ctx=106 keep=52 lost=0 conj=52 jac=0.3969 | side=r off=57 on=124 ctx=100 keep=57 lost=0 conj=42 jac=0.4597 | ctx_i=0.00 | KC 발화 합 good 끔 47057 켬 76352 · 맥락 단독 52190 · 기준선 134254 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e178 b11 learn off: => mod +0.2146
+  e178 b11 learn on: => mod +0.2669
+  e178 b11 none off: => mod +0.0384
+  e178 b11 none on: => mod +0.0244
+  e178 train b12: => 사전 +0.0178 사후 +0.1226 보상 1540 || 맥락 켬 1487 || 적재 2 || => KCTRACE 시행 3000 보상 1540 | A +7788783.2 B +9254319.4 C -7337563.3 P -9073956.2 |
+  e178 kcctx b12: => KCCTX side=l off=57 on=129 ctx=97 keep=57 lost=0 conj=47 jac=0.4419 | side=r off=52 on=120 ctx=101 keep=52 lost=0 conj=47 jac=0.4333 | ctx_i=0.00 | KC 발화 합 good 끔 47525 켬 76713 · 맥락 단독 52224 · 기준선 137472 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e178 b12 learn off: => mod +0.1226
+  e178 b12 learn on: => mod +0.2262
+  e178 b12 none off: => mod +0.0178
+  e178 b12 none on: => mod +0.0146
+  e178 train b13: => 사전 +0.0645 사후 +0.1747 보상 1498 || 맥락 켬 1511 || 적재 2 || => KCTRACE 시행 3000 보상 1498 | A +7682515.8 B +9831945.7 C -7316630.0 P -9856624.7 |
+  e178 kcctx b13: => KCCTX side=l off=48 on=124 ctx=103 keep=48 lost=0 conj=57 jac=0.3871 | side=r off=57 on=140 ctx=94 keep=57 lost=0 conj=56 jac=0.4071 | ctx_i=0.00 | KC 발화 합 good 끔 47444 켬 76943 · 맥락 단독 52739 · 기준선 138776 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e178 b13 learn off: => mod +0.1747
+  e178 b13 learn on: => mod +0.2670
+  e178 b13 none off: => mod +0.0645
+  e178 b13 none on: => mod +0.0208
+  e178 train b14: => 사전 +0.0543 사후 +0.1839 보상 1487 || 맥락 켬 1469 || 적재 2 || => KCTRACE 시행 3000 보상 1487 | A +8031489.5 B +11359663.9 C -7877008.1 P -11111216.5
+  e178 kcctx b14: => KCCTX side=l off=57 on=131 ctx=101 keep=57 lost=0 conj=50 jac=0.4351 | side=r off=58 on=123 ctx=91 keep=58 lost=0 conj=37 jac=0.4715 | ctx_i=0.00 | KC 발화 합 good 끔 47041 켬 76897 · 맥락 단독 51580 · 기준선 132459 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e178 b14 learn off: => mod +0.1839
+  e178 b14 learn on: => mod +0.2569
+  e178 b14 none off: => mod +0.0543
+  e178 b14 none on: => mod +0.0217
+[E178] 전체 루프 종료
+=== 종료코드 0 ===
