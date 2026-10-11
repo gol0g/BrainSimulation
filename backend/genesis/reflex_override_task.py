@@ -398,7 +398,7 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx", "rawcat"))
     ap.add_argument("--kc-type-weights", default=None,
                     help="E153: 경험 형성 KC 종류 입력(good·bad 눈 → KC) 가중치 npz — 모든 뇌에 싣는다(연결이 저장본과 같아야 함)")
     ap.add_argument("--kc-type-scale", type=float, default=1.0,
@@ -453,6 +453,27 @@ def main():
     ap.add_argument("--eval-ctx-trial", action="store_true",
                     help="E182: 맥락 평가(--eval-ctx·--eval-ctx2)를 학습과 같은 시간 구조로 — 안정화·오프셋 맥락 없음, 시행마다 조향 처리 동안만 맥락 켬, 사이 --eval-ctx-gap 처리 맥락 끔·무자극. 기본 꺼짐 = 이전(맥락 내내 켬)")
     ap.add_argument("--eval-ctx-gap", type=int, default=10, help="E182: 시행 맞춤 맥락 평가의 시행 사이 간격 처리 수(학습의 --trial-gap 과 같은 10)")
+    ap.add_argument("--feat-n", type=int, default=0,
+                    help="E183: 원시 특징 집단 zz_feat_l·zz_feat_r 크기(쪽마다, → 같은 쪽 KC). 0 = 없음. --conn-snapshot 필요")
+    ap.add_argument("--feat-w", type=float, default=4.0, help="E183: zz_feat → KC 초기 가중치")
+    ap.add_argument("--feat-p", type=float, default=0.10, help="E183: zz_feat → KC 연결 확률(호스트 지역 난수 18400 + genn_seed)")
+    ap.add_argument("--feat-oja", action="store_true", help="E183: zz_feat → KC 를 망 안 Oja(E160 식, eta 동적)로. 없으면 정적")
+    ap.add_argument("--feat-oja-eta", type=float, default=0.02, help="E183: Oja 학습률(빌드 값 — rawcat 은 측정 때 0, 노출 때 --rc-expo-eta)")
+    ap.add_argument("--feat-oja-beta", type=float, default=0.3, help="E183: Oja 감쇠(K94 형성 설정)")
+    ap.add_argument("--feat-oja-mmax", type=float, default=32.0, help="E183: Oja 상한")
+    ap.add_argument("--feat-oja-tau", type=float, default=20.0, help="E183: 전 흔적 시정수(ms)")
+    ap.add_argument("--feat-level", type=float, default=0.9, help="E183: 특징 패턴 세기(활성 단위 I_input = 값 × good_food_eye 감도 — 먹이 광선과 같은 단위)")
+    ap.add_argument("--rc-k", type=int, default=40, help="E183 rawcat: 원형 활성 단위 수")
+    ap.add_argument("--rc-shared", type=int, default=10, help="E183 rawcat: 두 원형 공유 단위 수")
+    ap.add_argument("--rc-d", type=int, default=12, help="E183 rawcat: 사례 왜곡 — 원형 활성 중 끄고 배경에서 켜는 수")
+    ap.add_argument("--rc-ntrain", type=int, default=6, help="E183 rawcat: 범주당 노출 사례 수")
+    ap.add_argument("--rc-nnew", type=int, default=6, help="E183 rawcat: 범주당 새 사례 수")
+    ap.add_argument("--rc-seed", type=int, default=18300, help="E183 rawcat: 사례 세계 시드(모든 뇌 공유)")
+    ap.add_argument("--rc-reps", type=int, default=3, help="E183 rawcat: 측정 때 사례마다 제시 수")
+    ap.add_argument("--rc-expo", type=int, default=17, help="E183 rawcat: 노출 주기 수(주기 = 노출 사례 × 범주 × 쪽 한 번씩)")
+    ap.add_argument("--rc-expo-eta", type=float, default=0.02, help="E183 rawcat: 노출 동안 Oja eta(0 = 대조 — 같은 노출, 가소성 없음)")
+    ap.add_argument("--rc-repeat-pre", action="store_true", help="E183 rawcat: 형성 전 측정을 두 번(측정 반복성 확인)")
+    ap.add_argument("--rc-save", default=None, help="E183 rawcat: 노출 뒤 zz_feat→KC 가중치 npz(+ pre·post 인덱스)")
     ap.add_argument("--motor-tonic", type=float, default=0.0,
                     help="motor 동작점(E178): motor 좌·우 Ioffset 기저값(음수 = 긴장성 억제 — 불응기 상한 아래로). 0 = 이전 모델(정적 Ioffset 0). "
                          "이 cfg 로 만드는 모든 뇌(학습·이식 평가). 행동 창·보상 창 침묵은 기저값 ± 전류로 바꾸고 기저값으로 되돌린다. motor Ioffset 동적화 자동")
@@ -557,6 +578,16 @@ def main():
     cfg.ctx2_n, cfg.ctx2_w, cfg.ctx2_p = int(args.ctx2_n), float(args.ctx2_w), float(args.ctx2_p)   # E179: 맥락 전용 집단 2(스냅숏 필요)
     if args.ctx2_n > 0 and not args.conn_snapshot:
         raise SystemExit("--ctx2-n > 0 은 --conn-snapshot 이 필요하다")
+    cfg.feat_n, cfg.feat_w, cfg.feat_p = int(args.feat_n), float(args.feat_w), float(args.feat_p)   # E183: 원시 특징 집단(스냅숏 필요)
+    cfg.feat_oja = bool(args.feat_oja)
+    cfg.feat_oja_eta, cfg.feat_oja_beta = float(args.feat_oja_eta), float(args.feat_oja_beta)
+    cfg.feat_oja_mmax, cfg.feat_oja_tau_pre = float(args.feat_oja_mmax), float(args.feat_oja_tau)
+    if args.feat_n > 0 and not args.conn_snapshot:
+        raise SystemExit("--feat-n > 0 은 --conn-snapshot 이 필요하다")
+    if args.decomp_mode == "rawcat" and (args.feat_n <= 0 or not args.decomp_weights):
+        raise SystemExit("rawcat 은 --feat-n > 0 과 --decomp-weights 가 필요하다")
+    if args.decomp_mode == "rawcat" and args.rc_expo_eta != 0 and not args.feat_oja:
+        raise SystemExit("rawcat 노출 eta ≠ 0 은 --feat-oja 가 필요하다(정적 시냅스는 바뀌지 않는다)")
     if args.ctx_task == "bicond2" and (args.ctx_n <= 0 or args.ctx2_n <= 0):
         raise SystemExit("--ctx-task bicond2 는 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 B = zz_ctx, A = zz_ctx2)")
     if args.eval_ctx2 and (args.ctx2_n <= 0 or args.eval_ctx):
@@ -704,7 +735,7 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
-        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx"):
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx", "rawcat"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         elif mode == "swap":
             # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
@@ -725,6 +756,187 @@ def main():
         else:
             raise SystemExit("알 수 없는 분해 모드 %s" % mode)
         _b2, _env2, _obs2 = TE.build_from_cfg(cfg, _bseed, env_seed=_eseed, env_cfg=_ecfg)
+        if mode == "rawcat":
+            # E183: 원시 특징 범주 형성 측정(보상 없음, 도파민 호출 없음). 특징 집단 zz_feat_l·r(같은 쪽 KC 로만)에 사례 패턴(rawcat.py 세계)을 준다.
+            # 형성 전 측정(eta 0) → 노출(eta = --rc-expo-eta; 0 이면 같은 노출·가소성 없음 대조) → 형성 후 측정(eta 0).
+            # 제시 = 3처리(먹이 광선 한쪽 0.9·good·bad 광선 0 — stim_food, 범주 표지 없음; 특징 I_input = 패턴 × --feat-level × good_food_eye 감도),
+            # 사이 무자극·특징 끔 10처리(측정 때 뒤 5처리 = 기준선). KC 반응 = 제시당 평균 발화 − 3 × 기준선 처리당 발화 ≥ 0.5(kcoverlap 과 같은 규칙).
+            import rawcat as RC
+            if getattr(_b2, "feat_pop", None) is None:
+                raise SystemExit("rawcat 은 --feat-n > 0 이 필요하다")
+            n_k = int(cfg.n_kc_per_side)
+            W_ = RC.make_world(n=args.feat_n, k=args.rc_k, shared=args.rc_shared, d=args.rc_d,
+                               n_train=args.rc_ntrain, n_new=args.rc_nnew, seed=args.rc_seed)
+            print("[원시 특징 세계] n %d k %d 공유 %d 왜곡 %d 노출 사례 %d 새 사례 %d seed %d | 원형 A %s | 원형 B %s"
+                  % (W_["n"], W_["k"], W_["shared"], W_["d"], args.rc_ntrain, args.rc_nnew, args.rc_seed,
+                     ",".join(str(int(x)) for x in W_["protos"]["A"]), ",".join(str(int(x)) for x in W_["protos"]["B"])))
+            _foja = bool(cfg.feat_oja)
+            _fsens = float(_b2.config.good_food_eye_sensitivity)
+            _pgb = [p_ for p_ in (getattr(_b2, "good_food_eye_left", None), getattr(_b2, "good_food_eye_right", None),
+                                  getattr(_b2, "bad_food_eye_left", None), getattr(_b2, "bad_food_eye_right", None)) if p_ is not None]
+
+            def _ids(pop):
+                return np.asarray(pop.spike_recording_data[0][1], dtype=np.int64)
+
+            def _feat(side, units):
+                for sd in "lr":
+                    v = np.zeros(args.feat_n, dtype=np.float32)
+                    if side is not None and sd == side[0]:
+                        v[np.asarray(units, dtype=int)] = float(args.feat_level) * _fsens
+                    _b2.feat_pop[sd].vars["I_input"].view[:] = v
+                    _b2.feat_pop[sd].vars["I_input"].push_to_device()
+
+            def _eta(val):
+                if _foja:
+                    for sd in "lr":
+                        _b2.feat_syn[sd][0].set_dynamic_param_value("eta", float(val))
+
+            _FS = {}
+            for sd in "lr":
+                sy = _b2.feat_syn[sd][0]
+                sy.pull_connectivity_from_device()
+                _FS[sd] = {"pre": np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64), "post": np.asarray(sy.get_sparse_post_inds(), dtype=np.int64)}
+
+            def _gpull():
+                out_ = {}
+                for sd in "lr":
+                    sy = _b2.feat_syn[sd][0]
+                    sy.vars["g"].pull_from_device()
+                    out_[sd] = np.asarray(sy.vars["g"].values, dtype=np.float64).ravel().copy()
+                return out_
+
+            neu = stim(_obs2, nh, "left")
+            for _k in ("good_food_rays_left", "good_food_rays_right", "food_rays_left", "food_rays_right", "bad_food_rays_left", "bad_food_rays_right"):
+                neu[_k] = np.zeros(nh)
+
+            def _settle():
+                _b2.reset()
+                _feat(None, None)
+                for _ in range(30):
+                    _b2.process(_obs2)
+
+            def _present(side, units, rec):
+                sd = side[0]
+                kpop = _b2.kc_left if sd == "l" else _b2.kc_right
+                act = np.zeros(args.feat_n, dtype=bool)
+                act[np.asarray(units, dtype=int)] = True
+                fired = set()
+                _feat(side, units)
+                o_ = stim_food(_obs2, nh, side)
+                for _ in range(3):
+                    _b2.process(o_)
+                    ids = _ids(kpop)
+                    if rec is not None and ids.size:
+                        rec["kc"] += np.bincount(ids[ids < n_k], minlength=n_k)[:n_k]
+                    fid = _ids(_b2.feat_pop[sd])
+                    fid = fid[fid < args.feat_n]
+                    if rec is not None:
+                        rec["fa"] += int(act[fid].sum()); rec["fi"] += int((~act[fid]).sum())
+                        fired |= set(np.unique(fid[act[fid]]).tolist())
+                        rec["fo"] += int(_ids(_b2.feat_pop["r" if sd == "l" else "l"]).size)
+                        rec["gb"] += int(sum(_ids(p_).size for p_ in _pgb))
+                if rec is not None:
+                    rec["fu"].append(len(fired) / float(act.sum()))
+                _feat(None, None)
+
+            def _gap(base):
+                for j in range(10):
+                    _b2.process(neu)
+                    if base is not None and j >= 5:
+                        for kn, pop in (("l", _b2.kc_left), ("r", _b2.kc_right)):
+                            ids = _ids(pop)
+                            if ids.size:
+                                base[kn] += np.bincount(ids[ids < n_k], minlength=n_k)[:n_k]
+
+            def _measure(tag):
+                _eta(0.0)
+                g_b = _gpull()
+                _settle()
+                base = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+                cnts = {}
+                rec = {"kc": None, "fa": 0, "fi": 0, "fo": 0, "gb": 0, "fu": []}
+                npres = 0
+                for _r in range(args.rc_reps):
+                    for side in ("left", "right"):
+                        for st in ("train", "new"):
+                            for i in range(len(W_[st]["A"])):
+                                for c in ("A", "B"):
+                                    key = (side[0], st, c, i)
+                                    if key not in cnts:
+                                        cnts[key] = np.zeros(n_k)
+                                    rec["kc"] = cnts[key]
+                                    _present(side, W_[st][c][i], rec)
+                                    _gap(base)
+                                    npres += 1
+                g_a = _gpull()
+                same = all(np.array_equal(g_b[sd], g_a[sd]) for sd in "lr")
+                if sum(float(v.sum()) for v in cnts.values()) == 0:
+                    raise RuntimeError("KC 스파이크 0 — 측정 도구 실패(기록 버퍼 확인)")
+                sets = {sd: {"train": {"A": [], "B": []}, "new": {"A": [], "B": []}} for sd in "lr"}
+                for (sd, st, c, i) in sorted(cnts):
+                    br = base[sd] / (5.0 * npres)
+                    resp = np.nonzero(cnts[(sd, st, c, i)] / float(args.rc_reps) - 3.0 * br >= 0.5)[0]
+                    sets[sd][st][c].append(set(int(x) for x in resp))
+                    print("RCKC tag=%s side=%s set=%s cat=%s i=%d n=%d ids=%s" % (tag, sd, st, c, i, resp.size, ",".join(str(int(x)) for x in resp)))
+                nall = rec["fa"] + rec["fi"]
+                print("RCCHK tag=%s npres=%d feat_active_frac=%.4f feat_inactive_spikes=%d feat_active_spikes=%d feat_other_side=%d goodbad=%d g_same=%d base_l=%d base_r=%d"
+                      % (tag, npres, float(np.mean(rec["fu"])) if rec["fu"] else float("nan"), rec["fi"], rec["fa"], rec["fo"], rec["gb"], int(same),
+                         int(base["l"].sum()), int(base["r"].sum())))
+                return sets
+
+            def _wsum(g, sd):
+                pre, post = _FS[sd]["pre"], _FS[sd]["post"]
+                a_only = np.setdiff1d(W_["protos"]["A"], W_["protos"]["B"]); b_only = np.setdiff1d(W_["protos"]["B"], W_["protos"]["A"])
+                ma = np.bincount(post, weights=g * np.isin(pre, a_only), minlength=n_k)[:n_k]
+                mb = np.bincount(post, weights=g * np.isin(pre, b_only), minlength=n_k)[:n_k]
+                tot = np.bincount(post, weights=g, minlength=n_k)[:n_k]
+                m = (ma + mb) > 0
+                sh = ma[m] / (ma[m] + mb[m])
+                return float(np.median(np.maximum(sh, 1.0 - sh))) if m.any() else float("nan"), float(np.mean(tot))
+
+            S_pre = _measure("pre")
+            if args.rc_repeat_pre:
+                _measure("pre2")
+            # 노출
+            _eta(args.rc_expo_eta)
+            g0 = _gpull()
+            _settle()
+            nexp = 0
+            for _cyc in range(args.rc_expo):
+                for i in range(len(W_["train"]["A"])):
+                    for c in ("A", "B"):
+                        for side in ("left", "right"):
+                            _present(side, W_["train"][c][i], None)
+                            _gap(None)
+                            nexp += 1
+            g1 = _gpull()
+            _eta(0.0)
+            for sd in "lr":
+                ws0, gm0 = _wsum(g0[sd], sd); ws1, gm1 = _wsum(g1[sd], sd)
+                print("RCW side=%s nsyn=%d g_mean0=%.4f g_mean1=%.4f dg_abs=%.4f frac_changed=%.4f wsel0=%.4f wsel1=%.4f kc_in_mean0=%.4f kc_in_mean1=%.4f"
+                      % (sd, g0[sd].size, float(g0[sd].mean()), float(g1[sd].mean()), float(np.abs(g1[sd] - g0[sd]).sum()),
+                         float(np.mean(g1[sd] != g0[sd])), ws0, ws1, gm0, gm1))
+            print("[원시 특징 노출] 제시 %d(주기 %d × 사례 %d × 범주 2 × 쪽 2), 노출 eta %g, Oja %s, 도파민 호출 없음"
+                  % (nexp, args.rc_expo, len(W_["train"]["A"]), args.rc_expo_eta, "켬" if _foja else "끔(정적)"))
+            if args.rc_save:
+                _sv = {}
+                for sd in "lr":
+                    nm_ = "zz_feat_%s_to_kc_%s" % (sd, sd)
+                    _sv[nm_] = g1[sd].astype(np.float32); _sv[nm_ + "__pre"] = _FS[sd]["pre"]; _sv[nm_ + "__post"] = _FS[sd]["post"]
+                np.savez_compressed(args.rc_save, **_sv)
+            S_post = _measure("post")
+            out = []
+            for sd in "lr":
+                r0 = RC.separation(S_pre[sd]["train"], S_pre[sd]["new"]); r1 = RC.separation(S_post[sd]["train"], S_post[sd]["new"])
+                t0 = RC.separation(S_pre[sd]["train"], S_pre[sd]["train"]); t1 = RC.separation(S_post[sd]["train"], S_post[sd]["train"])
+                z0 = RC.selectivity(S_pre[sd]["train"]); z1 = RC.selectivity(S_post[sd]["train"])
+                k0 = np.mean([len(s) for st in ("train", "new") for c in "AB" for s in S_pre[sd][st][c]])
+                k1 = np.mean([len(s) for st in ("train", "new") for c in "AB" for s in S_post[sd][st][c]])
+                out.append("side=%s S_new %.4f→%.4f S_train %.4f→%.4f J_AB %.4f→%.4f sel %.4f→%.4f newok %d→%d/%d K %.1f→%.1f"
+                           % (sd, r0[1], r1[1], t0[1], t1[1], r0[4], r1[4], z0[0], z1[0], r0[2], r1[2], r0[3], k0, k1))
+            print("=> RAWCAT %s | feat_n=%d w=%.2f p=%.3f level=%.2f oja=%d expo=%d expo_eta=%g reps=%d"
+                  % (" | ".join(out), args.feat_n, args.feat_w, args.feat_p, args.feat_level, int(_foja), args.rc_expo, args.rc_expo_eta, args.rc_reps))
+            return
         if mode == "kcoverlap":
             # E149: good·bad 자극의 KC 반응 겹침(학습 없음 — KC 입력은 정적이라 표현은 학습과 무관). kcrate 와 같은 제시 틀:
             # good-좌·bad-좌·good-우·bad-우를 차례로 args.trials 회(4의 배수, 각 3처리 스텝), 사이 무자극 10스텝 중 뒤 5스텝을 기준선.

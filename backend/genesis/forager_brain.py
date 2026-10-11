@@ -1206,6 +1206,14 @@ class ForagerBrainConfig:
     ctx2_n: int = 0                      # E179: 두 번째 맥락 전용 집단 zz_ctx2(대칭 맥락 A) 크기 — 스냅숏 적재가 있을 때만. 0 = 없음(이전 모델)
     ctx2_w: float = 4.0                  # E179: zz_ctx2 → KC(좌·우) 가중치
     ctx2_p: float = 0.10                 # E179: zz_ctx2 → KC 연결 확률(호스트 지역 난수 RandomState(17700 + genn_seed) — zz_ctx 와 독립)
+    feat_n: int = 0                      # E183: 원시 특징 집단 zz_feat_l·zz_feat_r 크기(쪽마다) — 범주 표지 없는 특징 채널, 같은 쪽 KC 로만. 스냅숏 적재가 있을 때만. 0 = 없음(이전 모델)
+    feat_w: float = 4.0                  # E183: zz_feat → KC(같은 쪽) 초기 가중치
+    feat_p: float = 0.10                 # E183: zz_feat → KC 연결 확률(호스트 지역 난수 RandomState(18400 + genn_seed))
+    feat_oja: bool = False               # E183: True = zz_feat→KC 망 안 Oja(E160 식, eta 동적 — 0 이면 고정), False = 정적
+    feat_oja_eta: float = 0.02           # E183: Oja 학습률(빌드 때 값 — 과제가 측정 중 0 으로 바꿀 수 있다)
+    feat_oja_beta: float = 0.3           # E183: Oja 감쇠(K94 형성 설정과 같은 기본)
+    feat_oja_mmax: float = 32.0          # E183: Oja 상한
+    feat_oja_tau_pre: float = 20.0       # E183: 전 흔적 시정수(ms)
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2272,6 +2280,64 @@ class ForagerBrain:
                 _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
                 self.ctx2_syn[_sd] = (_sg, int(_pi.size))
             print(f"  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 {_cn2} → KC 좌·우, w={_cw2:.2f}, p={_cp2:.3f}, 연결 좌 {self.ctx2_syn['l'][1]}·우 {self.ctx2_syn['r'][1]}")
+
+        # E183: 원시 특징 집단 zz_feat_l·zz_feat_r(감각 LIF, 먹이 눈과 같은 매개변수, 뉴런별 I_input 은 과제가 사례 패턴으로 설정) → 같은 쪽 KC 만
+        # (호스트 지역 난수 RandomState(18400 + genn_seed) 연결 — 좌 먼저). 범주 표지 없음: 두 범주는 같은 집단의 다른 패턴. 새 뉴런 집단이므로 스냅숏 필요.
+        # feat_oja = True 이면 E160 KCTypeOja 와 같은 식(전 스파이크: 전달·preTrace += 1, 후 스파이크: g += eta·(preTrace − beta·g), [0, m_max]),
+        # eta 는 동적 매개변수(과제가 측정 때 0 으로 고정). 모델 객체는 한 번만 만든다(E135 교훈). 기본 0 = 없음(이전 모델).
+        _fn = int(getattr(self.config, "feat_n", 0))
+        self.feat_pop = None
+        self.feat_syn = None
+        if _fn > 0:
+            if not self._conn_snap_load:
+                raise RuntimeError("feat_n > 0(원시 특징 집단)은 초기 연결 스냅숏 적재(conn_snapshot_load)가 필요하다 — 새 뉴런 집단은 장치 연결 난수를 바꾼다")
+            _c = self.config
+            _fw = float(getattr(_c, "feat_w", 4.0)); _fp = float(getattr(_c, "feat_p", 0.10))
+            _foja = bool(getattr(_c, "feat_oja", False))
+            self.feat_pop = {}
+            for _sd in ("l", "r"):
+                self.feat_pop[_sd] = self.model.add_neuron_population(
+                    "zz_feat_%s" % _sd, _fn, sensory_lif_model,
+                    {"C": 1.0, "TauM": _c.tau_m, "Vrest": _c.v_rest, "Vreset": _c.v_reset, "Vthresh": _c.v_thresh, "TauRefrac": _c.tau_refrac},
+                    {"V": _c.v_rest, "RefracTime": 0.0, "I_input": 0.0})
+                self.feat_pop[_sd].spike_recording_enabled = True
+            _fwu = None
+            _fpar = None
+            if _foja:
+                from pygenn import create_weight_update_model
+                _fwu = create_weight_update_model(
+                    "FeatOja",
+                    params=[("tau_pre", "scalar"), ("eta", "scalar"), ("beta", "scalar"), ("m_max", "scalar")],
+                    vars=[("g", "scalar")],
+                    pre_vars=[("preTrace", "scalar")],
+                    pre_spike_syn_code="addToPost(g);",
+                    post_spike_syn_code="""
+                    scalar mm = g + eta * (preTrace - beta * g);
+                    g = fmin(m_max, fmax(0.0, mm));
+                    """,
+                    pre_spike_code="preTrace += 1.0;",
+                    pre_dynamics_code="preTrace -= preTrace * (dt / tau_pre);",
+                )
+                _fpar = {"tau_pre": float(getattr(_c, "feat_oja_tau_pre", 20.0)), "eta": float(getattr(_c, "feat_oja_eta", 0.02)),
+                         "beta": float(getattr(_c, "feat_oja_beta", 0.3)), "m_max": float(getattr(_c, "feat_oja_mmax", 32.0))}
+            _frs = np.random.RandomState(18400 + int(getattr(_c, "genn_seed", 0)))
+            self.feat_syn = {}
+            for _sd, _post in (("l", self.kc_left), ("r", self.kc_right)):
+                _m = _frs.random_sample((_fn, int(_c.n_kc_per_side))) < _fp
+                _pi, _qi = np.nonzero(_m)
+                if _foja:
+                    _wu = init_weight_update(_fwu, _fpar, {"g": init_var("Constant", {"constant": _fw})}, {"preTrace": 0.0})
+                else:
+                    _wu = init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": _fw})})
+                _sg = self.model.add_synapse_population(
+                    "zz_feat_%s_to_kc_%s" % (_sd, _sd), "SPARSE", self.feat_pop[_sd], _post, _wu,
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
+                if _foja:
+                    _sg.set_wu_param_dynamic("eta")
+                self.feat_syn[_sd] = (_sg, int(_pi.size))
+            print(f"  [원시 특징] 특징 집단 zz_feat 좌·우 각 {_fn} → 같은 쪽 KC, w={_fw:.2f}, p={_fp:.3f}, 연결 좌 {self.feat_syn['l'][1]}·우 {self.feat_syn['r'][1]}, "
+                  + (f"망 안 Oja(eta {_fpar['eta']:g} beta {_fpar['beta']:g} m_max {_fpar['m_max']:g} tau_pre {_fpar['tau_pre']:g}, eta 동적)" if _foja else "정적"))
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
