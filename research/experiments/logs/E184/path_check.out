@@ -1,0 +1,12 @@
+[E184 경로 검사] 시작 2026-10-11 22:18:43
+[(a) 학습 회귀 rc=0] 변조폭 +0.0228 → 변조폭 -0.5094 보상 134회 | 범주 과제 줄 0
+  기대 (a): 변조폭 +0.0228 → −0.5094, 보상 134회(E179 경로 검사 (a)), 범주 과제 줄 0
+[(b) U 학습 rc=0] 1 catrule 줄 | 정답 같은 쪽 — 행동 창 끝 특징 발화 120 · 시행 끝 0 정답 같은 쪽 — 행동 창 끝 특징 발화 120 · 시행 끝 0 정답 같은 쪽 — 행동 창 끝 특징 발화 120 · 시행 끝 0 | [범주 과제] 시행 40 중 범주 B(같은 쪽) 23 · A(교차) 17 | 학습 줄 1 적재 0 | 변조폭 +0.0134
+[(b) U 평가 learn rc=0] RCEVAL 4 | cat=A set=train mod=+0.0046 off=-0.0029 acc=27.1 trials=96 feat_on=96 cat=A set=new mod=+0.0349 off=-0.0028 acc=12.5 trials=96 feat_on=96 cat=B set=train mod=+0.0659 off=-0.0025 acc=1.0 trials=96 feat_on=96 cat=B set=new mod=+0.0468 off=-0.0030 acc=13.5 trials=96 feat_on=96 | pushed=8 적재 0 | 진단 motor L/R 0.634788/0.640963 motor L/R 0.639552/0.647550 
+[(b) U 평가 none rc=0] RCEVAL 4 | cat=A set=train mod=+0.0134 off=-0.0040 acc=10.4 trials=96 feat_on=96 cat=A set=new mod=+0.0432 off=-0.0046 acc=0.0 trials=96 feat_on=96 cat=B set=train mod=+0.0457 off=-0.0039 acc=0.0 trials=96 feat_on=96 cat=B set=new mod=+0.0353 off=-0.0045 acc=5.2 trials=96 feat_on=96 | pushed=0 적재 0 | 진단 motor L/R 0.632197/0.621767 motor L/R 0.635877/0.630807 
+  기대 (b): catrule 줄 1, 점검 3줄 행동 창 끝 > 0·시행 끝 0, '시행 40 중 범주 B …', 학습 줄 1, 적재 0; RCEVAL 4 trials=96 feat_on=96, pushed 8/0, 적재 0
+[(c) F 짧은 형성 rc=0] 1 RAWCAT | 저장 331211 바이트
+[(c) F 학습 rc=0] 1 catrule 줄 | 정답 같은 쪽 — 행동 창 끝 특징 발화 120 · 시행 끝 0 정답 같은 쪽 — 행동 창 끝 특징 발화 120 · 시행 끝 0 정답 같은 쪽 — 행동 창 끝 특징 발화 120 · 시행 끝 0 | [범주 과제] 시행 40 중 범주 B(같은 쪽) 23 · A(교차) 17 | 학습 줄 1 적재 2 | 변조폭 +0.0173
+[(c) F 평가 learn rc=0] RCEVAL 4 | cat=A set=train mod=+0.0078 off=-0.0030 acc=14.6 trials=96 feat_on=96 cat=A set=new mod=+0.0440 off=-0.0039 acc=0.0 trials=96 feat_on=96 cat=B set=train mod=+0.0735 off=-0.0029 acc=0.0 trials=96 feat_on=96 cat=B set=new mod=+0.0576 off=-0.0034 acc=0.0 trials=96 feat_on=96 | pushed=8 적재 2 | 진단 motor L/R 0.611425/0.603510 motor L/R 0.601063/0.596260 
+  기대 (c): RAWCAT 1·npz 저장, F 학습·평가에 적재 줄 ≥ 1, RCEVAL 4
+[E184 경로 검사] 종료 2026-10-11 22:27:50
