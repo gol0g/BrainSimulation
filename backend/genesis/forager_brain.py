@@ -2301,6 +2301,11 @@ class ForagerBrain:
                     {"C": 1.0, "TauM": _c.tau_m, "Vrest": _c.v_rest, "Vreset": _c.v_reset, "Vthresh": _c.v_thresh, "TauRefrac": _c.tau_refrac},
                     {"V": _c.v_rest, "RefracTime": 0.0, "I_input": 0.0})
                 self.feat_pop[_sd].spike_recording_enabled = True
+            # 범주 누출 점검(E183 rawcat): 특징 모드에서만 good·bad 눈 4집단 스파이크 기록을 켠다(기록 버퍼만 — 동역학 불변, 기본 목록엔 없음).
+            for _gp in (getattr(self, "good_food_eye_left", None), getattr(self, "good_food_eye_right", None),
+                        getattr(self, "bad_food_eye_left", None), getattr(self, "bad_food_eye_right", None)):
+                if _gp is not None:
+                    _gp.spike_recording_enabled = True
             _fwu = None
             _fpar = None
             if _foja:

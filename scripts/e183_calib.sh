@@ -18,7 +18,7 @@ run_w() {
   local W=$1; local g="$OUT/rc_w${W}_b15.log"
   if grep -q '^=> RAWCAT ' "$g" 2>/dev/null; then echo "[W=$W] 건너뜀(있음)"; return; fi
   timeout 3600 python reflex_override_task.py $BASE $ACT --brain-seed 15 --kc-type-weights $KW15 --conn-snapshot $SN15 \
-    --feat-n 200 --feat-w $W --feat-p 0.10 --feat-oja --decomp-weights $WB --decomp-mode rawcat --rc-repeat-pre --rc-expo-eta 0.02 > "$g" 2>&1
+    --feat-n 200 --feat-w $W --feat-p 0.10 --feat-oja --feat-oja-eta 0 --decomp-weights $WB --decomp-mode rawcat --rc-repeat-pre --rc-expo-eta 0.02 > "$g" 2>&1
   echo "[W=$W rc=$?] 완료 $(grep -c '^=> RAWCAT ' "$g") RCKC $(grep -c '^RCKC ' "$g")"
 }
 for W in 8 16 24; do run_w $W; done

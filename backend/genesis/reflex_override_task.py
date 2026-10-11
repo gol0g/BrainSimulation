@@ -588,6 +588,8 @@ def main():
         raise SystemExit("rawcat 은 --feat-n > 0 과 --decomp-weights 가 필요하다")
     if args.decomp_mode == "rawcat" and args.rc_expo_eta != 0 and not args.feat_oja:
         raise SystemExit("rawcat 노출 eta ≠ 0 은 --feat-oja 가 필요하다(정적 시냅스는 바뀌지 않는다)")
+    if args.decomp_mode == "rawcat" and args.feat_oja and args.feat_oja_eta != 0:
+        raise SystemExit("rawcat 은 --feat-oja-eta 0(빌드 값)이어야 한다 — 빌드 뒤 워밍업 중 KC 발화마다 Oja 감쇠가 일어난다(E183 경로 검사 2차). 노출 eta 는 --rc-expo-eta")
     if args.ctx_task == "bicond2" and (args.ctx_n <= 0 or args.ctx2_n <= 0):
         raise SystemExit("--ctx-task bicond2 는 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 B = zz_ctx, A = zz_ctx2)")
     if args.eval_ctx2 and (args.ctx2_n <= 0 or args.eval_ctx):
@@ -897,10 +899,10 @@ def main():
             S_pre = _measure("pre")
             if args.rc_repeat_pre:
                 _measure("pre2")
-            # 노출
-            _eta(args.rc_expo_eta)
-            g0 = _gpull()
+            # 노출 — 안정화(eta 0) 뒤 g0 를 읽고 그다음에 노출 eta 를 켠다(경로 검사 2차: 안정화 중 Oja 감쇠가 노출 밖에서 일어나지 않게)
             _settle()
+            g0 = _gpull()
+            _eta(args.rc_expo_eta)
             nexp = 0
             for _cyc in range(args.rc_expo):
                 for i in range(len(W_["train"]["A"])):
@@ -913,9 +915,9 @@ def main():
             _eta(0.0)
             for sd in "lr":
                 ws0, gm0 = _wsum(g0[sd], sd); ws1, gm1 = _wsum(g1[sd], sd)
-                print("RCW side=%s nsyn=%d g_mean0=%.4f g_mean1=%.4f dg_abs=%.4f frac_changed=%.4f wsel0=%.4f wsel1=%.4f kc_in_mean0=%.4f kc_in_mean1=%.4f"
+                print("RCW side=%s nsyn=%d g_mean0=%.4f g_mean1=%.4f dg_abs=%.4f frac_changed=%.4f wsel0=%.4f wsel1=%.4f kc_in_mean0=%.4f kc_in_mean1=%.4f g0_init=%d"
                       % (sd, g0[sd].size, float(g0[sd].mean()), float(g1[sd].mean()), float(np.abs(g1[sd] - g0[sd]).sum()),
-                         float(np.mean(g1[sd] != g0[sd])), ws0, ws1, gm0, gm1))
+                         float(np.mean(g1[sd] != g0[sd])), ws0, ws1, gm0, gm1, int(np.all(g0[sd] == float(np.float32(args.feat_w))))))
             print("[원시 특징 노출] 제시 %d(주기 %d × 사례 %d × 범주 2 × 쪽 2), 노출 eta %g, Oja %s, 도파민 호출 없음"
                   % (nexp, args.rc_expo, len(W_["train"]["A"]), args.rc_expo_eta, "켬" if _foja else "끔(정적)"))
             if args.rc_save:

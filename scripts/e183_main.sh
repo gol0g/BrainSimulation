@@ -24,7 +24,7 @@ for B in 10 11 12 13 14; do
     [ "$A" = "O" ] && EE=0.02 || EE=0
     g="$RAW/rc_b${B}_$A.log"; printf "  %s: " "$tag"
     timeout 3600 python reflex_override_task.py $BASE $ACT --brain-seed $B --kc-type-weights $KW --conn-snapshot $SNAP/conn_b$B.npz \
-      --feat-n 200 --feat-w $W --feat-p 0.10 --feat-oja --decomp-weights $WB --decomp-mode rawcat --rc-repeat-pre --rc-expo-eta $EE > "$g" 2>&1; rc=$?
+      --feat-n 200 --feat-w $W --feat-p 0.10 --feat-oja --feat-oja-eta 0 --decomp-weights $WB --decomp-mode rawcat --rc-repeat-pre --rc-expo-eta $EE > "$g" 2>&1; rc=$?
     if grep -q "^=> RAWCAT " "$g"; then echo "=> $(grep '^=> RAWCAT ' "$g" | cut -c1-60) RCKC $(grep -c '^RCKC ' "$g")"; else echo "[실패 rc=$rc]"; tail -2 "$g" | sed 's/^/      /'; fi
   done
 done
