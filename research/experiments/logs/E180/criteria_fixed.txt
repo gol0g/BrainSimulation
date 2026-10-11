@@ -1,0 +1,11 @@
+E180 사전 판정 기준 — 고정 시각 2026-10-11 19:10:28 (경로 검사·본실험 전. 관측된 것: E170·E171(기저값 0 조합 평가 — ρ 0.45~0.48, K103·K104), E177~E179 전부. 기저값 −4000 에서 E162 AB 가중치를 평가한 결과는 미관측 — 단 E178 보정에서 다른 뇌(15)·다른 가중치(학습 A)의 단독 효과가 −0.51 → −1.17 로 커진 것은 관측)
+가설: H101 — E162 AB 가중치(두 연합: A good → 교차, B bad → 같은 쪽, 기저값 0 에서 학습)를 motor 기저값 −4000 에서 이식 평가하면 처음 보는 일치 조합 자극(good 한쪽 + bad 반대쪽)에 두 단독 효과의 합의 80% 이상으로 반응한다. 경쟁: H101-null(합성 없음).
+평가(학습 없음, scripts/e180_main.sh): 뇌 10~14, E170 과 같은 인자(BASE + '--act-window 3 --act-current 5000 --judge exec --reflex-w 0 --rw-apm-scale 0' + --kc-type-weights traces/E160/kctype_oja_b{B}.npz + --decomp-weights traces/E162/w_AB_b{B}.npz --decomp-mode all|none --eval-variant base|bad|agree|conflict) + --motor-tonic -4000 --eval-diag. 40 평가.
+지표: m = 이식 변조폭, e_v = m_AB(v) − m_none(v)(1e-4 정수).
+판정 1(일치 조합, 적용 순서): 합성 성공(H101) = ρ = e_agree / (e_base − e_bad) ≥ 0.80(⇔ 5·e_agree ≤ 4·(e_base − e_bad)) 인 뇌 ≥ 4/5. 합성 없음(H101-null) = |e_agree| < 1.10 × max(|e_base|, |e_bad|) ≥ 4/5. 그 밖 부분.
+판정 2(충돌 조합): 가산 상쇄 = |e_conflict − (e_base + e_bad)| ≤ 0.15 × (|e_base| + |e_bad|) ≥ 4/5. 그 밖 비가산.
+조작검증(하나라도 실패면 보류): 조합 자극 '[E170 자극]' 줄 쪽별 광선 = 설계(agree left good 0.90/0.00 bad 0.00/0.90 food 0.90/0.90, right 대칭; conflict left good 0.90/0.00 bad 0.90/0.00 food 0.90/0.00, right 대칭) 20/20 · 동작점 '[motor 동작점]' 줄 ≥ 1·값 = −4000 40/40 · 진단 '[E171 평가 진단]' 좌·우 40/40 · 비포화(진단 motor 4개가 모두 ≥ 0.66 아님) 40/40 · 적재 pushed AB 8·none 0 40/40 · 전제 e_base ≤ −0.10·e_bad ≥ +0.10 5/5. 판정 scripts/judge_e180.py, 독립 대조 scripts/verify_e180_independent.py.
+경로 검사(뇌 15, scripts/e180_path_check.sh): (a) 기저값 0 AB·none × base·bad → E170 경로 검사 값(AB base −0.4783·AB bad +0.5105·none base +0.0228·none bad +0.0120) 정확 재현, 동작점 줄 0. (b) 기저값 −4000 + 진단 AB·none × base·bad·agree·conflict → 동작점 줄 ≥ 1, 진단 줄 좌·우, 비포화, 자극 줄 설계 구성, pushed AB 8·none 0.
+부지표(판정 밖): E170 ρ(0.45~0.48) 대비 변화, 일치·충돌 조합의 진단 motor 발화율, 단독 효과 크기 변화(E170 대비).
+결과별 다음 결정: 결과와 무관하게 분기 종료(상한 1). 합성 성공 → K104 원인 = 출력 동작점 기록, 헌장 L2(반사 25, 새 동작점) 재시험 분기를 다음 첫 후보로. 합성 없음·부분 → 비가산은 동작점만으로 설명 안 됨 기록.
+예산: 경로 검사 약 10분 + 본실험 약 40분.
