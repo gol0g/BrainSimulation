@@ -2,4 +2,40 @@
 커맨드: bash scripts/e184_main.sh
 ---
 [E184] 원시 특징 범주 의존 행동 · 특징 w 24 · 뇌 10~14 × U(주)·F(부)
-  e184 form b10: 
+  e184 form b10: => => RAWCAT side=l S_new 0.1811→0.1737 S_train 0.2582→0.2805 J_AB 0.
+  e184 train b10 U: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 749 · A(교차) 751 || 보상 771회 || 사후 변조폭 +0.0037
+  e184 train b10 F: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 749 · A(교차) 751 || 보상 771회 || 사후 변조폭 -0.0007
+  e184 b10 U learn: => A_train=-0.1659 A_new=-0.0935 B_train=+0.3093 B_new=+0.2367 
+  e184 b10 U none: => A_train=+0.0123 A_new=+0.0764 B_train=+0.0922 B_new=+0.0813 
+  e184 b10 F learn: => A_train=-0.1687 A_new=-0.0483 B_train=+0.2132 B_new=+0.1666 
+  e184 b10 F none: => A_train=+0.0190 A_new=+0.0513 B_train=+0.0537 B_new=+0.0519 
+  e184 form b11: => => RAWCAT side=l S_new 0.1803→0.1824 S_train 0.2753→0.2554 J_AB 0.
+  e184 train b11 U: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 740 · A(교차) 760 || 보상 876회 || 사후 변조폭 -0.0069
+  e184 train b11 F: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 740 · A(교차) 760 || 보상 871회 || 사후 변조폭 +0.0264
+  e184 b11 U learn: => A_train=-0.1524 A_new=-0.0984 B_train=+0.2671 B_new=+0.1775 
+  e184 b11 U none: => A_train=+0.0125 A_new=+0.0270 B_train=+0.0372 B_new=+0.0262 
+  e184 b11 F learn: => A_train=-0.1902 A_new=-0.1071 B_train=+0.2555 B_new=+0.1759 
+  e184 b11 F none: => A_train=+0.0191 A_new=+0.0303 B_train=+0.0392 B_new=+0.0357 
+  e184 form b12: => => RAWCAT side=l S_new 0.1907→0.1738 S_train 0.2719→0.2716 J_AB 0.
+  e184 train b12 U: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 760 · A(교차) 740 || 보상 891회 || 사후 변조폭 -0.0031
+  e184 train b12 F: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 760 · A(교차) 740 || 보상 761회 || 사후 변조폭 -0.0031
+  e184 b12 U learn: => A_train=-0.1545 A_new=-0.0960 B_train=+0.2429 B_new=+0.1597 
+  e184 b12 U none: => A_train=+0.0210 A_new=+0.0491 B_train=+0.0575 B_new=+0.0489 
+  e184 b12 F learn: => A_train=-0.1654 A_new=-0.0687 B_train=+0.2288 B_new=+0.1727 
+  e184 b12 F none: => A_train=+0.0251 A_new=+0.0465 B_train=+0.0470 B_new=+0.0440 
+  e184 form b13: => => RAWCAT side=l S_new 0.1982→0.1755 S_train 0.2884→0.2783 J_AB 0.
+  e184 train b13 U: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 767 · A(교차) 733 || 보상 920회 || 사후 변조폭 -0.0320
+  e184 train b13 F: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 767 · A(교차) 733 || 보상 979회 || 사후 변조폭 -0.0235
+  e184 b13 U learn: => A_train=-0.1455 A_new=-0.0936 B_train=+0.2533 B_new=+0.1581 
+  e184 b13 U none: => A_train=+0.0093 A_new=+0.0532 B_train=+0.0866 B_new=+0.0563 
+  e184 b13 F learn: => A_train=-0.1968 A_new=-0.0809 B_train=+0.2677 B_new=+0.1920 
+  e184 b13 F none: => A_train=+0.0254 A_new=+0.0572 B_train=+0.0709 B_new=+0.0562 
+  e184 form b14: => => RAWCAT side=l S_new 0.1668→0.1610 S_train 0.2413→0.2833 J_AB 0.
+  e184 train b14 U: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 771 · A(교차) 729 || 보상 974회 || 사후 변조폭 +0.0070
+  e184 train b14 F: => [범주 과제] 시행 1500 중 범주 B(같은 쪽) 771 · A(교차) 729 || 보상 984회 || 사후 변조폭 +0.0198
+  e184 b14 U learn: => A_train=-0.1849 A_new=-0.1220 B_train=+0.3052 B_new=+0.2082 
+  e184 b14 U none: => A_train=+0.0264 A_new=+0.0523 B_train=+0.0679 B_new=+0.0501 
+  e184 b14 F learn: => A_train=-0.1798 A_new=-0.0775 B_train=+0.2391 B_new=+0.1805 
+  e184 b14 F none: => A_train=+0.0300 A_new=+0.0420 B_train=+0.0474 B_new=+0.0420 
+[E184] 전체 루프 종료
+=== 종료코드 0 ===

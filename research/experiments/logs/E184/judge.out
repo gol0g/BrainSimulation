@@ -1,0 +1,13 @@
+F b10 e_A train -1877 new -996 · e_B train +1595 new +1147 (1e-4)
+F b11 e_A train -2093 new -1374 · e_B train +2163 new +1402 (1e-4)
+F b12 e_A train -1905 new -1152 · e_B train +1818 new +1287 (1e-4)
+F b13 e_A train -2222 new -1381 · e_B train +1968 new +1358 (1e-4)
+F b14 e_A train -2098 new -1195 · e_B train +1917 new +1385 (1e-4)
+U b10 e_A train -1782 new -1699 · e_B train +2171 new +1554 (1e-4)
+U b11 e_A train -1649 new -1254 · e_B train +2299 new +1513 (1e-4)
+U b12 e_A train -1755 new -1451 · e_B train +1854 new +1108 (1e-4)
+U b13 e_A train -1548 new -1468 · e_B train +1667 new +1018 (1e-4)
+U b14 e_A train -2113 new -1743 · e_B train +2373 new +1581 (1e-4)
+조작검증 통과 | 주 팔 U: 획득 5/5 · 획득+일반화 5/5 · 사례 한정 0/5 · A만 0/5 · B만 0/5 · 획득 실패 0/5
+부 팔 F(판정 밖): 획득+일반화 5/5 | 새 사례 효과 F − U(1e-4): b10 A +703 B -407 · b11 A -120 B -111 · b12 A +299 B +179 · b13 A +87 B +340 · b14 A +548 B -196
+판정: 개념 수준(H105)
