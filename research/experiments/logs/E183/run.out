@@ -4,3 +4,5 @@
       - [~] INV-B1 변조폭 지표 (사유: 행동 평가 없음 — 측정 실험. 주 지표는 KC 집합 범주 분리 S(자카드 차))
 [게이트] 통과
 [실행] E183 → 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/E183.log
+[실행] 완료(rc=0), 로그 16 줄
+[다음] 결과를 research/experiments/E183.md 에 기록하고 hypotheses/·current-state.md 를 갱신하라(P9).

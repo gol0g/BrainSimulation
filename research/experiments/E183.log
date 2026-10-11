@@ -2,4 +2,15 @@
 커맨드: bash scripts/e183_main.sh
 ---
 [E183] 원시 특징 범주 형성 측정 · feat_w 24 · 뇌 10~14 × O·Z
-  e183 b10 O: 
+  e183 b10 O: => => RAWCAT side=l S_new 0.1811→0.1832 S_train 0.2582→0.28 RCKC 144
+  e183 b10 Z: => => RAWCAT side=l S_new 0.1811→0.1642 S_train 0.2582→0.26 RCKC 144
+  e183 b11 O: => => RAWCAT side=l S_new 0.1803→0.1824 S_train 0.2753→0.25 RCKC 144
+  e183 b11 Z: => => RAWCAT side=l S_new 0.1803→0.1993 S_train 0.2753→0.26 RCKC 144
+  e183 b12 O: => => RAWCAT side=l S_new 0.1907→0.1738 S_train 0.2719→0.27 RCKC 144
+  e183 b12 Z: => => RAWCAT side=l S_new 0.1907→0.1848 S_train 0.2719→0.27 RCKC 144
+  e183 b13 O: => => RAWCAT side=l S_new 0.1982→0.1755 S_train 0.2884→0.27 RCKC 144
+  e183 b13 Z: => => RAWCAT side=l S_new 0.1982→0.1949 S_train 0.2884→0.28 RCKC 144
+  e183 b14 O: => => RAWCAT side=l S_new 0.1668→0.1610 S_train 0.2413→0.28 RCKC 144
+  e183 b14 Z: => => RAWCAT side=l S_new 0.1668→0.1581 S_train 0.2413→0.25 RCKC 144
+[E183] 전체 루프 종료
+=== 종료코드 0 ===

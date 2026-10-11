@@ -1,0 +1,7 @@
+b10 G_new -39 G_train +77 J_AB 256 (1e-4)
+b11 G_new -188 G_train -237 J_AB 278 (1e-4)
+b12 G_new -118 G_train -61 J_AB 339 (1e-4)
+b13 G_new +66 G_train +147 J_AB 215 (1e-4)
+b14 G_new -174 G_train +57 J_AB 155 (1e-4)
+붕괴 0 · 지지 0 · 암기 0 · 역효과 0 · 이득 없음 5
+독립 판정: 이득 없음(H104-null-1)

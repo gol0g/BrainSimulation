@@ -174,6 +174,21 @@ def ctx_state(brain, state, args):
         set_ctx2_pop(brain, args.ctx_level if state == 2 else 0.0)
 
 
+def rc_feat(brain, side, units, level):
+    """원시 특징(E184): side 쪽 특징 집단 zz_feat 에 사례 패턴(units 만 I_input = level × good_food_eye 감도), 반대쪽은 0. side None = 둘 다 0.
+    특징 집단이 없으면 아무것도 안 한다."""
+    fp = getattr(brain, "feat_pop", None)
+    if fp is None:
+        return
+    n = int(brain.config.feat_n)
+    for sd in "lr":
+        v = np.zeros(n, dtype=np.float32)
+        if side is not None and sd == side[0]:
+            v[np.asarray(units, dtype=int)] = float(level) * float(brain.config.good_food_eye_sensitivity)
+        fp[sd].vars["I_input"].view[:] = v
+        fp[sd].vars["I_input"].push_to_device()
+
+
 def measure_offset(brain, obs, nh, n=20, steps=5):
     """좌우 대칭 자극에서 남는 조향 = 런 상수 오프셋(C28b: 런마다 0.3~0.83으로 요동).
     steps: 조향 합의 처리 수(기본 5 = evaluate 의 steer 와 같음). 외부 검토 2026-10-09: 학습 판단은 3처리 합이라 --offset-steps 3 으로 맞출 수 있다."""
@@ -199,6 +214,8 @@ def stim_variant(obs, nh, good_side, variant, rng):
         return stim(obs, nh, good_side)
     if variant == "bad":
         return stim_bad(obs, nh, good_side)     # E148: 과제 B 평가 자극(bad food 쪽 = good_side 자리)
+    if variant == "food":
+        return stim_food(obs, nh, good_side)    # E184: 원시 특징 평가 — 먹이 광선 한쪽, good·bad 광선 0(범주는 특징 집단 패턴으로)
     if variant in ("agree", "conflict"):
         # E170: 처음 보는 조합 자극(훈련에 없음). agree = good 이 good_side, bad 가 반대쪽(규칙 A good→교차·규칙 B bad→같은 쪽이 같은 방향),
         # 먹이 광선 양쪽. conflict = good·bad 모두 good_side(두 규칙이 반대 방향), 먹이 광선 그 쪽만. 각 광선 0.9(훈련 자극과 같은 세기).
@@ -226,7 +243,7 @@ def stim_variant(obs, nh, good_side, variant, rng):
     return o
 
 
-def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None, ctx=None, ctx_trial=False, ctx_gap=10):
+def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=None, ctx=None, ctx_trial=False, ctx_gap=10, featfn=None):
     """정답률과 **변조폭**을 함께 반환.
 
     C49에서 드러난 결함: 반사를 없애면 조향이 거의 0이라 |v|<0.02 임계에 걸려 좌·우 양쪽 다
@@ -272,7 +289,11 @@ def evaluate(brain, obs, nh, trials=100, stab=30, variant=None, vseed=0, diag=No
                      _mn("bad_food_rays_right"), _mn("food_rays_left"), _mn("food_rays_right")))
         if ctx is not None and ctx_trial:
             ctx(brain, True); _ctr["on"] += 1
+        if featfn is not None:
+            featfn(side, t)     # E184: 원시 특징 평가 — 조향 동안 자극 쪽 특징 집단에 사례 패턴(None = 이전 동작)
         v = steer(brain, _sv, rec=(diag.setdefault(side, []) if diag is not None else None)) - off     # 오프셋 보정(E146: variant None/base = stim 과 같음). E171: diag 사전이면 쪽별 처리 기록
+        if featfn is not None:
+            featfn(None, t)
         if ctx is not None and ctx_trial:
             ctx(brain, False); _ctr["off"] += 1
             for _ in range(ctx_gap):
@@ -474,6 +495,15 @@ def main():
     ap.add_argument("--rc-expo-eta", type=float, default=0.02, help="E183 rawcat: 노출 동안 Oja eta(0 = 대조 — 같은 노출, 가소성 없음)")
     ap.add_argument("--rc-repeat-pre", action="store_true", help="E183 rawcat: 형성 전 측정을 두 번(측정 반복성 확인)")
     ap.add_argument("--rc-save", default=None, help="E183 rawcat: 노출 뒤 zz_feat→KC 가중치 npz(+ pre·post 인덱스)")
+    ap.add_argument("--feat-weights", default=None,
+                    help="E184: 형성된 zz_feat→KC 가중치 npz(rawcat --rc-save 형식)를 이 cfg 로 만드는 모든 뇌에 싣는다(연결 일치 검사). 없으면 초기값 feat_w")
+    ap.add_argument("--rc-task", default="none", choices=("none", "catrule"),
+                    help="E184 catrule: 시행마다 범주(A·B 반반, 지역 난수)와 노출 사례 하나 — 자극 = 먹이 광선 한쪽(good·bad 0) + 그쪽 특징 집단 사례 패턴"
+                         "(결정·행동 창 동안, 보상 창·간격 끔). 정답: A = 교차, B = 같은 쪽. none = 이전 동작")
+    ap.add_argument("--rc-trial-seed", type=int, default=None, help="E184 catrule: 범주·사례 배정 지역 난수 시드(기본 18500 + 뇌 시드) — 전역 난수열 불변")
+    ap.add_argument("--rc-eval", action="store_true",
+                    help="E184: 분해(이식) 평가를 범주 A·B × 노출·새 사례 4조건으로(조건마다 evaluate — 먹이 광선 한쪽 + 사례 패턴, 시행 t 의 사례 = (t//2) mod 사례 수). "
+                         "RCEVAL 줄 4개")
     ap.add_argument("--motor-tonic", type=float, default=0.0,
                     help="motor 동작점(E178): motor 좌·우 Ioffset 기저값(음수 = 긴장성 억제 — 불응기 상한 아래로). 0 = 이전 모델(정적 Ioffset 0). "
                          "이 cfg 로 만드는 모든 뇌(학습·이식 평가). 행동 창·보상 창 침묵은 기저값 ± 전류로 바꾸고 기저값으로 되돌린다. motor Ioffset 동적화 자동")
@@ -588,6 +618,13 @@ def main():
         raise SystemExit("rawcat 은 --feat-n > 0 과 --decomp-weights 가 필요하다")
     if args.decomp_mode == "rawcat" and args.rc_expo_eta != 0 and not args.feat_oja:
         raise SystemExit("rawcat 노출 eta ≠ 0 은 --feat-oja 가 필요하다(정적 시냅스는 바뀌지 않는다)")
+    cfg.feat_weights_file = args.feat_weights or ""   # E184: 형성 특징 가중치 — 이 cfg 로 만드는 모든 뇌
+    if (args.feat_weights or args.rc_task != "none" or args.rc_eval) and args.feat_n <= 0:
+        raise SystemExit("--feat-weights·--rc-task·--rc-eval 은 --feat-n > 0 이 필요하다")
+    if args.rc_eval and not args.decomp_weights:
+        raise SystemExit("--rc-eval 은 --decomp-weights(분해 이식 평가)가 필요하다")
+    if args.rc_task != "none" and (args.ctx_task != "none" or args.task_b_after > 0 or args.reverse_after > 0):
+        raise SystemExit("--rc-task 는 --ctx-task·--task-b-after·--reverse-after 와 함께 쓸 수 없다")
     if args.decomp_mode == "rawcat" and args.feat_oja and args.feat_oja_eta != 0:
         raise SystemExit("rawcat 은 --feat-oja-eta 0(빌드 값)이어야 한다 — 빌드 뒤 워밍업 중 KC 발화마다 Oja 감쇠가 일어난다(E183 경로 검사 2차). 노출 eta 는 --rc-expo-eta")
     if args.ctx_task == "bicond2" and (args.ctx_n <= 0 or args.ctx2_n <= 0):
@@ -1486,6 +1523,36 @@ def main():
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
         _evd = {} if args.eval_diag else None
+        if args.rc_eval:
+            # E184: 원시 특징 범주 평가 — 범주 A·B × 노출·새 사례 4조건, 조건마다 evaluate(reset·안정화·오프셋·시행). 자극 = 먹이 광선 한쪽(good·bad 0)
+            # + 조향 동안 그쪽 특징 집단에 사례 패턴(시행 t 의 사례 = (t//2) mod 사례 수 — 좌·우 같은 사례). 변조폭 부호: + = 같은 쪽, − = 교차.
+            import rawcat as RC
+            _RW = RC.make_world(n=args.feat_n, k=args.rc_k, shared=args.rc_shared, d=args.rc_d,
+                                n_train=args.rc_ntrain, n_new=args.rc_nnew, seed=args.rc_seed)
+            _rcres = []
+            for _c in ("A", "B"):
+                for _st in ("train", "new"):
+                    _exs = _RW[_st][_c]
+                    _cnt = {"on": 0}
+
+                    def _ff(sd_, t_, _exs=_exs, _cnt=_cnt):
+                        if sd_ is None:
+                            rc_feat(_b2, None, None, args.feat_level)
+                        else:
+                            rc_feat(_b2, sd_, _exs[(t_ // 2) % len(_exs)], args.feat_level)
+                            _cnt["on"] += 1
+                    _d = {} if args.eval_diag else None
+                    acc_, off_, mod_ = evaluate(_b2, _obs2, nh, args.trials, variant="food", diag=_d, featfn=_ff)
+                    _rcres.append(mod_)
+                    _dg = ""
+                    if _d is not None:
+                        _dg = " | " + " ".join("side=%s n=%d motor L/R %.6f/%.6f KC L/R %.6f/%.6f" % ((s_, len(_d.get(s_, []))) + tuple(np.mean(np.array(_d.get(s_, []), dtype=np.float64), axis=0)))
+                                               for s_ in ("left", "right") if _d.get(s_))
+                    print("RCEVAL cat=%s set=%s mod=%+.4f off=%+.4f acc=%.1f trials=%d feat_on=%d%s" % (_c, _st, mod_, off_, acc_, args.trials, _cnt["on"], _dg))
+            gms = " ".join("%s=%.4f" % (n.replace("_to_motor_", ">"), float(sub[n].mean()) if n in sub else float("nan")) for n in kc)
+            print("=> DECOMP mode=%s rceval A_train=%+.4f A_new=%+.4f B_train=%+.4f B_new=%+.4f pushed=%d feat=%s kc_means[%s]"
+                  % (mode, _rcres[0], _rcres[1], _rcres[2], _rcres[3], len(sub), args.feat_weights or "초기값", gms))
+            return
         if args.eval_ctx2:
             _ectx = (lambda b_, on_: ctx_state(b_, 2 if on_ else 0, args))   # E179: 맥락 A(zz_ctx2) 켬 평가
         elif args.eval_ctx:
@@ -1744,6 +1811,20 @@ def main():
         print("[맥락 과제] bicond frac=%.2f I=%.2f I_inh=%.2f inh_frac=%.2f I_ab=%.2f ctx_n=%d w=%.2f seed=%d — 맥락 끔 정답 교차, 켬 정답 같은 쪽"
               % (args.ctx_frac, args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, args.ctx_n, args.ctx_w,
                  (args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed)))
+    # E184 범주 과제(catrule): 시행마다 범주·노출 사례 배정 — 지역 난수(전역 np.random 열 불변). none 이면 None(이전 동작)
+    _rcrng = None
+    _RCW = None
+    _ncatB = 0
+    _ncat = 0
+    if args.rc_task == "catrule":
+        import rawcat as RC
+        _RCW = RC.make_world(n=args.feat_n, k=args.rc_k, shared=args.rc_shared, d=args.rc_d,
+                             n_train=args.rc_ntrain, n_new=args.rc_nnew, seed=args.rc_seed)
+        _rcs = args.rc_trial_seed if args.rc_trial_seed is not None else 18500 + _bseed
+        _rcrng = np.random.RandomState(_rcs)
+        print("[범주 과제] catrule — 원시 특징 노출 사례 범주당 %d(세계 시드 %d), 범주 A 정답 교차·B 정답 같은 쪽, 배정 지역 난수 %d, "
+              "자극 = 먹이 광선 한쪽(good·bad 0) + 특징 패턴 level %.2f(결정·행동 창), 특징 가중치 %s"
+              % (args.rc_ntrain, args.rc_seed, _rcs, args.feat_level, args.feat_weights or "초기값"))
     for ep in range(args.episodes):
         off = measure_offset(brain, obs, nh, n=5, steps=args.offset_steps)
         if args.offset_steps != 5 and ep == 0:
@@ -1764,6 +1845,15 @@ def main():
                 print("[과제 B] 시행 %d 부터 자극 = bad food, 정답 = 같은 쪽" % (ep * args.steps + t))
                 _taskb_announced = True
             _stimf = stim_bad if _taskb else stim
+            _catB = False
+            if _rcrng is not None:
+                # E184: 범주(반반)·노출 사례 배정(지역 난수) — 자극 = 먹이 광선 한쪽 + 그쪽 특징 집단 사례 패턴(결정·행동 창 동안)
+                _rcc = "B" if _rcrng.random_sample() < 0.5 else "A"
+                _rci = int(_rcrng.randint(len(_RCW["train"][_rcc])))
+                _catB = _rcc == "B"
+                _ncatB += int(_catB); _ncat += 1
+                _stimf = stim_food
+                rc_feat(brain, side, _RCW["train"][_rcc][_rci], args.feat_level)
             _ctx_on = bool(_crng is not None and _crng.random_sample() < args.ctx_frac)   # 맥락 의존 규칙(지역 난수)
             if _crng is not None and args.ctx_task == "bicond2":
                 ctx_state(brain, 1 if _ctx_on else 2, args)   # E179: 맥락 B(같은 쪽) 또는 A(교차) — 결정 3처리·행동 창 동안
@@ -1802,7 +1892,7 @@ def main():
             if _rev and not _rev_announced:
                 print("[반전] 시행 %d 부터 정답 = 같은 쪽(good 쪽)" % (ep * args.steps + t))
                 _rev_announced = True
-            if _rev or _taskb or _ctx_on:
+            if _rev or _taskb or _ctx_on or _catB:
                 correct = (side == "left" and v < -0.02) or (side == "right" and v > 0.02)
             else:
                 correct = (side == "left" and v > 0.02) or (side == "right" and v < -0.02)
@@ -1810,7 +1900,7 @@ def main():
                 # K52: v<0 = motor_left 우세. v==0 이면 무작위. (E119: 판정 비교를 위해 행동 창 앞으로 옮김 —
                 # 사이에 np.random 소비가 없어 난수열은 이전과 같다)
                 _ex = "left" if v < 0 else ("right" if v > 0 else ("left" if np.random.random() < 0.5 else "right"))
-                if _rev or _taskb or _ctx_on:
+                if _rev or _taskb or _ctx_on or _catB:
                     correct_ex = (side == "left" and _ex == "left") or (side == "right" and _ex == "right")
                 else:
                     correct_ex = (side == "left" and _ex == "right") or (side == "right" and _ex == "left")
@@ -1847,6 +1937,11 @@ def main():
                     _aw = (float("nan"), float("nan"))
             else:
                 _aw = (float("nan"), float("nan"))
+            if _rcrng is not None:
+                if ep == 0 and t < 3:
+                    # E184 조작검증(읽기 전용): 행동 창 마지막 처리의 자극 쪽 특징 집단 발화(> 0 이어야)
+                    _rcf1 = int(np.asarray(brain.feat_pop[side[0]].spike_recording_data[0][1]).size)
+                rc_feat(brain, None, None, args.feat_level)   # E184: 보상 창·간격에는 특징 패턴 끔(먹이 광선과 같이)
             if _crng is not None and args.ctx_task == "bicond2":
                 ctx_state(brain, 0, args)       # E179: 보상 창·간격에는 두 맥락 모두 끔
             elif _crng is not None and _ctx_on:
@@ -1930,6 +2025,11 @@ def main():
                     _neu[_k] = np.zeros(nh)
                 for _ in range(args.trial_gap):
                     brain.process(_neu)
+            if _rcrng is not None and ep == 0 and t < 3:
+                # E184 조작검증(읽기 전용): 시행 끝(간격 마지막 처리) 두 쪽 특징 집단 발화(0 이어야)
+                _rcf2 = sum(int(np.asarray(brain.feat_pop[s_].spike_recording_data[0][1]).size) for s_ in "lr")
+                print("[범주 과제 점검] 시행 %d 범주 %s 사례 %d 쪽 %s 정답 %s — 행동 창 끝 특징 발화 %d · 시행 끝 %d"
+                      % (t, _rcc, _rci, side, "같은 쪽" if _catB else "교차", _rcf1, _rcf2))
             if KCT is not None:
                 # E139: 시행 끝(보상 창 → 도파민 0 → 간격 뒤) g. Δg = 이 시행의 도파민이 만든 변화.
                 _kg1 = _kct_read("g")
@@ -1948,6 +2048,8 @@ def main():
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
     if _crng is not None:
         print("[맥락 과제] 시행 %d 중 맥락 켬 %d" % (args.episodes * args.steps, _nctx))
+    if _rcrng is not None:
+        print("[범주 과제] 시행 %d 중 범주 B(같은 쪽) %d · A(교차) %d" % (_ncat, _ncatB, _ncat - _ncatB))
     if KRW is not None:
         _kmean = lambda a: (float(np.mean(a)) if a else float("nan"), len(a))
         print("[E168 KC 발화] 결정 단계(3처리 끝) 평균 %.6f n=%d | 보상 창 보상 시행 평균 %.6f n=%d | 보상 창 처벌 시행 평균 %.6f n=%d | da_kc_inh=%.2f p=%.2f"

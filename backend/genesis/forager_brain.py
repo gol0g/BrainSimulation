@@ -1214,6 +1214,7 @@ class ForagerBrainConfig:
     feat_oja_beta: float = 0.3           # E183: Oja 감쇠(K94 형성 설정과 같은 기본)
     feat_oja_mmax: float = 32.0          # E183: Oja 상한
     feat_oja_tau_pre: float = 20.0       # E183: 전 흔적 시정수(ms)
+    feat_weights_file: str = ""         # E184: 형성된 zz_feat→KC 가중치 npz(rawcat --rc-save 형식) — 연결이 저장본과 같아야. "" = 초기값(feat_w)
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2370,6 +2371,10 @@ class ForagerBrain:
         _kts = float(getattr(self.config, "kc_type_scale", 1.0))
         if _kts != 1.0:
             self._scale_kc_type_weights(_kts)
+        # E184: 형성된 원시 특징 가중치(feat_weights_file) — zz_feat→KC 에 싣는다(연결 pre·post 가 저장본과 같아야, 싣고 다시 읽어 확인). "" = 초기값.
+        _fwf = getattr(self.config, "feat_weights_file", "") or ""
+        if _fwf:
+            self._load_feat_weights(_fwf)
 
         # SPARSE 시냅스는 connectivity를 먼저 pull해야 .values가 동작함 (CRITICAL)
         # connectivity 패턴은 고정이므로 최초 1회만 pull
@@ -2784,6 +2789,35 @@ class ForagerBrain:
                 pass
 
     KC_TYPE_SYN = ("good_food_eye_l_to_kc_l", "bad_food_eye_l_to_kc_l", "good_food_eye_r_to_kc_r", "bad_food_eye_r_to_kc_r")
+
+    def _load_feat_weights(self, path):
+        """E184: 저장된 원시 특징 가중치(zz_feat_{l,r}_to_kc_{l,r}, rawcat --rc-save 형식: g·__pre·__post)를 싣는다.
+        연결(pre·post)이 이 뇌와 같아야 한다(같은 시드·같은 호스트 연결) — 다르면 중단. 싣고 장치에서 다시 읽어 정확히 같은지 확인."""
+        if getattr(self, "feat_syn", None) is None:
+            raise RuntimeError("feat_weights_file 은 feat_n > 0 이 필요하다")
+        W = np.load(path)
+        tot = []
+        for sd in ("l", "r"):
+            nm = "zz_feat_%s_to_kc_%s" % (sd, sd)
+            sy = self.feat_syn[sd][0]
+            sy.pull_connectivity_from_device()
+            pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+            post = np.asarray(sy.get_sparse_post_inds(), dtype=np.int64)
+            if not (np.array_equal(pre, np.asarray(W[nm + "__pre"], dtype=np.int64)) and np.array_equal(post, np.asarray(W[nm + "__post"], dtype=np.int64))):
+                raise RuntimeError("E184 특징 가중치 적재: %s 연결이 저장본과 다르다 — 같은 시드 뇌가 아니다" % nm)
+            sy.vars["g"].pull_from_device()
+            arr = np.asarray(W[nm], dtype=np.float32)
+            cur = np.asarray(sy.vars["g"].values, dtype=np.float64).ravel()
+            if cur.size != arr.size:
+                raise RuntimeError("E184 특징 가중치 적재: %s 크기 불일치 %d vs %d" % (nm, cur.size, arr.size))
+            cur[:] = arr
+            sy.vars["g"].values = cur
+            sy.vars["g"].push_to_device()
+            sy.vars["g"].pull_from_device()
+            if not np.array_equal(np.asarray(sy.vars["g"].values, dtype=np.float32).ravel(), arr):
+                raise RuntimeError("E184 특징 가중치 적재 검증 실패: %s" % nm)
+            tot.append("%s=%.2f" % (nm, float(arr.astype(np.float64).sum())))
+        print("[E184 특징 가중치 적재] %s 검증 일치 — %s" % (path, " ".join(tot)))
 
     def _load_kc_type_weights(self, path):
         """E153: 저장된 종류 입력(good·bad 눈 → KC) 가중치를 싣는다. 저장본의 연결(post 인덱스)이 이 뇌와 같아야 한다(같은 시드) — 다르면 중단.
