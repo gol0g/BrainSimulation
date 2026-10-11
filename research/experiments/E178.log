@@ -1,0 +1,5 @@
+=== E178 실행: 2026-10-11T05:25:22Z ===
+커맨드: bash scripts/e178_main.sh
+---
+[E178] 맥락 세기 w=4(고정) · motor 긴장성 억제 X=-4000 (logs/E178/pick.txt)
+  e178 train b10: 
