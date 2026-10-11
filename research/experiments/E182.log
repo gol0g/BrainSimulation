@@ -2,4 +2,25 @@
 커맨드: bash scripts/e182_main.sh
 ---
 [E182] 시행 맞춤 맥락 평가 · 기저값 −4000 · E179 가중치
-  e182 b10 learn A: 
+  e182 b10 learn A: => mod -0.1276
+  e182 b10 learn B: => mod +0.0922
+  e182 b10 none A: => mod +0.0211
+  e182 b10 none B: => mod +0.0243
+  e182 b11 learn A: => mod -0.1375
+  e182 b11 learn B: => mod +0.0891
+  e182 b11 none A: => mod +0.0383
+  e182 b11 none B: => mod +0.0392
+  e182 b12 learn A: => mod -0.1378
+  e182 b12 learn B: => mod +0.1252
+  e182 b12 none A: => mod +0.0162
+  e182 b12 none B: => mod +0.0175
+  e182 b13 learn A: => mod -0.1196
+  e182 b13 learn B: => mod +0.1454
+  e182 b13 none A: => mod +0.0404
+  e182 b13 none B: => mod +0.0415
+  e182 b14 learn A: => mod -0.2296
+  e182 b14 learn B: => mod +0.0505
+  e182 b14 none A: => mod +0.0315
+  e182 b14 none B: => mod +0.0322
+[E182] 전체 루프 종료
+=== 종료코드 0 ===
