@@ -158,6 +158,22 @@ def ctx_apply(brain, on, args):
         set_ctx_ab(brain, args.ctx_ab_i if on else 0.0)   # E175 정정 1: 음수 = 침묵(assoc_binding 은 맥락 없이도 불응기 한계로 포화)
 
 
+def set_ctx2_pop(brain, level):
+    """대칭 맥락(E179): 맥락 전용 집단 2 zz_ctx2(맥락 A) 구동 — set_ctx_pop 과 같은 단위. 집단이 없으면 아무것도 안 한다."""
+    p = getattr(brain, "ctx2_pop", None)
+    if p is None:
+        return
+    p.vars["I_input"].view[:] = float(level) * float(brain.config.good_food_eye_sensitivity)
+    p.vars["I_input"].push_to_device()
+
+
+def ctx_state(brain, state, args):
+    """대칭 맥락(E179): 0 = 맥락 없음, 1 = 맥락 B(zz_ctx — 기존 '켬'), 2 = 맥락 A(zz_ctx2). 기존 경로(bicond·평가 켬)는 ctx_apply 를 그대로 쓴다."""
+    ctx_apply(brain, state == 1, args)
+    if args.ctx2_n > 0:
+        set_ctx2_pop(brain, args.ctx_level if state == 2 else 0.0)
+
+
 def measure_offset(brain, obs, nh, n=20, steps=5):
     """좌우 대칭 자극에서 남는 조향 = 런 상수 오프셋(C28b: 런마다 0.3~0.83으로 요동).
     steps: 조향 합의 처리 수(기본 5 = evaluate 의 steer 와 같음). 외부 검토 2026-10-09: 학습 판단은 3처리 합이라 --offset-steps 3 으로 맞출 수 있다."""
@@ -391,9 +407,10 @@ def main():
     ap.add_argument("--ctx-i", type=float, default=0.0,
                     help="맥락 의존 규칙(E173): 맥락 켬 때 KC 좌·우에 거는 균일 전류(Ioffset). 0 = 맥락 기전 없음(KC Ioffset 정적 — 이전 모델). "
                          ">0 이면 이 cfg 로 만드는 모든 뇌의 KC Ioffset 을 동적 매개변수로(값은 끔 0)")
-    ap.add_argument("--ctx-task", default="none", choices=("none", "bicond"),
+    ap.add_argument("--ctx-task", default="none", choices=("none", "bicond", "bicond2"),
                     help="맥락 의존 규칙 학습: bicond = 시행마다 맥락(지역 난수, 확률 --ctx-frac) — 맥락 끔이면 정답 = 교차(과제 A), 켬이면 같은 쪽. "
-                         "맥락은 결정 3처리·행동 창 동안만 켬(보상 창·간격 끔). none = 이전 동작")
+                         "맥락은 결정 3처리·행동 창 동안만 켬(보상 창·간격 끔). none = 이전 동작. "
+                         "bicond2(E179 대칭 맥락) = 시행마다 맥락 A(zz_ctx2, 정답 교차) 또는 B(zz_ctx, 정답 같은 쪽) — --ctx-n·--ctx2-n 필요, 추적 열 37 = 1 이면 B")
     ap.add_argument("--ctx-frac", type=float, default=0.5, help="bicond: 맥락 켬 시행 비율")
     ap.add_argument("--ctx-seed", type=int, default=None, help="bicond: 맥락 배정 지역 난수 시드(기본 17300 + 뇌 시드) — 전역 난수열 불변")
     ap.add_argument("--ctx-inh-i", type=float, default=0.0,
@@ -412,6 +429,11 @@ def main():
     ap.add_argument("--ctx-p", type=float, default=0.10, help="E176: zz_ctx → KC 연결 확률(호스트 지역 난수 17300 + genn_seed)")
     ap.add_argument("--ctx-level", type=float, default=0.9, help="E176: 맥락 켬 세기(zz_ctx I_input = 값 × good_food_eye 감도)")
     ap.add_argument("--eval-ctx", action="store_true", help="분해(이식) 평가를 맥락 켬(--ctx-i·--ctx-inh-i·--ctx-ab-i·--ctx-n)으로. 기본 끔")
+    ap.add_argument("--ctx2-n", type=int, default=0,
+                    help="E179: 맥락 전용 집단 2 zz_ctx2(대칭 맥락 A) 크기(→ KC 좌·우). 0 = 없음. --conn-snapshot 필요")
+    ap.add_argument("--ctx2-w", type=float, default=4.0, help="E179: zz_ctx2 → KC 가중치")
+    ap.add_argument("--ctx2-p", type=float, default=0.10, help="E179: zz_ctx2 → KC 연결 확률(호스트 지역 난수 17700 + genn_seed)")
+    ap.add_argument("--eval-ctx2", action="store_true", help="E179: 분해(이식) 평가를 맥락 A(zz_ctx2) 켬으로. --eval-ctx(맥락 B)와 함께 쓸 수 없다")
     ap.add_argument("--motor-tonic", type=float, default=0.0,
                     help="motor 동작점(E178): motor 좌·우 Ioffset 기저값(음수 = 긴장성 억제 — 불응기 상한 아래로). 0 = 이전 모델(정적 Ioffset 0). "
                          "이 cfg 로 만드는 모든 뇌(학습·이식 평가). 행동 창·보상 창 침묵은 기저값 ± 전류로 바꾸고 기저값으로 되돌린다. motor Ioffset 동적화 자동")
@@ -513,6 +535,13 @@ def main():
     cfg.ctx_n, cfg.ctx_w, cfg.ctx_p = int(args.ctx_n), float(args.ctx_w), float(args.ctx_p)   # E176: 맥락 전용 집단(스냅숏 필요)
     if args.ctx_n > 0 and not args.conn_snapshot:
         raise SystemExit("--ctx-n > 0 은 --conn-snapshot 이 필요하다(새 뉴런 집단은 장치 연결 난수를 바꾼다 — E173 정정 1)")
+    cfg.ctx2_n, cfg.ctx2_w, cfg.ctx2_p = int(args.ctx2_n), float(args.ctx2_w), float(args.ctx2_p)   # E179: 맥락 전용 집단 2(스냅숏 필요)
+    if args.ctx2_n > 0 and not args.conn_snapshot:
+        raise SystemExit("--ctx2-n > 0 은 --conn-snapshot 이 필요하다")
+    if args.ctx_task == "bicond2" and (args.ctx_n <= 0 or args.ctx2_n <= 0):
+        raise SystemExit("--ctx-task bicond2 는 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 B = zz_ctx, A = zz_ctx2)")
+    if args.eval_ctx2 and (args.ctx2_n <= 0 or args.eval_ctx):
+        raise SystemExit("--eval-ctx2 는 --ctx2-n > 0 이 필요하고 --eval-ctx 와 함께 쓸 수 없다")
     if (args.ctx_task != "none" or args.eval_ctx or args.decomp_mode == "kcctx") and args.ctx_i <= 0 and args.ctx_inh_i <= 0 and args.ctx_ab_i == 0 and args.ctx_n <= 0:
         raise SystemExit("--ctx-task·--eval-ctx·kcctx 는 --ctx-i > 0·--ctx-inh-i > 0·--ctx-ab-i ≠ 0·--ctx-n > 0 중 하나가 필요하다")
     if args.rw_da_reset or args.offset_steps != 5:
@@ -954,6 +983,8 @@ def main():
             isum = [0, 0]      # E174 조작검증: good 제시의 맥락 부분집합 억제 뉴런 발화 합(끔·켬) — 맥락이 억제 뉴런에 닿으면 켬 > 끔
             asum = [0, 0]      # E175 조작검증: good 제시의 assoc_binding 발화 합(끔·켬) — 맥락이 연합 결합 집단에 닿으면 켬 > 끔
             csum = [0, 0]      # E176 조작검증: good 제시의 맥락 전용 집단 zz_ctx 발화 합(끔·켬) — 끔 0·켬 > 0
+            c2sum = [0, 0]     # E179 조작검증(대칭 모드): good 제시의 zz_ctx2(맥락 A) 발화 합 — '끔'(= A) 자리 > 0·'켬'(= B) 0
+            _sym = args.ctx2_n > 0   # E179 대칭 모드: '끔' good 제시 = 맥락 A 켬(good+A 대 good+B 집합), 간격·기준선은 두 맥락 끔
             _b2.reset()
             for _ in range(30):
                 _b2.process(_obs2)
@@ -968,7 +999,10 @@ def main():
                         dst[kn] += np.bincount(ids, minlength=n_k)[:n_k]
             for rep_i in range(args.trials):
                 sd, on = seq[rep_i % 6]
-                ctx_apply(_b2, bool(on), args)
+                if _sym and sd is not None:
+                    ctx_state(_b2, 1 if on else 2, args)   # E179: '켬' = 맥락 B, '끔' = 맥락 A
+                else:
+                    ctx_apply(_b2, bool(on), args)
                 for _ in range(3):
                     _b2.process(stim(_obs2, nh, sd) if sd else neu)
                     _tmp = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
@@ -987,7 +1021,12 @@ def main():
                             asum[on] += int(np.asarray(_b2.assoc_binding.spike_recording_data[0][1]).size)   # E175 조작검증
                         if getattr(_b2, "ctx_pop", None) is not None:
                             csum[on] += int(np.asarray(_b2.ctx_pop.spike_recording_data[0][1]).size)         # E176 조작검증
-                ctx_apply(_b2, False, args)
+                        if getattr(_b2, "ctx2_pop", None) is not None:
+                            c2sum[on] += int(np.asarray(_b2.ctx2_pop.spike_recording_data[0][1]).size)       # E179 조작검증
+                if _sym:
+                    ctx_state(_b2, 0, args)
+                else:
+                    ctx_apply(_b2, False, args)
                 for j in range(10):
                     _b2.process(neu)
                     if j >= 5:
@@ -1006,7 +1045,8 @@ def main():
                   " | ctx_n=%d w=%.2f p=%.3f level=%.2f 맥락 집단 발화 끔 %d 켬 %d"
                   % (" | ".join(out), args.ctx_i, ksum[0], ksum[1], int(cnt[(None, 1)]["l"].sum() + cnt[(None, 1)]["r"].sum()),
                      int(c0["l"].sum() + c0["r"].sum()), n_pres, args.ctx_inh_i, isum[0], isum[1], args.ctx_ab_i, asum[0], asum[1],
-                     args.ctx_n, args.ctx_w, args.ctx_p, args.ctx_level, csum[0], csum[1]))
+                     args.ctx_n, args.ctx_w, args.ctx_p, args.ctx_level, csum[0], csum[1])
+                  + (" | 대칭(E179 — 끔 자리 = 맥락 A) ctx2_n=%d w2=%.2f p2=%.3f 맥락2 집단 발화 끔 %d 켬 %d" % (args.ctx2_n, args.ctx2_w, args.ctx2_p, c2sum[0], c2sum[1]) if _sym else ""))
             return
         if mode == "kcrate":
             # E138: 발화 **수** 기준 KC 선택성(kcsets 의 ≥1 스파이크 기준은 지속·잔여 발화로 "공유"를 부풀릴 수 있다).
@@ -1211,11 +1251,18 @@ def main():
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
         _evd = {} if args.eval_diag else None
-        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd,
-                                 ctx=((lambda b_, on_: ctx_apply(b_, on_, args)) if args.eval_ctx else None))
+        if args.eval_ctx2:
+            _ectx = (lambda b_, on_: ctx_state(b_, 2 if on_ else 0, args))   # E179: 맥락 A(zz_ctx2) 켬 평가
+        elif args.eval_ctx:
+            _ectx = (lambda b_, on_: ctx_apply(b_, on_, args))
+        else:
+            _ectx = None
+        acc, off, mod = evaluate(_b2, _obs2, nh, args.trials, variant=args.eval_variant, vseed=args.eval_vseed, diag=_evd, ctx=_ectx)
         if args.eval_ctx:
             print("[맥락 평가] ctx=켬 I=%.2f(KC 좌·우 Ioffset) I_inh=%.2f(억제 부분집합 %.2f) I_ab=%.2f(assoc_binding) ctx_n=%d w=%.2f level=%.2f(맥락 전용 집단)"
                   % (args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, args.ctx_n, args.ctx_w, args.ctx_level))
+        if args.eval_ctx2:
+            print("[맥락 평가 A] ctx2=켬 ctx2_n=%d w2=%.2f p2=%.3f level=%.2f(맥락 전용 집단 2)" % (args.ctx2_n, args.ctx2_w, args.ctx2_p, args.ctx_level))
         if args.eval_variant:
             print("[E146 변형] variant=%s vseed=%d" % (args.eval_variant, args.eval_vseed))
         if _evd is not None:
@@ -1450,9 +1497,14 @@ def main():
     _dar_done = False       # 구현 점검 ①: 첫 보상 창 끝 도파민 뉴런 입력 0 확인을 한 번만 출력
     KRW = {"dec": [], "rw_rew": [], "rw_pun": []} if args.kc_rw_diag else None   # E168(읽기 전용): KC 발화율 진단
     # 맥락 의존 규칙(bicond): 시행마다 맥락 배정 — 지역 난수(전역 np.random 열 불변). none 이면 None(이전 동작)
-    _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task == "bicond" else None
+    _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task in ("bicond", "bicond2") else None
     _nctx = 0
-    if _crng is not None:
+    if _crng is not None and args.ctx_task == "bicond2":
+        # E179 대칭 맥락: 같은 지역 난수로 맥락 B(zz_ctx, '켬' 자리) 대 A(zz_ctx2, '끔' 자리) 배정 — 시행열은 bicond 와 같다
+        print("[맥락 과제] bicond2 frac=%.2f ctx_n=%d w=%.2f ctx2_n=%d w2=%.2f p2=%.3f seed=%d — 맥락 A(zz_ctx2) 정답 교차, 맥락 B(zz_ctx) 정답 같은 쪽"
+              % (args.ctx_frac, args.ctx_n, args.ctx_w, args.ctx2_n, args.ctx2_w, args.ctx2_p,
+                 (args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed)))
+    elif _crng is not None:
         print("[맥락 과제] bicond frac=%.2f I=%.2f I_inh=%.2f inh_frac=%.2f I_ab=%.2f ctx_n=%d w=%.2f seed=%d — 맥락 끔 정답 교차, 켬 정답 같은 쪽"
               % (args.ctx_frac, args.ctx_i, args.ctx_inh_i, cfg.ctx_inh_frac, args.ctx_ab_i, args.ctx_n, args.ctx_w,
                  (args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed)))
@@ -1477,7 +1529,10 @@ def main():
                 _taskb_announced = True
             _stimf = stim_bad if _taskb else stim
             _ctx_on = bool(_crng is not None and _crng.random_sample() < args.ctx_frac)   # 맥락 의존 규칙(지역 난수)
-            if _crng is not None:
+            if _crng is not None and args.ctx_task == "bicond2":
+                ctx_state(brain, 1 if _ctx_on else 2, args)   # E179: 맥락 B(같은 쪽) 또는 A(교차) — 결정 3처리·행동 창 동안
+                _nctx += int(_ctx_on)
+            elif _crng is not None:
                 ctx_apply(brain, _ctx_on, args)   # 결정 3처리·행동 창 동안
                 _nctx += int(_ctx_on)
             if args.dec_apm_scale >= 0:
@@ -1556,7 +1611,9 @@ def main():
                     _aw = (float("nan"), float("nan"))
             else:
                 _aw = (float("nan"), float("nan"))
-            if _crng is not None and _ctx_on:
+            if _crng is not None and args.ctx_task == "bicond2":
+                ctx_state(brain, 0, args)       # E179: 보상 창·간격에는 두 맥락 모두 끔
+            elif _crng is not None and _ctx_on:
                 ctx_apply(brain, False, args)   # 맥락 의존 규칙: 보상 창·간격에는 맥락 끔(자극과 같이)
             if KCT is not None:
                 _ke = _kct_sum(_kct_read("e"))      # E139: 도파민 직전(행동 창 뒤) 자격흔적 역할별 합

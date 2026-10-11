@@ -1203,6 +1203,9 @@ class ForagerBrainConfig:
     ctx_n: int = 0                       # E176: 맥락 전용 집단 zz_ctx 크기(스냅숏 적재가 있을 때만 — 새 뉴런 집단은 장치 연결 난수를 바꾼다). 0 = 없음
     ctx_w: float = 4.0                   # E176: zz_ctx → KC(좌·우) 가중치
     ctx_p: float = 0.10                  # E176: zz_ctx → KC 연결 확률(호스트 지역 난수 RandomState(17300 + genn_seed))
+    ctx2_n: int = 0                      # E179: 두 번째 맥락 전용 집단 zz_ctx2(대칭 맥락 A) 크기 — 스냅숏 적재가 있을 때만. 0 = 없음(이전 모델)
+    ctx2_w: float = 4.0                  # E179: zz_ctx2 → KC(좌·우) 가중치
+    ctx2_p: float = 0.10                 # E179: zz_ctx2 → KC 연결 확률(호스트 지역 난수 RandomState(17700 + genn_seed) — zz_ctx 와 독립)
     kc_to_d1_init_w: float = 0.5
     kc_to_d1_sparsity: float = 0.05
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
@@ -2246,6 +2249,29 @@ class ForagerBrain:
                 _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
                 self.ctx_syn[_sd] = (_sg, int(_pi.size))
             print(f"  [맥락 입력] 맥락 전용 집단 zz_ctx {_cn} → KC 좌·우, w={_cw:.2f}, p={_cp:.3f}, 연결 좌 {self.ctx_syn['l'][1]}·우 {self.ctx_syn['r'][1]}")
+        # E179: 두 번째 맥락 전용 집단 zz_ctx2(대칭 맥락 A) — zz_ctx 와 같은 모형·같은 방식, 독립 호스트 난수(17700 + genn_seed). 스냅숏 필요. 기본 0 = 없음.
+        _cn2 = int(getattr(self.config, "ctx2_n", 0))
+        if _cn2 > 0:
+            if not self._conn_snap_load:
+                raise RuntimeError("ctx2_n > 0(맥락 전용 집단 2)은 초기 연결 스냅숏 적재(conn_snapshot_load)가 필요하다 — 새 뉴런 집단은 장치 연결 난수를 바꾼다")
+            _cw2 = float(getattr(self.config, "ctx2_w", 4.0)); _cp2 = float(getattr(self.config, "ctx2_p", 0.10)); _c = self.config
+            self.ctx2_pop = self.model.add_neuron_population(
+                "zz_ctx2", _cn2, sensory_lif_model,
+                {"C": 1.0, "TauM": _c.tau_m, "Vrest": _c.v_rest, "Vreset": _c.v_reset, "Vthresh": _c.v_thresh, "TauRefrac": _c.tau_refrac},
+                {"V": _c.v_rest, "RefracTime": 0.0, "I_input": 0.0})
+            self.ctx2_pop.spike_recording_enabled = True
+            _crs2 = np.random.RandomState(17700 + int(getattr(self.config, "genn_seed", 0)))
+            self.ctx2_syn = {}
+            for _sd, _post in (("l", self.kc_left), ("r", self.kc_right)):
+                _m = _crs2.random_sample((_cn2, int(self.config.n_kc_per_side))) < _cp2
+                _pi, _qi = np.nonzero(_m)
+                _sg = self.model.add_synapse_population(
+                    "zz_ctx2_to_kc_%s" % _sd, "SPARSE", self.ctx2_pop, _post,
+                    init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": _cw2})}),
+                    init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
+                self.ctx2_syn[_sd] = (_sg, int(_pi.size))
+            print(f"  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 {_cn2} → KC 좌·우, w={_cw2:.2f}, p={_cp2:.3f}, 연결 좌 {self.ctx2_syn['l'][1]}·우 {self.ctx2_syn['r'][1]}")
 
         # Enable spike recording for all populations (batched GPU pull)
         self._enable_spike_recording()
