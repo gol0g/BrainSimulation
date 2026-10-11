@@ -1,1 +1,9 @@
 [E183 보정] 시작 2026-10-11 21:23:21
+[W=8 rc=0] 완료 1 RCKC 144
+[W=16 rc=0] 완료 1 RCKC 144
+[W=24 rc=0] 완료 1 RCKC 144
+W=8 K_pre 63.7 K_post 57.9 P1 True P2 True P3 True
+W=16 K_pre 94.2 K_post 102.6 P1 True P2 True P3 True
+W=24 K_pre 131.0 K_post 142.9 P1 True P2 True P3 True
+선택: W=24
+[E183 보정] 선택 W=24 종료 2026-10-11 21:34:21
