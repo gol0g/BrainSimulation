@@ -13,7 +13,9 @@ OUT="$R/research/experiments/logs/E177/sat_check/$SUB"; mkdir -p "$OUT"
 source $R/scripts/cuda_env.sh >/dev/null 2>&1
 source /root/pygenn_wsl/bin/activate
 mkdir -p /root/e177_satcheck_run && cd /root/e177_satcheck_run
-cp $R/backend/genesis/*.py . 2>/dev/null
+# 코드: E177 실행 사본(/root/e177_main_run/*.py — 01:01:31 에 저장소 백엔드를 복사한 그대로)을 쓴다. 저장소 백엔드가 다음 분기로 바뀌어도 E177 과 같은 코드.
+# 사본이 없으면(다른 기계 등) 저장소 백엔드로 대신하고 그렇게 적는다.
+if ls /root/e177_main_run/*.py >/dev/null 2>&1; then cp /root/e177_main_run/*.py . ; echo "[코드] /root/e177_main_run 사본" | tee -a "$OUT/summary.out"; else cp $R/backend/genesis/*.py . 2>/dev/null; echo "[코드] 저장소 backend/genesis(E177 사본 없음)" | tee -a "$OUT/summary.out"; fi
 BASE="--real-rstdp --crossed --d1-inhib -400 --direct-inhib -100 --kc-motor --kc-motor-sparsity 0.25 --kc-motor-w-max 300 --kc-motor-init-w 150 --kc-motor-eta 0.15 --tau-e 12 --reward-window 2 --reward-stim none --trial-gap 10 --epsilon 0.6 --bias 25 --env-seed 0"
 ACT="--act-window 3 --act-current 5000 --judge exec --reflex-w 0 --rw-apm-scale 0"
 for B in "$@"; do

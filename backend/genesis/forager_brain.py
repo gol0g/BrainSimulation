@@ -1208,6 +1208,7 @@ class ForagerBrainConfig:
     # E109: KC→motor 학습 경로(버섯체 MBON 유사). D1 경로는 행동 권한이 반사의 6~17%뿐(K52, E108).
     # 최소 회로(K50)처럼 학습 경로를 운동 출력에 직접 닿게 한다. 기본 꺼짐 = 기존 동작.
     motor_ioffset_dynamic: bool = False   # E115: 행동 창 지속 전류용
+    motor_tonic: float = 0.0              # motor 동작점(E178): motor 좌·우 Ioffset 기저값 — 음수 = 긴장성 억제(불응기 상한 아래로). 0 = 이전 모델(정적 Ioffset 0). motor_ioffset_dynamic 필요
     kc_motor_rstdp: bool = False
     kc_motor_init_w: float = 0.5
     kc_motor_w_max: float = 2.0
@@ -1738,6 +1739,10 @@ class ForagerBrain:
             # 막전위 튕기기(steer 편향)는 처리 스텝 시작에만 작용해 반사 입력이 반대쪽 motor 를 곧 다시 발화시킨다(E114 첫 쌍).
             self.motor_left.set_param_dynamic("Ioffset")
             self.motor_right.set_param_dynamic("Ioffset")
+        self.motor_tonic = float(getattr(self.config, "motor_tonic", 0.0))
+        if self.motor_tonic != 0.0 and not getattr(self.config, "motor_ioffset_dynamic", False):
+            # E178: 기저값은 동적 Ioffset 으로 건다(행동 창이 기저값 ± 전류로 바꾸고 기저값으로 되돌린다)
+            raise RuntimeError("motor_tonic 은 motor_ioffset_dynamic 이 필요하다")
         print(f"  Motor: C={self.config.motor_capacitance} (anti-saturation)")
 
         print(f"  Motor: Left({self.config.n_motor_left}) + Right({self.config.n_motor_right})")
@@ -2254,6 +2259,11 @@ class ForagerBrain:
         _css = getattr(self.config, "conn_snapshot_save", "") or ""
         if _css:
             self._save_conn_snapshot(_css)
+        if self.motor_tonic != 0.0:
+            # E178: motor 긴장성 억제 — 기저 Ioffset. reset() 은 Ioffset 을 건드리지 않으므로 평가 reset 뒤에도 유지된다.
+            self.motor_left.set_dynamic_param_value("Ioffset", self.motor_tonic)
+            self.motor_right.set_dynamic_param_value("Ioffset", self.motor_tonic)
+            print(f"  [motor 동작점] motor 좌·우 Ioffset 기저값 {self.motor_tonic:.1f}(긴장성 억제)")
 
         # E153: 경험 형성 KC 종류 입력 가중치(kc_type_weights_file) — 이 설정으로 만드는 모든 뇌(학습·이식 평가·측정)가 같은 형성 표현을 쓴다.
         _ktw = getattr(self.config, "kc_type_weights_file", "") or ""

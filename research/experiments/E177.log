@@ -8,4 +8,10 @@
   e177 b10 learn on: => mod -0.0000
   e177 b10 none off: => mod +0.0080
   e177 b10 none on: => mod +0.0007
-  e177 train b11: 
+  e177 train b11: => 사전 +0.0107 사후 -0.4400 보상 1786 || 맥락 켬 1479 || 적재 2 || => KCTRACE 시행 3000 보상 1786 | A +5769788.2 B +3177137.5 C -5273967.9 P -3341219.2 |
+  e177 kcctx b11: => KCCTX side=l off=52 on=131 ctx=103 keep=52 lost=0 conj=51 jac=0.3969 | side=r off=57 on=126 ctx=100 keep=57 lost=0 conj=44 jac=0.4524 | ctx_i=0.00 | KC 발화 합 good 끔 46757 켬 76400 · 맥락 단독 52080 · 기준선 134613 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e177 b11 learn off: => mod -0.4400
+  e177 b11 learn on: => mod +0.0007
+  e177 b11 none off: => mod +0.0107
+  e177 b11 none on: => mod +0.0009
+  e177 train b12: 

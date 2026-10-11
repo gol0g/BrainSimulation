@@ -2,7 +2,8 @@
 """E177 탐색(판정 밖) — 쌍조건 학습 중 맥락별 정답 선택률 곡선: 어느 맥락이 지는가.
 추적 traces/E177/tr_bc_b{B}.npz 의 rows: 열 2 = 자극 쪽, 6 = 실행 행동(−1 = 행동 창 없음), 7 = 보상, 37 = 맥락(0 끔 · 1 켬).
 정답 규칙(judge_e177.bicond_stats 와 같음): 끔 → 실행 ≠ 쪽(교차), 켬 → 실행 = 쪽(같은 쪽).
-출력: 뇌마다 맥락별 블록(기본 10 블록 × 300시행) 정답 선택률(행동한 시행 중), 마지막 3 블록 평균.
+출력: 뇌마다 맥락별 블록(기본 10 블록 × 300시행) 정답 선택률(행동한 시행 중), 마지막 3 블록 평균,
+탐욕 시행 결정 조향(열 5 — 정답 방향 부호 평균·|v|·|v| ≤ 0.02 비율), 행동 창 반대 motor 발화율 합(열 36) 맥락별 평균.
 탐험(epsilon 0.6)이 섞인 실행 기준이라 범위는 대략 0.5(무작위) ~ 0.7(정책 완벽) — 상대 비교용.
 실행: python3 scripts/explore_e177_curves.py (저장소 루트) / 합성 검사: --selftest"""
 import os
@@ -36,6 +37,25 @@ def tail_mean(cv, k=3):
     """마지막 k 블록의 행동 가중 정답률."""
     tot = sum(n for n, _ in cv[-k:])
     return float(sum(n * r for n, r in cv[-k:] if n) / tot) if tot else float("nan")
+
+
+def greedy_v(rows, last_from=2000):
+    """탐욕 시행(열 3 = 0)의 결정 조향 v(열 5, v<0 = 왼쪽)를 맥락별로: 정답 방향 부호를 곱한 평균, |v| 평균, |v| ≤ 0.02 비율, 정답 방향 비율.
+    정답 방향(+1 = 오른쪽): 끔 = 교차(자극 왼쪽 → 오른쪽), 켬 = 같은 쪽(자극 오른쪽 → 오른쪽). last_from 이후 시행만(기본 마지막 1/3)."""
+    rows = np.asarray(rows, dtype=np.float64)
+    idx = np.arange(len(rows))
+    greedy = (rows[:, 3] == 0) & (idx >= last_from)
+    ctx = rows[:, 37] == 1
+    side_r = rows[:, 2] == 1
+    v = rows[:, 5]
+    cdir = np.where(ctx, np.where(side_r, 1.0, -1.0), np.where(side_r, -1.0, 1.0))
+    out = {}
+    for c in (0, 1):
+        m = greedy & (ctx == bool(c))
+        k = int(m.sum())
+        out[c] = (k, float((v * cdir)[m].mean()) if k else float("nan"), float(np.abs(v[m]).mean()) if k else float("nan"),
+                  float(np.mean(np.abs(v[m]) <= 0.02)) if k else float("nan"), float(np.mean((v * cdir)[m] > 0)) if k else float("nan"))
+    return out
 
 
 def selftest():
@@ -72,6 +92,19 @@ def selftest():
     good_ = tail_mean(cv2[1]) == 1.0 and tail_mean(cv2[0]) == 0.0
     ok &= good_
     print("  %-24s 켬 %.1f 끔 %.1f %s" % ("규칙 방향(모두 같은 쪽)", tail_mean(cv2[1]), tail_mean(cv2[0]), "✓" if good_ else "✗"))
+    # greedy_v: 끔 탐욕 = 교차 방향 v ±0.15, 켬 탐욕 = |v| 0.004(포화 흉내), 탐험 시행(열 3 = 1)은 큰 v(제외돼야 함)
+    r3 = np.zeros((n, 38))
+    r3[:, 2] = rng.randint(0, 2, n)
+    r3[:, 37] = rng.randint(0, 2, n)
+    r3[:, 3] = (rng.rand(n) < 0.6).astype(float)
+    cross = np.where(r3[:, 2] == 1, -1.0, 1.0)
+    r3[:, 5] = np.where(r3[:, 37] == 1, 0.004 * np.where(rng.rand(n) < 0.5, 1.0, -1.0), 0.15 * cross)
+    r3[r3[:, 3] == 1, 5] = 5.0
+    g = greedy_v(r3)
+    good_ = abs(g[0][1] - 0.15) < 1e-9 and abs(g[0][2] - 0.15) < 1e-9 and g[0][3] == 0.0 and g[0][4] == 1.0 \
+        and abs(g[1][2] - 0.004) < 1e-9 and g[1][3] == 1.0 and abs(g[1][1]) < 0.002
+    ok &= good_
+    print("  %-24s 끔 정답방향 %+.3f |v| %.3f · 켬 |v| %.3f 작음비율 %.2f %s" % ("탐욕 결정 조향(greedy_v)", g[0][1], g[0][2], g[1][2], g[1][3], "✓" if good_ else "✗"))
     print("합성 검사:", "통과" if ok else "실패")
     return ok
 
@@ -88,6 +121,10 @@ def main():
         cv = curves(rows)
         for c, nm in ((0, "끔(교차)"), (1, "켬(같은 쪽)")):
             print("b%d %-10s %s | 마지막 3 블록 %.3f" % (b, nm, " ".join("%.2f" % r for _, r in cv[c]), tail_mean(cv[c])))
+        g = greedy_v(rows)
+        print("b%d 탐욕 결정 조향(시행 2000~): 끔 정답방향 %+.3f |v| %.3f 작음 %.2f 정답비율 %.2f (n %d) · 켬 정답방향 %+.3f |v| %.3f 작음 %.2f 정답비율 %.2f (n %d)"
+              % (b, g[0][1], g[0][2], g[0][3], g[0][4], g[0][0], g[1][1], g[1][2], g[1][3], g[1][4], g[1][0]))
+        print("b%d 행동 창 반대 motor 발화율 합(열 36): 끔 %.3f · 켬 %.3f" % (b, rows[rows[:, 37] == 0, 36].mean(), rows[rows[:, 37] == 1, 36].mean()))
 
 
 if __name__ == "__main__":

@@ -91,13 +91,14 @@ def steer(brain, o, steps=5, bias_side=None, bias_strength=0.0, bias_at_d1=False
 
 def act_window_current(brain, o, ex_side, current, steps, neg=None):
     """E115: 행동 창 — 실행 motor 에 +current, 반대 motor 에 −current 를 **지속 전류**로(Ioffset) 넣고 steps 처리.
-    motor Ioffset 이 동적 파라미터여야 한다(cfg.motor_ioffset_dynamic). 끝나면 0으로 되돌린다.
+    motor Ioffset 이 동적 파라미터여야 한다(cfg.motor_ioffset_dynamic). 끝나면 기저값(brain.motor_tonic — E178, 기본 0)으로 되돌린다.
     E144: neg 를 주면 반대 motor 에는 −neg(실행 쪽 +current 는 그대로). None = 이전 동작(−current).
     반환: 창 동안 (실행 motor 발화율 합, 반대 motor 발화율 합)."""
     _neg = current if neg is None else neg
+    _b0 = float(getattr(brain, "motor_tonic", 0.0))   # E178: motor 기저 Ioffset(긴장성 억제) — 기저값 ± 전류, 끝나면 기저값으로. 0 이면 이전 동작
     ml, mr = brain.motor_left, brain.motor_right
-    ml.set_dynamic_param_value("Ioffset", current if ex_side == "left" else -_neg)
-    mr.set_dynamic_param_value("Ioffset", current if ex_side == "right" else -_neg)
+    ml.set_dynamic_param_value("Ioffset", _b0 + (current if ex_side == "left" else -_neg))
+    mr.set_dynamic_param_value("Ioffset", _b0 + (current if ex_side == "right" else -_neg))
     ex_r = ot_r = 0.0
     try:
         for _ in range(steps):
@@ -106,8 +107,8 @@ def act_window_current(brain, o, ex_side, current, steps, neg=None):
             ex_r += (l if ex_side == "left" else r)
             ot_r += (r if ex_side == "left" else l)
     finally:
-        ml.set_dynamic_param_value("Ioffset", 0.0)
-        mr.set_dynamic_param_value("Ioffset", 0.0)
+        ml.set_dynamic_param_value("Ioffset", _b0)
+        mr.set_dynamic_param_value("Ioffset", _b0)
     return ex_r, ot_r
 
 
@@ -411,6 +412,9 @@ def main():
     ap.add_argument("--ctx-p", type=float, default=0.10, help="E176: zz_ctx → KC 연결 확률(호스트 지역 난수 17300 + genn_seed)")
     ap.add_argument("--ctx-level", type=float, default=0.9, help="E176: 맥락 켬 세기(zz_ctx I_input = 값 × good_food_eye 감도)")
     ap.add_argument("--eval-ctx", action="store_true", help="분해(이식) 평가를 맥락 켬(--ctx-i·--ctx-inh-i·--ctx-ab-i·--ctx-n)으로. 기본 끔")
+    ap.add_argument("--motor-tonic", type=float, default=0.0,
+                    help="motor 동작점(E178): motor 좌·우 Ioffset 기저값(음수 = 긴장성 억제 — 불응기 상한 아래로). 0 = 이전 모델(정적 Ioffset 0). "
+                         "이 cfg 로 만드는 모든 뇌(학습·이식 평가). 행동 창·보상 창 침묵은 기저값 ± 전류로 바꾸고 기저값으로 되돌린다. motor Ioffset 동적화 자동")
     ap.add_argument("--kc-rw-diag", action="store_true",
                     help="E168(읽기 전용): 학습 중 결정 단계(3처리 끝)·보상 창(보상 시행·처벌 시행) KC 발화율 평균을 출력. 난수 소비 없음")
     ap.add_argument("--kc-dev-n", type=int, default=100, help="E153 kcdev: 종류·쪽마다 노출 제시 수")
@@ -550,6 +554,9 @@ def main():
     if args.hippo_eta is not None:
         cfg.place_to_food_memory_eta = args.hippo_eta
     if args.act_current > 0 or args.calib_act_current or args.rw_motor_silence > 0:
+        cfg.motor_ioffset_dynamic = True
+    cfg.motor_tonic = float(args.motor_tonic)   # E178: motor 기저 Ioffset — 0 이면 이전 모델
+    if args.motor_tonic != 0:
         cfg.motor_ioffset_dynamic = True
     if args.kc_motor:
         cfg.kc_motor_rstdp = True
@@ -1585,8 +1592,8 @@ def main():
                 if args.rw_motor_silence > 0:
                     # E140: 보상 창(도파민 켜짐) 동안 양쪽 motor 침묵(지속 음 전류) — 새 post 스파이크가 없으면 보상 창의 비선택 LTP 흔적이 생기지 않는다.
                     # 행동 창·평가에는 걸지 않는다(보상 창 루프 직후 0 으로 되돌림).
-                    brain.motor_left.set_dynamic_param_value("Ioffset", -args.rw_motor_silence)
-                    brain.motor_right.set_dynamic_param_value("Ioffset", -args.rw_motor_silence)
+                    brain.motor_left.set_dynamic_param_value("Ioffset", float(getattr(brain, "motor_tonic", 0.0)) - args.rw_motor_silence)   # E178: 기저값 기준
+                    brain.motor_right.set_dynamic_param_value("Ioffset", float(getattr(brain, "motor_tonic", 0.0)) - args.rw_motor_silence)
                 if args.rw_apm_scale >= 0:
                     # E141: 보상 창 동안 KC→motor 흔적 생성 배율(0 = 동결 — 새 pre·post 스파이크가 흔적을 만들지 않고,
                     # 결정·행동 창 흔적이 감쇠만 하며 가중치로 굳는다). E140 침묵은 생성 부호만 LTD 로 바꿨다(경로 검사).
@@ -1604,8 +1611,8 @@ def main():
                 if KRW is not None and args.reward_window > 0:
                     KRW["rw_rew" if correct else "rw_pun"].append(_kcw / args.reward_window)
                 if args.rw_motor_silence > 0:
-                    brain.motor_left.set_dynamic_param_value("Ioffset", 0.0)
-                    brain.motor_right.set_dynamic_param_value("Ioffset", 0.0)
+                    brain.motor_left.set_dynamic_param_value("Ioffset", float(getattr(brain, "motor_tonic", 0.0)))   # E178: 기저값으로 되돌림(0 이면 이전 동작)
+                    brain.motor_right.set_dynamic_param_value("Ioffset", float(getattr(brain, "motor_tonic", 0.0)))
                 if args.rw_apm_scale >= 0:
                     for _s in brain.kc_motor_syn.values():
                         _s.set_dynamic_param_value("A_plus", brain.kc_motor_apm[0])
