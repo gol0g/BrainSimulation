@@ -14,4 +14,23 @@
   e177 b11 learn on: => mod +0.0007
   e177 b11 none off: => mod +0.0107
   e177 b11 none on: => mod +0.0009
-  e177 train b12: 
+  e177 train b12: => 사전 +0.0008 사후 -0.4440 보상 1809 || 맥락 켬 1487 || 적재 2 || => KCTRACE 시행 3000 보상 1809 | A +5832907.4 B +4138275.3 C -5455030.7 P -4196648.7 |
+  e177 kcctx b12: => KCCTX side=l off=57 on=130 ctx=96 keep=57 lost=0 conj=47 jac=0.4385 | side=r off=52 on=121 ctx=100 keep=52 lost=0 conj=48 jac=0.4298 | ctx_i=0.00 | KC 발화 합 good 끔 47491 켬 76651 · 맥락 단독 52318 · 기준선 137221 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e177 b12 learn off: => mod -0.4440
+  e177 b12 learn on: => mod +0.0005
+  e177 b12 none off: => mod +0.0008
+  e177 b12 none on: => mod -0.0002
+  e177 train b13: => 사전 +0.0227 사후 -0.4175 보상 1743 || 맥락 켬 1511 || 적재 2 || => KCTRACE 시행 3000 보상 1743 | A +6078427.3 B +4013072.7 C -5786924.0 P -4305846.8 |
+  e177 kcctx b13: => KCCTX side=l off=48 on=123 ctx=102 keep=48 lost=0 conj=55 jac=0.3902 | side=r off=57 on=140 ctx=96 keep=57 lost=0 conj=56 jac=0.4071 | ctx_i=0.00 | KC 발화 합 good 끔 47356 켬 76894 · 맥락 단독 52943 · 기준선 138654 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e177 b13 learn off: => mod -0.4175
+  e177 b13 learn on: => mod +0.0011
+  e177 b13 none off: => mod +0.0227
+  e177 b13 none on: => mod +0.0007
+  e177 train b14: => 사전 +0.0119 사후 -0.4626 보상 1735 || 맥락 켬 1469 || 적재 2 || => KCTRACE 시행 3000 보상 1735 | A +6343317.5 B +2988122.4 C -5936508.0 P -3266178.6 |
+  e177 kcctx b14: => KCCTX side=l off=57 on=128 ctx=103 keep=57 lost=0 conj=48 jac=0.4453 | side=r off=58 on=123 ctx=91 keep=58 lost=0 conj=37 jac=0.4715 | ctx_i=0.00 | KC 발화 합 good 끔 46962 켬 76790 · 맥락 단독 51523 · 기준선 132586 | n_pres=40 | ctx_inh_i=0.00 억제 부분집합 발화 끔 0 켬 0 | ctx_ab_i=0.00 연합 결합 발화 끔 0 켬 0 | ctx_n=200 w=4.00 p=0.100 level=0.90 맥락 집단 발화 끔 0 켬 160000
+  e177 b14 learn off: => mod -0.4626
+  e177 b14 learn on: => mod +0.0010
+  e177 b14 none off: => mod +0.0119
+  e177 b14 none on: => mod +0.0001
+[E177] 전체 루프 종료
+=== 종료코드 0 ===
