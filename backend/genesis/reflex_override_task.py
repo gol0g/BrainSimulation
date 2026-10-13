@@ -498,6 +498,8 @@ def main():
     ap.add_argument("--feat-weights", default=None,
                     help="E184: 형성된 zz_feat→KC 가중치 npz(rawcat --rc-save 형식)를 이 cfg 로 만드는 모든 뇌에 싣는다(연결 일치 검사). 없으면 초기값 feat_w")
     ap.add_argument("--rc-ctx-seed", type=int, default=None, help="E187 catctx: 맥락 X·Y 배정 지역 난수 시드(기본 18600 + 뇌 시드)")
+    ap.add_argument("--rc-reverse-after", type=int, default=0,
+                    help="E188 catrule: 전체 시행 번호 N 부터 범주 규칙 반전(A → 같은 쪽, B → 교차). 0 = 반전 없음(이전)")
     ap.add_argument("--rc-eval-ctx", default="none", choices=("none", "X", "Y"),
                     help="E187: --rc-eval 시행마다 조향 동안 맥락 X(zz_ctx2) 또는 Y(zz_ctx)를 특징 패턴과 함께 켬(학습과 같은 시간 구조). none = 이전")
     ap.add_argument("--rc-task", default="none", choices=("none", "catrule", "catctx"),
@@ -633,6 +635,8 @@ def main():
         raise SystemExit("--rc-eval-sets 는 train·new·proto·far 중 겹치지 않는 쉼표 목록")
     if args.rc_task != "none" and (args.ctx_task != "none" or args.task_b_after > 0 or args.reverse_after > 0):
         raise SystemExit("--rc-task 는 --ctx-task·--task-b-after·--reverse-after 와 함께 쓸 수 없다")
+    if args.rc_reverse_after > 0 and args.rc_task != "catrule":
+        raise SystemExit("--rc-reverse-after 는 --rc-task catrule 전용")
     if (args.rc_task == "catctx" or args.rc_eval_ctx != "none") and (args.ctx_n <= 0 or args.ctx2_n <= 0):
         raise SystemExit("catctx·--rc-eval-ctx 는 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 Y = zz_ctx, X = zz_ctx2)")
     if args.rc_eval_ctx != "none" and not args.rc_eval:
@@ -1842,6 +1846,8 @@ def main():
     _ncat = 0
     _nctxX = 0
     _nsame = 0
+    _nrev = 0
+    _rcrev_announced = False
     if args.rc_task == "catctx":
         _rcxs = args.rc_ctx_seed if args.rc_ctx_seed is not None else 18600 + _bseed
         _rcxrng = np.random.RandomState(_rcxs)
@@ -1882,6 +1888,13 @@ def main():
                 _rcc = "B" if _rcrng.random_sample() < 0.5 else "A"
                 _rci = int(_rcrng.randint(len(_RCW["train"][_rcc])))
                 _catB = _rcc == "B"
+                if args.rc_reverse_after > 0 and (ep * args.steps + t) >= args.rc_reverse_after:
+                    # E188: 범주 규칙 반전 — 전체 시행 번호 N 부터 A → 같은 쪽, B → 교차(지역 난수 소비 불변)
+                    _catB = not _catB
+                    if not _rcrev_announced:
+                        print("[범주 반전] 시행 %d 부터 정답 A → 같은 쪽 · B → 교차" % (ep * args.steps + t))
+                        _rcrev_announced = True
+                    _nrev += 1
                 _ncatB += int(_rcc == "B"); _ncat += 1
                 _stimf = stim_food
                 rc_feat(brain, side, _RCW["train"][_rcc][_rci], args.feat_level)
@@ -2102,6 +2115,8 @@ def main():
         print("[범주 과제] 시행 %d 중 범주 B(같은 쪽) %d · A(교차) %d" % (_ncat, _ncatB, _ncat - _ncatB))
     if _rcxrng is not None:
         print("[맥락 범주 과제] 시행 %d 중 맥락 X %d · Y %d · 정답 같은 쪽 %d · 교차 %d" % (_ncat, _nctxX, _ncat - _nctxX, _nsame, _ncat - _nsame))
+    if args.rc_reverse_after > 0:
+        print("[범주 반전] 반전 시행 %d (시행 %d 부터, 전체 %d)" % (_nrev, args.rc_reverse_after, _ncat))
     if KRW is not None:
         _kmean = lambda a: (float(np.mean(a)) if a else float("nan"), len(a))
         print("[E168 KC 발화] 결정 단계(3처리 끝) 평균 %.6f n=%d | 보상 창 보상 시행 평균 %.6f n=%d | 보상 창 처벌 시행 평균 %.6f n=%d | da_kc_inh=%.2f p=%.2f"
