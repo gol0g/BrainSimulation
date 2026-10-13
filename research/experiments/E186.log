@@ -2,4 +2,25 @@
 커맨드: bash scripts/e186_main.sh
 ---
 [E186] 원형 효과·전형성 기울기(평가만) · 뇌 16~20(E185) · 10~14(E184 U)
-  e186 b16 learn: 
+  e186 b16 learn: => RCEVAL 8줄
+  e186 b16 none: => RCEVAL 8줄
+  e186 b17 learn: => RCEVAL 8줄
+  e186 b17 none: => RCEVAL 8줄
+  e186 b18 learn: => RCEVAL 8줄
+  e186 b18 none: => RCEVAL 8줄
+  e186 b19 learn: => RCEVAL 8줄
+  e186 b19 none: => RCEVAL 8줄
+  e186 b20 learn: => RCEVAL 8줄
+  e186 b20 none: => RCEVAL 8줄
+  e186 b10 learn: => RCEVAL 8줄
+  e186 b10 none: => RCEVAL 8줄
+  e186 b11 learn: => RCEVAL 8줄
+  e186 b11 none: => RCEVAL 8줄
+  e186 b12 learn: => RCEVAL 8줄
+  e186 b12 none: => RCEVAL 8줄
+  e186 b13 learn: => RCEVAL 8줄
+  e186 b13 none: => RCEVAL 8줄
+  e186 b14 learn: => RCEVAL 8줄
+  e186 b14 none: => RCEVAL 8줄
+[E186] 전체 루프 종료
+=== 종료코드 0 ===

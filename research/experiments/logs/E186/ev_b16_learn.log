@@ -767,3 +767,12 @@ make: Leaving directory '/root/e186_main_run/forager_brain_CODE'
   [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 790 개
 [E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/kctype_oja_b16.npz 검증 일치 — good_food_eye_l_to_kc_l=234371.54 bad_food_eye_l_to_kc_l=237868.80 good_food_eye_r_to_kc_r=237622.84 bad_food_eye_r_to_kc_r=239534.55
 Model ready! Total: 28,323 neurons
+RCEVAL cat=A set=train mod=-0.2008 off=-0.0027 acc=100.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.594742/0.647318 KC L/R 0.004678/0.001692 side=right n=240 motor L/R 0.642933/0.615182 KC L/R 0.001628/0.004813
+RCEVAL cat=A set=new mod=-0.1342 off=-0.0047 acc=100.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.604753/0.634287 KC L/R 0.004707/0.001477 side=right n=240 motor L/R 0.639248/0.615103 KC L/R 0.001468/0.004837
+RCEVAL cat=A set=proto mod=-0.2314 off=-0.0033 acc=100.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.576567/0.634062 KC L/R 0.004776/0.001442 side=right n=240 motor L/R 0.632257/0.597197 KC L/R 0.001452/0.004808
+RCEVAL cat=A set=far mod=-0.0733 off=-0.0029 acc=65.6 trials=96 feat_on=96 | side=left n=240 motor L/R 0.610393/0.631853 KC L/R 0.004664/0.001497 side=right n=240 motor L/R 0.628785/0.620913 KC L/R 0.001503/0.004704
+RCEVAL cat=B set=train mod=+0.2701 off=-0.0039 acc=0.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.642505/0.589752 KC L/R 0.004705/0.001492 side=right n=240 motor L/R 0.585242/0.640520 KC L/R 0.001476/0.004708
+RCEVAL cat=B set=new mod=+0.2100 off=-0.0020 acc=0.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.628432/0.590332 KC L/R 0.004681/0.001448 side=right n=240 motor L/R 0.588395/0.634293 KC L/R 0.001481/0.004748
+RCEVAL cat=B set=proto mod=+0.2992 off=-0.0000 acc=0.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.641937/0.579252 KC L/R 0.004687/0.001479 side=right n=240 motor L/R 0.583415/0.640415 KC L/R 0.001498/0.004787
+RCEVAL cat=B set=far mod=+0.1527 off=-0.0010 acc=0.0 trials=96 feat_on=96 | side=left n=240 motor L/R 0.636563/0.607672 KC L/R 0.004653/0.001496 side=right n=240 motor L/R 0.605482/0.637685 KC L/R 0.001494/0.004678
+=> DECOMP mode=all rceval A_train=-0.2008 A_new=-0.1342 A_proto=-0.2314 A_far=-0.0733 B_train=+0.2701 B_new=+0.2100 B_proto=+0.2992 B_far=+0.1527 pushed=8 feat=초기값 kc_means[kc_l>l=148.3263 kc_l>r=148.9130 kc_r>l=148.7388 kc_r>r=148.7491]
