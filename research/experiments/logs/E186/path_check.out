@@ -1,0 +1,6 @@
+[E186 경로 검사] 시작 2026-10-13 13:37:13
+[(a) 기본 집합 rc=0] RCEVAL 4 | A_train=-0.2008 A_new=-0.1342 B_train=+0.2913 B_new=+0.1879 
+  기대 (a): A_train=-0.2008 A_new=-0.1342 B_train=+0.2913 B_new=+0.1879(E185 ev_b16_learn1500)
+[(b) 확장 집합 rc=0] RCEVAL 8(96·96 줄 8) 집합 cat=A set=train cat=A set=new cat=A set=proto cat=A set=far cat=B set=train cat=B set=new cat=B set=proto cat=B set=far  | A train·new A_train=-0.2008 A_new=-0.1342 | pushed pushed=8
+  기대 (b): RCEVAL 8(96·96 8), 집합 순서 A train new proto far B train new proto far, A train·new = (a), pushed 8 — 원형·먼 사례 값은 출력 안 함
+[E186 경로 검사] 종료 2026-10-13 13:40:10
