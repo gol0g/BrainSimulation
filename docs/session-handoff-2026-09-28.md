@@ -253,3 +253,4 @@ CLAUDE.md의 1~5 그대로(current-state → invariants → protocols → proces
 - 2026-10-13 14:33 E187 본실험 실행 중(14:32 시작, 약 2시간, 요약 25줄). 감시 watch-exp.sh E187 25 "e187 .*: =>"(Monitor 30분 — 만료마다 반드시 재무장). 끝나면 judge_e187.py·verify_e187_independent.py → P9 → 결과별 E188 결정.
 - 2026-10-13 16:34 E187 **획득 실패(H108-null) 5/5**(K118 — 범주 × 맥락 XOR 네 칸 < 0.10, 맥락 반응 차 정답 방향 10/10 작음). L4 분기 미해결 종료. 다음: research/abcd-2026-10-13-rawrev.md — E188 범주 규칙 반전(조건 4): 코드(--rc-reverse-after) → 판정 → 사전등록 → 경로 검사 → 본실험.
 - 2026-10-13 16:38 E188(범주 규칙 반전, 조건 4) 준비: 기준 고정 16:37:30, 판정·대조 합성 15/9, 코드 --rc-reverse-after. 경로 검사 → 게이트 → run_experiment.sh E188 "bash scripts/e188_main.sh"(약 2시간). 감시 Monitor 30분 재무장.
+- 2026-10-13 16:44 E188 본실험 실행 중(16:43 시작, 약 2시간, 요약 15줄). 감시 watch-exp.sh E188 15 "e188 .*: =>"(Monitor 30분 재무장 — 공백 금지). 끝나면 judge_e188.py·verify_e188_independent.py → P9 → 분기 종료 → 다음 능력 결정.
