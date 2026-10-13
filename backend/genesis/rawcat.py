@@ -15,7 +15,7 @@ import numpy as np
 WORLD_SEED = 18300
 
 
-def make_world(n=200, k=40, shared=10, d=12, n_train=6, n_new=6, seed=WORLD_SEED):
+def make_world(n=200, k=40, shared=10, d=12, n_train=6, n_new=6, seed=WORLD_SEED, d_far=20, n_far=6):
     if not (0 <= shared <= k and 2 * k - shared <= n and 0 <= d <= k):
         raise ValueError("사례 세계 인자 범위 밖")
     rs = np.random.RandomState(seed)
@@ -27,18 +27,24 @@ def make_world(n=200, k=40, shared=10, d=12, n_train=6, n_new=6, seed=WORLD_SEED
     bg = np.setdiff1d(np.arange(n), np.union1d(a, b))
     protos = {"A": a, "B": b}
 
-    def exemplars(c, m, s):
+    def exemplars(c, m, s, dd=d):
         r = np.random.RandomState(s)
         out = []
         for _ in range(m):
-            keep = np.sort(r.choice(protos[c], k - d, replace=False))
-            add = np.sort(r.choice(bg, d, replace=False))
+            keep = np.sort(r.choice(protos[c], k - dd, replace=False))
+            add = np.sort(r.choice(bg, dd, replace=False))
             out.append(np.sort(np.concatenate([keep, add])))
         return out
 
     train = {c: exemplars(c, n_train, seed + 1 + i) for i, c in enumerate(("A", "B"))}
     new = {c: exemplars(c, n_new, seed + 11 + i) for i, c in enumerate(("A", "B"))}
-    return {"n": n, "k": k, "shared": shared, "d": d, "protos": protos, "bg": bg, "train": train, "new": new}
+    # E186: 원형 자체(학습·노출에 없음, 왜곡 0)와 먼 사례(왜곡 d_far, 따로 고정한 난수열) — train·new 의 난수열은 그대로(회귀 검사)
+    proto = {c: [np.array(protos[c])] for c in ("A", "B")}
+    if not (0 <= d_far <= k and d_far <= len(bg)):
+        raise ValueError("d_far 범위 밖")
+    far = {c: exemplars(c, n_far, seed + 21 + i, d_far) for i, c in enumerate(("A", "B"))}
+    return {"n": n, "k": k, "shared": shared, "d": d, "d_far": d_far, "protos": protos, "bg": bg, "train": train, "new": new,
+            "proto": proto, "far": far}
 
 
 def pattern(world, units, level=1.0):
@@ -130,8 +136,14 @@ def _selftest():
     # 선택성: A 에만 반응 KC 1, 둘 다 같은 비율 KC 2 → 중앙 (1 + 0)/2 = 0.5
     sel, nsel = selectivity({"A": [{1, 2}] * 6, "B": [{2}] * 6})
     c10 = abs(sel - 0.5) < 1e-12 and nsel == 2
+    # E186: 원형 집합 = 원형 그대로 1개, 먼 사례 = 원형 20 + 배경 20, 노출·새·먼 사례 서로 다름
+    c11 = all(len(w["proto"][c]) == 1 and np.array_equal(w["proto"][c][0], w["protos"][c]) for c in "AB")
+    c12 = all(len(x) == 40 and len(np.intersect1d(x, w["protos"][c])) == 20 and len(np.intersect1d(x, w["bg"])) == 20 for c in "AB" for x in w["far"][c])
+    fr = set(tuple(x) for c in "AB" for x in w["far"][c])
+    c13 = len(fr) == 12 and not (fr & tr) and not (fr & nw)
     for name, c in (("원형 크기·공유", c1), ("사례 구성 28+12", c2), ("노출·새 사례 서로 다름", c3), ("결정론", c4), ("전류 패턴", c5),
-                    ("완벽 분리", c6), ("붕괴", c7), ("반쪽 겹침 s", c8), ("절반 규칙", c9 and c9b), ("선택성", c10)):
+                    ("완벽 분리", c6), ("붕괴", c7), ("반쪽 겹침 s", c8), ("절반 규칙", c9 and c9b), ("선택성", c10),
+                    ("원형 집합", c11), ("먼 사례 20+20", c12), ("먼 사례 서로 다름", c13)):
         print("  %-18s %s" % (name, "✓" if c else "✗"))
         ok &= bool(c)
     return ok

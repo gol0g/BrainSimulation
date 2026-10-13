@@ -501,6 +501,8 @@ def main():
                     help="E184 catrule: 시행마다 범주(A·B 반반, 지역 난수)와 노출 사례 하나 — 자극 = 먹이 광선 한쪽(good·bad 0) + 그쪽 특징 집단 사례 패턴"
                          "(결정·행동 창 동안, 보상 창·간격 끔). 정답: A = 교차, B = 같은 쪽. none = 이전 동작")
     ap.add_argument("--rc-trial-seed", type=int, default=None, help="E184 catrule: 범주·사례 배정 지역 난수 시드(기본 18500 + 뇌 시드) — 전역 난수열 불변")
+    ap.add_argument("--rc-eval-sets", default="train,new",
+                    help="E186: --rc-eval 시험 집합(쉼표) — train(노출 사례)·new(새 사례, 왜곡 12)·proto(원형 자체, 학습에 없음)·far(먼 사례, 왜곡 20). 기본 train,new = E184·E185 와 같음")
     ap.add_argument("--rc-eval", action="store_true",
                     help="E184: 분해(이식) 평가를 범주 A·B × 노출·새 사례 4조건으로(조건마다 evaluate — 먹이 광선 한쪽 + 사례 패턴, 시행 t 의 사례 = (t//2) mod 사례 수). "
                          "RCEVAL 줄 4개")
@@ -623,6 +625,9 @@ def main():
         raise SystemExit("--feat-weights·--rc-task·--rc-eval 은 --feat-n > 0 이 필요하다")
     if args.rc_eval and not args.decomp_weights:
         raise SystemExit("--rc-eval 은 --decomp-weights(분해 이식 평가)가 필요하다")
+    _rcsets = [s_ for s_ in args.rc_eval_sets.split(",") if s_]
+    if not _rcsets or any(s_ not in ("train", "new", "proto", "far") for s_ in _rcsets) or len(set(_rcsets)) != len(_rcsets):
+        raise SystemExit("--rc-eval-sets 는 train·new·proto·far 중 겹치지 않는 쉼표 목록")
     if args.rc_task != "none" and (args.ctx_task != "none" or args.task_b_after > 0 or args.reverse_after > 0):
         raise SystemExit("--rc-task 는 --ctx-task·--task-b-after·--reverse-after 와 함께 쓸 수 없다")
     if args.decomp_mode == "rawcat" and args.feat_oja and args.feat_oja_eta != 0:
@@ -1530,8 +1535,10 @@ def main():
             _RW = RC.make_world(n=args.feat_n, k=args.rc_k, shared=args.rc_shared, d=args.rc_d,
                                 n_train=args.rc_ntrain, n_new=args.rc_nnew, seed=args.rc_seed)
             _rcres = []
+            _rckeys = []
             for _c in ("A", "B"):
-                for _st in ("train", "new"):
+                for _st in [s_ for s_ in args.rc_eval_sets.split(",") if s_]:   # E186: 기본 train,new(이전과 같은 순서·호출)
+                    _rckeys.append("%s_%s" % (_c, _st))
                     _exs = _RW[_st][_c]
                     _cnt = {"on": 0}
 
@@ -1550,8 +1557,8 @@ def main():
                                                for s_ in ("left", "right") if _d.get(s_))
                     print("RCEVAL cat=%s set=%s mod=%+.4f off=%+.4f acc=%.1f trials=%d feat_on=%d%s" % (_c, _st, mod_, off_, acc_, args.trials, _cnt["on"], _dg))
             gms = " ".join("%s=%.4f" % (n.replace("_to_motor_", ">"), float(sub[n].mean()) if n in sub else float("nan")) for n in kc)
-            print("=> DECOMP mode=%s rceval A_train=%+.4f A_new=%+.4f B_train=%+.4f B_new=%+.4f pushed=%d feat=%s kc_means[%s]"
-                  % (mode, _rcres[0], _rcres[1], _rcres[2], _rcres[3], len(sub), args.feat_weights or "초기값", gms))
+            print("=> DECOMP mode=%s rceval %s pushed=%d feat=%s kc_means[%s]"
+                  % (mode, " ".join("%s=%+.4f" % (k_, v_) for k_, v_ in zip(_rckeys, _rcres)), len(sub), args.feat_weights or "초기값", gms))
             return
         if args.eval_ctx2:
             _ectx = (lambda b_, on_: ctx_state(b_, 2 if on_ else 0, args))   # E179: 맥락 A(zz_ctx2) 켬 평가
