@@ -2,4 +2,20 @@
 커맨드: bash scripts/e189_main.sh
 ---
 [E189] 원시 특징 범주의 간섭 하 유지 · catrule 1,500 → 둘째 쌍 1,500 · 뇌 10~14
-  e189 train b10: 
+  e189 train b10: => [둘째 범주 쌍] 둘째 쌍 시행 1500 (시행 1500 부터, 전체 3000) || 보상 1579회
+  e189 b10 learn: => A_train=-0.0303 A_new=+0.0496 B_train=+0.1472 B_new=+0.1065 C_train=+0.2883 C_new=+0.2752 D_train=-0.1987 D_new=-0.1117 
+  e189 b10 none: => A_train=+0.0123 A_new=+0.0764 B_train=+0.0922 B_new=+0.0813 C_train=+0.0764 C_new=+0.0978 D_train=+0.0816 D_new=+0.0821 
+  e189 train b11: => [둘째 범주 쌍] 둘째 쌍 시행 1500 (시행 1500 부터, 전체 3000) || 보상 1811회
+  e189 b11 learn: => A_train=-0.0265 A_new=+0.0103 B_train=+0.0941 B_new=+0.0589 C_train=+0.2481 C_new=+0.2268 D_train=-0.2049 D_new=-0.1353 
+  e189 b11 none: => A_train=+0.0125 A_new=+0.0270 B_train=+0.0372 B_new=+0.0262 C_train=+0.0235 C_new=+0.0313 D_train=+0.0147 D_new=+0.0188 
+  e189 train b12: => [둘째 범주 쌍] 둘째 쌍 시행 1500 (시행 1500 부터, 전체 3000) || 보상 1693회
+  e189 b12 learn: => A_train=-0.0482 A_new=+0.0064 B_train=+0.0991 B_new=+0.0582 C_train=+0.2553 C_new=+0.2324 D_train=-0.1617 D_new=-0.1238 
+  e189 b12 none: => A_train=+0.0210 A_new=+0.0491 B_train=+0.0575 B_new=+0.0489 C_train=+0.0465 C_new=+0.0566 D_train=+0.0501 D_new=+0.0504 
+  e189 train b13: => [둘째 범주 쌍] 둘째 쌍 시행 1500 (시행 1500 부터, 전체 3000) || 보상 1899회
+  e189 b13 learn: => A_train=-0.0171 A_new=+0.0378 B_train=+0.1109 B_new=+0.0712 C_train=+0.2661 C_new=+0.2586 D_train=-0.1576 D_new=-0.1077 
+  e189 b13 none: => A_train=+0.0093 A_new=+0.0532 B_train=+0.0866 B_new=+0.0563 C_train=+0.0611 C_new=+0.0808 D_train=+0.0656 D_new=+0.0674 
+  e189 train b14: => [둘째 범주 쌍] 둘째 쌍 시행 1500 (시행 1500 부터, 전체 3000) || 보상 1919회
+  e189 b14 learn: => A_train=-0.0255 A_new=+0.0091 B_train=+0.0770 B_new=+0.0342 C_train=+0.2521 C_new=+0.2430 D_train=-0.1970 D_new=-0.1148 
+  e189 b14 none: => A_train=+0.0264 A_new=+0.0523 B_train=+0.0679 B_new=+0.0501 C_train=+0.0565 C_new=+0.0734 D_train=+0.0532 D_new=+0.0526 
+[E189] 전체 루프 종료
+=== 종료코드 0 ===

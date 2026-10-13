@@ -495,6 +495,9 @@ def main():
     ap.add_argument("--rc-expo-eta", type=float, default=0.02, help="E183 rawcat: 노출 동안 Oja eta(0 = 대조 — 같은 노출, 가소성 없음)")
     ap.add_argument("--rc-repeat-pre", action="store_true", help="E183 rawcat: 형성 전 측정을 두 번(측정 반복성 확인)")
     ap.add_argument("--rc-save", default=None, help="E183 rawcat: 노출 뒤 zz_feat→KC 가중치 npz(+ pre·post 인덱스)")
+    ap.add_argument("--rc-expo-cats", default="A,B", help="E190 rawcat: 노출(형성) 범주(쉼표, A·B·C·D). 기본 A,B = 이전")
+    ap.add_argument("--rc-measure-cats", default="A,B",
+                    help="E190 rawcat: 형성 전후 KC 집합 측정 범주(쉼표, A·B 포함). 기본 A,B = 이전. 범주 쌍 겹침 RCJ 줄은 측정 범주의 모든 쌍")
     ap.add_argument("--feat-weights", default=None,
                     help="E184: 형성된 zz_feat→KC 가중치 npz(rawcat --rc-save 형식)를 이 cfg 로 만드는 모든 뇌에 싣는다(연결 일치 검사). 없으면 초기값 feat_w")
     ap.add_argument("--rc-ctx-seed", type=int, default=None, help="E187 catctx: 맥락 X·Y 배정 지역 난수 시드(기본 18600 + 뇌 시드)")
@@ -645,6 +648,14 @@ def main():
     _rccats = [c_ for c_ in args.rc_eval_cats.split(",") if c_]
     if not _rccats or any(c_ not in ("A", "B", "C", "D") for c_ in _rccats) or len(set(_rccats)) != len(_rccats):
         raise SystemExit("--rc-eval-cats 는 A·B·C·D 중 겹치지 않는 쉼표 목록")
+    for _nm_, _v_ in (("--rc-expo-cats", args.rc_expo_cats), ("--rc-measure-cats", args.rc_measure_cats)):
+        _l_ = [c_ for c_ in _v_.split(",") if c_]
+        if not _l_ or any(c_ not in ("A", "B", "C", "D") for c_ in _l_) or len(set(_l_)) != len(_l_):
+            raise SystemExit("%s 는 A·B·C·D 중 겹치지 않는 쉼표 목록" % _nm_)
+    if not {"A", "B"} <= set(args.rc_measure_cats.split(",")):
+        raise SystemExit("--rc-measure-cats 는 A·B 를 포함해야 한다(RAWCAT 분리 지표는 A·B)")
+    if (args.rc_expo_cats != "A,B" or args.rc_measure_cats != "A,B") and args.decomp_mode != "rawcat":
+        raise SystemExit("--rc-expo-cats·--rc-measure-cats 는 rawcat 형성 전용이다(다른 경로에서는 듣지 않는다)")
     if (args.rc_task == "catctx" or args.rc_eval_ctx != "none") and (args.ctx_n <= 0 or args.ctx2_n <= 0):
         raise SystemExit("catctx·--rc-eval-ctx 는 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 Y = zz_ctx, X = zz_ctx2)")
     if args.rc_eval_ctx != "none" and not args.rc_eval:
@@ -835,6 +846,8 @@ def main():
             print("[원시 특징 세계] n %d k %d 공유 %d 왜곡 %d 노출 사례 %d 새 사례 %d seed %d | 원형 A %s | 원형 B %s"
                   % (W_["n"], W_["k"], W_["shared"], W_["d"], args.rc_ntrain, args.rc_nnew, args.rc_seed,
                      ",".join(str(int(x)) for x in W_["protos"]["A"]), ",".join(str(int(x)) for x in W_["protos"]["B"])))
+            _mcats = [c_ for c_ in args.rc_measure_cats.split(",") if c_]   # E190: 측정 범주(기본 A,B — 이전과 같은 순서·제시)
+            _ecats = [c_ for c_ in args.rc_expo_cats.split(",") if c_]      # E190: 노출(형성) 범주(기본 A,B)
             _foja = bool(cfg.feat_oja)
             _fsens = float(_b2.config.good_food_eye_sensitivity)
             _pgb = [p_ for p_ in (getattr(_b2, "good_food_eye_left", None), getattr(_b2, "good_food_eye_right", None),
@@ -925,7 +938,7 @@ def main():
                     for side in ("left", "right"):
                         for st in ("train", "new"):
                             for i in range(len(W_[st]["A"])):
-                                for c in ("A", "B"):
+                                for c in _mcats:
                                     key = (side[0], st, c, i)
                                     if key not in cnts:
                                         cnts[key] = np.zeros(n_k)
@@ -937,7 +950,7 @@ def main():
                 same = all(np.array_equal(g_b[sd], g_a[sd]) for sd in "lr")
                 if sum(float(v.sum()) for v in cnts.values()) == 0:
                     raise RuntimeError("KC 스파이크 0 — 측정 도구 실패(기록 버퍼 확인)")
-                sets = {sd: {"train": {"A": [], "B": []}, "new": {"A": [], "B": []}} for sd in "lr"}
+                sets = {sd: {"train": {c_: [] for c_ in _mcats}, "new": {c_: [] for c_ in _mcats}} for sd in "lr"}
                 for (sd, st, c, i) in sorted(cnts):
                     br = base[sd] / (5.0 * npres)
                     resp = np.nonzero(cnts[(sd, st, c, i)] / float(args.rc_reps) - 3.0 * br >= 0.5)[0]
@@ -969,7 +982,7 @@ def main():
             nexp = 0
             for _cyc in range(args.rc_expo):
                 for i in range(len(W_["train"]["A"])):
-                    for c in ("A", "B"):
+                    for c in _ecats:
                         for side in ("left", "right"):
                             _present(side, W_["train"][c][i], None)
                             _gap(None)
@@ -981,8 +994,9 @@ def main():
                 print("RCW side=%s nsyn=%d g_mean0=%.4f g_mean1=%.4f dg_abs=%.4f frac_changed=%.4f wsel0=%.4f wsel1=%.4f kc_in_mean0=%.4f kc_in_mean1=%.4f g0_init=%d"
                       % (sd, g0[sd].size, float(g0[sd].mean()), float(g1[sd].mean()), float(np.abs(g1[sd] - g0[sd]).sum()),
                          float(np.mean(g1[sd] != g0[sd])), ws0, ws1, gm0, gm1, int(np.all(g0[sd] == float(np.float32(args.feat_w))))))
-            print("[원시 특징 노출] 제시 %d(주기 %d × 사례 %d × 범주 2 × 쪽 2), 노출 eta %g, Oja %s, 도파민 호출 없음"
-                  % (nexp, args.rc_expo, len(W_["train"]["A"]), args.rc_expo_eta, "켬" if _foja else "끔(정적)"))
+            print("[원시 특징 노출] 제시 %d(주기 %d × 사례 %d × 범주 %d × 쪽 2), 노출 eta %g, Oja %s, 도파민 호출 없음"
+                  % (nexp, args.rc_expo, len(W_["train"]["A"]), len(_ecats), args.rc_expo_eta, "켬" if _foja else "끔(정적)")
+                  + ("" if _ecats == ["A", "B"] else " — 노출 범주 %s" % ",".join(_ecats)))
             if args.rc_save:
                 _sv = {}
                 for sd in "lr":
@@ -990,6 +1004,15 @@ def main():
                     _sv[nm_] = g1[sd].astype(np.float32); _sv[nm_ + "__pre"] = _FS[sd]["pre"]; _sv[nm_ + "__post"] = _FS[sd]["post"]
                 np.savez_compressed(args.rc_save, **_sv)
             S_post = _measure("post")
+            for sd in "lr":
+                # E190(측정): 측정 범주 모든 쌍의 범주 KC 집합(노출 사례 절반 이상) 자카드 — 형성 전·후(상충 짝 A·C, B·D 겹침이 줄었는가)
+                for i_, c1 in enumerate(_mcats):
+                    for c2 in _mcats[i_ + 1:]:
+                        print("RCJ side=%s pair=%s%s J_pre=%.4f J_post=%.4f n_pre=%d/%d n_post=%d/%d"
+                              % (sd, c1, c2, RC.jac(RC.cat_set(S_pre[sd]["train"][c1]), RC.cat_set(S_pre[sd]["train"][c2])),
+                                 RC.jac(RC.cat_set(S_post[sd]["train"][c1]), RC.cat_set(S_post[sd]["train"][c2])),
+                                 len(RC.cat_set(S_pre[sd]["train"][c1])), len(RC.cat_set(S_pre[sd]["train"][c2])),
+                                 len(RC.cat_set(S_post[sd]["train"][c1])), len(RC.cat_set(S_post[sd]["train"][c2]))))
             out = []
             for sd in "lr":
                 r0 = RC.separation(S_pre[sd]["train"], S_pre[sd]["new"]); r1 = RC.separation(S_post[sd]["train"], S_post[sd]["new"])
