@@ -15,7 +15,7 @@ import numpy as np
 WORLD_SEED = 18300
 
 
-def make_world(n=200, k=40, shared=10, d=12, n_train=6, n_new=6, seed=WORLD_SEED, d_far=20, n_far=6):
+def make_world(n=200, k=40, shared=10, d=12, n_train=6, n_new=6, seed=WORLD_SEED, d_far=20, n_far=6, shared2=10):
     if not (0 <= shared <= k and 2 * k - shared <= n and 0 <= d <= k):
         raise ValueError("사례 세계 인자 범위 밖")
     rs = np.random.RandomState(seed)
@@ -43,7 +43,31 @@ def make_world(n=200, k=40, shared=10, d=12, n_train=6, n_new=6, seed=WORLD_SEED
     if not (0 <= d_far <= k and d_far <= len(bg)):
         raise ValueError("d_far 범위 밖")
     far = {c: exemplars(c, n_far, seed + 21 + i, d_far) for i, c in enumerate(("A", "B"))}
-    return {"n": n, "k": k, "shared": shared, "d": d, "d_far": d_far, "protos": protos, "bg": bg, "train": train, "new": new,
+    # E189: 둘째 범주 쌍 C·D(별도 난수 — A·B 와 그 사례·원형·먼 사례는 그대로): C 는 A 와 shared2 단위, D 는 B 와 shared2 단위 공유,
+    # 나머지는 A·B 밖 배경에서(서로 겹치지 않음). C·D 사례의 왜곡은 A·B·C·D 모두 밖의 배경에서.
+    r2 = np.random.RandomState(seed + 31)
+    c_sh = np.sort(r2.choice(np.setdiff1d(a, b), shared2, replace=False))   # A 만의 단위(B 와 안 겹침)
+    d_sh = np.sort(r2.choice(np.setdiff1d(b, a), shared2, replace=False))   # B 만의 단위
+    rest = r2.permutation(bg)
+    c_own = rest[:k - shared2]
+    d_own = rest[k - shared2: 2 * (k - shared2)]
+    protos2 = {"C": np.sort(np.concatenate([c_sh, c_own])), "D": np.sort(np.concatenate([d_sh, d_own]))}
+    bg2 = np.setdiff1d(np.arange(n), np.union1d(np.union1d(a, b), np.union1d(protos2["C"], protos2["D"])))
+
+    def exemplars2(c, m, s):
+        r = np.random.RandomState(s)
+        out = []
+        for _ in range(m):
+            keep = np.sort(r.choice(protos2[c], k - d, replace=False))
+            add = np.sort(r.choice(bg2, d, replace=False))
+            out.append(np.sort(np.concatenate([keep, add])))
+        return out
+    all_protos = dict(protos)
+    all_protos.update(protos2)
+    for i, c in enumerate(("C", "D")):
+        train[c] = exemplars2(c, n_train, seed + 41 + i)
+        new[c] = exemplars2(c, n_new, seed + 51 + i)
+    return {"n": n, "k": k, "shared": shared, "d": d, "d_far": d_far, "protos": all_protos, "bg": bg, "bg2": bg2, "train": train, "new": new,
             "proto": proto, "far": far}
 
 
@@ -141,9 +165,15 @@ def _selftest():
     c12 = all(len(x) == 40 and len(np.intersect1d(x, w["protos"][c])) == 20 and len(np.intersect1d(x, w["bg"])) == 20 for c in "AB" for x in w["far"][c])
     fr = set(tuple(x) for c in "AB" for x in w["far"][c])
     c13 = len(fr) == 12 and not (fr & tr) and not (fr & nw)
+    # E189: C 는 A 와 10·B 와 0, D 는 B 와 10·A 와 0, C·D 겹침 0, 각 40
+    pC, pD = w["protos"]["C"], w["protos"]["D"]
+    c14 = (len(pC) == 40 and len(pD) == 40 and len(np.intersect1d(pC, w["protos"]["A"])) == 10 and len(np.intersect1d(pC, w["protos"]["B"])) == 0
+           and len(np.intersect1d(pD, w["protos"]["B"])) == 10 and len(np.intersect1d(pD, w["protos"]["A"])) == 0 and len(np.intersect1d(pC, pD)) == 0)
+    c15 = all(len(x) == 40 and len(np.intersect1d(x, w["protos"][c])) == 28 and len(np.intersect1d(x, w["bg2"])) == 12 for c in "CD" for x in w["train"][c] + w["new"][c])
     for name, c in (("원형 크기·공유", c1), ("사례 구성 28+12", c2), ("노출·새 사례 서로 다름", c3), ("결정론", c4), ("전류 패턴", c5),
                     ("완벽 분리", c6), ("붕괴", c7), ("반쪽 겹침 s", c8), ("절반 규칙", c9 and c9b), ("선택성", c10),
-                    ("원형 집합", c11), ("먼 사례 20+20", c12), ("먼 사례 서로 다름", c13)):
+                    ("원형 집합", c11), ("먼 사례 20+20", c12), ("먼 사례 서로 다름", c13),
+                    ("둘째 쌍 원형", c14), ("둘째 쌍 사례", c15)):
         print("  %-18s %s" % (name, "✓" if c else "✗"))
         ok &= bool(c)
     return ok
