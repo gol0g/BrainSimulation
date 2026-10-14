@@ -1,0 +1,20 @@
+[E192 경로 검사] 시작 2026-10-14 15:59:59
+[(C0) 측정 rc=0] RCKX 288 (l train 0·new 0) | RCKXCHK npres=288 ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0 base_l=74500 base_r=82958 g_same=1 ctx_w=4.00 ctx_p=0.100 ctx2_w=4.00 ctx2_p=0.100
+    [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=4.00, p=0.100, 연결 좌 60230·우 59631
+    [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=4.00, p=0.100, 연결 좌 59688·우 59711
+    [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 60039·우 60038, 정적
+    [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=4.00, p=0.100, 연결 좌 60230·우 59631
+    [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=4.00, p=0.100, 연결 좌 59688·우 59711
+    [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 60039·우 60038, 정적
+[(C2) 측정 rc=0] RCKX 96 (l train 0·new 0) | RCKXCHK npres=96 ctx_on_spikes=192000 ctx_off_spikes=0 feat_inactive_spikes=0 base_l=24952 base_r=27802 g_same=1 ctx_w=20.00 ctx_p=0.020 ctx2_w=20.00 ctx2_p=0.020
+    [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 12106·우 11860
+    [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 11825·우 11895
+    [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 60039·우 60038, 정적
+    [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 12106·우 11860
+    [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 11825·우 11895
+    [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 60039·우 60038, 정적
+[(a) C0 해독(보고)]
+    /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E192/pathcheck/C0_meas_b15.log side=l XOR 0.972 범주 1.000 맥락 1.000 결합 KC 41 (λ {'xor': 100.0, 'cat': 1000.0, 'ctx': 1000.0}, 시험 72)
+    /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/logs/E192/pathcheck/C0_meas_b15.log side=r XOR 0.958 범주 1.000 맥락 1.000 결합 KC 35 (λ {'xor': 10.0, 'cat': 1000.0, 'ctx': 1000.0}, 시험 72)
+  기대: (a) RCKX 288(l 72/72), RCKXCHK npres 288·ctx_on > 0·ctx_off 0·feat_inactive 0·g_same 1·w 4·p 0.100, 맥락 연결 약 60,000; (b) RCKX 96, 맥락 연결 약 12,000(w 20·p 0.020), 특징 연결 수 (a) 와 같음
+[E192 경로 검사] 종료 2026-10-14 16:02:22

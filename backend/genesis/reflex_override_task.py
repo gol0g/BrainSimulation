@@ -496,6 +496,8 @@ def main():
     ap.add_argument("--rc-repeat-pre", action="store_true", help="E183 rawcat: 형성 전 측정을 두 번(측정 반복성 확인)")
     ap.add_argument("--rc-save", default=None, help="E183 rawcat: 노출 뒤 zz_feat→KC 가중치 npz(+ pre·post 인덱스)")
     ap.add_argument("--rc-expo-cats", default="A,B", help="E190 rawcat: 노출(형성) 범주(쉼표, A·B·C·D). 기본 A,B = 이전")
+    ap.add_argument("--rc-measure-ctx", action="store_true",
+                    help="E192 rawcat(측정 전용): 노출 없이 사례 × 범주 A·B × 맥락 X(zz_ctx2)·Y(zz_ctx) 제시, 자극 쪽 KC 제시별 스파이크 수 RCKX 줄. --ctx-n·--ctx2-n 필요")
     ap.add_argument("--rc-measure-cats", default="A,B",
                     help="E190 rawcat: 형성 전후 KC 집합 측정 범주(쉼표, A·B 포함). 기본 A,B = 이전. 범주 쌍 겹침 RCJ 줄은 측정 범주의 모든 쌍")
     ap.add_argument("--feat-weights", default=None,
@@ -654,6 +656,8 @@ def main():
             raise SystemExit("%s 는 A·B·C·D 중 겹치지 않는 쉼표 목록" % _nm_)
     if not {"A", "B"} <= set(args.rc_measure_cats.split(",")):
         raise SystemExit("--rc-measure-cats 는 A·B 를 포함해야 한다(RAWCAT 분리 지표는 A·B)")
+    if args.rc_measure_ctx and (args.decomp_mode != "rawcat" or args.ctx_n <= 0 or args.ctx2_n <= 0):
+        raise SystemExit("--rc-measure-ctx 는 rawcat 측정 전용이며 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 X = zz_ctx2, Y = zz_ctx)")
     if (args.rc_expo_cats != "A,B" or args.rc_measure_cats != "A,B") and args.decomp_mode != "rawcat":
         raise SystemExit("--rc-expo-cats·--rc-measure-cats 는 rawcat 형성 전용이다(다른 경로에서는 듣지 않는다)")
     if (args.rc_task == "catctx" or args.rc_eval_ctx != "none") and (args.ctx_n <= 0 or args.ctx2_n <= 0):
@@ -972,6 +976,53 @@ def main():
                 sh = ma[m] / (ma[m] + mb[m])
                 return float(np.median(np.maximum(sh, 1.0 - sh))) if m.any() else float("nan"), float(np.mean(tot))
 
+            if args.rc_measure_ctx:
+                # E192(측정, 학습 없음): 범주 × 맥락 결합 부호 — 사례(노출·새) × 범주 A·B × 맥락 X(zz_ctx2)·Y(zz_ctx) × 쪽 × 회를 제시하고
+                # 자극 쪽 KC 의 제시별 스파이크 수(3처리)를 RCKX 줄로(1 이상인 KC 만 번호:수). 맥락은 제시 3처리 동안만 켬(간격 끔 — E187 학습과 같은 시간 구조).
+                _eta(0.0)
+                g_b = _gpull()
+                _settle()
+                base = {"l": np.zeros(n_k), "r": np.zeros(n_k)}
+                npres, c_on, c_off, f_in = 0, 0, 0, 0
+                # 경로 검사 정정(2026-10-14): 고정 순서(사례마다 AX·AY·BX·BY)는 XOR 표지를 직전 제시 범주와 완전히 겹치게 한다 —
+                # (회, 쪽) 묶음마다 제시 순서를 고정 지역 난수(19200 + 2·회 + 쪽)로 섞는다(뇌·설정 무관 같은 순서 — 설정 짝짓기 유지). k = 묶음 안 순번.
+                for _r in range(args.rc_reps):
+                    for si_, side in enumerate(("left", "right")):
+                        sd = side[0]
+                        kpop = _b2.kc_left if sd == "l" else _b2.kc_right
+                        _seq = [(st, i, c, x) for st in ("train", "new") for i in range(len(W_[st]["A"])) for c in ("A", "B") for x in ("X", "Y")]
+                        _ord = np.random.RandomState(19200 + 2 * _r + si_).permutation(len(_seq))
+                        for k_seq, (st, i, c, x) in enumerate(_seq[j_] for j_ in _ord):
+                            units = W_[st][c][i]
+                            act = np.zeros(args.feat_n, dtype=bool)
+                            act[np.asarray(units, dtype=int)] = True
+                            ctx_state(_b2, 2 if x == "X" else 1, args)
+                            _feat(side, units)
+                            o_ = stim_food(_obs2, nh, side)
+                            cnt = np.zeros(n_k)
+                            for _ in range(3):
+                                _b2.process(o_)
+                                ids = _ids(kpop)
+                                if ids.size:
+                                    cnt += np.bincount(ids[ids < n_k], minlength=n_k)[:n_k]
+                                c_on += int(_ids(_b2.ctx2_pop if x == "X" else _b2.ctx_pop).size)
+                                c_off += int(_ids(_b2.ctx_pop if x == "X" else _b2.ctx2_pop).size)
+                                fid = _ids(_b2.feat_pop[sd])
+                                f_in += int((~act[fid[fid < args.feat_n]]).sum())
+                            _feat(None, None)
+                            ctx_state(_b2, 0, args)
+                            nz = np.nonzero(cnt)[0]
+                            print("RCKX rep=%d side=%s k=%d set=%s cat=%s ctx=%s i=%d n=%d ids=%s"
+                                  % (_r, sd, k_seq, st, c, x, i, nz.size, ",".join("%d:%d" % (int(k_), int(cnt[k_])) for k_ in nz)))
+                            _gap(base)
+                            npres += 1
+                g_a = _gpull()
+                same = all(np.array_equal(g_b[sd], g_a[sd]) for sd in "lr")
+                if npres and c_on == 0:
+                    raise RuntimeError("E192 측정: 켠 맥락 집단 발화 0 — 맥락 입력이 닿지 않음(측정 도구 실패)")
+                print("RCKXCHK npres=%d ctx_on_spikes=%d ctx_off_spikes=%d feat_inactive_spikes=%d base_l=%d base_r=%d g_same=%d ctx_w=%.2f ctx_p=%.3f ctx2_w=%.2f ctx2_p=%.3f"
+                      % (npres, c_on, c_off, f_in, int(base["l"].sum()), int(base["r"].sum()), int(same), args.ctx_w, args.ctx_p, args.ctx2_w, args.ctx2_p))
+                return
             S_pre = _measure("pre")
             if args.rc_repeat_pre:
                 _measure("pre2")
