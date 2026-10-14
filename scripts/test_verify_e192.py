@@ -41,11 +41,13 @@ def synth_rows(kind, seed, n_ex=6, reps=3):
     return out
 
 
-def log_text(kind, seed, p, w, npres=288, ctx_off=0, drop=0, conn_scale=1.0, feat=True, gsame=1):
+def log_text(kind, seed, p, w, npres=288, ctx_off=0, drop=0, conn_scale=1.0, feat=True, gsame=1, dup=False, no2=False):
     t = "[E153 종류 입력 적재] x 검증 일치 — y\n"
     n = int(200 * N_KC * p * conn_scale)
-    t += "  [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=%.2f, p=%.3f, 연결 좌 %d·우 %d\n" % (w, p, n, n)
-    t += "  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=%.2f, p=%.3f, 연결 좌 %d·우 %d\n" % (w, p, n, n)
+    for _rep in range(2 if dup else 1):
+        t += "  [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=%.2f, p=%.3f, 연결 좌 %d·우 %d\n" % (w, p, n, n)
+        if not no2:
+            t += "  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=%.2f, p=%.3f, 연결 좌 %d·우 %d\n" % (w, p, n, n)
     if feat:
         t += "  [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 59816·우 60158, 정적\n"
     k = 0
@@ -85,6 +87,8 @@ cases = [
     ("모두 덧셈 → 부족", dict(kinds={"C0": "additive", "C1": "additive", "C2": "additive"}), "독립 판정: 결합 부호 부족(설정 무관)"),
     ("끈 맥락 발화", dict(kinds={"C0": "conj", "C1": "conj", "C2": "conj"}, mods={(10, "C0"): {"ctx_off": 3}}), "독립 판정: 보류(조작검증 실패)"),
     ("맥락 연결 수 p 와 안 맞음", dict(kinds={"C0": "conj", "C1": "conj", "C2": "conj"}, mods={(13, "C2"): {"conn_scale": 5.0}}), "독립 판정: 보류(조작검증 실패)"),
+    ("맥락 연결 줄 중복(뇌 두 번 생성)", dict(kinds={"C0": "conj", "C1": "conj", "C2": "conj"}, mods={(b, c): {"dup": True} for b in (10, 11, 12, 13, 14) for c in ("C0", "C1", "C2")}), "독립 판정: 표현 충분(H113-null)"),
+    ("맥락 입력 2 줄 없음", dict(kinds={"C0": "conj", "C1": "conj", "C2": "conj"}, mods={(11, "C0"): {"no2": True}}), "독립 판정: 보류(조작검증 실패)"),
     ("로그 결측", dict(kinds={"C0": "conj", "C1": "conj", "C2": "conj"}, miss=True), "독립 판정: 보류(결측"),
 ]
 ok_all = True

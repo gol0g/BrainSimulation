@@ -2,3 +2,20 @@
 커맨드: bash scripts/e192_main.sh
 ---
 [E192] 범주 × 맥락 결합 부호 측정 · 맥락 연결 C0(p 0.10·w 4)·C1(p 0.05·w 8)·C2(p 0.02·w 20) · 뇌 10~14
+  e192 meas b10 C0: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b10 C1: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b10 C2: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b11 C0: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b11 C1: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b11 C2: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b12 C0: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b12 C1: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b12 C2: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b13 C0: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b13 C1: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b13 C2: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b14 C0: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b14 C1: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+  e192 meas b14 C2: => RCKX 288 || ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0
+[E192] 전체 루프 종료
+=== 종료코드 0 ===

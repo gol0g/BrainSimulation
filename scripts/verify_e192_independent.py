@@ -24,9 +24,10 @@ def load(path, p, w):
         rows[m.group(2)].append((m.group(3), m.group(4), m.group(5), int(m.group(6)), v))
     ck = re.search(r"^RCKXCHK npres=(\d+) ctx_on_spikes=(\d+) ctx_off_spikes=(\d+) feat_inactive_spikes=(\d+) \S+ \S+ g_same=(\d) ctx_w=([0-9.]+) ctx_p=([0-9.]+) ctx2_w=([0-9.]+) ctx2_p=([0-9.]+)", t, re.M)
     cl = re.findall(r"^\s*\[맥락 입력(?: 2)?\] .* w=([0-9.]+), p=([0-9.]+), 연결 좌 (\d+)·우 (\d+)", t, re.M)
+    kinds = set(re.findall(r"^\s*\[(맥락 입력(?: 2)?)\] ", t, re.M))   # 뇌를 두 번 만들어(학습·측정) 같은 줄이 두 번 나온다 — 종류 둘 다·모든 줄 값으로 검사
     bad = not ck or ck.group(1) != "288" or int(ck.group(2)) <= 0 or ck.group(3) != "0" or ck.group(4) != "0" or ck.group(5) != "1"
     bad = bad or any(abs(float(ck.group(g)) - (w if g in (6, 8) else p)) > 1e-6 for g in (6, 7, 8, 9)) if ck else True
-    bad = bad or len(cl) != 2 or any(abs(float(a) - w) > 1e-6 or abs(float(b) - p) > 1e-9 or not (0.85 <= int(n1) / (600000 * p) <= 1.15 and 0.85 <= int(n2) / (600000 * p) <= 1.15)
+    bad = bad or kinds != {"맥락 입력", "맥락 입력 2"} or len(cl) < 2 or any(abs(float(a) - w) > 1e-6 or abs(float(b) - p) > 1e-9 or not (0.85 <= int(n1) / (600000 * p) <= 1.15 and 0.85 <= int(n2) / (600000 * p) <= 1.15)
                                      for a, b, n1, n2 in cl)
     bad = bad or not re.search(r"^\s*\[원시 특징\] .*w=24\.00, p=0\.100", t, re.M) or not re.search(r"^\[E153 종류 입력 적재\].*검증 일치", t, re.M)
     for sd in "lr":
