@@ -14,7 +14,7 @@ cp $R/backend/genesis/*.py . 2>/dev/null
 BASE="--real-rstdp --crossed --d1-inhib -400 --direct-inhib -100 --kc-motor --kc-motor-sparsity 0.25 --kc-motor-w-max 300 --kc-motor-init-w 150 --kc-motor-eta 0.15 --tau-e 12 --reward-window 2 --reward-stim none --trial-gap 10 --epsilon 0.6 --bias 25 --env-seed 0"
 ACT="--act-window 3 --act-current 5000 --judge exec --reflex-w 0 --rw-apm-scale 0"
 CTX="--ctx-n 200 --ctx-w 20 --ctx-p 0.02 --ctx2-n 200 --ctx2-w 20 --ctx2-p 0.02 --motor-tonic -4900"   # 동작점 맞춤(logs/E193/calib.out — 사전 규칙 선택)
-echo "[E193] 맥락 의존 범주(XOR) · 특징 w 24 · 맥락 w 20·p 0.02(C2) · 기저값 −4000 · 뇌 10~14"
+echo "[E193] 맥락 의존 범주(XOR) · 특징 w 24 · 맥락 w 20·p 0.02(C2) · 기저값 −4900 · 뇌 10~14"
 for B in 10 11 12 13 14; do
   KW="$R/research/experiments/traces/E160/kctype_oja_b$B.npz"
   FEAT="--conn-snapshot $SNAP/conn_b$B.npz --feat-n 200 --feat-w 24 --feat-p 0.10"
