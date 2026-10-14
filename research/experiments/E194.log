@@ -2,4 +2,30 @@
 커맨드: bash scripts/e194_main.sh
 ---
 [E194] L4 XOR 학습량 의존 · catctx 9,000 · 특징 w 24 · 맥락 w 20·p 0.02(C2) · 기저값 −4900 · 뇌 10~14
-  e194 train b10: 
+  e194 train b10: => [맥락 범주 과제] 시행 9000 중 맥락 X 4418 · Y 4582 · 정답 같은 쪽 4562 · 교차 4438 || 보상 4756회
+  e194 b10 learn X: => A_train=-0.0377 A_new=-0.0041 B_train=+0.1016 B_new=+0.0822 
+  e194 b10 learn Y: => A_train=+0.0345 A_new=+0.0496 B_train=+0.0024 B_new=+0.0090 
+  e194 b10 none X: => A_train=+0.0138 A_new=+0.0448 B_train=+0.0509 B_new=+0.0453 
+  e194 b10 none Y: => A_train=+0.0098 A_new=+0.0431 B_train=+0.0503 B_new=+0.0419 
+  e194 train b11: => [맥락 범주 과제] 시행 9000 중 맥락 X 4536 · Y 4464 · 정답 같은 쪽 4519 · 교차 4481 || 보상 4949회
+  e194 b11 learn X: => A_train=-0.0260 A_new=-0.0179 B_train=+0.0244 B_new=+0.0136 
+  e194 b11 learn Y: => A_train=+0.0559 A_new=+0.0462 B_train=-0.0215 B_new=-0.0081 
+  e194 b11 none X: => A_train=+0.0093 A_new=+0.0151 B_train=+0.0198 B_new=+0.0164 
+  e194 b11 none Y: => A_train=+0.0061 A_new=+0.0116 B_train=+0.0200 B_new=+0.0191 
+  e194 train b12: => [맥락 범주 과제] 시행 9000 중 맥락 X 4535 · Y 4465 · 정답 같은 쪽 4523 · 교차 4477 || 보상 4880회
+  e194 b12 learn X: => A_train=-0.0173 A_new=-0.0029 B_train=+0.0360 B_new=+0.0267 
+  e194 b12 learn Y: => A_train=+0.0475 A_new=+0.0513 B_train=-0.0181 B_new=-0.0068 
+  e194 b12 none X: => A_train=+0.0055 A_new=+0.0225 B_train=+0.0235 B_new=+0.0193 
+  e194 b12 none Y: => A_train=+0.0126 A_new=+0.0262 B_train=+0.0287 B_new=+0.0235 
+  e194 train b13: => [맥락 범주 과제] 시행 9000 중 맥락 X 4463 · Y 4537 · 정답 같은 쪽 4476 · 교차 4524 || 보상 4934회
+  e194 b13 learn X: => A_train=-0.0068 A_new=+0.0097 B_train=+0.0455 B_new=+0.0263 
+  e194 b13 learn Y: => A_train=+0.0364 A_new=+0.0500 B_train=-0.0181 B_new=-0.0147 
+  e194 b13 none X: => A_train=+0.0073 A_new=+0.0308 B_train=+0.0497 B_new=+0.0350 
+  e194 b13 none Y: => A_train=+0.0054 A_new=+0.0353 B_train=+0.0492 B_new=+0.0367 
+  e194 train b14: => [맥락 범주 과제] 시행 9000 중 맥락 X 4522 · Y 4478 · 정답 같은 쪽 4530 · 교차 4470 || 보상 5119회
+  e194 b14 learn X: => A_train=-0.0198 A_new=-0.0068 B_train=+0.0585 B_new=+0.0466 
+  e194 b14 learn Y: => A_train=+0.0220 A_new=+0.0262 B_train=-0.0108 B_new=-0.0050 
+  e194 b14 none X: => A_train=+0.0152 A_new=+0.0339 B_train=+0.0421 B_new=+0.0362 
+  e194 b14 none Y: => A_train=+0.0057 A_new=+0.0224 B_train=+0.0326 B_new=+0.0258 
+[E194] 전체 루프 종료
+=== 종료코드 0 ===
