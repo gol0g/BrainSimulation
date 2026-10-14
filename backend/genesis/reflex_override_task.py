@@ -496,6 +496,10 @@ def main():
     ap.add_argument("--rc-repeat-pre", action="store_true", help="E183 rawcat: 형성 전 측정을 두 번(측정 반복성 확인)")
     ap.add_argument("--rc-save", default=None, help="E183 rawcat: 노출 뒤 zz_feat→KC 가중치 npz(+ pre·post 인덱스)")
     ap.add_argument("--rc-expo-cats", default="A,B", help="E190 rawcat: 노출(형성) 범주(쉼표, A·B·C·D). 기본 A,B = 이전")
+    ap.add_argument("--kc-target", type=float, default=0.05,
+                    help="E195: KC 항상성 억제(PI 제어기) 목표 발화율 — 이 cfg 로 만드는 모든 뇌. 0.05 = 이전 고정값, 낮추면 KC 희소화")
+    ap.add_argument("--kc-inh-scale", type=float, default=1.0,
+                    help="E195 정정: KC 되먹임 억제(kc_inh → kc) 가중치 배율 — 이 cfg 로 만드는 모든 뇌. 1 = 이전(−15). 항상성 PI 제어기는 실제 KC 발화율이 목표보다 낮아 구동 0 이라 이것이 실제 희소화 손잡이")
     ap.add_argument("--rc-measure-ctx", action="store_true",
                     help="E192 rawcat(측정 전용): 노출 없이 사례 × 범주 A·B × 맥락 X(zz_ctx2)·Y(zz_ctx) 제시, 자극 쪽 KC 제시별 스파이크 수 RCKX 줄. --ctx-n·--ctx2-n 필요")
     ap.add_argument("--rc-measure-cats", default="A,B",
@@ -634,6 +638,16 @@ def main():
     if args.decomp_mode == "rawcat" and args.rc_expo_eta != 0 and not args.feat_oja:
         raise SystemExit("rawcat 노출 eta ≠ 0 은 --feat-oja 가 필요하다(정적 시냅스는 바뀌지 않는다)")
     cfg.feat_weights_file = args.feat_weights or ""   # E184: 형성 특징 가중치 — 이 cfg 로 만드는 모든 뇌
+    if not (0.0 < args.kc_target < 1.0):
+        raise SystemExit("--kc-target 은 (0, 1) 범위")
+    cfg.kc_target = float(args.kc_target)              # E195: KC 항상성 목표(기본 0.05 = 이전)
+    if args.kc_target != 0.05:
+        print("[E195 KC 항상성] 목표 발화율 %.3f(기본 0.05)" % args.kc_target)
+    if not (0.0 < args.kc_inh_scale <= 10.0):
+        raise SystemExit("--kc-inh-scale 은 (0, 10] 범위")
+    cfg.kc_inh_to_kc_weight = float(cfg.kc_inh_to_kc_weight) * float(args.kc_inh_scale)   # E195 정정: 되먹임 억제 배율(1 = 이전)
+    if args.kc_inh_scale != 1.0:
+        print("[E195 KC 되먹임 억제] 배율 %.2f (kc_inh_to_kc_weight %.1f)" % (args.kc_inh_scale, cfg.kc_inh_to_kc_weight))
     if (args.feat_weights or args.rc_task != "none" or args.rc_eval) and args.feat_n <= 0:
         raise SystemExit("--feat-weights·--rc-task·--rc-eval 은 --feat-n > 0 이 필요하다")
     if args.rc_eval and not args.decomp_weights:
@@ -1020,8 +1034,18 @@ def main():
                 same = all(np.array_equal(g_b[sd], g_a[sd]) for sd in "lr")
                 if npres and c_on == 0:
                     raise RuntimeError("E192 측정: 켠 맥락 집단 발화 0 — 맥락 입력이 닿지 않음(측정 도구 실패)")
-                print("RCKXCHK npres=%d ctx_on_spikes=%d ctx_off_spikes=%d feat_inactive_spikes=%d base_l=%d base_r=%d g_same=%d ctx_w=%.2f ctx_p=%.3f ctx2_w=%.2f ctx2_p=%.3f"
-                      % (npres, c_on, c_off, f_in, int(base["l"].sum()), int(base["r"].sum()), int(same), args.ctx_w, args.ctx_p, args.ctx2_w, args.ctx2_p))
+                _ig = []
+                for _nm in ("kc_inh_l_to_kc_l", "kc_inh_r_to_kc_r"):   # E195 정정 조작검증(읽기 전용): 장치의 되먹임 억제 g 평균
+                    _sy = _b2.model.synapse_populations[_nm]
+                    _sy.pull_connectivity_from_device()      # SPARSE 는 연결을 먼저 당겨야 values 가 채워진다(E111)
+                    _sy.vars["g"].pull_from_device()
+                    _gv = np.asarray(_sy.vars["g"].values, dtype=np.float64)
+                    if _gv.size == 0:
+                        raise RuntimeError("E195 조작검증: %s g 빈 배열 — 측정 도구 실패" % _nm)
+                    _ig.append(float(np.mean(_gv)))
+                print("RCKXCHK npres=%d ctx_on_spikes=%d ctx_off_spikes=%d feat_inactive_spikes=%d base_l=%d base_r=%d g_same=%d ctx_w=%.2f ctx_p=%.3f ctx2_w=%.2f ctx2_p=%.3f kc_target=%.3f cfg_kc_target=%.3f kc_inh_scale=%.2f cfg_kc_inh_w=%.2f inh_g_l=%.3f inh_g_r=%.3f"
+                      % (npres, c_on, c_off, f_in, int(base["l"].sum()), int(base["r"].sum()), int(same), args.ctx_w, args.ctx_p, args.ctx2_w, args.ctx2_p,
+                         args.kc_target, float(getattr(_b2.config, "kc_target", float("nan"))), args.kc_inh_scale, float(_b2.config.kc_inh_to_kc_weight), _ig[0], _ig[1]))
                 return
             S_pre = _measure("pre")
             if args.rc_repeat_pre:

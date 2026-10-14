@@ -1,0 +1,7 @@
+[E195 경로 검사 2] 시작 2026-10-15 00:16:24
+[배율 1 rc=0] RCKX 96 | 제시당 활성 KC 327.1 | base_l=24952 base_r=27802 kc_inh_scale=1.00 cfg_kc_inh_w=-15.00 inh_g_l=-15.000 inh_g_r=-15.000  | 배율 줄 0
+[배율 1.5 rc=0] RCKX 96 | 제시당 활성 KC 133.4 | base_l=15932 base_r=17005 kc_inh_scale=1.50 cfg_kc_inh_w=-22.50 inh_g_l=-22.500 inh_g_r=-22.500  | 배율 줄 1
+[배율 2 rc=0] RCKX 96 | 제시당 활성 KC 94.4 | base_l=11964 base_r=12536 kc_inh_scale=2.00 cfg_kc_inh_w=-30.00 inh_g_l=-30.000 inh_g_r=-30.000  | 배율 줄 1
+[배율 3 rc=0] RCKX 96 | 제시당 활성 KC 64.1 | base_l=8349 base_r=8734 kc_inh_scale=3.00 cfg_kc_inh_w=-45.00 inh_g_l=-45.000 inh_g_r=-45.000  | 배율 줄 1
+[배율 4 rc=0] RCKX 96 | 제시당 활성 KC 51.0 | base_l=6661 base_r=6794 kc_inh_scale=4.00 cfg_kc_inh_w=-60.00 inh_g_l=-60.000 inh_g_r=-60.000  | 배율 줄 1
+[E195 경로 검사 2] 종료 2026-10-15 00:20:26

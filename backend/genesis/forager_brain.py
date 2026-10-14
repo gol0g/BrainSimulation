@@ -1193,6 +1193,7 @@ class ForagerBrainConfig:
     kc_to_inh_sparsity: float = 0.05
     kc_inh_to_kc_weight: float = -15.0
     kc_inh_to_kc_sparsity: float = 0.08
+    kc_target: float = 0.05              # E195: KC 항상성 억제(PI) 목표 발화율 — 0.05 = 이전 고정값(희소화는 낮춤)
     da_kc_inh_w: float = 0.0             # E168: 도파민 뉴런 → KC 억제 뉴런(좌·우) 흥분 가중치. 0 = 끔(집단을 만들지 않음 — 이전 모델과 같다)
     da_kc_inh_p: float = 0.2             # E168: 그 연결 확률
     ctx_kc_dynamic: bool = False         # 맥락 의존 규칙(E173): KC 좌·우 Ioffset 을 동적 매개변수로(맥락 = 균일 전류). False = 이전 모델
@@ -11560,8 +11561,8 @@ class ForagerBrain:
                 self.last_kc_l_rate = kc_l_rate
                 self.last_kc_r_rate = kc_r_rate
 
-                # Homeostatic KC inhibition: PI control (target ~5%)
-                kc_target = 0.05
+                # Homeostatic KC inhibition: PI control (target ~5%) — E195: 목표는 config.kc_target(기본 0.05 = 이전)
+                kc_target = float(getattr(self.config, "kc_target", 0.05))
                 avg_rate = (kc_l_rate + kc_r_rate) / 2.0
                 error = avg_rate - kc_target
                 integral = getattr(self, '_kc_inh_integral', 0.0) + error * 0.1

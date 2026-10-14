@@ -1,0 +1,7 @@
+[E195 경로 검사] 시작 2026-10-15 00:11:11
+[(a) 회귀 learn rc=0] A_train=+0.0046 A_new=+0.0349 B_train=+0.0659 B_new=+0.0468  | E195 줄 0
+  기대 (a): A_train=+0.0046 A_new=+0.0349 B_train=+0.0659 B_new=+0.0468, E195 줄 0
+[(b) 측정 T 0.05 rc=0] RCKX 96 | 제시당 활성 KC 평균 327.1 | base_l=24952 base_r=27802 kc_target=0.050 cfg_kc_target=0.050  | E195 줄 
+[(b) 측정 T 0.02 rc=0] RCKX 96 | 제시당 활성 KC 평균 327.1 | base_l=24952 base_r=27802 kc_target=0.020 cfg_kc_target=0.020  | E195 줄 [E195 KC 항상성] 목표 발화율 0.020(기본 0.05)
+  기대 (b): RCKX 96, kc_target = cfg_kc_target(0.050·0.020), 0.02 에서 E195 줄 1·제시당 활성 KC 감소
+[E195 경로 검사] 종료 2026-10-15 00:14:03

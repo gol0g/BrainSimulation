@@ -129,6 +129,29 @@ def decode_rows(rows):
     return res
 
 
+def purity_rows(rows):
+    """(E195) 노출 제시 칸 평균 → 반응 KC(칸 평균 ≥ 0.25)의 XOR 순도 = |(AX+BY)−(AY+BX)|/(AX+AY+BX+BY).
+    반환: (활동 가중 평균 순도, 반응 KC 수, 순도 ≥ 0.5 반응 KC 수, 제시당 활성 KC(≥ 1 스파이크) 평균)."""
+    tr = [r for r in rows if r[0] == "train"]
+    cell = {}
+    for row in tr:
+        cell.setdefault(row[1] + row[2], []).append(row[5])
+    if set(cell) != {"AX", "AY", "BX", "BY"}:
+        raise ValueError("칸 부족 %s" % sorted(cell))
+    m = {k: np.mean(v, axis=0) for k, v in cell.items()}
+    tot = m["AX"] + m["AY"] + m["BX"] + m["BY"]
+    inter = np.abs((m["AX"] + m["BY"]) - (m["AY"] + m["BX"]))
+    resp = tot / 4.0 >= 0.25
+    pur = np.where(tot > 0, inter / np.maximum(tot, 1e-12), 0.0)
+    wmean = float(np.sum(pur[resp] * tot[resp]) / np.sum(tot[resp])) if resp.any() else float("nan")
+    nact = float(np.mean([np.count_nonzero(r[5]) for r in tr]))
+    return wmean, int(resp.sum()), int(np.sum(resp & (pur >= 0.5))), nact
+
+
+def purity_log(path, n_kc=N_KC):
+    return {sd: purity_rows(rows) for sd, rows in sorted(parse(path, n_kc).items())}
+
+
 def decode_log(path, n_kc=N_KC):
     pc = prev_cats(path)
     out = {}
@@ -231,6 +254,13 @@ def _selftest():
         good = all(lo <= r[k] < hi for k, (lo, hi) in want.items())
         ok &= good
         print("  이력 %-8s hist %.1f → XOR %.3f 직전 범주 %.3f %s" % (order, hist, r["xor"], r["prev"], "✓" if good else "✗"))
+    # (E195) 순도: 결합 부호는 덧셈 부호보다 활동 가중 순도가 크다; 순수 결합 단위만 있는 부호는 순도 ≈ 1
+    pa = purity_rows(_synthetic("additive", 7)); pc = purity_rows(_synthetic("conj", 7))
+    rows1 = [("train", c, x, i, 0, np.array([5.0 if (c, x) == ("A", "X") else 0.0, 5.0 if (c, x) == ("B", "Y") else 0.0])) for c in "AB" for x in "XY" for i in range(3)]
+    p1 = purity_rows(rows1)
+    good = pc[0] > pa[0] + 0.1 and abs(p1[0] - 1.0) < 1e-9 and p1[1] == 2 and p1[2] == 2
+    ok &= good
+    print("  순도: 덧셈 %.3f < 결합 %.3f, 순수 결합 2 단위 = %.3f(반응 %d·≥0.5 %d) %s" % (pa[0], pc[0], p1[0], p1[1], p1[2], "✓" if good else "✗"))
     # 파싱: RCKX 줄 왕복
     import os
     import tempfile
