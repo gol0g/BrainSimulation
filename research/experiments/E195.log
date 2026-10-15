@@ -2,3 +2,20 @@
 커맨드: bash scripts/e195_main.sh
 ---
 [E195] KC 희소화와 XOR 결합 순도 측정 · 되먹임 억제 배율 1·1.5·2 · 맥락 C2 · 뇌 10~14
+  e195 meas b10 S1: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.00 cfg_kc_inh_w=-15.00 inh_g_l=-15.000 
+  e195 meas b10 SP: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.50 cfg_kc_inh_w=-22.50 inh_g_l=-22.500 
+  e195 meas b10 SR: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=2.00 cfg_kc_inh_w=-30.00 inh_g_l=-30.000 
+  e195 meas b11 S1: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.00 cfg_kc_inh_w=-15.00 inh_g_l=-15.000 
+  e195 meas b11 SP: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.50 cfg_kc_inh_w=-22.50 inh_g_l=-22.500 
+  e195 meas b11 SR: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=2.00 cfg_kc_inh_w=-30.00 inh_g_l=-30.000 
+  e195 meas b12 S1: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.00 cfg_kc_inh_w=-15.00 inh_g_l=-15.000 
+  e195 meas b12 SP: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.50 cfg_kc_inh_w=-22.50 inh_g_l=-22.500 
+  e195 meas b12 SR: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=2.00 cfg_kc_inh_w=-30.00 inh_g_l=-30.000 
+  e195 meas b13 S1: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.00 cfg_kc_inh_w=-15.00 inh_g_l=-15.000 
+  e195 meas b13 SP: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.50 cfg_kc_inh_w=-22.50 inh_g_l=-22.500 
+  e195 meas b13 SR: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=2.00 cfg_kc_inh_w=-30.00 inh_g_l=-30.000 
+  e195 meas b14 S1: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.00 cfg_kc_inh_w=-15.00 inh_g_l=-15.000 
+  e195 meas b14 SP: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=1.50 cfg_kc_inh_w=-22.50 inh_g_l=-22.500 
+  e195 meas b14 SR: => RCKX 288 || ctx_off_spikes=0 kc_inh_scale=2.00 cfg_kc_inh_w=-30.00 inh_g_l=-30.000 
+[E195] 전체 루프 종료
+=== 종료코드 0 ===

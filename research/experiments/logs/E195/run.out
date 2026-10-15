@@ -4,3 +4,6 @@
       - [~] INV-A6 evaluate 상태 정규화 (사유: 행동 평가 없음 — 측정 전 reset + 안정화 30처리(_settle), 학습 없음·가중치 불변 g_same 확인)
       - [~] INV-B1 변조폭 지표 (사유: 행동 지표 없음 — KC 반응 순도·해독이 주 지표, 측정 연구)
 [게이트] 통과
+[실행] E195 → 로그: /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/E195.log
+[실행] 완료(rc=0), 로그 21 줄
+[다음] 결과를 research/experiments/E195.md 에 기록하고 hypotheses/·current-state.md 를 갱신하라(P9).
