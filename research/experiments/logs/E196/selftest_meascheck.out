@@ -1,0 +1,16 @@
+[통과] 정상 → True 
+[통과] RCKX 287 → False RCKX 287
+[통과] RCKXCHK 없음 → False RCKXCHK 없음
+[통과] npres 287 → False npres 287
+[통과] 맥락 켬 0 → False 맥락 켬 스파이크 0
+[통과] 맥락 끔 > 0 → False 맥락 끔 스파이크 5
+[통과] 비활성 특징 > 0 → False 비활성 특징 스파이크 2
+[통과] g 바뀜 → False g_same 0
+[통과] C1(w 10) → False ctx_w 10.00
+[통과] 기저값 −4000 → False motor 기저값 -4000.0,-4000.0
+[통과] 기저값 한 줄만 −4000 → False motor 기저값 -4900.0,-4000.0
+[통과] 기저값 줄 없음 → False motor 기저값 줄 없음
+[통과] 로그 없음 → False 로그 없음
+[통과] 실제 meas_b15_T4900.log → True 
+[통과] 실제 meas_b15_T4000.log → False motor 기저값 -4000.0,-4000.0
+합성 15/15

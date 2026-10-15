@@ -1,0 +1,5 @@
+=== E196 실행: 2026-10-15T14:38:27Z ===
+커맨드: bash scripts/e196_main.sh
+---
+[E196] L4 병목 위치 — 이상 KC→motor 가중치(none·cat·sel·eq) × 맥락 X·Y · C2 · 기저값 −4900 · 뇌 10~14
+  e196 meas b10: 

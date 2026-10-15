@@ -1,0 +1,151 @@
+"""E196: L4 이상 가중치(오라클) — KC 별 선택 지수와 KC→motor 이상 가중치(순수 함수, GeNN 불사용 — 합성 정답 검사용).
+지수(노출(train) 제시 칸 평균 m_AX·m_AY·m_BX·m_BY, 합 tot):
+  SXI = ((AX + BY) − (AY + BX)) / tot  — + = 교차 칸(X·A, Y·B: 범주 × 맥락 XOR 의 정답 교차) 선택, − = 같은 쪽 칸(X·B, Y·A) 선택
+       (rcxor.purity_rows 의 순도 = |SXI|)
+  CSI = ((AX + AY) − (BX + BY)) / tot  — + = 범주 A 선택(범주 규칙 'A 교차·B 같은 쪽' 의 교차), − = B 선택
+  반응 = tot/4 ≥ 0.25(rcxor 와 같음). 경계 비교 전 소수 9자리 반올림(E138 교훈).
+가중치(KC 쪽 pop, motor 쪽 motor; 교차 = pop ≠ motor), 지수 v(cat 은 CSI, sel·eq 는 SXI):
+  cat·sel: 반응·v ≥ θ → 교차 wmax·같은 쪽 0 / 반응·v ≤ −θ → 같은 쪽 wmax·교차 0 / 그 밖 init        (E138 kcsel 의 범주·L4 판)
+  eq     : 반응 → 교차 wmax·(1 + v)/2 · 같은 쪽 wmax·(1 − v)/2 / 비반응 init
+           (SXI 비례 상관 판독 — 대칭 도파민·무작위 선택 가정에서 rstdp_model 연성 상한식의 평형 g* = wmax·P/(P + D) 근사)
+KC 마다 두 motor 로 가는 값의 합은 cat·sel·eq 모두 wmax(= init 150 × 2 일 때 이전과 같은 공통 구동).
+실행: python3 kcxor_oracle.py  (합성 자체 시험)"""
+import os
+import sys
+
+import numpy as np
+
+CELLS = ("AX", "AY", "BX", "BY")
+ARMS = ("cat", "sel", "eq")
+
+
+def sxi_rows(rows, n_kc):
+    """rows: [(set, cat, ctx, i, rep, vec, k)] 한 쪽 → dict(sxi, csi, resp, tot, npc). 노출(train) 제시만."""
+    tr = [r for r in rows if r[0] == "train"]
+    cell = {}
+    for r in tr:
+        cell.setdefault(r[1] + r[2], []).append(r[5])
+    if set(cell) != set(CELLS):
+        raise ValueError("칸 부족 %s" % sorted(cell))
+    n = {c: len(cell[c]) for c in CELLS}
+    if len(set(n.values())) != 1:
+        raise ValueError("칸 제시 수 불균형 %s" % n)
+    m = {c: np.mean(cell[c], axis=0) for c in CELLS}
+    if m["AX"].size != n_kc:
+        raise ValueError("KC 수 %d ≠ %d" % (m["AX"].size, n_kc))
+    tot = m["AX"] + m["AY"] + m["BX"] + m["BY"]
+    den = np.maximum(tot, 1e-12)
+    sxi = np.round(np.where(tot > 0, ((m["AX"] + m["BY"]) - (m["AY"] + m["BX"])) / den, 0.0), 9)
+    csi = np.round(np.where(tot > 0, ((m["AX"] + m["AY"]) - (m["BX"] + m["BY"])) / den, 0.0), 9)
+    resp = np.round(tot / 4.0, 9) >= 0.25
+    return {"sxi": sxi, "csi": csi, "resp": resp, "tot": tot, "npc": n["AX"]}
+
+
+def oracle_weights(pre, index, resp, pop, motor, wmax, init, arm, theta=0.5):
+    """KC→motor 한 집단의 시냅스 값(float32). pre = 시냅스별 전시냅스 KC 인덱스, index = KC 별 지수(cat 은 CSI, sel·eq 는 SXI)."""
+    if arm not in ARMS:
+        raise ValueError(arm)
+    pre = np.asarray(pre, dtype=np.int64)
+    v = np.round(np.asarray(index, dtype=np.float64), 9)[pre]
+    rp = np.asarray(resp, dtype=bool)[pre]
+    crossed = pop != motor
+    out = np.full(pre.size, init, dtype=np.float64)
+    if arm in ("cat", "sel"):
+        hi = rp & (v >= theta)
+        lo = rp & (v <= -theta)
+        out[hi] = wmax if crossed else 0.0
+        out[lo] = 0.0 if crossed else wmax
+    else:
+        sign = 1.0 if crossed else -1.0
+        out[rp] = wmax * (1.0 + sign * v[rp]) / 2.0
+    return np.clip(out, 0.0, wmax).astype(np.float32)
+
+
+def counts(index, resp, theta=0.5):
+    """오라클 점검 줄 수: (교차 선택, 같은 쪽 선택, 반응)."""
+    v = np.round(np.asarray(index, dtype=np.float64), 9)
+    r = np.asarray(resp, dtype=bool)
+    return int(np.sum(r & (v >= theta))), int(np.sum(r & (v <= -theta))), int(r.sum())
+
+
+def _selftest():
+    ok = 0
+    n = 0
+
+    def chk(name, cond, msg=""):
+        nonlocal ok, n
+        n += 1
+        ok += bool(cond)
+        print("  [%s] %s %s" % ("통과" if cond else "실패", name, msg))
+
+    # KC0 교차 전용(AX·BY), KC1 같은 쪽 전용(AY·BX), KC2 범주 A(AX·AY), KC3 맥락 X(AX·BX), KC4 AX 만, KC5 무반응,
+    # KC6 교차 3·같은 쪽 1(SXI 정확히 0.5), KC7 4칸 평균 정확히 0.25(반응 경계), KC8 범주 B(BX·BY)
+    nk = 9
+    cv = {"AX": [2, 0, 1, 1, 2, 0, 2, 1, 0], "BY": [2, 0, 0, 0, 0, 0, 1, 0, 1],
+          "AY": [0, 2, 1, 0, 0, 0, 1, 0, 0], "BX": [0, 2, 0, 1, 0, 0, 0, 0, 1]}
+    rows = []
+    for c in CELLS:
+        for rep in range(3):
+            rows.append(("train", c[0], c[1], 0, rep, np.array(cv[c], dtype=float), -1))
+            rows.append(("new", c[0], c[1], 0, rep, np.full(nk, 9.0), -1))
+    d = sxi_rows(rows, nk)
+    chk("SXI 정답표", np.allclose(d["sxi"], [1, -1, 0, 0, 1, 0, 0.5, 1, 0]), str(np.round(d["sxi"], 3)))
+    chk("CSI 정답표", np.allclose(d["csi"], [0, 0, 1, 0, 1, 0, 0.5, 1, -1]), str(np.round(d["csi"], 3)))
+    chk("반응 정답표", list(d["resp"]) == [True, True, True, True, True, False, True, True, True], str(d["resp"].astype(int)))
+    chk("새 사례 무시·칸당 제시 3", d["npc"] == 3 and d["tot"][0] == 4.0)
+    pre = np.arange(nk)
+    sr = oracle_weights(pre, d["sxi"], d["resp"], "l", "r", 300.0, 150.0, "sel")
+    sl = oracle_weights(pre, d["sxi"], d["resp"], "l", "l", 300.0, 150.0, "sel")
+    chk("sel 교차", list(sr) == [300, 0, 150, 150, 300, 150, 300, 300, 150], str(sr))
+    chk("sel 같은 쪽", list(sl) == [0, 300, 150, 150, 0, 150, 0, 0, 150], str(sl))
+    cr = oracle_weights(pre, d["csi"], d["resp"], "l", "r", 300.0, 150.0, "cat")
+    chk("cat 교차(A 선택 → 교차)", list(cr) == [150, 150, 300, 150, 300, 150, 300, 300, 0], str(cr))
+    er = oracle_weights(pre, d["sxi"], d["resp"], "l", "r", 300.0, 150.0, "eq")
+    el = oracle_weights(pre, d["sxi"], d["resp"], "l", "l", 300.0, 150.0, "eq")
+    chk("eq 교차", np.allclose(er, [300, 0, 150, 150, 300, 150, 225, 300, 150]), str(er))
+    chk("eq 같은 쪽", np.allclose(el, [0, 300, 150, 150, 0, 150, 75, 0, 150]), str(el))
+    tot_ok = True
+    for arm, idx in (("cat", d["csi"]), ("sel", d["sxi"]), ("eq", d["sxi"])):
+        a = oracle_weights(pre, idx, d["resp"], "l", "r", 300.0, 150.0, arm)
+        b = oracle_weights(pre, idx, d["resp"], "l", "l", 300.0, 150.0, arm)
+        tot_ok &= bool(np.allclose(a + b, 300.0))
+    chk("세 팔 모두 KC 마다 두 motor 합 300", tot_ok)
+    chk("kc_r → motor_l 이 교차", list(oracle_weights(pre, d["sxi"], d["resp"], "r", "l", 300.0, 150.0, "sel")) == list(sr))
+    pre2 = np.array([6, 0, 6, 1, 5, 0])
+    chk("시냅스 단위 매핑", list(oracle_weights(pre2, d["sxi"], d["resp"], "l", "r", 300.0, 150.0, "sel")) == [300, 300, 300, 0, 150, 300])
+    chk("θ 경계(0.5 선택·0.499 아님)", list(oracle_weights(np.arange(4), np.array([0.5, 0.499, -0.5, -0.499]), np.ones(4, bool), "l", "r", 300.0, 150.0, "sel")) == [300, 150, 0, 150])
+    chk("점검 수(sel)", counts(d["sxi"], d["resp"]) == (4, 1, 8), str(counts(d["sxi"], d["resp"])))
+    chk("점검 수(cat)", counts(d["csi"], d["resp"]) == (4, 1, 8), str(counts(d["csi"], d["resp"])))
+    for nm, fn in (("칸 결측 거부", lambda: sxi_rows([r for r in rows if r[1] + r[2] != "BY"], nk)),
+                   ("칸 불균형 거부", lambda: sxi_rows(rows[:-2], nk)),
+                   ("KC 수 불일치 거부", lambda: sxi_rows(rows, nk + 1)),
+                   ("알 수 없는 팔 거부", lambda: oracle_weights(pre, d["sxi"], d["resp"], "l", "r", 300.0, 150.0, "foo"))):
+        try:
+            fn()
+            chk(nm, False)
+        except ValueError:
+            chk(nm, True)
+    # rcxor 순도와 같은 정의(|SXI| 활동 가중 평균 = purity_rows)
+    sd = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts")
+    sys.path.insert(0, sd)
+    try:
+        import rcxor
+        rs = np.random.RandomState(3)
+        rows3 = []
+        for c in CELLS:
+            lam = rs.uniform(0, 1.5, 200)
+            for i in range(6):
+                for rep in range(3):
+                    rows3.append(("train", c[0], c[1], i, rep, rs.poisson(lam).astype(float), -1))
+        d3 = sxi_rows(rows3, 200)
+        w_ours = float(np.sum(np.abs(d3["sxi"][d3["resp"]]) * d3["tot"][d3["resp"]]) / np.sum(d3["tot"][d3["resp"]]))
+        w_rc = rcxor.purity_rows(rows3)[0]
+        chk("rcxor 순도 정의와 일치", abs(w_ours - w_rc) < 1e-8, "%.9f vs %.9f" % (w_ours, w_rc))
+    except ImportError:
+        chk("rcxor 순도 정의와 일치(rcxor 없음)", False)
+    print("합성 %d/%d" % (ok, n))
+    return ok == n
+
+
+if __name__ == "__main__":
+    sys.exit(0 if _selftest() else 1)

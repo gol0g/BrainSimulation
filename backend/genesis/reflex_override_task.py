@@ -419,7 +419,7 @@ def main():
                     help="E112: 저장된 가중치로 부분 이식 분해 평가만 하고 종료(학습 없음)")
     ap.add_argument("--decomp-mode", default="all",
                     choices=("all", "none", "kc_only", "d1_only", "kc_shuffle", "kc_uniform", "kc_cm", "neuron", "kcsets",
-                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx", "rawcat"))
+                             "kcrate", "kcsel", "kcselonly", "kcpop", "swap", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx", "rawcat", "kcxor"))
     ap.add_argument("--kc-type-weights", default=None,
                     help="E153: 경험 형성 KC 종류 입력(good·bad 눈 → KC) 가중치 npz — 모든 뇌에 싣는다(연결이 저장본과 같아야 함)")
     ap.add_argument("--kc-type-scale", type=float, default=1.0,
@@ -554,6 +554,13 @@ def main():
                     help="E145: 바꿔 끼울 집단 이름(쉼표 구분, 예: kc_l_to_motor_l,kc_r_to_motor_r). 빈 값 = 바꿈 없음(= all)")
     ap.add_argument("--kc-rate-file", default=None,
                     help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
+    ap.add_argument("--kc-xor-file", default=None,
+                    help="E196: kcxor 모드의 KC 별 지수 npz(scripts/kcxor_build.py — sxi_·csi_·resp_ {l,r})")
+    ap.add_argument("--kc-xor-arm", default=None, choices=("cat", "sel", "eq"),
+                    help="E196: kcxor 설계 팔 — cat = CSI 선택 KC 이상값(양성 대조), sel = SXI 선택 KC 이상값, "
+                         "eq = 반응 KC 교차 wmax·(1+SXI)/2·같은 쪽 wmax·(1−SXI)/2. 나머지 KC 는 초기값")
+    ap.add_argument("--kc-xor-theta", type=float, default=0.5,
+                    help="E196: cat·sel 선택 문턱 |지수| ≥ θ, (0, 1]")
     ap.add_argument("--rw-motor-silence", type=float, default=0.0,
                     help="E140: 보상 창 동안 양쪽 motor Ioffset 을 −값으로(침묵). 0 = 이전 동작. motor Ioffset 동적화 자동")
     ap.add_argument("--rw-apm-scale", type=float, default=-1.0,
@@ -652,6 +659,13 @@ def main():
         raise SystemExit("--feat-weights·--rc-task·--rc-eval 은 --feat-n > 0 이 필요하다")
     if args.rc_eval and not args.decomp_weights:
         raise SystemExit("--rc-eval 은 --decomp-weights(분해 이식 평가)가 필요하다")
+    if args.decomp_mode == "kcxor":
+        if not args.kc_xor_file or not os.path.exists(args.kc_xor_file) or args.kc_xor_arm is None:
+            raise SystemExit("--decomp-mode kcxor 는 있는 --kc-xor-file 과 --kc-xor-arm 이 필요하다")
+    elif args.kc_xor_file or args.kc_xor_arm is not None or args.kc_xor_theta != 0.5:
+        raise SystemExit("--kc-xor-file·--kc-xor-arm·--kc-xor-theta 는 --decomp-mode kcxor 전용")
+    if not (0.0 < args.kc_xor_theta <= 1.0):
+        raise SystemExit("--kc-xor-theta 는 (0, 1] 범위")
     _rcsets = [s_ for s_ in args.rc_eval_sets.split(",") if s_]
     if not _rcsets or any(s_ not in ("train", "new", "proto", "far") for s_ in _rcsets) or len(set(_rcsets)) != len(_rcsets):
         raise SystemExit("--rc-eval-sets 는 train·new·proto·far 중 겹치지 않는 쉼표 목록")
@@ -829,7 +843,7 @@ def main():
                 sub[n] = np.full(W[n].size, gm)
         elif mode in ("neuron", "kcsets"):
             sub = dict(W)
-        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx", "rawcat"):
+        elif mode in ("kcrate", "kcsel", "kcselonly", "kcpop", "kcoverlap", "kcoverlap3", "kcdev", "kcdevoja", "kcctx", "rawcat", "kcxor"):
             sub = {}    # E138: 아래에서 새 뇌의 장치 연결(전시냅스 KC 인덱스)로 만든다 — KC→motor 4집단만, D1 등은 초기값
         elif mode == "swap":
             # E145: 집단 맞바꿈 — A(--decomp-weights) 전체에 B(--decomp-swap-weights)의 지정 집단만 바꿔 끼운다.
@@ -1544,6 +1558,28 @@ def main():
                 print("[E138] %s: 선택 KC kc_l 좌 %d 우 %d / kc_r 좌 %d 우 %d (wmax %.0f, init %.0f)"
                       % (mode, int((cls["l"] == KS.CLS_L).sum()), int((cls["l"] == KS.CLS_R).sum()),
                          int((cls["r"] == KS.CLS_L).sum()), int((cls["r"] == KS.CLS_R).sum()), wmax, init_w))
+        if mode == "kcxor":
+            # E196: KC→motor 4집단만 KC 별 범주·XOR 선택 지수(--kc-xor-file)로 설계해 이식(D1 등 나머지는 초기값 — kcsel 과 같은 범위).
+            # 교차 = kc_l→motor_r·kc_r→motor_l. 시냅스 값은 kcxor_oracle.oracle_weights(합성 자체 시험), 장치 연결의 전시냅스 KC 인덱스로.
+            import kcxor_oracle as KX
+            n_k = int(cfg.n_kc_per_side); init_w = float(cfg.kc_motor_init_w); wmax = float(cfg.kc_motor_w_max)
+            Zx = np.load(args.kc_xor_file)
+            key = "csi_" if args.kc_xor_arm == "cat" else "sxi_"
+            cnt_x = {}
+            for kn in ("l", "r"):
+                if Zx[key + kn].size != n_k or Zx["resp_" + kn].size != n_k:
+                    raise SystemExit("%s: %s 쪽 지수 크기 %d·%d ≠ KC %d" % (args.kc_xor_file, kn, Zx[key + kn].size, Zx["resp_" + kn].size, n_k))
+                cnt_x[kn] = KX.counts(Zx[key + kn], Zx["resp_" + kn], args.kc_xor_theta)
+                for m in ("l", "r"):
+                    nm = "kc_%s_to_motor_%s" % (kn, m)
+                    sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
+                    pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                    if pre.size != W[nm].size:
+                        raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, pre.size, W[nm].size))
+                    sub[nm] = KX.oracle_weights(pre, Zx[key + kn], Zx["resp_" + kn], kn, m, wmax, init_w,
+                                                args.kc_xor_arm, args.kc_xor_theta)
+            print("[E196 오라클] 설계 arm=%s theta=%.2f file=%s cross_l=%d same_l=%d resp_l=%d cross_r=%d same_r=%d resp_r=%d wmax=%.0f init=%.0f"
+                  % ((args.kc_xor_arm, args.kc_xor_theta, args.kc_xor_file) + cnt_x["l"] + cnt_x["r"] + (wmax, init_w)))
         if mode == "kcsets":
             # E117: KC 반응 집합(자극 good=왼쪽/오른쪽) — 새 뇌(학습 가중치 이식 전)에 steer 와 같은 3스텝 제시 × N, 사이 무자극 10스텝.
             # KC 입력은 감각에서 오므로 반응 집합은 KC→motor 가중치와 무관하다. 집합별로 저장된 학습 Δg 를 분해한다.
@@ -1646,6 +1682,8 @@ def main():
         if sub:
             TE.push(_b2, sub)
             TE.verify(_b2, _b2, sub)
+            if mode == "kcxor":
+                print("[E196 오라클 장치 검증] 일치 n=%d(KC→motor 집단 — 장치 가중치 = 설계값, 정확 비교)" % len(sub))
         _evd = {} if args.eval_diag else None
         if args.rc_eval:
             # E184: 원시 특징 범주 평가 — 범주 A·B × 노출·새 사례 4조건, 조건마다 evaluate(reset·안정화·오프셋·시행). 자극 = 먹이 광선 한쪽(good·bad 0)
