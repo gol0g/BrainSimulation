@@ -2,4 +2,55 @@
 커맨드: bash scripts/e196_main.sh
 ---
 [E196] L4 병목 위치 — 이상 KC→motor 가중치(none·cat·sel·eq) × 맥락 X·Y · C2 · 기저값 −4900 · 뇌 10~14
-  e196 meas b10: 
+  e196 meas b10: => RCKX 288 || npres=288 ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0 g_same=1 
+  e196 sxi b10: => 쪽 l | 반응 562 · SXI ≥ 0.5 46 · ≤ −0.5 41 · CSI ≥ 0.5 107 · ≤ −0.5 110 쪽 r | 반응 540 · SXI ≥ 0.5 43 · ≤ −0.5 43 · CSI ≥ 0.5 98 · ≤ −0.5 112 
+  e196 b10 none X: => A_train=+0.0138 A_new=+0.0448 B_train=+0.0509 B_new=+0.0453 pushed=0 
+  e196 b10 none Y: => A_train=+0.0098 A_new=+0.0431 B_train=+0.0503 B_new=+0.0419 pushed=0 
+  e196 b10 cat X: => A_train=-0.2519 A_new=-0.1948 B_train=+0.3678 B_new=+0.2870 pushed=4 
+  e196 b10 cat Y: => A_train=-0.2198 A_new=-0.1848 B_train=+0.3329 B_new=+0.2491 pushed=4 
+  e196 b10 sel X: => A_train=-0.0725 A_new=-0.0290 B_train=+0.1775 B_new=+0.1412 pushed=4 
+  e196 b10 sel Y: => A_train=+0.0588 A_new=+0.0867 B_train=-0.0636 B_new=-0.0429 pushed=4 
+  e196 b10 eq X: => A_train=-0.0842 A_new=-0.0388 B_train=+0.1853 B_new=+0.1489 pushed=4 
+  e196 b10 eq Y: => A_train=+0.0810 A_new=+0.1098 B_train=-0.0634 B_new=-0.0458 pushed=4 
+  e196 meas b11: => RCKX 288 || npres=288 ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0 g_same=1 
+  e196 sxi b11: => 쪽 l | 반응 548 · SXI ≥ 0.5 40 · ≤ −0.5 48 · CSI ≥ 0.5 111 · ≤ −0.5 100 쪽 r | 반응 557 · SXI ≥ 0.5 46 · ≤ −0.5 39 · CSI ≥ 0.5 101 · ≤ −0.5 105 
+  e196 b11 none X: => A_train=+0.0093 A_new=+0.0151 B_train=+0.0198 B_new=+0.0164 pushed=0 
+  e196 b11 none Y: => A_train=+0.0061 A_new=+0.0116 B_train=+0.0200 B_new=+0.0191 pushed=0 
+  e196 b11 cat X: => A_train=-0.1904 A_new=-0.1595 B_train=+0.2962 B_new=+0.2262 pushed=4 
+  e196 b11 cat Y: => A_train=-0.2502 A_new=-0.2120 B_train=+0.3056 B_new=+0.2220 pushed=4 
+  e196 b11 sel X: => A_train=-0.0641 A_new=-0.0465 B_train=+0.0961 B_new=+0.0709 pushed=4 
+  e196 b11 sel Y: => A_train=+0.0931 A_new=+0.0745 B_train=-0.0721 B_new=-0.0333 pushed=4 
+  e196 b11 eq X: => A_train=-0.0743 A_new=-0.0563 B_train=+0.0970 B_new=+0.0673 pushed=4 
+  e196 b11 eq Y: => A_train=+0.1104 A_new=+0.0978 B_train=-0.0771 B_new=-0.0382 pushed=4 
+  e196 meas b12: => RCKX 288 || npres=288 ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0 g_same=1 
+  e196 sxi b12: => 쪽 l | 반응 545 · SXI ≥ 0.5 38 · ≤ −0.5 36 · CSI ≥ 0.5 101 · ≤ −0.5 93 쪽 r | 반응 542 · SXI ≥ 0.5 40 · ≤ −0.5 42 · CSI ≥ 0.5 109 · ≤ −0.5 106 
+  e196 b12 none X: => A_train=+0.0055 A_new=+0.0225 B_train=+0.0235 B_new=+0.0193 pushed=0 
+  e196 b12 none Y: => A_train=+0.0126 A_new=+0.0262 B_train=+0.0287 B_new=+0.0235 pushed=0 
+  e196 b12 cat X: => A_train=-0.2474 A_new=-0.2100 B_train=+0.2687 B_new=+0.1875 pushed=4 
+  e196 b12 cat Y: => A_train=-0.2345 A_new=-0.1887 B_train=+0.3082 B_new=+0.2385 pushed=4 
+  e196 b12 sel X: => A_train=-0.0831 A_new=-0.0492 B_train=+0.0984 B_new=+0.0629 pushed=4 
+  e196 b12 sel Y: => A_train=+0.0690 A_new=+0.0732 B_train=-0.0602 B_new=-0.0351 pushed=4 
+  e196 b12 eq X: => A_train=-0.0785 A_new=-0.0478 B_train=+0.1203 B_new=+0.0804 pushed=4 
+  e196 b12 eq Y: => A_train=+0.0833 A_new=+0.0841 B_train=-0.0776 B_new=-0.0531 pushed=4 
+  e196 meas b13: => RCKX 288 || npres=288 ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0 g_same=1 
+  e196 sxi b13: => 쪽 l | 반응 567 · SXI ≥ 0.5 54 · ≤ −0.5 51 · CSI ≥ 0.5 118 · ≤ −0.5 119 쪽 r | 반응 583 · SXI ≥ 0.5 50 · ≤ −0.5 52 · CSI ≥ 0.5 119 · ≤ −0.5 106 
+  e196 b13 none X: => A_train=+0.0073 A_new=+0.0308 B_train=+0.0497 B_new=+0.0350 pushed=0 
+  e196 b13 none Y: => A_train=+0.0054 A_new=+0.0353 B_train=+0.0492 B_new=+0.0367 pushed=0 
+  e196 b13 cat X: => A_train=-0.2257 A_new=-0.1919 B_train=+0.2878 B_new=+0.1928 pushed=4 
+  e196 b13 cat Y: => A_train=-0.2703 A_new=-0.2513 B_train=+0.3187 B_new=+0.2376 pushed=4 
+  e196 b13 sel X: => A_train=-0.0568 A_new=-0.0287 B_train=+0.1580 B_new=+0.0980 pushed=4 
+  e196 b13 sel Y: => A_train=+0.0692 A_new=+0.0938 B_train=-0.0820 B_new=-0.0683 pushed=4 
+  e196 b13 eq X: => A_train=-0.0635 A_new=-0.0340 B_train=+0.1542 B_new=+0.0886 pushed=4 
+  e196 b13 eq Y: => A_train=+0.0720 A_new=+0.0913 B_train=-0.0963 B_new=-0.0814 pushed=4 
+  e196 meas b14: => RCKX 288 || npres=288 ctx_on_spikes=576000 ctx_off_spikes=0 feat_inactive_spikes=0 g_same=1 
+  e196 sxi b14: => 쪽 l | 반응 564 · SXI ≥ 0.5 34 · ≤ −0.5 43 · CSI ≥ 0.5 114 · ≤ −0.5 95 쪽 r | 반응 541 · SXI ≥ 0.5 35 · ≤ −0.5 36 · CSI ≥ 0.5 97 · ≤ −0.5 121 
+  e196 b14 none X: => A_train=+0.0152 A_new=+0.0339 B_train=+0.0421 B_new=+0.0362 pushed=0 
+  e196 b14 none Y: => A_train=+0.0057 A_new=+0.0224 B_train=+0.0326 B_new=+0.0258 pushed=0 
+  e196 b14 cat X: => A_train=-0.2340 A_new=-0.1729 B_train=+0.3509 B_new=+0.2982 pushed=4 
+  e196 b14 cat Y: => A_train=-0.2698 A_new=-0.2348 B_train=+0.3084 B_new=+0.2236 pushed=4 
+  e196 b14 sel X: => A_train=-0.0286 A_new=+0.0044 B_train=+0.1270 B_new=+0.1079 pushed=4 
+  e196 b14 sel Y: => A_train=+0.0753 A_new=+0.0896 B_train=-0.0510 B_new=-0.0226 pushed=4 
+  e196 b14 eq X: => A_train=-0.0425 A_new=-0.0079 B_train=+0.1567 B_new=+0.1366 pushed=4 
+  e196 b14 eq Y: => A_train=+0.0851 A_new=+0.0934 B_train=-0.0765 B_new=-0.0430 pushed=4 
+[E196] 전체 루프 종료
+=== 종료코드 0 ===
