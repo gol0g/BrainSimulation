@@ -1,0 +1,30 @@
+[E197 판정 기준 고정] 2026-10-16 00:50:53 (경로 검사·본실험 전 — E197 실행 결과를 보기 전. 이때 본 것: E196 전체 결과·사후 탐색(posthoc_effects.out·posthoc_readout.out) — 판독 형식별 구동 예측의 근거)
+가설 H118: 현재 C2 KC 표현에서 반응 KC 전부를 SXI 부호 쪽으로 300/0(SXI > 0 → 교차 300·같은 쪽 0, < 0 → 반대, 0 → 150) 두는 부호 판독(sgnR)이면 E196 과 같은 이식 평가에서 범주 × 맥락 XOR 네 칸이 선다.
+경쟁: H118-null(표현·출력 병목 — 부호 판독으로도 획득 칸 ≤ 1), 부분(2~3 칸 — 칸 불균형). 부: sgnA(발화 있는 KC 전부 — 경성 상한 규칙의 긴 시간 극한)는 보고.
+
+[본실험] 뇌 10~14(E160 종류 가중치, 스냅숏), 특징 w 24 형성 전, 맥락 C2(zz_ctx·zz_ctx2 각 200, w 20·p 0.02, level 0.9), motor 기저값 −4900, E193·E196 BASE·ACT, 학습 없음.
+  지수 파일 = E196 의 −4900 측정 지수 traces/E196/sxi_b{B}.npz 그대로(SXI·반응·tot, 경계 비교 전 9자리 반올림).
+  팔(--decomp-mode kcxor --kc-xor-arm, KC→motor 4집단만 설계 — D1 등 초기값; 교차 = kc_l→motor_r·kc_r→motor_l; KC 마다 두 motor 합 300):
+    none = --decomp-mode none(E196 none 과 같은 커맨드 — 회귀) / sel = E196 sel 과 같은 커맨드(회귀) / sgnR = 반응 KC 전부 SXI 부호 / sgnA = 발화 있는 KC(tot > 0) 전부 SXI 부호.
+  평가: --decomp-weights traces/E193/w_b{B}.npz(크기 확인용) --rc-eval --rc-eval-ctx X|Y --trials 96 --eval-diag(train·new) → logs/E197/ev_b{B}_{none,sel,sgnR,sgnA}_{X,Y}.log(뇌마다 8, 40).
+
+[지표 — 1e-4 정수] e_{팔,x,c,s} = m(팔) − m(none). XOR 방향 a = −e(X·A, Y·B 교차 칸), +e(X·B, Y·A 같은 쪽 칸).
+
+[조작검증 — 하나라도 어기면 판정 보류(조작검증 실패)]
+  평가 로그마다 RCEVAL 4줄(A·B × train·new) 각 trials 96·feat_on 96·ctx 표지 = 평가 맥락·ctx_on 96, '[E153 종류 입력 적재] … 검증 일치' ≥ 1, '[E184 특징 가중치 적재]' 없음,
+  포화 칸(한 쪽 두 motor 모두 ≥ 0.66) 없음, pushed = 0(none)·4(sel·sgnR·sgnA).
+  팔 로그: '[E196 오라클] 설계' 줄의 arm = 팔·theta 0.50·file = 지수 파일·cross/same/resp(쪽마다) = 지수 파일에서 다시 센 값
+    (sel: 반응·SXI ≥ 0.5 / ≤ −0.5, sgnR: 반응·SXI > 0 / < 0·대상 = 반응, sgnA: tot > 0·SXI > 0 / < 0·대상 = tot > 0), '[E196 오라클 장치 검증] 일치' 줄(TE.verify 정확 비교 통과 뒤).
+  none 회귀·sel 회귀: E197 none·sel 과 E196 none·sel(logs/E196/ev_b{B}_{none,sel}_{X,Y}.log) 뇌마다 8값(맥락 2 × 범주 2 × 세트 2) 모두 |차| ≤ 2.
+  조작 무효 의심: sgnR 효과 8값이 모두 |e| ≤ 2 인 뇌가 있으면 보류.
+
+[판정 — 뇌 단위] 팔 sgnR·sgnA·sel: 획득 칸 n = #{a_train ≥ 1000}; 획득 = n 4 / 부분 = 2 ≤ n ≤ 3 / 실패 = n ≤ 1.
+[판정 — 종합(우선순위)] 조작검증 실패 → 보류 / sgnR 획득 ≥ 4/5 → 표현 충분(부호 판독, H118) / sgnR 실패 ≥ 4/5 → 표현·출력 병목(H118-null)
+  / sgnR 부분 ≥ 4/5 → 부분 / 그 밖 보류. (보고) sgnA·sel 획득 수, 새 사례 a_new.
+  판정 scripts/judge_e197.py(합성 23/23), 독립 대조 scripts/verify_e197_independent.py(합성 23/23), 오라클 함수 backend/genesis/kcxor_oracle.py(합성 28/28).
+
+[경로 검사(뇌 15, 표본 밖) 통과 조건] (a) E196 경로 검사 −4900 측정 로그로 지수 파일 생성 (b) 맥락 X × none·sgnR·sgnA: RCEVAL 4줄·pushed 0/4·오라클 줄(arm·θ·수 = 파일)·장치 검증 줄·포화 없음.
+  경로 검사의 효과 값은 보고만(판정에 쓰지 않음).
+
+[결과별 다음 결정] 표현 충분 → 다음 분기 학습 규칙 형식(경성 상한·가산형 R-STDP 로 L4 학습이 부호 고정점 쪽으로 가는가 — 앞 능력 회귀 필수).
+  표현·출력 병목 → 다음 분기 표현 형성(맥락 동반 형성 — 결합 KC 의 양·순도). 부분·보류 → 기록, 분기 종료, L4 줄기 정리 후 다음 능력(헌장 L3 전체 모델 관계 수준 또는 L2) 결정.

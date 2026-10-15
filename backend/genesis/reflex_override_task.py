@@ -556,9 +556,10 @@ def main():
                     help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
     ap.add_argument("--kc-xor-file", default=None,
                     help="E196: kcxor 모드의 KC 별 지수 npz(scripts/kcxor_build.py — sxi_·csi_·resp_ {l,r})")
-    ap.add_argument("--kc-xor-arm", default=None, choices=("cat", "sel", "eq"),
+    ap.add_argument("--kc-xor-arm", default=None, choices=("cat", "sel", "eq", "sgnR", "sgnA"),
                     help="E196: kcxor 설계 팔 — cat = CSI 선택 KC 이상값(양성 대조), sel = SXI 선택 KC 이상값, "
-                         "eq = 반응 KC 교차 wmax·(1+SXI)/2·같은 쪽 wmax·(1−SXI)/2. 나머지 KC 는 초기값")
+                         "eq = 반응 KC 교차 wmax·(1+SXI)/2·같은 쪽 wmax·(1−SXI)/2. 나머지 KC 는 초기값. "
+                         "E197: sgnR = 반응 KC 전부 SXI 부호 쪽 wmax/0, sgnA = 발화 있는 KC 전부(부호 판독)")
     ap.add_argument("--kc-xor-theta", type=float, default=0.5,
                     help="E196: cat·sel 선택 문턱 |지수| ≥ θ, (0, 1]")
     ap.add_argument("--rw-motor-silence", type=float, default=0.0,
@@ -1567,16 +1568,17 @@ def main():
             key = "csi_" if args.kc_xor_arm == "cat" else "sxi_"
             cnt_x = {}
             for kn in ("l", "r"):
-                if Zx[key + kn].size != n_k or Zx["resp_" + kn].size != n_k:
-                    raise SystemExit("%s: %s 쪽 지수 크기 %d·%d ≠ KC %d" % (args.kc_xor_file, kn, Zx[key + kn].size, Zx["resp_" + kn].size, n_k))
-                cnt_x[kn] = KX.counts(Zx[key + kn], Zx["resp_" + kn], args.kc_xor_theta)
+                if Zx[key + kn].size != n_k or Zx["resp_" + kn].size != n_k or Zx["tot_" + kn].size != n_k:
+                    raise SystemExit("%s: %s 쪽 지수 크기 %d·%d·%d ≠ KC %d" % (args.kc_xor_file, kn, Zx[key + kn].size, Zx["resp_" + kn].size, Zx["tot_" + kn].size, n_k))
+                el = KX.elig(args.kc_xor_arm, Zx["resp_" + kn], Zx["tot_" + kn])   # E197: 대상 KC(sgnA = 발화 있는 KC, 그 밖 = 반응 KC)
+                cnt_x[kn] = KX.counts(Zx[key + kn], el, args.kc_xor_theta, sign=args.kc_xor_arm in KX.SIGN_ARMS)
                 for m in ("l", "r"):
                     nm = "kc_%s_to_motor_%s" % (kn, m)
                     sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
                     pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
                     if pre.size != W[nm].size:
                         raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, pre.size, W[nm].size))
-                    sub[nm] = KX.oracle_weights(pre, Zx[key + kn], Zx["resp_" + kn], kn, m, wmax, init_w,
+                    sub[nm] = KX.oracle_weights(pre, Zx[key + kn], el, kn, m, wmax, init_w,
                                                 args.kc_xor_arm, args.kc_xor_theta)
             print("[E196 오라클] 설계 arm=%s theta=%.2f file=%s cross_l=%d same_l=%d resp_l=%d cross_r=%d same_r=%d resp_r=%d wmax=%.0f init=%.0f"
                   % ((args.kc_xor_arm, args.kc_xor_theta, args.kc_xor_file) + cnt_x["l"] + cnt_x["r"] + (wmax, init_w)))

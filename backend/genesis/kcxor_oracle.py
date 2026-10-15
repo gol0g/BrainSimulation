@@ -8,7 +8,10 @@
   cat·sel: 반응·v ≥ θ → 교차 wmax·같은 쪽 0 / 반응·v ≤ −θ → 같은 쪽 wmax·교차 0 / 그 밖 init        (E138 kcsel 의 범주·L4 판)
   eq     : 반응 → 교차 wmax·(1 + v)/2 · 같은 쪽 wmax·(1 − v)/2 / 비반응 init
            (SXI 비례 상관 판독 — 대칭 도파민·무작위 선택 가정에서 rstdp_model 연성 상한식의 평형 g* = wmax·P/(P + D) 근사)
-KC 마다 두 motor 로 가는 값의 합은 cat·sel·eq 모두 wmax(= init 150 × 2 일 때 이전과 같은 공통 구동).
+  sgnR   : (E197) 반응 KC 전부 — SXI > 0 → 교차 wmax·같은 쪽 0 / SXI < 0 → 반대 / SXI = 0·비반응 init
+           (부호 판독 — 경성 상한(가산형) R-STDP 의 고정점: 상관 부호 쪽 경계로 포화)
+  sgnA   : (E197) sgnR 과 같은 규칙을 발화 있는 KC 전부(tot > 0)에 — 경성 상한 규칙의 긴 시간 극한
+KC 마다 두 motor 로 가는 값의 합은 모든 팔에서 wmax(= init 150 × 2 일 때 이전과 같은 공통 구동).
 실행: python3 kcxor_oracle.py  (합성 자체 시험)"""
 import os
 import sys
@@ -16,7 +19,8 @@ import sys
 import numpy as np
 
 CELLS = ("AX", "AY", "BX", "BY")
-ARMS = ("cat", "sel", "eq")
+ARMS = ("cat", "sel", "eq", "sgnR", "sgnA")
+SIGN_ARMS = ("sgnR", "sgnA")
 
 
 def sxi_rows(rows, n_kc):
@@ -50,9 +54,13 @@ def oracle_weights(pre, index, resp, pop, motor, wmax, init, arm, theta=0.5):
     rp = np.asarray(resp, dtype=bool)[pre]
     crossed = pop != motor
     out = np.full(pre.size, init, dtype=np.float64)
-    if arm in ("cat", "sel"):
-        hi = rp & (v >= theta)
-        lo = rp & (v <= -theta)
+    if arm in ("cat", "sel") or arm in SIGN_ARMS:
+        if arm in SIGN_ARMS:     # resp = elig(arm, …) — 대상 KC
+            hi = rp & (v > 0)
+            lo = rp & (v < 0)
+        else:
+            hi = rp & (v >= theta)
+            lo = rp & (v <= -theta)
         out[hi] = wmax if crossed else 0.0
         out[lo] = 0.0 if crossed else wmax
     else:
@@ -61,10 +69,19 @@ def oracle_weights(pre, index, resp, pop, motor, wmax, init, arm, theta=0.5):
     return np.clip(out, 0.0, wmax).astype(np.float32)
 
 
-def counts(index, resp, theta=0.5):
-    """오라클 점검 줄 수: (교차 선택, 같은 쪽 선택, 반응)."""
+def elig(arm, resp, tot):
+    """(E197) 팔별 대상 KC 마스크: sgnA = 발화 있는 KC(tot 9자리 반올림 > 0), 그 밖 = 반응 KC."""
+    if arm == "sgnA":
+        return np.round(np.asarray(tot, dtype=np.float64), 9) > 0
+    return np.asarray(resp, dtype=bool)
+
+
+def counts(index, resp, theta=0.5, sign=False):
+    """오라클 점검 줄 수: (교차 선택, 같은 쪽 선택, 대상). sign=True(부호 판독) 이면 지수 > 0·< 0, resp 는 elig() 마스크."""
     v = np.round(np.asarray(index, dtype=np.float64), 9)
     r = np.asarray(resp, dtype=bool)
+    if sign:
+        return int(np.sum(r & (v > 0))), int(np.sum(r & (v < 0))), int(r.sum())
     return int(np.sum(r & (v >= theta))), int(np.sum(r & (v <= -theta))), int(r.sum())
 
 
@@ -116,6 +133,26 @@ def _selftest():
     chk("θ 경계(0.5 선택·0.499 아님)", list(oracle_weights(np.arange(4), np.array([0.5, 0.499, -0.5, -0.499]), np.ones(4, bool), "l", "r", 300.0, 150.0, "sel")) == [300, 150, 0, 150])
     chk("점검 수(sel)", counts(d["sxi"], d["resp"]) == (4, 1, 8), str(counts(d["sxi"], d["resp"])))
     chk("점검 수(cat)", counts(d["csi"], d["resp"]) == (4, 1, 8), str(counts(d["csi"], d["resp"])))
+    # (E197) 부호 판독: 약한 선택(|SXI| < θ)도 부호대로 300/0, 0 은 init, sgnA 는 비반응이라도 발화 있으면 포함
+    iv = np.array([0.2, -0.1, 0.0, 0.7, -0.6, 0.3])
+    rv = np.array([True, True, True, True, True, False])
+    tv = np.array([4.0, 2.0, 3.0, 4.0, 4.0, 0.5])
+    p6 = np.arange(6)
+    gR = oracle_weights(p6, iv, elig("sgnR", rv, tv), "l", "r", 300.0, 150.0, "sgnR")
+    gRs = oracle_weights(p6, iv, elig("sgnR", rv, tv), "l", "l", 300.0, 150.0, "sgnR")
+    gA = oracle_weights(p6, iv, elig("sgnA", rv, tv), "l", "r", 300.0, 150.0, "sgnA")
+    chk("sgnR 교차(약한 선택 포함·0 은 init·비반응 init)", list(gR) == [300, 0, 150, 300, 0, 150], str(gR))
+    chk("sgnR 같은 쪽", list(gRs) == [0, 300, 150, 0, 300, 150], str(gRs))
+    chk("sgnA 교차(발화 있는 비반응 포함)", list(gA) == [300, 0, 150, 300, 0, 300], str(gA))
+    chk("sel 은 약한 선택 제외(대조)", list(oracle_weights(p6, iv, rv, "l", "r", 300.0, 150.0, "sel")) == [150, 150, 150, 300, 0, 150])
+    chk("sgnA 대상: tot 0·1e-12 제외", list(elig("sgnA", rv, np.array([0.0, 1e-12, 0.25, 1, 1, 1]))) == [False, False, True, True, True, True])
+    chk("점검 수 sgnR", counts(iv, elig("sgnR", rv, tv), sign=True) == (2, 2, 5), str(counts(iv, elig("sgnR", rv, tv), sign=True)))
+    chk("점검 수 sgnA", counts(iv, elig("sgnA", rv, tv), sign=True) == (3, 2, 6), str(counts(iv, elig("sgnA", rv, tv), sign=True)))
+    s_ok = True
+    for arm in SIGN_ARMS:
+        e = elig(arm, rv, tv)
+        s_ok &= bool(np.allclose(oracle_weights(p6, iv, e, "r", "l", 300.0, 150.0, arm) + oracle_weights(p6, iv, e, "r", "r", 300.0, 150.0, arm), 300.0))
+    chk("부호 팔 KC 마다 두 motor 합 300·kc_r 교차 = motor_l", s_ok and list(oracle_weights(p6, iv, elig("sgnR", rv, tv), "r", "l", 300.0, 150.0, "sgnR")) == list(gR))
     for nm, fn in (("칸 결측 거부", lambda: sxi_rows([r for r in rows if r[1] + r[2] != "BY"], nk)),
                    ("칸 불균형 거부", lambda: sxi_rows(rows[:-2], nk)),
                    ("KC 수 불일치 거부", lambda: sxi_rows(rows, nk + 1)),
