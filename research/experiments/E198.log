@@ -2,4 +2,45 @@
 커맨드: bash scripts/e198_main.sh
 ---
 [E198] L4 학습 규칙 형식 — 학습 부호 판독(lsgnR·lsgnA) + 회귀(none·sgnR) × 맥락 X·Y · C2 · 기저값 −4900 · 뇌 10~14
-  e198 b10 none X: 
+  e198 b10 none X: => A_train=+0.0138 A_new=+0.0448 B_train=+0.0509 B_new=+0.0453 pushed=0 
+  e198 b10 none Y: => A_train=+0.0098 A_new=+0.0431 B_train=+0.0503 B_new=+0.0419 pushed=0 
+  e198 b10 sgnR X: => A_train=-0.1945 A_new=-0.1374 B_train=+0.3788 B_new=+0.2932 pushed=4 
+  e198 b10 sgnR Y: => A_train=+0.2149 A_new=+0.2250 B_train=-0.1779 B_new=-0.1096 pushed=4 
+  e198 b10 lsgnR X: => A_train=-0.0082 A_new=+0.0688 B_train=+0.6671 B_new=+0.5853 pushed=4 
+  e198 b10 lsgnR Y: => A_train=+0.2991 A_new=+0.2652 B_train=-0.1256 B_new=-0.0645 pushed=4 
+  e198 b10 lsgnA X: => A_train=-0.0591 A_new=+0.0192 B_train=+0.7180 B_new=+0.6026 pushed=4 
+  e198 b10 lsgnA Y: => A_train=+0.3353 A_new=+0.2829 B_train=-0.1555 B_new=-0.0913 pushed=4 
+  e198 b11 none X: => A_train=+0.0093 A_new=+0.0151 B_train=+0.0198 B_new=+0.0164 pushed=0 
+  e198 b11 none Y: => A_train=+0.0061 A_new=+0.0116 B_train=+0.0200 B_new=+0.0191 pushed=0 
+  e198 b11 sgnR X: => A_train=-0.2599 A_new=-0.2037 B_train=+0.1728 B_new=+0.1182 pushed=4 
+  e198 b11 sgnR Y: => A_train=+0.2377 A_new=+0.2211 B_train=-0.1977 B_new=-0.0982 pushed=4 
+  e198 b11 lsgnR X: => A_train=-0.0956 A_new=-0.0518 B_train=+0.0337 B_new=-0.0129 pushed=4 
+  e198 b11 lsgnR Y: => A_train=+0.5267 A_new=+0.4883 B_train=-0.4318 B_new=-0.2919 pushed=4 
+  e198 b11 lsgnA X: => A_train=-0.1253 A_new=-0.0817 B_train=+0.0659 B_new=+0.0023 pushed=4 
+  e198 b11 lsgnA Y: => A_train=+0.5876 A_new=+0.5172 B_train=-0.4646 B_new=-0.3110 pushed=4 
+  e198 b12 none X: => A_train=+0.0055 A_new=+0.0225 B_train=+0.0235 B_new=+0.0193 pushed=0 
+  e198 b12 none Y: => A_train=+0.0126 A_new=+0.0262 B_train=+0.0287 B_new=+0.0235 pushed=0 
+  e198 b12 sgnR X: => A_train=-0.2201 A_new=-0.1901 B_train=+0.2479 B_new=+0.1674 pushed=4 
+  e198 b12 sgnR Y: => A_train=+0.1864 A_new=+0.1517 B_train=-0.2084 B_new=-0.1312 pushed=4 
+  e198 b12 lsgnR X: => A_train=-0.1424 A_new=-0.1006 B_train=+0.0961 B_new=+0.0446 pushed=4 
+  e198 b12 lsgnR Y: => A_train=+0.0092 A_new=+0.0122 B_train=-0.0306 B_new=-0.0130 pushed=4 
+  e198 b12 lsgnA X: => A_train=-0.1760 A_new=-0.1285 B_train=+0.1069 B_new=+0.0531 pushed=4 
+  e198 b12 lsgnA Y: => A_train=+0.0122 A_new=+0.0163 B_train=-0.0339 B_new=-0.0137 pushed=4 
+  e198 b13 none X: => A_train=+0.0073 A_new=+0.0308 B_train=+0.0497 B_new=+0.0350 pushed=0 
+  e198 b13 none Y: => A_train=+0.0054 A_new=+0.0353 B_train=+0.0492 B_new=+0.0367 pushed=0 
+  e198 b13 sgnR X: => A_train=-0.1239 A_new=-0.0429 B_train=+0.3577 B_new=+0.2489 pushed=4 
+  e198 b13 sgnR Y: => A_train=+0.1933 A_new=+0.2079 B_train=-0.2310 B_new=-0.1516 pushed=4 
+  e198 b13 lsgnR X: => A_train=+0.4301 A_new=+0.5442 B_train=+0.4858 B_new=+0.3994 pushed=4 
+  e198 b13 lsgnR Y: => A_train=+0.8400 A_new=+0.8678 B_train=-0.0553 B_new=+0.0651 pushed=4 
+  e198 b13 lsgnA X: => A_train=+0.4164 A_new=+0.5439 B_train=+0.5321 B_new=+0.4272 pushed=4 
+  e198 b13 lsgnA Y: => A_train=+0.8656 A_new=+0.8802 B_train=-0.1122 B_new=+0.0427 pushed=4 
+  e198 b14 none X: => A_train=+0.0152 A_new=+0.0339 B_train=+0.0421 B_new=+0.0362 pushed=0 
+  e198 b14 none Y: => A_train=+0.0057 A_new=+0.0224 B_train=+0.0326 B_new=+0.0258 pushed=0 
+  e198 b14 sgnR X: => A_train=-0.2582 A_new=-0.2077 B_train=+0.1800 B_new=+0.1202 pushed=4 
+  e198 b14 sgnR Y: => A_train=+0.1018 A_new=+0.0551 B_train=-0.4252 B_new=-0.3065 pushed=4 
+  e198 b14 lsgnR X: => A_train=-0.1020 A_new=-0.0491 B_train=+0.4196 B_new=+0.3519 pushed=4 
+  e198 b14 lsgnR Y: => A_train=+0.0313 A_new=+0.0503 B_train=-0.2435 B_new=-0.2289 pushed=4 
+  e198 b14 lsgnA X: => A_train=-0.1388 A_new=-0.0928 B_train=+0.4752 B_new=+0.3862 pushed=4 
+  e198 b14 lsgnA Y: => A_train=+0.0536 A_new=+0.0516 B_train=-0.2759 B_new=-0.2824 pushed=4 
+[E198] 전체 루프 종료
+=== 종료코드 0 ===

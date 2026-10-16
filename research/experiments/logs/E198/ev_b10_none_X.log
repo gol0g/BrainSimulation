@@ -775,3 +775,6 @@ make: Leaving directory '/root/e198_main_run/forager_brain_CODE'
 Model ready! Total: 28,323 neurons
 RCEVAL cat=A set=train mod=+0.0138 off=+0.0729 acc=49.0 trials=96 feat_on=96 ctx=X ctx_on=96 | side=left n=240 motor L/R 0.611442/0.620487 KC L/R 0.011824/0.003651 side=right n=240 motor L/R 0.590282/0.604832 KC L/R 0.003761/0.010791
 RCEVAL cat=A set=new mod=+0.0448 off=+0.0783 acc=35.4 trials=96 feat_on=96 ctx=X ctx_on=96 | side=left n=240 motor L/R 0.596393/0.599843 KC L/R 0.011745/0.003148 side=right n=240 motor L/R 0.571545/0.592917 KC L/R 0.003394/0.010720
+RCEVAL cat=B set=train mod=+0.0509 off=+0.0829 acc=49.0 trials=96 feat_on=96 ctx=X ctx_on=96 | side=left n=240 motor L/R 0.587388/0.584970 KC L/R 0.011257/0.003086 side=right n=240 motor L/R 0.574817/0.592772 KC L/R 0.003266/0.010903
+RCEVAL cat=B set=new mod=+0.0453 off=+0.0690 acc=24.0 trials=96 feat_on=96 ctx=X ctx_on=96 | side=left n=240 motor L/R 0.586548/0.588715 KC L/R 0.011255/0.003177 side=right n=240 motor L/R 0.569283/0.589578 KC L/R 0.003388/0.010665
+=> DECOMP mode=none rceval A_train=+0.0138 A_new=+0.0448 B_train=+0.0509 B_new=+0.0453 pushed=0 feat=초기값 kc_means[kc_l>l=nan kc_l>r=nan kc_r>l=nan kc_r>r=nan]
