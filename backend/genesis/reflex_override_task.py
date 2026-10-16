@@ -400,6 +400,10 @@ def main():
     ap.add_argument("--kc-motor-init-w", type=float, default=0.5)
     ap.add_argument("--kc-motor-eta", type=float, default=0.001)
     ap.add_argument("--kc-motor-sparsity", type=float, default=0.05)
+    ap.add_argument("--kc-motor-hard", action="store_true",
+                    help="E199: KC→motor 4집단만 가산형(경성 상한) 갱신 g += η·DA·e, clip(rstdp_model hard 판). 기본 꺼짐 = 연성 상한 그대로")
+    ap.add_argument("--kc-motor-comp", action="store_true",
+                    help="E199: 보상 창 뒤 도파민 0 직후 KC 별 두 motor 평균 가중치 합을 2·init 으로 되돌리는 감산 정규화(kc_comp — 경계 안 정확 투영). 기본 꺼짐")
     ap.add_argument("--calib-kc-motor", action="store_true",
                     help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
@@ -755,6 +759,11 @@ def main():
         cfg.kc_motor_init_w = args.kc_motor_init_w
         cfg.kc_motor_eta = args.kc_motor_eta
         cfg.kc_motor_sparsity = args.kc_motor_sparsity
+        cfg.kc_motor_hard = bool(args.kc_motor_hard)
+    if (args.kc_motor_hard or args.kc_motor_comp) and not args.kc_motor:
+        raise SystemExit("--kc-motor-hard·--kc-motor-comp 는 --kc-motor 가 필요하다")
+    if args.kc_motor_comp and not (args.reward_window > 0 or args.trial_gap > 0):
+        raise SystemExit("--kc-motor-comp 는 보상 창 블록(--reward-window 또는 --trial-gap > 0)에서 적용된다")
     if args.rw_apm_scale >= 0 or args.dec_apm_scale >= 0:
         if not args.kc_motor:
             raise SystemExit("--rw-apm-scale·--dec-apm-scale 은 --kc-motor 가 필요하다")
@@ -1988,6 +1997,8 @@ def main():
     _rev_announced = False
     _taskb_announced = False
     _dar_done = False       # 구현 점검 ①: 첫 보상 창 끝 도파민 뉴런 입력 0 확인을 한 번만 출력
+    # E199: KC→motor 경쟁 정규화(--kc-motor-comp) — 보상 창 뒤 도파민 0 직후 KC 별 두 motor 평균 합을 2·init 으로(kc_comp). 기본 None = 이전 동작
+    _kcmp = {"pre": None, "n": 0, "d0": [], "d1": 0.0} if args.kc_motor_comp else None
     KRW = {"dec": [], "rw_rew": [], "rw_pun": []} if args.kc_rw_diag else None   # E168(읽기 전용): KC 발화율 진단
     # 맥락 의존 규칙(bicond): 시행마다 맥락 배정 — 지역 난수(전역 np.random 열 불변). none 이면 None(이전 동작)
     _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task in ("bicond", "bicond2") else None
@@ -2241,6 +2252,20 @@ def main():
                     _kee = _kct_sum(_kct_read("e"))      # E139 수정: 보상 창 끝(도파민 0 직전) 자격흔적
                 brain.dopamine_level = 0.0
                 brain._push_dopamine_to_rstdp()
+                if _kcmp is not None:
+                    # E199: 이 시행의 도파민 갱신이 끝난 뒤 KC 별 두 motor 평균 합 보존(감산 정규화 — 공통 모드 제거)
+                    if _kcmp["pre"] is None:
+                        import kc_comp as KCOMP
+                        _kcmp["mod"] = KCOMP
+                        _kcmp["pre"] = KCOMP.prepare(brain)
+                    _cfg_ = brain.config
+                    _st = _kcmp["mod"].apply(brain, _kcmp["pre"], int(_cfg_.n_kc_per_side), 2.0 * float(_cfg_.kc_motor_init_w), 0.0, float(_cfg_.kc_motor_w_max))
+                    _kcmp["n"] += 1
+                    _kcmp["d0"].append(max(v_[0] for v_ in _st.values()))
+                    _kcmp["d1"] = max(_kcmp["d1"], max(v_[1] for v_ in _st.values()))
+                    if _kcmp["n"] <= 3:
+                        print("[E199 경쟁 정규화] 시행 %d 적용 — 정규화 전 max|S−%.0f| 쪽 l %.4f·r %.4f → 뒤 %.2e·%.2e"
+                              % (_kcmp["n"], 2.0 * float(_cfg_.kc_motor_init_w), _st["l"][0], _st["r"][0], _st["l"][1], _st["r"][1]))
                 if args.rw_da_reset:
                     # 외부 검토 2026-10-09 ①: 도파민 뉴런 입력도 0(기본은 다음 release_dopamine 까지 보상 시 입력 유지 → 간격·다음 시행 동안 D1·D2 구동)
                     _dav = brain.dopamine_neurons.vars["I_input"]
@@ -2282,6 +2307,10 @@ def main():
                                    + ([float(_ctx_on)] if _crng is not None else []))          # 맥락 의존 규칙: 37 맥락 켬(bicond 만 — 기본 행 길이 불변)
                 KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
+    if _kcmp is not None:
+        print("[E199 경쟁 정규화] 적용 %d회 · 정규화 전 max|S−목표| 평균 %.4f 최대 %.4f · 정규화 뒤 최대 %.2e · hard=%d"
+              % (_kcmp["n"], float(np.mean(_kcmp["d0"])) if _kcmp["d0"] else float("nan"), max(_kcmp["d0"]) if _kcmp["d0"] else float("nan"),
+                 _kcmp["d1"], int(bool(args.kc_motor_hard))))
     if _crng is not None:
         print("[맥락 과제] 시행 %d 중 맥락 켬 %d" % (args.episodes * args.steps, _nctx))
     if _rcrng is not None:

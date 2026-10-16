@@ -21,10 +21,31 @@ dopamine은 extra_global_param(스칼라)으로, 파이썬에서 매 스텝 설�
 from pygenn import create_weight_update_model, init_var
 
 
-def make_rstdp_model():
-    """시냅스별 자격흔적 + 도파민 게이팅 R-STDP."""
+SOFT_DYNAMICS = """
+        e -= e * (dt / tau_e);
+        if (dopamine != 0.0) {
+            const scalar dw = eta * dopamine * e;
+            const scalar room = (dw > 0.0) ? (w_max - g) : (g - w_min);
+            const scalar span = w_max - w_min;
+            g += dw * (room / (span > 0.0 ? span : 1.0));
+            g = fmin(w_max, fmax(w_min, g));
+        }
+        """
+# E199: 가산형(경성 상한) — 연성 상한의 room/span 없이 g += η·DA·e 후 경계로 자른다. C36 초판과 같은 식이나,
+# E199 는 KC→motor 에만 쓰고 KC 별 두 motor 합 보존 정규화(kc_comp)와 함께 써서 공통 모드 붕괴를 막는다.
+HARD_DYNAMICS = """
+        e -= e * (dt / tau_e);
+        if (dopamine != 0.0) {
+            g += eta * dopamine * e;
+            g = fmin(w_max, fmax(w_min, g));
+        }
+        """
+
+
+def make_rstdp_model(hard=False):
+    """시냅스별 자격흔적 + 도파민 게이팅 R-STDP. hard=True(E199): 가산형(경성 상한) 갱신 — 모델 이름이 달라 기본(연성) 코드는 그대로."""
     return create_weight_update_model(
-        "RSTDPEligibility",
+        "RSTDPEligibilityHard" if hard else "RSTDPEligibility",
         params=[
             ("tau_pre", "scalar"),     # pre 흔적 시정수
             ("tau_post", "scalar"),    # post 흔적 시정수
@@ -60,16 +81,7 @@ def make_rstdp_model():
         # 초판은 g += eta*da*e 후 clip만 해서 전 시냅스가 w_max에 붙어 std가 0으로 붕괴했다
         # (food_to_d1_r: 100% 변화, std 0→0 = 변별 소멸). 상한에 가까울수록 증가폭을 줄이고
         # 하한에 가까울수록 감소폭을 줄이면 시냅스별 차이가 보존된다.
-        synapse_dynamics_code="""
-        e -= e * (dt / tau_e);
-        if (dopamine != 0.0) {
-            const scalar dw = eta * dopamine * e;
-            const scalar room = (dw > 0.0) ? (w_max - g) : (g - w_min);
-            const scalar span = w_max - w_min;
-            g += dw * (room / (span > 0.0 ? span : 1.0));
-            g = fmin(w_max, fmax(w_min, g));
-        }
-        """,
+        synapse_dynamics_code=HARD_DYNAMICS if hard else SOFT_DYNAMICS,
         pre_spike_code="preTrace += 1.0;",
         post_spike_code="postTrace += 1.0;",
         pre_dynamics_code="preTrace -= preTrace * (dt / tau_pre);",

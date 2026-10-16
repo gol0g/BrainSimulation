@@ -1229,6 +1229,7 @@ class ForagerBrainConfig:
     kc_motor_tau_e: float = 12.0
     kc_motor_sparsity: float = 0.05
     kc_motor_apm_dynamic: bool = False   # E141: KC→motor A_plus·A_minus 동적화(보상 창 흔적 생성 동결용)
+    kc_motor_hard: bool = False          # E199: KC→motor 4집단만 가산형(경성 상한) 갱신(rstdp_model hard 판). 기본 꺼짐 = 연성 상한 그대로
     kc_rstdp_eta: float = 0.0003
     kc_rstdp_w_max: float = 5.0
     kc_rstdp_w_rest: float = 0.5
@@ -9443,7 +9444,10 @@ class ForagerBrain:
             _mp["w_max"] = float(self.config.kc_motor_w_max)
             _mp["eta"] = float(self.config.kc_motor_eta)
             _mp["tau_e"] = float(self.config.kc_motor_tau_e)
-            _mwu = make_rstdp_model()
+            _mhard = bool(getattr(self.config, "kc_motor_hard", False))
+            _mwu = make_rstdp_model(hard=True) if _mhard else make_rstdp_model()
+            if _mhard:
+                print("    KC→motor [E199 가산형(경성 상한) 갱신 — g += eta·DA·e, clip]")
             _mw = float(self.config.kc_motor_init_w)
             _msp = float(self.config.kc_motor_sparsity)
             self.kc_motor_syn = {}
