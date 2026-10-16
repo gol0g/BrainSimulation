@@ -1,0 +1,5 @@
+=== E198 실행: 2026-10-16T11:57:18Z ===
+커맨드: bash scripts/e198_main.sh
+---
+[E198] L4 학습 규칙 형식 — 학습 부호 판독(lsgnR·lsgnA) + 회귀(none·sgnR) × 맥락 X·Y · C2 · 기저값 −4900 · 뇌 10~14
+  e198 b10 none X: 

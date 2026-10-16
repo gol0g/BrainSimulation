@@ -11,6 +11,8 @@
   sgnR   : (E197) 반응 KC 전부 — SXI > 0 → 교차 wmax·같은 쪽 0 / SXI < 0 → 반대 / SXI = 0·비반응 init
            (부호 판독 — 경성 상한(가산형) R-STDP 의 고정점: 상관 부호 쪽 경계로 포화)
   sgnA   : (E197) sgnR 과 같은 규칙을 발화 있는 KC 전부(tot > 0)에 — 경성 상한 규칙의 긴 시간 극한
+  lsgnR  : (E198) 지수 대신 학습 차 Δ_k = mean(w_교차[k]) − mean(w_같은쪽[k])(학습 가중치, KC 별 묶음 — learned_diff)의 부호로 sgnR 규칙, 대상 = 반응 KC
+  lsgnA  : (E198) 같은 규칙, 대상 = Δ ≠ 0 인 KC 전부(학습 중 흔적이 한 번이라도 굳은 KC)
 KC 마다 두 motor 로 가는 값의 합은 모든 팔에서 wmax(= init 150 × 2 일 때 이전과 같은 공통 구동).
 실행: python3 kcxor_oracle.py  (합성 자체 시험)"""
 import os
@@ -19,8 +21,9 @@ import sys
 import numpy as np
 
 CELLS = ("AX", "AY", "BX", "BY")
-ARMS = ("cat", "sel", "eq", "sgnR", "sgnA")
-SIGN_ARMS = ("sgnR", "sgnA")
+ARMS = ("cat", "sel", "eq", "sgnR", "sgnA", "lsgnR", "lsgnA")
+SIGN_ARMS = ("sgnR", "sgnA", "lsgnR", "lsgnA")
+LEARN_ARMS = ("lsgnR", "lsgnA")
 
 
 def sxi_rows(rows, n_kc):
@@ -69,11 +72,36 @@ def oracle_weights(pre, index, resp, pop, motor, wmax, init, arm, theta=0.5):
     return np.clip(out, 0.0, wmax).astype(np.float32)
 
 
-def elig(arm, resp, tot):
-    """(E197) 팔별 대상 KC 마스크: sgnA = 발화 있는 KC(tot 9자리 반올림 > 0), 그 밖 = 반응 KC."""
+def elig(arm, resp, tot, delta=None):
+    """(E197) 팔별 대상 KC 마스크: sgnA = 발화 있는 KC(tot 9자리 반올림 > 0), (E198) lsgnA = Δ(9자리 반올림) ≠ 0, 그 밖 = 반응 KC."""
     if arm == "sgnA":
         return np.round(np.asarray(tot, dtype=np.float64), 9) > 0
+    if arm == "lsgnA":
+        if delta is None:
+            raise ValueError("lsgnA 는 delta 가 필요하다")
+        return np.round(np.asarray(delta, dtype=np.float64), 9) != 0
     return np.asarray(resp, dtype=bool)
+
+
+def learned_diff(pre_c, w_c, pre_s, w_s, n_kc):
+    """(E198) KC 별 학습 차 Δ_k = mean(w_교차 over k 의 시냅스) − mean(w_같은쪽 over k 의 시냅스), 9자리 반올림. 한쪽이라도 시냅스가 없는 KC 는 0.
+    pre_* = 시냅스별 전시냅스 KC 인덱스(장치 연결 또는 스냅숏 __pre — 행 묶음만 쓰므로 행 안 순서와 무관), w_* = 같은 순서의 학습 가중치."""
+    pre_c = np.asarray(pre_c, dtype=np.int64); pre_s = np.asarray(pre_s, dtype=np.int64)
+    w_c = np.asarray(w_c, dtype=np.float64); w_s = np.asarray(w_s, dtype=np.float64)
+    if pre_c.size != w_c.size or pre_s.size != w_s.size:
+        raise ValueError("pre·w 크기 불일치")
+    nc = np.bincount(pre_c, minlength=n_kc); ns = np.bincount(pre_s, minlength=n_kc)
+    if nc.size != n_kc or ns.size != n_kc:
+        raise ValueError("KC 인덱스 범위 밖")
+    mc = np.bincount(pre_c, weights=w_c, minlength=n_kc) / np.maximum(nc, 1)
+    ms = np.bincount(pre_s, weights=w_s, minlength=n_kc) / np.maximum(ns, 1)
+    return np.round(np.where((nc > 0) & (ns > 0), mc - ms, 0.0), 9)
+
+
+def agree(delta, sxi, mask):
+    """(E198 보고) 대상 KC 중 sign(Δ) = sign(SXI) 인 수(둘 다 0 아님)."""
+    d = np.round(np.asarray(delta, dtype=np.float64), 9); s = np.round(np.asarray(sxi, dtype=np.float64), 9); m = np.asarray(mask, dtype=bool)
+    return int(np.sum(m & (d != 0) & (s != 0) & (np.sign(d) == np.sign(s))))
 
 
 def counts(index, resp, theta=0.5, sign=False):
@@ -149,10 +177,31 @@ def _selftest():
     chk("점검 수 sgnR", counts(iv, elig("sgnR", rv, tv), sign=True) == (2, 2, 5), str(counts(iv, elig("sgnR", rv, tv), sign=True)))
     chk("점검 수 sgnA", counts(iv, elig("sgnA", rv, tv), sign=True) == (3, 2, 6), str(counts(iv, elig("sgnA", rv, tv), sign=True)))
     s_ok = True
-    for arm in SIGN_ARMS:
+    for arm in ("sgnR", "sgnA"):
         e = elig(arm, rv, tv)
         s_ok &= bool(np.allclose(oracle_weights(p6, iv, e, "r", "l", 300.0, 150.0, arm) + oracle_weights(p6, iv, e, "r", "r", 300.0, 150.0, arm), 300.0))
     chk("부호 팔 KC 마다 두 motor 합 300·kc_r 교차 = motor_l", s_ok and list(oracle_weights(p6, iv, elig("sgnR", rv, tv), "r", "l", 300.0, 150.0, "sgnR")) == list(gR))
+    # (E198) 학습 차 Δ: KC0 교차 쪽 학습 큼(+), KC1 같은 쪽 큼(−), KC2 같음(0), KC3 교차 시냅스 없음(0), 행 안 순서 섞어도 같음
+    pc = np.array([0, 0, 1, 1, 2, 2]); wc = np.array([200., 220., 140., 150., 150., 150.])
+    ps = np.array([0, 1, 1, 2, 3, 3]); ws = np.array([150., 160., 170., 150., 100., 120.])
+    dl = learned_diff(pc, wc, ps, ws, 4)
+    chk("Δ 정답표(KC1: 교차 (140+150)/2 − 같은 쪽 (160+170)/2 = −20)", list(dl) == [60.0, -20.0, 0.0, 0.0], str(dl))
+    perm = np.array([5, 3, 1, 0, 4, 2])
+    chk("Δ 행 안 순서 무관", list(learned_diff(pc[perm], wc[perm], ps, ws, 4)) == list(dl))
+    rL = np.array([True, True, False, True])
+    gl = oracle_weights(np.arange(4), dl, elig("lsgnR", rL, None, dl), "l", "r", 300.0, 150.0, "lsgnR")
+    chk("lsgnR 교차(Δ 부호·반응 대상)", list(gl) == [300, 0, 150, 150], str(gl))
+    chk("lsgnA 대상 = Δ ≠ 0", list(elig("lsgnA", rL, None, dl)) == [True, True, False, False])
+    chk("lsgn 점검 수", counts(dl, elig("lsgnR", rL, None, dl), sign=True) == (1, 1, 3), str(counts(dl, elig("lsgnR", rL, None, dl), sign=True)))
+    chk("부호 일치 수", agree(dl, np.array([0.3, 0.2, -0.1, 0.5]), np.array([True, True, True, True])) == 1)
+    for nm, fn in (("lsgnA delta 없음 거부", lambda: elig("lsgnA", rL, None)),
+                   ("Δ pre·w 크기 불일치 거부", lambda: learned_diff(pc, wc[:-1], ps, ws, 4)),
+                   ("Δ KC 범위 밖 거부", lambda: learned_diff(pc, wc, ps, ws, 3))):
+        try:
+            fn()
+            chk(nm, False)
+        except ValueError:
+            chk(nm, True)
     for nm, fn in (("칸 결측 거부", lambda: sxi_rows([r for r in rows if r[1] + r[2] != "BY"], nk)),
                    ("칸 불균형 거부", lambda: sxi_rows(rows[:-2], nk)),
                    ("KC 수 불일치 거부", lambda: sxi_rows(rows, nk + 1)),

@@ -556,10 +556,11 @@ def main():
                     help="E138: kcrate 가 KC 별 좌/우 제시·기준선 스파이크 수를 저장하고 kcsel·kcselonly 가 읽는 npz")
     ap.add_argument("--kc-xor-file", default=None,
                     help="E196: kcxor 모드의 KC 별 지수 npz(scripts/kcxor_build.py — sxi_·csi_·resp_ {l,r})")
-    ap.add_argument("--kc-xor-arm", default=None, choices=("cat", "sel", "eq", "sgnR", "sgnA"),
+    ap.add_argument("--kc-xor-arm", default=None, choices=("cat", "sel", "eq", "sgnR", "sgnA", "lsgnR", "lsgnA"),
                     help="E196: kcxor 설계 팔 — cat = CSI 선택 KC 이상값(양성 대조), sel = SXI 선택 KC 이상값, "
                          "eq = 반응 KC 교차 wmax·(1+SXI)/2·같은 쪽 wmax·(1−SXI)/2. 나머지 KC 는 초기값. "
-                         "E197: sgnR = 반응 KC 전부 SXI 부호 쪽 wmax/0, sgnA = 발화 있는 KC 전부(부호 판독)")
+                         "E197: sgnR = 반응 KC 전부 SXI 부호 쪽 wmax/0, sgnA = 발화 있는 KC 전부(부호 판독). "
+                         "E198: lsgnR·lsgnA = 지수 대신 --decomp-weights 학습값의 KC 별 교차 − 같은 쪽 평균 차 Δ 의 부호(대상 반응 KC·Δ ≠ 0 KC)")
     ap.add_argument("--kc-xor-theta", type=float, default=0.5,
                     help="E196: cat·sel 선택 문턱 |지수| ≥ θ, (0, 1]")
     ap.add_argument("--rw-motor-silence", type=float, default=0.0,
@@ -1567,21 +1568,37 @@ def main():
             Zx = np.load(args.kc_xor_file)
             key = "csi_" if args.kc_xor_arm == "cat" else "sxi_"
             cnt_x = {}
+            _lrn = args.kc_xor_arm in getattr(KX, "LEARN_ARMS", ())     # E198: 지수 대신 학습 차 Δ(--decomp-weights 의 KC→motor 학습값)
+            agr_x, pin_x = {}, []
             for kn in ("l", "r"):
                 if Zx[key + kn].size != n_k or Zx["resp_" + kn].size != n_k or Zx["tot_" + kn].size != n_k:
                     raise SystemExit("%s: %s 쪽 지수 크기 %d·%d·%d ≠ KC %d" % (args.kc_xor_file, kn, Zx[key + kn].size, Zx["resp_" + kn].size, Zx["tot_" + kn].size, n_k))
-                el = KX.elig(args.kc_xor_arm, Zx["resp_" + kn], Zx["tot_" + kn])   # E197: 대상 KC(sgnA = 발화 있는 KC, 그 밖 = 반응 KC)
-                cnt_x[kn] = KX.counts(Zx[key + kn], el, args.kc_xor_theta, sign=args.kc_xor_arm in KX.SIGN_ARMS)
+                pres = {}
                 for m in ("l", "r"):
                     nm = "kc_%s_to_motor_%s" % (kn, m)
                     sy = getattr(_b2, nm); sy.pull_connectivity_from_device()
-                    pre = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
-                    if pre.size != W[nm].size:
-                        raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, pre.size, W[nm].size))
-                    sub[nm] = KX.oracle_weights(pre, Zx[key + kn], el, kn, m, wmax, init_w,
+                    pres[m] = np.asarray(sy.get_sparse_pre_inds(), dtype=np.int64)
+                    if pres[m].size != W[nm].size:
+                        raise RuntimeError("%s 크기 불일치 %d vs %d" % (nm, pres[m].size, W[nm].size))
+                    pin_x.append("%s n=%d pre_sum=%d" % (nm, pres[m].size, int(pres[m].sum())))
+                if _lrn:
+                    oc = "r" if kn == "l" else "l"     # 교차 motor
+                    idx = KX.learned_diff(pres[oc], W["kc_%s_to_motor_%s" % (kn, oc)], pres[kn], W["kc_%s_to_motor_%s" % (kn, kn)], n_k)
+                else:
+                    idx = Zx[key + kn]
+                el = KX.elig(args.kc_xor_arm, Zx["resp_" + kn], Zx["tot_" + kn], idx) if _lrn else KX.elig(args.kc_xor_arm, Zx["resp_" + kn], Zx["tot_" + kn])   # E197: 대상 KC
+                cnt_x[kn] = KX.counts(idx, el, args.kc_xor_theta, sign=args.kc_xor_arm in KX.SIGN_ARMS)
+                if _lrn:
+                    agr_x[kn] = KX.agree(idx, Zx["sxi_" + kn], el)
+                for m in ("l", "r"):
+                    nm = "kc_%s_to_motor_%s" % (kn, m)
+                    sub[nm] = KX.oracle_weights(pres[m], idx, el, kn, m, wmax, init_w,
                                                 args.kc_xor_arm, args.kc_xor_theta)
             print("[E196 오라클] 설계 arm=%s theta=%.2f file=%s cross_l=%d same_l=%d resp_l=%d cross_r=%d same_r=%d resp_r=%d wmax=%.0f init=%.0f"
                   % ((args.kc_xor_arm, args.kc_xor_theta, args.kc_xor_file) + cnt_x["l"] + cnt_x["r"] + (wmax, init_w)))
+            if _lrn:
+                print("[E198 학습 부호] 가중치=%s 부호 일치(대상 중 sign(Δ) = sign(SXI)) agree_l=%d agree_r=%d" % (args.decomp_weights, agr_x["l"], agr_x["r"]))
+                print("[E198 연결 확인] " + " | ".join(pin_x))
         if mode == "kcsets":
             # E117: KC 반응 집합(자극 good=왼쪽/오른쪽) — 새 뇌(학습 가중치 이식 전)에 steer 와 같은 3스텝 제시 × N, 사이 무자극 10스텝.
             # KC 입력은 감각에서 오므로 반응 집합은 KC→motor 가중치와 무관하다. 집합별로 저장된 학습 Δg 를 분해한다.

@@ -1,0 +1,31 @@
+[E198 판정 기준 고정] 2026-10-16 20:51:04 (경로 검사·본실험 전 — E198 실행 결과를 보기 전. 이때 본 것: E197 전체 결과·사후 기술, E196 전체 결과, K125 의 사후 탐색(kcw_decomp — E193·E194 학습 가중치의 KC 묶음 기울기: 결합 KC 정답 방향, 그 밖 반응 KC 평균 차 ≈ 0). 실제 E193 가중치로 KC 별 Δ 부호·부호 일치율은 계산하지 않았다 — Δ 세 구현은 합성 자료로만 시험)
+가설 H119: E193 학습(3,000시행) 가중치에서 KC 마다 교차 − 같은 쪽 학습 가중치 평균 차 Δ 의 부호로 300/0 을 두면(lsgnR — 대상 = 반응 KC) E197 과 같은 이식 평가에서 범주 × 맥락 XOR 네 칸이 선다.
+경쟁: H119-null(학습 방향 부족 — lsgnR 획득 칸 ≤ 1), 부분(2~3 칸). 부: lsgnA(Δ ≠ 0 KC 전부), 반응 KC 부호 일치율 sign(Δ) = sign(SXI)는 보고.
+
+[본실험] 뇌 10~14(E160 종류 가중치, 스냅숏), 특징 w 24 형성 전, 맥락 C2(zz_ctx·zz_ctx2 각 200, w 20·p 0.02, level 0.9), motor 기저값 −4900, E193·E196·E197 BASE·ACT, 학습 없음.
+  지수 = E196 −4900 측정 traces/E196/sxi_b{B}.npz(반응·SXI), 학습값 = traces/E193/w_b{B}.npz(KC→motor 4집단 — Δ_k = mean(w_교차[k]) − mean(w_같은쪽[k]), 9자리 반올림, 한쪽 시냅스 없는 KC 0).
+  팔(--decomp-mode kcxor --kc-xor-arm, KC→motor 4집단만 설계 — D1 등 초기값; 교차 = kc_l→motor_r·kc_r→motor_l; KC 마다 두 motor 합 300):
+    none = --decomp-mode none(E197 none 과 같은 커맨드 — 회귀) / sgnR = E197 sgnR 과 같은 커맨드(회귀) / lsgnR = 반응 KC, Δ > 0 → 교차 300·같은 쪽 0, Δ < 0 → 반대, Δ = 0 → 150 / lsgnA = Δ ≠ 0 KC 전부 같은 규칙.
+  평가: --decomp-weights traces/E193/w_b{B}.npz --rc-eval --rc-eval-ctx X|Y --trials 96 --eval-diag(train·new) → logs/E198/ev_b{B}_{none,sgnR,lsgnR,lsgnA}_{X,Y}.log(뇌마다 8, 40).
+
+[지표 — 1e-4 정수] e_{팔,x,c,s} = m(팔) − m(none). XOR 방향 a = −e(X·A, Y·B 교차 칸), +e(X·B, Y·A 같은 쪽 칸).
+
+[조작검증 — 하나라도 어기면 판정 보류(조작검증 실패)]
+  평가 로그마다 RCEVAL 4줄(A·B × train·new) 각 trials 96·feat_on 96·ctx 표지 = 평가 맥락·ctx_on 96, '[E153 종류 입력 적재] … 검증 일치' ≥ 1, '[E184 특징 가중치 적재]' 없음,
+  포화 칸(한 쪽 두 motor 모두 ≥ 0.66) 없음, pushed = 0(none)·4(sgnR·lsgnR·lsgnA).
+  팔 로그: '[E196 오라클] 설계' 줄의 arm = 팔·theta 0.50·file = 지수 파일·cross/same/resp(쪽마다) = 판정기가 다시 센 값(sgnR: 반응·SXI > 0 / < 0; lsgnR: 반응·Δ > 0 / < 0; lsgnA: Δ ≠ 0·Δ > 0 / < 0),
+    '[E196 오라클 장치 검증] 일치' 줄; lsgn 팔은 '[E198 학습 부호]' 줄(가중치 = w_b{B}.npz, agree_l·agree_r = 대상 중 sign(Δ) = sign(SXI) 수 — 다시 센 값)과
+    '[E198 연결 확인]' 줄(KC→motor 4집단 n·pre_sum = 스냅숏 traces/E176/snap/conn_b{B}.npz 의 __pre 크기·합).
+  none 회귀·sgnR 회귀: E198 none·sgnR 과 E197 none·sgnR(logs/E197/ev_b{B}_{none,sgnR}_{X,Y}.log) 뇌마다 8값 모두 |차| ≤ 2.
+  조작 무효 의심: lsgnR 효과 8값이 모두 |e| ≤ 2 인 뇌가 있으면 보류.
+
+[판정 — 뇌 단위] 팔 lsgnR·lsgnA·sgnR: 획득 칸 n = #{a_train ≥ 1000}; 획득 = n 4 / 부분 = 2 ≤ n ≤ 3 / 실패 = n ≤ 1.
+[판정 — 종합(우선순위)] 조작검증 실패 → 보류 / lsgnR 획득 ≥ 4/5 → 학습 방향 충분 — 크기 병목(H119) / lsgnR 실패 ≥ 4/5 → 학습 방향 부족(H119-null)
+  / lsgnR 부분 ≥ 4/5 → 부분 / 그 밖 보류. (보고) 반응 KC 부호 일치율 = agree / #(대상·Δ ≠ 0·SXI ≠ 0), lsgnA·sgnR 획득 수, 새 사례 a_new.
+  판정 scripts/judge_e198.py(합성 23/23), 독립 대조 scripts/verify_e198_independent.py(합성 23/23), 오라클 함수 backend/genesis/kcxor_oracle.py(합성 37/37).
+
+[경로 검사(뇌 15, 표본 밖) 통과 조건] 맥락 X × none·lsgnR·lsgnA(학습값 = E179 경로 검사 가중치 w_bc2_b15 — L4 학습 아님): RCEVAL 4줄·pushed 0/4·오라클 수·부호 일치·연결 확인 = 판정기 함수 재계산('같음')·장치 검증 줄·포화 없음.
+  경로 검사의 효과 값은 보고만(판정에 쓰지 않음 — 그 가중치는 L4 학습값이 아님).
+
+[결과별 다음 결정] 학습 방향 충분 → E199: KC 마다 두 motor 합을 보존하는 경쟁형(정규화) 갱신으로 L4 학습(앞 능력 회귀 포함).
+  학습 방향 부족 → 신용 할당 분기(결정 창의 맥락·흔적 시점). 부분·보류 → 기록, 부호 일치율로 원인 기술, 분기 안에서 E199 설계 결정.
