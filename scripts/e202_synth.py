@@ -35,7 +35,8 @@ def _delta(dobs, weak_scale=1.0):
     return d
 
 
-def write_brain(base, b, scen, weak_scale=1.0, flip200=False, n_rows=3000, drop=None, log_drop=None):
+def write_brain(base, b, scen, weak_scale=1.0, flip200=False, n_rows=3000, drop=None, log_drop=None, own=1.0):
+    """own: 약한 무리 x 중 자기 쪽 자극 시행 몫(정정 1 — 기본 1.0, 0.6 이면 분류 오염 시나리오)."""
     ex = os.path.join(base, "research", "experiments")
     for sub in ("traces/E202", "traces/E200", "traces/E196", "traces/E176/snap", "logs/E202"):
         os.makedirs(os.path.join(ex, sub), exist_ok=True)
@@ -76,11 +77,23 @@ def write_brain(base, b, scen, weak_scale=1.0, flip200=False, n_rows=3000, drop=
             dg["es_%s_%s" % (KEY[c], sd)] = np.full(NK, 0.7)
     for sd in "lr":
         dg["tot_x_" + sd] = sum(dg["x_%s_%s" % (KEY[c], sd)] for c in CLASSES)
+    # 정정 1: 자극 쪽별 분할 — 약한 무리는 own 몫을 자기 쪽 자극 칸에, 나머지를 반대쪽에. 다른 KC 는 전부 자기 쪽.
+    for q in ("x", "ec", "es"):
+        for c in CLASSES:
+            for sd in "lr":
+                tot = dg["%s_%s_%s" % (q, KEY[c], sd)]
+                fr_own = np.ones(NK)
+                if q == "x":
+                    fr_own[0:400] = own
+                for st in "lr":
+                    dg["%ss_%s_%s_%s" % (q, KEY[c], st, sd)] = tot * (fr_own if st == sd else (1.0 - fr_own))
+    dg["Ws"] = np.asarray([[W[c] / 2, W[c] / 2] for c in CLASSES])
     N = np.array([900, 600, 700, 800])
     if n_rows != 3000:
         N = np.array([900, 600, 700, n_rows - 2200])
     rows = np.zeros((n_rows, 9))
     rows[:, 8] = np.repeat(np.arange(4), N)[:n_rows] if N.sum() == n_rows else 0
+    dg["Ns"] = np.stack([N // 2, N - N // 2], axis=1)
     dg.update({"rows": rows, "row_cols": np.asarray(("trial", "stim_r", "ex_r", "correct", "same", "ctx_x", "cat_b", "da", "cls")),
                "classes": np.asarray(CLASSES), "W": np.asarray([W[c] for c in CLASSES]), "N": N})
     if drop != "dg":

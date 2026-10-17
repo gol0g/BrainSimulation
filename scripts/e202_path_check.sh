@@ -3,6 +3,7 @@
 # (a) E200 플래그(--kc-motor-hard --kc-motor-comp --da-baseline) 계측 끔: 저장 가중치 = traces/E200/pathcheck/w_base_b15.npz(배열 정확 — 새 코드가 E200 경로를 안 바꿈), E202 줄 0.
 # (a2) (a) + --trace-dg: 저장 가중치 = (a)(배열 정확 — 계측은 읽기 전용), 점검 3줄·'[E202 계측] 시행 40 · …' 요약.
 # (b) 계측 파일: 행 40·N 합 40·범주 합 = 총 x·값 유한, 총 x 와 (a2) 가중치 학습 Δ 최대 절대 오차 ≤ 1e-3, 범주 W·m 보고.
+# (b 정정 1) 자극 쪽별 분할(xs·Ws·Ns) 합 = 합계.
 set -u
 R=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild
 OUT="$R/research/experiments/logs/E202/pathcheck"; WD="$R/research/experiments/traces/E202/pathcheck"; mkdir -p "$OUT" "$WD"
@@ -52,7 +53,10 @@ err = max(float(np.max(np.abs(np.asarray(dl[sd], float) - D["tot_x_" + sd]))) fo
 mag = max(float(np.max(np.abs(D["tot_x_" + sd]))) for sd in "lr")
 print("[대조 (b)] 계측 파일: 행 %d·N %s(합 %d)·W %s · 범주 합 = 총 x %s · 유한 %s · 재구성 최대 오차 %.2e(총 x 최대 %.3f)"
       % (D["rows"].shape[0], list(int(v) for v in D["N"]), int(D["N"].sum()), " ".join("%+.3f" % v for v in D["W"]), sums_ok, fin, err, mag))
-ok = s1 and s2 and rows_ok and sums_ok and fin and err <= 1e-3 and mag > 0
+split_ok = all(np.allclose(D["xs_%s_l_%s" % (c, sd)] + D["xs_%s_r_%s" % (c, sd)], D["x_%s_%s" % (c, sd)], atol=1e-9) for c in CL for sd in "lr") \
+    and D["Ws"].shape == (4, 2) and np.allclose(D["Ws"].sum(axis=1), D["W"]) and list(D["Ns"].sum(axis=1)) == list(D["N"])
+print("[대조 (b) 정정 1] 자극 쪽별 분할: 분할 합 = 합계 %s · Ns %s" % (split_ok, D["Ns"].tolist()))
+ok = s1 and s2 and rows_ok and sums_ok and fin and err <= 1e-3 and mag > 0 and split_ok
 print("[대조 (b)] %s" % ("통과" if ok else "실패"))
 PY
 echo "[E202 경로 검사] 종료 $(date '+%F %T')"

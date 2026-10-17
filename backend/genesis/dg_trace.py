@@ -8,6 +8,7 @@
   같은 범주별로 도파민 직전 e 의 KC 별 경로 평균(교차 ec·같은 쪽 es)도 누적한다.
 - 범주 c 의 도파민 합 W[c]·시행 수 N[c], 시행별 요약 행(rows)을 남기고 save(path) 로 npz 저장.
 어떤 KC 무리 G 에 대해서도 Σ_{t∈c} mean_{k∈G} x = mean_{k∈G} acc_x[c][k] 이므로(합과 평균의 교환) 무리는 분석 때 고른다.
+E202 정정 1(결과 전): 같은 누적을 자극 쪽(l·r)별로도 나눠 둔다(xs·ecs·ess·Ws·Ns) — 자극 반대쪽 KC 의 활동이 반대 범주로 섞이는 크기를 잴 수 있게.
 KC 별 정규화는 KC 마다 두 경로에 같은 값을 빼므로 x 의 누적은 학습 Δ(교차 − 같은 쪽)와 같아야 한다(경계 자르기만 오차).
 """
 import numpy as np
@@ -30,6 +31,10 @@ class DgTrace:
         self.acc = {q: {c: {sd: np.zeros(self.n_kc) for sd in "lr"} for c in CLASSES} for q in ("x", "ec", "es")}
         self.W = {c: 0.0 for c in CLASSES}
         self.N = {c: 0 for c in CLASSES}
+        # 자극 쪽별 분할(정정 1): accs[q][c][stim][KC 쪽], Ws[c][stim], Ns[c][stim]
+        self.accs = {q: {c: {st: {sd: np.zeros(self.n_kc) for sd in "lr"} for st in "lr"} for c in CLASSES} for q in ("x", "ec", "es")}
+        self.Ws = {c: {st: 0.0 for st in "lr"} for c in CLASSES}
+        self.Ns = {c: {st: 0 for st in "lr"} for c in CLASSES}
         self.tot_x = {sd: np.zeros(self.n_kc) for sd in "lr"}
         self.rows = []
         self.g0 = self.e0 = None
@@ -72,17 +77,25 @@ class DgTrace:
             raise RuntimeError("E202 계측: before()·DA 기록 없이 after() 호출")
         g1 = self._pull(brain, "g")
         c = cls_of(meta["side"], meta["ex"], bool(meta["correct"]))
+        st = meta["side"][0]
         self.W[c] += float(self.da)
         self.N[c] += 1
+        self.Ws[c][st] += float(self.da)
+        self.Ns[c][st] += 1
         for kn in "lr":
             oc = "r" if kn == "l" else "l"
             cr, sa = "kc_%s_to_motor_%s" % (kn, oc), "kc_%s_to_motor_%s" % (kn, kn)
             x = self.kc_mean(cr, g1[cr] - self.g0[cr]) - self.kc_mean(sa, g1[sa] - self.g0[sa])
             both = (self.cnt[cr] > 0) & (self.cnt[sa] > 0)
             x[~both] = 0.0
+            ec = np.where(both, self.kc_mean(cr, self.e0[cr]), 0.0)
+            es = np.where(both, self.kc_mean(sa, self.e0[sa]), 0.0)
             self.acc["x"][c][kn] += x
-            self.acc["ec"][c][kn] += np.where(both, self.kc_mean(cr, self.e0[cr]), 0.0)
-            self.acc["es"][c][kn] += np.where(both, self.kc_mean(sa, self.e0[sa]), 0.0)
+            self.acc["ec"][c][kn] += ec
+            self.acc["es"][c][kn] += es
+            self.accs["x"][c][st][kn] += x
+            self.accs["ec"][c][st][kn] += ec
+            self.accs["es"][c][st][kn] += es
             self.tot_x[kn] += x
         self.rows.append([int(meta["trial"]), int(meta["side"][0] == "r"), int(meta["ex"][0] == "r"), int(bool(meta["correct"])),
                           int(bool(meta["same"])), int(meta.get("ctx") == "X"), int(meta.get("cat") in ("B", "D")),
@@ -101,6 +114,14 @@ class DgTrace:
                     out["%s_%s_%s" % (q, c.replace("+", "p").replace("-", "m"), sd)] = self.acc[q][c][sd]
         for sd in "lr":
             out["tot_x_" + sd] = self.tot_x[sd]
+        # 정정 1: 자극 쪽별 — 키 '<q>s_<범주>_<자극 쪽>_<KC 쪽>', Ws·Ns 는 (범주 4 × 자극 쪽 l·r)
+        for q in ("x", "ec", "es"):
+            for c in CLASSES:
+                for st in "lr":
+                    for sd in "lr":
+                        out["%ss_%s_%s_%s" % (q, c.replace("+", "p").replace("-", "m"), st, sd)] = self.accs[q][c][st][sd]
+        out["Ws"] = np.asarray([[self.Ws[c][st] for st in "lr"] for c in CLASSES])
+        out["Ns"] = np.asarray([[self.Ns[c][st] for st in "lr"] for c in CLASSES])
         return out
 
     def save(self, path):
@@ -194,6 +215,14 @@ def _selftest():
     chk("rows 범주 번호", list(a["rows"][:, 8]) == [0.0, 3.0])
     chk("rows 맥락 X·범주 B", list(a["rows"][1, 5:7]) == [1.0, 1.0])
     chk("저장 키", "x_Sp_l" in a and "x_Cm_r" in a and "ec_Cm_r" in a and "tot_x_l" in a)
+    # 정정 1: 자극 쪽별 분할 — 시행 1 은 자극 왼쪽, 시행 2 는 자극 오른쪽
+    chk("분할 키·모양", "xs_Sp_l_l" in a and a["Ws"].shape == (4, 2) and a["Ns"].shape == (4, 2))
+    chk("시행 1 → xs_Sp_l_l = −0.75, 자극 오른쪽 칸 0", np.allclose(a["xs_Sp_l_l"], -0.75) and np.allclose(a["xs_Sp_r_l"], 0.0))
+    chk("시행 2 → xs_Cm_r_r 0~4 = −0.5, 자극 왼쪽 칸 0", np.allclose(a["xs_Cm_r_r"][:5], -0.5) and np.allclose(a["xs_Cm_l_r"], 0.0))
+    chk("Ws: S+ 왼쪽 0.7·C− 오른쪽 −0.8", abs(a["Ws"][0, 0] - 0.7) < 1e-12 and abs(a["Ws"][3, 1] + 0.8) < 1e-12 and abs(a["Ws"].sum() + 0.1) < 1e-12)
+    chk("Ns 합 = N", int(a["Ns"].sum()) == 2 and list(a["Ns"].sum(axis=1)) == list(a["N"]))
+    chk("분할 합 = 합계(모든 키)", all(np.allclose(a["%ss_%s_l_%s" % (q, k, sd)] + a["%ss_%s_r_%s" % (q, k, sd)], a["%s_%s_%s" % (q, k, sd)])
+                                    for q in ("x", "ec", "es") for k in ("Sp", "Sm", "Cp", "Cm") for sd in "lr"))
     # 읽기 전용: push 하면 _Var 가 오류를 낸다 — 위 호출이 통과했으면 push 없음
     chk("pull 횟수(시행마다 g 2회 + e 1회)", br.kc_l_to_motor_l.vars["g"].pulls == 4 and br.kc_l_to_motor_l.vars["e"].pulls == 2)
     # 순서 오류는 거부

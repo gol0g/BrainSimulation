@@ -381,6 +381,7 @@ Building Forager Brain (28,323 neurons)...
   Spike recording enabled for all monitored populations
 Building model...
 make: Entering directory '/root/e202_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
 make: Leaving directory '/root/e202_run/forager_brain_CODE'
   [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 790 개
   [motor 동작점] motor 좌·우 Ioffset 기저값 -4000.0(긴장성 억제)

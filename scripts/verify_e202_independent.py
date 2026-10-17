@@ -132,6 +132,18 @@ def verify(base="."):
         r2 = pearson(ra, rb)
         if not (ag >= 0.97 and r2 >= 0.99):
             why.append("E200 회귀")
+        # (3) 정정 1 — 자기 쪽 자극 몫: KC 마다 자극 쪽 = 그 KC 쪽 인 시행의 x 합을 직접 더해 균형 평균
+        def own_val(sd, k):
+            return sum(float(D["xs_%s_%s_%s" % (TAG[c], sd, sd)][k]) for c in CL)
+        def tot_val(sd, k):
+            return float(D["tot_x_" + sd][k])
+        def bal_fn(fn):
+            ms = [sum(fn(sd, k) for sd, k in grp) / len(grp) if grp else float("nan") for grp in (cw, swk)]
+            return (ms[0] + ms[1]) / 2
+        o_all = bal_fn(tot_val)
+        share = bal_fn(own_val) / o_all if o_all != 0 else float("nan")
+        if not (share == share and share >= 0.7):
+            why.append("분류 오염")
         # 분해(약한 무리)
         Wc = {c: float(v) for c, v in zip(CL, D["W"])}
         Xc = {c: balanced({"l": D["x_%s_l" % TAG[c]], "r": D["x_%s_r" % TAG[c]]}, cw, swk) for c in CL}
@@ -148,8 +160,8 @@ def verify(base="."):
         tally[mk] += 1
         if why:
             fails.append(b)
-        print("b%d | D_obs %+.3f D_freq %+.3f D_mag %+.3f %s | 재구성 r %.4f 기울기 %.3f offset %+.3f/%+.3f | 회귀 부호 %.4f r %.4f | %s"
-              % (b, dobs, dfreq, dmag, mk, r1, sl, om, ol, ag, r2, "통과" if not why else "실패 " + ",".join(why)))
+        print("b%d | D_obs %+.3f D_freq %+.3f D_mag %+.3f %s | 재구성 r %.4f 기울기 %.3f offset %+.3f/%+.3f | 회귀 부호 %.4f r %.4f | 자기 쪽 몫 %.3f | %s"
+              % (b, dobs, dfreq, dmag, mk, r1, sl, om, ol, ag, r2, share, "통과" if not why else "실패 " + ",".join(why)))
     print("M2 %d M1 %d 혼합 %d · 계측 검증 실패 %s" % (tally["M2"], tally["M1"], tally["혼합"], fails if fails else "없음"))
     if fails:
         v = "보류(계측 검증 실패)"

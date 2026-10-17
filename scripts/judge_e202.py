@@ -12,7 +12,7 @@ D_freq = Σ μ_r·(W_Cr − W_Sr)(같은 크기에서 도파민 합 비대칭), 
 뇌마다: |D_mag| ≥ 2|D_freq| 이고 D_mag 와 D_obs 부호 같음 → M2 / |D_freq| ≥ 2|D_mag| 이고 부호 같음 → M1 / 그 밖 혼합.
 조작검증(계측 검증, 뇌마다): 학습 로그(맥락 범주 과제 3000·경쟁 정규화 3000회 hard=1·도파민 통계 3000 |평균| ≤ 0.05 기준선 1·계측 줄 3000·점검 3줄),
 계측 파일(행 3000·N 합 3000·범주 합 = 총 x), (1) KC 별 총 x 와 저장 가중치 학습 Δ: 상관 ≥ 0.95·원점 기울기 0.9~1.1·약한 무리 offset 상대 오차 ≤ 0.2,
-(2) 반응 KC Δ 가 E200 과 부호 일치 ≥ 0.97·상관 ≥ 0.99.
+(2) 반응 KC Δ 가 E200 과 부호 일치 ≥ 0.97·상관 ≥ 0.99, (3) 정정 1(결과 전): 약한 무리 D_obs 중 자기 쪽 자극 시행 몫 ≥ 0.7(같은 부호) — 아니면 분류 오염.
 종합: 계측 검증 실패 → 보류 / M2 ≥ 4/5 → 흔적 크기 비대칭(H123) / M1 ≥ 4/5 → 결과 빈도 비대칭(H123-alt) / 그 밖 혼합.
 실행: 저장소 루트에서 python3 scripts/judge_e202.py [기준 디렉터리 — 시험용]"""
 import os
@@ -121,6 +121,28 @@ def validate(D, dl, g):
     return (r >= 0.95 and 0.9 <= slope <= 1.1 and rel <= 0.2), r, slope, om, ol, rel
 
 
+def own_share(D, g):
+    """정정 1: 약한 무리 균형 평균에서 자기 쪽 자극 시행(자극 쪽 = KC 쪽)만의 합 / 전체 합."""
+    own = {sd: sum(np.asarray(D["xs_%s_%s_%s" % (KEY[c], sd, sd)], dtype=np.float64) for c in CLASSES) for sd in "lr"}
+    d_own = bal(own, g, "weak")
+    d_all = bal({sd: D["tot_x_" + sd] for sd in "lr"}, g, "weak")
+    share = d_own / d_all if d_all != 0 else float("nan")
+    return share, d_own, d_all
+
+
+def decompose_own(D, g, grp):
+    """(보고, 근사) 자기 쪽 자극 시행만의 분해 — W 는 두 자극 쪽 평균."""
+    X = {c: bal({sd: D["xs_%s_%s_%s" % (KEY[c], sd, sd)] for sd in "lr"}, g, grp) for c in CLASSES}
+    Ws = np.asarray(D["Ws"], dtype=np.float64)
+    W = {c: float(Ws[i].mean()) for i, c in enumerate(CLASSES)}
+    if any(W[c] == 0.0 for c in CLASSES) or any(np.isnan(X[c]) for c in CLASSES):
+        return None
+    m = {c: X[c] / W[c] for c in CLASSES}
+    dfreq = sum((m["C" + r] - m["S" + r]) / 2 * (W["C" + r] - W["S" + r]) for r in "+-")
+    dmag = sum((m["S" + r] + m["C" + r]) / 2 * (W["S" + r] + W["C" + r]) for r in "+-")
+    return {"Dobs": float(sum(X.values())), "Dfreq": dfreq, "Dmag": dmag}
+
+
 def regress(d2, d0, Z):
     a = np.concatenate([np.asarray(d2[sd], dtype=np.float64)[Z["resp_" + sd] > 0] for sd in "lr"])
     b = np.concatenate([np.asarray(d0[sd], dtype=np.float64)[Z["resp_" + sd] > 0] for sd in "lr"])
@@ -148,8 +170,11 @@ def judge(base="."):
         fw = file_ok(D)
         vok, vr, vs, om, ol, rel = validate(D, d2, g)
         gok, agree, gr = regress(d2, d0, Z)
+        osh, down, dall = own_share(D, g)
+        sok = (not np.isnan(osh)) and osh >= 0.7
         dw, dsg = decompose(D, g, "weak"), decompose(D, g, "strong")
-        res[b] = {"why": lw + fw + ([] if vok else ["재구성"]) + ([] if gok else ["E200 회귀"]),
+        dwo = decompose_own(D, g, "weak")
+        res[b] = {"why": lw + fw + ([] if vok else ["재구성"]) + ([] if gok else ["E200 회귀"]) + ([] if sok else ["분류 오염"]),
                   "mech": mech(dw) if dw else "결측", "dw": dw, "ds": dsg}
         N = dict(zip(CLASSES, [int(v) for v in np.asarray(D["N"])]))
         pS = N["S+"] / max(N["S+"] + N["S-"], 1)
@@ -159,8 +184,10 @@ def judge(base="."):
         print(line + " | 범주 N %s · W %s · m(약) %s | 보상률 실행 자극 쪽 %.3f · 반대 %.3f · 평균 DA %+.4f"
               % (" ".join("%s %d" % (c, N[c]) for c in CLASSES), " ".join("%s %+.1f" % (c, dw["W"][c]) for c in CLASSES) if dw else "-",
                  " ".join("%s %+.4f" % (c, dw["m"][c]) for c in CLASSES) if dw else "-", pS, pC, mda))
-        print("    계측 검증: 상관 %.4f · 기울기 %.3f · 약한 무리 offset 계측 %+.3f 학습 %+.3f(상대 %.3f) | E200 회귀 반응 KC 부호 %.4f · 상관 %.4f | %s"
-              % (vr, vs, om, ol, rel, agree, gr, "통과" if not res[b]["why"] else "실패: " + ", ".join(res[b]["why"])))
+        print("    계측 검증: 상관 %.4f · 기울기 %.3f · 약한 무리 offset 계측 %+.3f 학습 %+.3f(상대 %.3f) | E200 회귀 반응 KC 부호 %.4f · 상관 %.4f | 자기 쪽 자극 몫 %.3f | %s"
+              % (vr, vs, om, ol, rel, agree, gr, osh, "통과" if not res[b]["why"] else "실패: " + ", ".join(res[b]["why"])))
+        if dwo:
+            print("    (보고) 자기 쪽 자극 시행만(근사) D_obs %+.3f = D_freq %+.3f + D_mag %+.3f → %s" % (dwo["Dobs"], dwo["Dfreq"], dwo["Dmag"], mech(dwo)))
         if dsg:
             print("    (보고) 강한 무리 D_obs %+.3f = D_freq %+.3f + D_mag %+.3f → %s" % (dsg["Dobs"], dsg["Dfreq"], dsg["Dmag"], mech(dsg)))
     bad = [b for b in BRAINS if res[b]["why"]]

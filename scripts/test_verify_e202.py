@@ -53,6 +53,10 @@ out = run(["M1"] * 5, {10: {"log_drop": "[E202 계측] 시행 3000"}})
 chk("계측 요약 없음", "독립 판정: 보류(계측 검증 실패)" in out and "계측 요약" in out)
 out = run(["M1"] * 5, {10: {"n_rows": 2999}})
 chk("행 2999", "독립 판정: 보류(계측 검증 실패)" in out and "계측 행" in out)
+# 정정 1 — 분류 오염
+out = run(["M1"] * 5, {12: {"own": 0.6}})
+chk("분류 오염", "독립 판정: 보류(계측 검증 실패)" in out and "분류 오염" in out and "자기 쪽 몫 0.600" in out)
+chk("자기 쪽 몫 0.8 통과", "독립 판정: 결과 빈도 비대칭(H123-alt)" in run(["M1"] * 5, {12: {"own": 0.8}}))
 # reduceat Δ = 정답 Δ
 d = tempfile.mkdtemp()
 SY.write_tree(d, ["M1"] * 5)
