@@ -2,4 +2,30 @@
 커맨드: bash scripts/e200_main.sh
 ---
 [E200] 도파민 기준선(DA = r − r̄) + 경쟁형 학습 규칙(가산형 경성 상한 + KC 별 두 motor 합 보존) · η 2.4 · catctx 3,000 · C2 · 기저값 −4900 · 뇌 10~14
-  e200 train b10: 
+  e200 train b10: => [맥락 범주 과제] 시행 3000 중 맥락 X 1455 · Y 1545 · 정답 같은 쪽 1522 · 교차 1478 || 보상 1595회 || 적용 3000회 hard=1 || 평균 DA +0.0023 기준선 1 
+  e200 b10 learn X: => A_train=+0.0376 A_new=+0.1298 B_train=+0.6196 B_new=+0.5121 
+  e200 b10 learn Y: => A_train=+0.2687 A_new=+0.2938 B_train=-0.0363 B_new=+0.0158 
+  e200 b10 none X: => A_train=+0.0138 A_new=+0.0448 B_train=+0.0509 B_new=+0.0453 
+  e200 b10 none Y: => A_train=+0.0098 A_new=+0.0431 B_train=+0.0503 B_new=+0.0419 
+  e200 train b11: => [맥락 범주 과제] 시행 3000 중 맥락 X 1483 · Y 1517 · 정답 같은 쪽 1547 · 교차 1453 || 보상 1590회 || 적용 3000회 hard=1 || 평균 DA +0.0005 기준선 1 
+  e200 b11 learn X: => A_train=-0.1564 A_new=-0.0785 B_train=+0.3575 B_new=+0.2729 
+  e200 b11 learn Y: => A_train=+0.4000 A_new=+0.3718 B_train=-0.0221 B_new=+0.0353 
+  e200 b11 none X: => A_train=+0.0093 A_new=+0.0151 B_train=+0.0198 B_new=+0.0164 
+  e200 b11 none Y: => A_train=+0.0061 A_new=+0.0116 B_train=+0.0200 B_new=+0.0191 
+  e200 train b12: => [맥락 범주 과제] 시행 3000 중 맥락 X 1503 · Y 1497 · 정답 같은 쪽 1483 · 교차 1517 || 보상 1592회 || 적용 3000회 hard=1 || 평균 DA +0.0015 기준선 1 
+  e200 b12 learn X: => A_train=-0.0738 A_new=-0.0423 B_train=+0.3811 B_new=+0.3006 
+  e200 b12 learn Y: => A_train=+0.3513 A_new=+0.3244 B_train=-0.0624 B_new=-0.0043 
+  e200 b12 none X: => A_train=+0.0055 A_new=+0.0225 B_train=+0.0235 B_new=+0.0193 
+  e200 b12 none Y: => A_train=+0.0126 A_new=+0.0262 B_train=+0.0287 B_new=+0.0235 
+  e200 train b13: => [맥락 범주 과제] 시행 3000 중 맥락 X 1484 · Y 1516 · 정답 같은 쪽 1512 · 교차 1488 || 보상 1596회 || 적용 3000회 hard=1 || 평균 DA +0.0007 기준선 1 
+  e200 b13 learn X: => A_train=-0.0031 A_new=+0.1458 B_train=+0.5758 B_new=+0.4957 
+  e200 b13 learn Y: => A_train=+0.5125 A_new=+0.5291 B_train=+0.1176 B_new=+0.1796 
+  e200 b13 none X: => A_train=+0.0073 A_new=+0.0308 B_train=+0.0497 B_new=+0.0350 
+  e200 b13 none Y: => A_train=+0.0054 A_new=+0.0353 B_train=+0.0492 B_new=+0.0367 
+  e200 train b14: => [맥락 범주 과제] 시행 3000 중 맥락 X 1553 · Y 1447 · 정답 같은 쪽 1531 · 교차 1469 || 보상 1626회 || 적용 3000회 hard=1 || 평균 DA +0.0024 기준선 1 
+  e200 b14 learn X: => A_train=-0.0907 A_new=-0.0420 B_train=+0.4374 B_new=+0.3707 
+  e200 b14 learn Y: => A_train=+0.2431 A_new=+0.2251 B_train=-0.0770 B_new=-0.0365 
+  e200 b14 none X: => A_train=+0.0152 A_new=+0.0339 B_train=+0.0421 B_new=+0.0362 
+  e200 b14 none Y: => A_train=+0.0057 A_new=+0.0224 B_train=+0.0326 B_new=+0.0258 
+[E200] 전체 루프 종료
+=== 종료코드 0 ===
