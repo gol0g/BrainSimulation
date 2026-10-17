@@ -1,0 +1,6 @@
+[E200 재현 변동 점검] 시작 2026-10-17 13:29:59
+  재현 b10 learn X rc=0: A_train=-0.0992 A_new=+0.0120 B_train=+0.3275 B_new=+0.2930 pushed=8 
+  원래 E199: A_train=-0.0990 A_new=+0.0104 B_train=+0.3216 B_new=+0.2836 
+  재현 b10 learn Y rc=0: A_train=+0.2943 A_new=+0.2766 B_train=-0.2358 B_new=-0.1484 pushed=8 
+  원래 E199: A_train=+0.2882 A_new=+0.2736 B_train=-0.2309 B_new=-0.1476 
+[E200 재현 변동 점검] 종료 2026-10-17 13:32:20
