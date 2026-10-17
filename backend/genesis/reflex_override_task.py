@@ -410,6 +410,8 @@ def main():
     ap.add_argument("--da-baseline-init", type=float, default=0.25, help="E200: r̄ 초기값(무작위 행동의 기대 보상 0.5·1 + 0.5·(−0.5) = 0.25)")
     ap.add_argument("--da-stats", action="store_true",
                     help="E200(읽기 전용): 시행마다 실제로 낸 도파민 수준을 모아 끝에 평균·평균 절댓값을 출력(동역학 불변)")
+    ap.add_argument("--kc-motor-path", action="store_true",
+                    help="E201: 경로 항상성 — 매 시행 KC 별 정규화 앞에서 KC 반구 × motor 4경로 평균 가중치를 init 으로 되돌림(kc_comp.apply_paths). --kc-motor-comp 필요. 기본 꺼짐")
     ap.add_argument("--calib-kc-motor", action="store_true",
                     help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
@@ -770,6 +772,8 @@ def main():
         raise SystemExit("--kc-motor-hard·--kc-motor-comp 는 --kc-motor 가 필요하다")
     if args.kc_motor_comp and not (args.reward_window > 0 or args.trial_gap > 0):
         raise SystemExit("--kc-motor-comp 는 보상 창 블록(--reward-window 또는 --trial-gap > 0)에서 적용된다")
+    if args.kc_motor_path and not args.kc_motor_comp:
+        raise SystemExit("--kc-motor-path 는 --kc-motor-comp 와 함께 쓴다(경로 평균 보존 뒤 KC 별 합 보존)")
     if args.rw_apm_scale >= 0 or args.dec_apm_scale >= 0:
         if not args.kc_motor:
             raise SystemExit("--rw-apm-scale·--dec-apm-scale 은 --kc-motor 가 필요하다")
@@ -2285,6 +2289,15 @@ def main():
                         _kcmp["mod"] = KCOMP
                         _kcmp["pre"] = KCOMP.prepare(brain)
                     _cfg_ = brain.config
+                    if args.kc_motor_path:
+                        # E201: 경로 항상성 — 4경로(KC 반구 × motor) 평균을 init 으로(집단 치우침 제거), 그다음 KC 별 합 보존
+                        _ps = _kcmp["mod"].apply_paths(brain, float(_cfg_.kc_motor_init_w), 0.0, float(_cfg_.kc_motor_w_max))
+                        _kcmp.setdefault("p0", []).append(max(v_[0] for v_ in _ps.values()))
+                        _kcmp["p1"] = max(_kcmp.get("p1", 0.0), max(v_[1] for v_ in _ps.values()))
+                        if len(_kcmp["p0"]) <= 3:
+                            print("[E201 경로 항상성] 시행 %d 적용 — 경로 평균 |m−%.0f| 전 %s → 뒤 최대 %.2e"
+                                  % (len(_kcmp["p0"]), float(_cfg_.kc_motor_init_w), " ".join("%s %.4f" % (k_[3:].replace("_to_motor_", "→"), v_[0]) for k_, v_ in sorted(_ps.items())),
+                                     max(v_[1] for v_ in _ps.values())))
                     _st = _kcmp["mod"].apply(brain, _kcmp["pre"], int(_cfg_.n_kc_per_side), 2.0 * float(_cfg_.kc_motor_init_w), 0.0, float(_cfg_.kc_motor_w_max))
                     _kcmp["n"] += 1
                     _kcmp["d0"].append(max(v_[0] for v_ in _st.values()))
@@ -2337,6 +2350,10 @@ def main():
         print("[E199 경쟁 정규화] 적용 %d회 · 정규화 전 max|S−목표| 평균 %.4f 최대 %.4f · 정규화 뒤 최대 %.2e · hard=%d"
               % (_kcmp["n"], float(np.mean(_kcmp["d0"])) if _kcmp["d0"] else float("nan"), max(_kcmp["d0"]) if _kcmp["d0"] else float("nan"),
                  _kcmp["d1"], int(bool(args.kc_motor_hard))))
+        if args.kc_motor_path:
+            _p0 = _kcmp.get("p0", [])
+            print("[E201 경로 항상성] 적용 %d회 · 정규화 전 경로 평균 최대 |m−init| 평균 %.4f 최대 %.4f · 뒤 최대 %.2e"
+                  % (len(_p0), float(np.mean(_p0)) if _p0 else float("nan"), max(_p0) if _p0 else float("nan"), _kcmp.get("p1", float("nan"))))
     if _dab is not None:
         _da = np.asarray(_dab["da"], dtype=float)
         print("[E200 도파민 통계] 시행 %d · 평균 DA %+.4f · 평균 |DA| %.4f · 기준선 %d · r̄ 끝 %.4f · τ %.0f · r̄₀ %.2f"

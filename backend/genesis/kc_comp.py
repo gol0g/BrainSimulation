@@ -90,6 +90,52 @@ def apply(brain, pre, n_kc, target, w_min, w_max):
     return out
 
 
+def center_path(g, target, w_min, w_max, iters=ITERS):
+    """(E201) 한 경로(KC 반구 → motor 집단)의 평균 가중치를 target 으로 — 모든 시냅스에서 같은 s 를 빼고 [w_min, w_max] 로 자른다.
+    mean(clip(g − s)) 는 s 에 대해 단조 감소 → 1차 해 s = mean − target 에서 뉴턴(구간 보호, 밖이면 이분법). 반환 (새 g, 전 |mean − target|, 뒤 |mean − target|)."""
+    g = np.asarray(g, dtype=np.float64)
+    if not (w_min <= target <= w_max):
+        raise ValueError("목표 평균이 경계 밖")
+    m0 = float(g.mean())
+    if abs(m0 - target) <= 1e-9:
+        return g.copy(), abs(m0 - target), abs(m0 - target)
+    span = float(w_max - w_min)
+    lo, hi = -span, span
+    s = m0 - target
+    for _ in range(iters):
+        x = g - s
+        r = float(np.clip(x, w_min, w_max).mean()) - target
+        if abs(r) <= 1e-9:
+            break
+        if r > 0:
+            lo = s
+        else:
+            hi = s
+        fr = float(np.mean((x > w_min) & (x < w_max)))
+        sn = s + r / fr if fr > 0 else 0.5 * (lo + hi)
+        if not (lo < sn < hi):
+            sn = 0.5 * (lo + hi)
+        s = sn
+    out = np.clip(g - s, w_min, w_max)
+    return out, abs(m0 - target), abs(float(out.mean()) - target)
+
+
+def apply_paths(brain, target, w_min, w_max):
+    """(E201) 장치 가중치의 KC→motor 4경로 평균을 target 으로(경로 항상성). 그다음 KC 별 합 보존은 apply 가 한다. 반환 {경로: (전, 뒤 |mean − target|)}."""
+    out = {}
+    for kn in "lr":
+        for m in "lr":
+            nm = "kc_%s_to_motor_%s" % (kn, m)
+            s = getattr(brain, nm)
+            s.vars["g"].pull_from_device()
+            g = np.asarray(s.vars["g"].values, dtype=np.float64).ravel()
+            x, d0, d1 = center_path(g, target, w_min, w_max)
+            s.vars["g"].values = x
+            s.vars["g"].push_to_device()
+            out[nm] = (d0, d1)
+    return out
+
+
 def kc_sums(pre_a, g_a, pre_b, g_b, n_kc):
     """(판정·보고용) KC 별 mean(g_a) + mean(g_b) 와 두 집단 모두 시냅스가 있는 KC 마스크."""
     pre_a = np.asarray(pre_a, dtype=np.int64); pre_b = np.asarray(pre_b, dtype=np.int64)
@@ -143,8 +189,19 @@ def _selftest():
     na_, nb_, d0, d1 = project(pa, ga, pb, gb, n, 300.0, 0.0, 300.0)
     s, both = kc_sums(pa, na_, pb, nb_, n)
     chk("무작위: 합 300(1e-6)·경계 안", np.max(np.abs(s[both] - 300)) < 1e-6 and na_.min() >= 0 and nb_.max() <= 300, "%.2e" % np.max(np.abs(s[both] - 300)))
+    # 8) (E201) 경로 평균: 경계에 안 닿으면 같은 값을 뺌 — (160,170,180) → 평균 150 이면 s = 20 → (140,150,160)
+    x, d0, d1 = center_path(np.array([160., 170., 180.]), 150.0, 0.0, 300.0)
+    chk("경로 평균 1차 해(s=20)", np.allclose(x, [140, 150, 160]) and np.isclose(d0, 20) and d1 < 1e-9, str((x, d0, d1)))
+    # 9) 하한 자르기: (0, 0, 300, 300, 300) 평균 180 → 목표 150: s 를 빼면 0 은 그대로 → 3(300 − s)/5 = 150 → s = 50 → (0,0,250,250,250)
+    x, d0, d1 = center_path(np.array([0., 0., 300., 300., 300.]), 150.0, 0.0, 300.0)
+    chk("경로 평균 자르기 포함(s=50)", np.allclose(x, [0, 0, 250, 250, 250]) and d1 < 1e-9, str((x, d1)))
+    # 10) 상한 쪽: (300, 300, 0, 100) 평균 175 → 목표 150 — 0 은 그대로, 나머지 (300−s)·2 + (100−s) = 600 → s = 100/3
+    x, _, d1 = center_path(np.array([300., 300., 0., 100.]), 150.0, 0.0, 300.0)
+    chk("경로 평균 셋 이동(s=100/3)", np.allclose(x, [300 - 100 / 3, 300 - 100 / 3, 0, 100 - 100 / 3]) and d1 < 1e-9, str(x))
+    chk("경로 평균 이미 목표면 불변", np.allclose(center_path(np.array([100., 200.]), 150.0, 0.0, 300.0)[0], [100, 200]))
     for nm, fn in (("pre·g 크기 불일치 거부", lambda: project(pa, ga[:-1], pb, gb, n, 300.0, 0.0, 300.0)),
-                   ("KC 범위 밖 거부", lambda: project(pa, ga, pb, gb, n - 1, 300.0, 0.0, 300.0))):
+                   ("KC 범위 밖 거부", lambda: project(pa, ga, pb, gb, n - 1, 300.0, 0.0, 300.0)),
+                   ("경로 목표 경계 밖 거부", lambda: center_path(np.array([1.0]), 400.0, 0.0, 300.0))):
         try:
             fn()
             chk(nm, False)
