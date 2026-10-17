@@ -412,6 +412,9 @@ def main():
                     help="E200(읽기 전용): 시행마다 실제로 낸 도파민 수준을 모아 끝에 평균·평균 절댓값을 출력(동역학 불변)")
     ap.add_argument("--kc-motor-path", action="store_true",
                     help="E201: 경로 항상성 — 매 시행 KC 별 정규화 앞에서 KC 반구 × motor 4경로 평균 가중치를 init 으로 되돌림(kc_comp.apply_paths). --kc-motor-comp 필요. 기본 꺼짐")
+    ap.add_argument("--trace-dg", type=str, default="",
+                    help="E202(읽기 전용): 시행마다 도파민 직전 e·g 와 보상 창 뒤(도파민 0 직후·정규화 전) g 를 당겨 KC 별 Δg(교차 − 같은 쪽)를 "
+                         "(실행 쪽 자극 쪽/반대) × (보상/무보상) 범주로 누적해 이 경로(npz)에 저장(dg_trace). --kc-motor·--act-window·--reward-window 필요. 기본 꺼짐")
     ap.add_argument("--calib-kc-motor", action="store_true",
                     help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
@@ -774,6 +777,8 @@ def main():
         raise SystemExit("--kc-motor-comp 는 보상 창 블록(--reward-window 또는 --trial-gap > 0)에서 적용된다")
     if args.kc_motor_path and not args.kc_motor_comp:
         raise SystemExit("--kc-motor-path 는 --kc-motor-comp 와 함께 쓴다(경로 평균 보존 뒤 KC 별 합 보존)")
+    if args.trace_dg and not (args.kc_motor and args.act_window > 0 and args.reward_window > 0):
+        raise SystemExit("--trace-dg 는 --kc-motor·--act-window > 0(실행 쪽)·--reward-window > 0(보상 창 Δg)이 필요하다")
     if args.rw_apm_scale >= 0 or args.dec_apm_scale >= 0:
         if not args.kc_motor:
             raise SystemExit("--rw-apm-scale·--dec-apm-scale 은 --kc-motor 가 필요하다")
@@ -2013,6 +2018,12 @@ def main():
     if args.da_baseline and not args.da_baseline_tau > 0:
         raise SystemExit("--da-baseline-tau 는 0 보다 커야 한다")
     _dab = {"rbar": float(args.da_baseline_init), "n": 0, "da": []} if (args.da_baseline or args.da_stats) else None
+    # E202(읽기 전용): 보상 창 Δg 계측(--trace-dg). 기본 None = 이전 동작(장치 값을 당기기만 하고 바꾸지 않는다)
+    if args.trace_dg:
+        import dg_trace as DGT
+        _dgt = DGT.DgTrace(int(brain.config.n_kc_per_side))
+    else:
+        _dgt = None
     KRW = {"dec": [], "rw_rew": [], "rw_pun": []} if args.kc_rw_diag else None   # E168(읽기 전용): KC 발화율 진단
     # 맥락 의존 규칙(bicond): 시행마다 맥락 배정 — 지역 난수(전역 np.random 열 불변). none 이면 None(이전 동작)
     _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task in ("bicond", "bicond2") else None
@@ -2209,6 +2220,8 @@ def main():
                 _kee = np.zeros(4); _mrw = [0.0, 0.0]   # 보상 창 끝 흔적·보상 창 중 motor 발화율 합(보상 창이 있으면 아래에서 채움)
             if args.no_reward:
                 continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
+            if _dgt is not None:
+                _dgt.before(brain)    # E202(읽기 전용): 도파민 방출 직전 KC→motor g·e
             if correct:
                 if args.da_baseline:
                     # E200: 평균 보상을 뺀 도파민(REINFORCE 기준선) — 고정 보상의 양의 평균 도파민이 만드는 실행 쪽 공통 강화를 없앤다
@@ -2231,6 +2244,8 @@ def main():
                     brain.release_dopamine(reward_magnitude=_r - _dab["rbar"], primary_reward=False)
                 else:
                     brain.release_dopamine(reward_magnitude=-0.5)
+            if _dgt is not None:
+                _dgt.da = float(brain.dopamine_level)   # E202(읽기 전용): 이 시행에 실제로 낸 도파민
             if _dab is not None:
                 _dab["da"].append(float(brain.dopamine_level))
                 _dab["n"] += 1
@@ -2282,6 +2297,13 @@ def main():
                     _kee = _kct_sum(_kct_read("e"))      # E139 수정: 보상 창 끝(도파민 0 직전) 자격흔적
                 brain.dopamine_level = 0.0
                 brain._push_dopamine_to_rstdp()
+                if _dgt is not None:
+                    # E202(읽기 전용): 보상 창 뒤·정규화 전 g — 이 시행의 도파민 게이팅 Δg 를 범주별로 누적
+                    _dgc = _dgt.after(brain, {"trial": ep * args.steps + t, "side": side, "ex": _ex, "correct": correct,
+                                              "same": bool(_catB), "ctx": (_rcx if _rcxrng is not None else None),
+                                              "cat": (_rcc if _rcrng is not None else None)})
+                    if len(_dgt.rows) <= 3:
+                        print("[E202 계측] 시행 %d 범주 %s · DA %+.4f · 자극 %s 실행 %s" % (len(_dgt.rows), _dgc, _dgt.rows[-1][7], side, _ex))
                 if _kcmp is not None:
                     # E199: 이 시행의 도파민 갱신이 끝난 뒤 KC 별 두 motor 평균 합 보존(감산 정규화 — 공통 모드 제거)
                     if _kcmp["pre"] is None:
@@ -2359,6 +2381,9 @@ def main():
         print("[E200 도파민 통계] 시행 %d · 평균 DA %+.4f · 평균 |DA| %.4f · 기준선 %d · r̄ 끝 %.4f · τ %.0f · r̄₀ %.2f"
               % (_dab["n"], float(_da.mean()) if _da.size else float("nan"), float(np.abs(_da).mean()) if _da.size else float("nan"),
                  int(bool(args.da_baseline)), _dab["rbar"], float(args.da_baseline_tau), float(args.da_baseline_init)))
+    if _dgt is not None:
+        _dgt.save(args.trace_dg)
+        print("[E202 계측] %s · 저장 %s" % (_dgt.summary(), args.trace_dg))
     if _crng is not None:
         print("[맥락 과제] 시행 %d 중 맥락 켬 %d" % (args.episodes * args.steps, _nctx))
     if _rcrng is not None:
