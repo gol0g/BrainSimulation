@@ -404,6 +404,12 @@ def main():
                     help="E199: KC→motor 4집단만 가산형(경성 상한) 갱신 g += η·DA·e, clip(rstdp_model hard 판). 기본 꺼짐 = 연성 상한 그대로")
     ap.add_argument("--kc-motor-comp", action="store_true",
                     help="E199: 보상 창 뒤 도파민 0 직후 KC 별 두 motor 평균 가중치 합을 2·init 으로 되돌리는 감산 정규화(kc_comp — 경계 안 정확 투영). 기본 꺼짐")
+    ap.add_argument("--da-baseline", action="store_true",
+                    help="E200: 도파민 = r − r̄(r = 정답 +1·오답 −0.5, r̄ = 시행마다 r̄ += (r − r̄)/τ 로 갱신하는 평균 보상) — NAc 기반 양의 보상 할인(td RPE)은 거치지 않는다. 기본 꺼짐 = 고정 보상")
+    ap.add_argument("--da-baseline-tau", type=float, default=100.0, help="E200: 평균 보상 r̄ 의 시정수(시행)")
+    ap.add_argument("--da-baseline-init", type=float, default=0.25, help="E200: r̄ 초기값(무작위 행동의 기대 보상 0.5·1 + 0.5·(−0.5) = 0.25)")
+    ap.add_argument("--da-stats", action="store_true",
+                    help="E200(읽기 전용): 시행마다 실제로 낸 도파민 수준을 모아 끝에 평균·평균 절댓값을 출력(동역학 불변)")
     ap.add_argument("--calib-kc-motor", action="store_true",
                     help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
@@ -1999,6 +2005,10 @@ def main():
     _dar_done = False       # 구현 점검 ①: 첫 보상 창 끝 도파민 뉴런 입력 0 확인을 한 번만 출력
     # E199: KC→motor 경쟁 정규화(--kc-motor-comp) — 보상 창 뒤 도파민 0 직후 KC 별 두 motor 평균 합을 2·init 으로(kc_comp). 기본 None = 이전 동작
     _kcmp = {"pre": None, "n": 0, "d0": [], "d1": 0.0} if args.kc_motor_comp else None
+    # E200: 도파민 기준선(--da-baseline)·도파민 통계(--da-stats, 읽기 전용). 기본 None = 이전 동작
+    if args.da_baseline and not args.da_baseline_tau > 0:
+        raise SystemExit("--da-baseline-tau 는 0 보다 커야 한다")
+    _dab = {"rbar": float(args.da_baseline_init), "n": 0, "da": []} if (args.da_baseline or args.da_stats) else None
     KRW = {"dec": [], "rw_rew": [], "rw_pun": []} if args.kc_rw_diag else None   # E168(읽기 전용): KC 발화율 진단
     # 맥락 의존 규칙(bicond): 시행마다 맥락 배정 — 지역 난수(전역 np.random 열 불변). none 이면 None(이전 동작)
     _crng = np.random.RandomState(args.ctx_seed if args.ctx_seed is not None else 17300 + _bseed) if args.ctx_task in ("bicond", "bicond2") else None
@@ -2196,7 +2206,12 @@ def main():
             if args.no_reward:
                 continue          # C63: 처리만 하고 도파민·학습 호출을 전혀 하지 않는다
             if correct:
-                brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
+                if args.da_baseline:
+                    # E200: 평균 보상을 뺀 도파민(REINFORCE 기준선) — 고정 보상의 양의 평균 도파민이 만드는 실행 쪽 공통 강화를 없앤다
+                    _r = 1.0
+                    brain.release_dopamine(reward_magnitude=_r - _dab["rbar"], primary_reward=False)
+                else:
+                    brain.release_dopamine(reward_magnitude=1.0, primary_reward=True)
                 rew += 1
                 c = brain.config
                 try:
@@ -2207,7 +2222,18 @@ def main():
                 except Exception:
                     pass
             else:
-                brain.release_dopamine(reward_magnitude=-0.5)
+                if args.da_baseline:
+                    _r = -0.5
+                    brain.release_dopamine(reward_magnitude=_r - _dab["rbar"], primary_reward=False)
+                else:
+                    brain.release_dopamine(reward_magnitude=-0.5)
+            if _dab is not None:
+                _dab["da"].append(float(brain.dopamine_level))
+                _dab["n"] += 1
+                if args.da_baseline:
+                    if _dab["n"] <= 3:
+                        print("[E200 도파민 기준선] 시행 %d r=%+.2f r̄=%.4f → DA=%+.4f" % (_dab["n"], _r, _dab["rbar"], float(brain.dopamine_level)))
+                    _dab["rbar"] += (_r - _dab["rbar"]) / float(args.da_baseline_tau)
             if args.reward_window > 0 or args.trial_gap > 0:
                 # E109: 보상 타이밍 수리. 이 과제는 decay_dopamine()을 부르지 않아 도파민이 **다음 시행**의
                 # 처리 스텝 동안 가중치에 반영됐다(시행 t 보상 → 시행 t+1 활동에 배정). 최소 회로처럼
@@ -2311,6 +2337,11 @@ def main():
         print("[E199 경쟁 정규화] 적용 %d회 · 정규화 전 max|S−목표| 평균 %.4f 최대 %.4f · 정규화 뒤 최대 %.2e · hard=%d"
               % (_kcmp["n"], float(np.mean(_kcmp["d0"])) if _kcmp["d0"] else float("nan"), max(_kcmp["d0"]) if _kcmp["d0"] else float("nan"),
                  _kcmp["d1"], int(bool(args.kc_motor_hard))))
+    if _dab is not None:
+        _da = np.asarray(_dab["da"], dtype=float)
+        print("[E200 도파민 통계] 시행 %d · 평균 DA %+.4f · 평균 |DA| %.4f · 기준선 %d · r̄ 끝 %.4f · τ %.0f · r̄₀ %.2f"
+              % (_dab["n"], float(_da.mean()) if _da.size else float("nan"), float(np.abs(_da).mean()) if _da.size else float("nan"),
+                 int(bool(args.da_baseline)), _dab["rbar"], float(args.da_baseline_tau), float(args.da_baseline_init)))
     if _crng is not None:
         print("[맥락 과제] 시행 %d 중 맥락 켬 %d" % (args.episodes * args.steps, _nctx))
     if _rcrng is not None:
