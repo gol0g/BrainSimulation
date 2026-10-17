@@ -397,8 +397,8 @@ Model ready! Total: 28,323 neurons
   WARNING: MOTOR DEAD - no movement!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-[E202 계측] 시행 1 범주 S- · DA -0.7500 · 자극 left 실행 left
 [E199 경쟁 정규화] 시행 1 적용 — 정규화 전 max|S−300| 쪽 l 9.3043·r 9.0698 → 뒤 1.08e-12·9.66e-13
+[E202 계측] 시행 1 범주 S- · DA -0.7500 · 자극 left 실행 left
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   WARNING: MOTOR DEAD - no movement!
@@ -432,8 +432,8 @@ Model ready! Total: 28,323 neurons
   WARNING: MOTOR DEAD - no movement!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-[E202 계측] 시행 2 범주 C+ · DA +0.7575 · 자극 right 실행 left
 [E199 경쟁 정규화] 시행 2 적용 — 정규화 전 max|S−300| 쪽 l 7.1125·r 8.3775 → 뒤 1.14e-12·1.14e-12
+[E202 계측] 시행 2 범주 C+ · DA +0.7575 · 자극 right 실행 left
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   WARNING: MOTOR DEAD - no movement!
@@ -462,8 +462,8 @@ Model ready! Total: 28,323 neurons
   WARNING: MOTOR DEAD - no movement!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-[E202 계측] 시행 3 범주 C- · DA -0.7501 · 자극 left 실행 right
 [E199 경쟁 정규화] 시행 3 적용 — 정규화 전 max|S−300| 쪽 l 8.8286·r 8.2633 → 뒤 1.02e-12·1.02e-12
+[E202 계측] 시행 3 범주 C- · DA -0.7501 · 자극 left 실행 right
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   WARNING: MOTOR DEAD - no movement!

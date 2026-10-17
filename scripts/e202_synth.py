@@ -87,6 +87,14 @@ def write_brain(base, b, scen, weak_scale=1.0, flip200=False, n_rows=3000, drop=
                     fr_own[0:400] = own
                 for st in "lr":
                     dg["%ss_%s_%s_%s" % (q, KEY[c], st, sd)] = tot * (fr_own if st == sd else (1.0 - fr_own))
+    # 정정 2: 도파민 성분 xd(정규화 전) — 합성에서는 x 의 0.9 배(정규화가 차를 10% 바꾼 꼴)
+    for c in CLASSES:
+        for sd in "lr":
+            dg["xd_%s_%s" % (KEY[c], sd)] = 0.9 * dg["x_%s_%s" % (KEY[c], sd)]
+            for st in "lr":
+                dg["xds_%s_%s_%s" % (KEY[c], st, sd)] = 0.9 * dg["xs_%s_%s_%s" % (KEY[c], st, sd)]
+    for sd in "lr":
+        dg["tot_xd_" + sd] = 0.9 * dg["tot_x_" + sd]
     dg["Ws"] = np.asarray([[W[c] / 2, W[c] / 2] for c in CLASSES])
     N = np.array([900, 600, 700, 800])
     if n_rows != 3000:

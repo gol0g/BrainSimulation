@@ -9,6 +9,8 @@
 - 범주 c 의 도파민 합 W[c]·시행 수 N[c], 시행별 요약 행(rows)을 남기고 save(path) 로 npz 저장.
 어떤 KC 무리 G 에 대해서도 Σ_{t∈c} mean_{k∈G} x = mean_{k∈G} acc_x[c][k] 이므로(합과 평균의 교환) 무리는 분석 때 고른다.
 E202 정정 1(결과 전): 같은 누적을 자극 쪽(l·r)별로도 나눠 둔다(xs·ecs·ess·Ws·Ns) — 자극 반대쪽 KC 의 활동이 반대 범주로 섞이는 크기를 잴 수 있게.
+E202 정정 2(판정 전): x 는 시행 전체 변화(도파민 직전 → KC 별 정규화 뒤)로 잰다 — η 2.4 에서는 정규화의 경계 자르기가 KC 의 교차−같은 쪽 차를
+바꾸므로(진단 D1~D3) 정규화 전 Δg 만으로는 학습 Δ 가 재구성되지 않았다. mid(brain) = 보상 창 뒤·정규화 전 g — 도파민 게이팅 성분 xd 를 따로 남긴다.
 KC 별 정규화는 KC 마다 두 경로에 같은 값을 빼므로 x 의 누적은 학습 Δ(교차 − 같은 쪽)와 같아야 한다(경계 자르기만 오차).
 """
 import numpy as np
@@ -28,16 +30,17 @@ class DgTrace:
         self.n_kc = int(n_kc)
         self.pre = None
         self.cnt = {}
-        self.acc = {q: {c: {sd: np.zeros(self.n_kc) for sd in "lr"} for c in CLASSES} for q in ("x", "ec", "es")}
+        self.acc = {q: {c: {sd: np.zeros(self.n_kc) for sd in "lr"} for c in CLASSES} for q in ("x", "xd", "ec", "es")}
         self.W = {c: 0.0 for c in CLASSES}
         self.N = {c: 0 for c in CLASSES}
         # 자극 쪽별 분할(정정 1): accs[q][c][stim][KC 쪽], Ws[c][stim], Ns[c][stim]
-        self.accs = {q: {c: {st: {sd: np.zeros(self.n_kc) for sd in "lr"} for st in "lr"} for c in CLASSES} for q in ("x", "ec", "es")}
+        self.accs = {q: {c: {st: {sd: np.zeros(self.n_kc) for sd in "lr"} for st in "lr"} for c in CLASSES} for q in ("x", "xd", "ec", "es")}
         self.Ws = {c: {st: 0.0 for st in "lr"} for c in CLASSES}
         self.Ns = {c: {st: 0 for st in "lr"} for c in CLASSES}
         self.tot_x = {sd: np.zeros(self.n_kc) for sd in "lr"}
+        self.tot_xd = {sd: np.zeros(self.n_kc) for sd in "lr"}
         self.rows = []
-        self.g0 = self.e0 = None
+        self.g0 = self.e0 = self.gm = None
         self.da = None
 
     # ── 장치 접근(읽기만) ───────────────────────────────────
@@ -69,12 +72,19 @@ class DgTrace:
             self.prepare(brain)
         self.g0 = self._pull(brain, "g")
         self.e0 = self._pull(brain, "e")
+        self.gm = None
         self.da = None
+
+    def mid(self, brain):
+        """정정 2: 보상 창 뒤 도파민 0 직후·KC 별 정규화 전 g — 도파민 게이팅 성분(xd)."""
+        if self.g0 is None:
+            raise RuntimeError("E202 계측: before() 없이 mid() 호출")
+        self.gm = self._pull(brain, "g")
 
     def after(self, brain, meta):
         """meta: trial·side(자극 쪽)·ex(실행 쪽)·correct·same(정답 같은 쪽)·ctx('X'/'Y'/None)·cat('A'/'B'/None). DA 는 self.da(방출 직후 값)."""
-        if self.g0 is None or self.da is None:
-            raise RuntimeError("E202 계측: before()·DA 기록 없이 after() 호출")
+        if self.g0 is None or self.da is None or self.gm is None:
+            raise RuntimeError("E202 계측: before()·DA 기록·mid() 없이 after() 호출")
         g1 = self._pull(brain, "g")
         c = cls_of(meta["side"], meta["ex"], bool(meta["correct"]))
         st = meta["side"][0]
@@ -86,21 +96,26 @@ class DgTrace:
             oc = "r" if kn == "l" else "l"
             cr, sa = "kc_%s_to_motor_%s" % (kn, oc), "kc_%s_to_motor_%s" % (kn, kn)
             x = self.kc_mean(cr, g1[cr] - self.g0[cr]) - self.kc_mean(sa, g1[sa] - self.g0[sa])
+            xd = self.kc_mean(cr, self.gm[cr] - self.g0[cr]) - self.kc_mean(sa, self.gm[sa] - self.g0[sa])
             both = (self.cnt[cr] > 0) & (self.cnt[sa] > 0)
             x[~both] = 0.0
+            xd[~both] = 0.0
             ec = np.where(both, self.kc_mean(cr, self.e0[cr]), 0.0)
             es = np.where(both, self.kc_mean(sa, self.e0[sa]), 0.0)
             self.acc["x"][c][kn] += x
+            self.acc["xd"][c][kn] += xd
             self.acc["ec"][c][kn] += ec
             self.acc["es"][c][kn] += es
             self.accs["x"][c][st][kn] += x
+            self.accs["xd"][c][st][kn] += xd
             self.accs["ec"][c][st][kn] += ec
             self.accs["es"][c][st][kn] += es
             self.tot_x[kn] += x
+            self.tot_xd[kn] += xd
         self.rows.append([int(meta["trial"]), int(meta["side"][0] == "r"), int(meta["ex"][0] == "r"), int(bool(meta["correct"])),
                           int(bool(meta["same"])), int(meta.get("ctx") == "X"), int(meta.get("cat") in ("B", "D")),
                           float(self.da), CLASSES.index(c)])
-        self.g0 = self.e0 = None
+        self.g0 = self.e0 = self.gm = None
         self.da = None
         return c
 
@@ -108,14 +123,15 @@ class DgTrace:
     def arrays(self):
         out = {"rows": np.asarray(self.rows, dtype=np.float64).reshape(-1, len(ROW_COLS)), "row_cols": np.asarray(ROW_COLS),
                "classes": np.asarray(CLASSES), "W": np.asarray([self.W[c] for c in CLASSES]), "N": np.asarray([self.N[c] for c in CLASSES])}
-        for q in ("x", "ec", "es"):
+        for q in ("x", "xd", "ec", "es"):
             for c in CLASSES:
                 for sd in "lr":
                     out["%s_%s_%s" % (q, c.replace("+", "p").replace("-", "m"), sd)] = self.acc[q][c][sd]
         for sd in "lr":
             out["tot_x_" + sd] = self.tot_x[sd]
+            out["tot_xd_" + sd] = self.tot_xd[sd]
         # 정정 1: 자극 쪽별 — 키 '<q>s_<범주>_<자극 쪽>_<KC 쪽>', Ws·Ns 는 (범주 4 × 자극 쪽 l·r)
-        for q in ("x", "ec", "es"):
+        for q in ("x", "xd", "ec", "es"):
             for c in CLASSES:
                 for st in "lr":
                     for sd in "lr":
@@ -190,9 +206,15 @@ def _selftest():
     br.kc_l_to_motor_l.vars["g"].values = br.kc_l_to_motor_l.vars["g"].values + 1.0
     br.kc_l_to_motor_r.vars["g"].values = br.kc_l_to_motor_r.vars["g"].values + 0.25
     T.da = 0.7
+    T.mid(br)
+    # 정규화 흉내: KC 마다 두 경로 공통 −0.3, KC 0 의 교차(l→r)만 −0.1 더(경계 자르기 꼴의 비대칭)
+    br.kc_l_to_motor_l.vars["g"].values = br.kc_l_to_motor_l.vars["g"].values - 0.3
+    k0 = pre["kc_l_to_motor_r"] == 0
+    br.kc_l_to_motor_r.vars["g"].values = br.kc_l_to_motor_r.vars["g"].values - 0.3 - 0.1 * k0
     c1 = T.after(br, {"trial": 0, "side": "left", "ex": "left", "correct": True, "same": True, "ctx": "Y", "cat": "A"})
     chk("범주 S+", c1 == "S+")
-    chk("KC l 쪽 x = 0.25 − 1 = −0.75", np.allclose(T.acc["x"]["S+"]["l"], -0.75))
+    chk("KC l 쪽 xd(도파민 성분) = 0.25 − 1 = −0.75", np.allclose(T.acc["xd"]["S+"]["l"], -0.75))
+    chk("KC l 쪽 x(전체) = −0.75, KC 0 만 −0.85(비대칭 정규화)", np.allclose(T.acc["x"]["S+"]["l"][1:], -0.75) and abs(T.acc["x"]["S+"]["l"][0] + 0.85) < 1e-5)
     chk("KC r 쪽 x 0", np.allclose(T.acc["x"]["S+"]["r"], 0.0))
     chk("W S+ = 0.7", abs(T.W["S+"] - 0.7) < 1e-12 and T.N["S+"] == 1)
     # 시행 2: 자극 오른쪽, 실행 왼쪽(C), 무보상(−) DA −0.8 — r→l(교차) −0.5 (KC 5 는 연결 없음), e 도 미리 넣어 둠
@@ -201,6 +223,7 @@ def _selftest():
     T.before(br)
     br.kc_r_to_motor_l.vars["g"].values = br.kc_r_to_motor_l.vars["g"].values - 0.5
     T.da = -0.8
+    T.mid(br)
     c2 = T.after(br, {"trial": 1, "side": "right", "ex": "left", "correct": False, "same": False, "ctx": "X", "cat": "B"})
     chk("범주 C−", c2 == "C-")
     xr = T.acc["x"]["C-"]["r"]
@@ -209,6 +232,7 @@ def _selftest():
     chk("ec(교차 = r→l) 1.0·es(같은 쪽 = r→r) 0.2", np.allclose(T.acc["ec"]["C-"]["r"][:5], 1.0) and np.allclose(T.acc["es"]["C-"]["r"][:5], 0.2))
     chk("ec KC 5 0", T.acc["ec"]["C-"]["r"][5] == 0.0)
     chk("총 x = 범주 합", all(np.allclose(T.tot_x[sd], sum(T.acc["x"][c][sd] for c in CLASSES)) for sd in "lr"))
+    chk("총 xd = 범주 합", all(np.allclose(T.tot_xd[sd], sum(T.acc["xd"][c][sd] for c in CLASSES)) for sd in "lr"))
     chk("W C− = −0.8", abs(T.W["C-"] + 0.8) < 1e-12)
     a = T.arrays()
     chk("rows 2행 9열", a["rows"].shape == (2, 9))
@@ -217,20 +241,29 @@ def _selftest():
     chk("저장 키", "x_Sp_l" in a and "x_Cm_r" in a and "ec_Cm_r" in a and "tot_x_l" in a)
     # 정정 1: 자극 쪽별 분할 — 시행 1 은 자극 왼쪽, 시행 2 는 자극 오른쪽
     chk("분할 키·모양", "xs_Sp_l_l" in a and a["Ws"].shape == (4, 2) and a["Ns"].shape == (4, 2))
-    chk("시행 1 → xs_Sp_l_l = −0.75, 자극 오른쪽 칸 0", np.allclose(a["xs_Sp_l_l"], -0.75) and np.allclose(a["xs_Sp_r_l"], 0.0))
+    chk("시행 1 → xs_Sp_l_l = −0.75(KC 0 −0.85), 자극 오른쪽 칸 0", np.allclose(a["xs_Sp_l_l"][1:], -0.75) and abs(a["xs_Sp_l_l"][0] + 0.85) < 1e-5 and np.allclose(a["xs_Sp_r_l"], 0.0))
+    chk("시행 1 → xds_Sp_l_l = −0.75 전부(도파민 성분)", np.allclose(a["xds_Sp_l_l"], -0.75))
     chk("시행 2 → xs_Cm_r_r 0~4 = −0.5, 자극 왼쪽 칸 0", np.allclose(a["xs_Cm_r_r"][:5], -0.5) and np.allclose(a["xs_Cm_l_r"], 0.0))
     chk("Ws: S+ 왼쪽 0.7·C− 오른쪽 −0.8", abs(a["Ws"][0, 0] - 0.7) < 1e-12 and abs(a["Ws"][3, 1] + 0.8) < 1e-12 and abs(a["Ws"].sum() + 0.1) < 1e-12)
     chk("Ns 합 = N", int(a["Ns"].sum()) == 2 and list(a["Ns"].sum(axis=1)) == list(a["N"]))
     chk("분할 합 = 합계(모든 키)", all(np.allclose(a["%ss_%s_l_%s" % (q, k, sd)] + a["%ss_%s_r_%s" % (q, k, sd)], a["%s_%s_%s" % (q, k, sd)])
                                     for q in ("x", "ec", "es") for k in ("Sp", "Sm", "Cp", "Cm") for sd in "lr"))
     # 읽기 전용: push 하면 _Var 가 오류를 낸다 — 위 호출이 통과했으면 push 없음
-    chk("pull 횟수(시행마다 g 2회 + e 1회)", br.kc_l_to_motor_l.vars["g"].pulls == 4 and br.kc_l_to_motor_l.vars["e"].pulls == 2)
+    chk("pull 횟수(시행마다 g 3회 + e 1회)", br.kc_l_to_motor_l.vars["g"].pulls == 6 and br.kc_l_to_motor_l.vars["e"].pulls == 2)
+    chk("xd 키", "xd_Sp_l" in a and "xds_Cm_r_r" in a and "tot_xd_r" in a)
     # 순서 오류는 거부
     try:
         T.after(br, {"trial": 2, "side": "left", "ex": "left", "correct": True, "same": True})
         chk("before 없이 after 거부", False)
     except RuntimeError:
         chk("before 없이 after 거부", True)
+    T.before(br)
+    T.da = 0.5
+    try:
+        T.after(br, {"trial": 2, "side": "left", "ex": "left", "correct": True, "same": True})
+        chk("mid 없이 after 거부", False)
+    except RuntimeError:
+        chk("mid 없이 after 거부", True)
     # 길이 불일치 거부
     br2 = _Brain()
     for nm in POPS:

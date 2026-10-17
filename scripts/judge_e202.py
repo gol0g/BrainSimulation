@@ -188,6 +188,16 @@ def judge(base="."):
               % (vr, vs, om, ol, rel, agree, gr, osh, "통과" if not res[b]["why"] else "실패: " + ", ".join(res[b]["why"])))
         if dwo:
             print("    (보고) 자기 쪽 자극 시행만(근사) D_obs %+.3f = D_freq %+.3f + D_mag %+.3f → %s" % (dwo["Dobs"], dwo["Dfreq"], dwo["Dmag"], mech(dwo)))
+        # 정정 2 (보고): 도파민 성분 xd(정규화 전) — 약한 무리 offset 과 그 분해
+        dxd = bal({sd: D["tot_xd_" + sd] for sd in "lr"}, g, "weak")
+        Dd = {k: D[k] for k in D.files}
+        for c in CLASSES:
+            for sd in "lr":
+                Dd["x_%s_%s" % (KEY[c], sd)] = D["xd_%s_%s" % (KEY[c], sd)]
+        dwd = decompose(Dd, g, "weak")
+        if dwd:
+            print("    (보고) 도파민 성분 xd: 약한 무리 offset %+.3f(전체 x 의 %.2f배) · D_obs %+.3f = D_freq %+.3f + D_mag %+.3f → %s"
+                  % (dxd, dxd / dw["Dobs"] if dw and dw["Dobs"] else float("nan"), dwd["Dobs"], dwd["Dfreq"], dwd["Dmag"], mech(dwd)))
         if dsg:
             print("    (보고) 강한 무리 D_obs %+.3f = D_freq %+.3f + D_mag %+.3f → %s" % (dsg["Dobs"], dsg["Dfreq"], dsg["Dmag"], mech(dsg)))
     bad = [b for b in BRAINS if res[b]["why"]]

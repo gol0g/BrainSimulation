@@ -4,6 +4,8 @@
 # (a2) (a) + --trace-dg: 저장 가중치 = (a)(배열 정확 — 계측은 읽기 전용), 점검 3줄·'[E202 계측] 시행 40 · …' 요약.
 # (b) 계측 파일: 행 40·N 합 40·범주 합 = 총 x·값 유한, 총 x 와 (a2) 가중치 학습 Δ 최대 절대 오차 ≤ 1e-3, 범주 W·m 보고.
 # (b 정정 1) 자극 쪽별 분할(xs·Ws·Ns) 합 = 합계.
+# (c 정정 2) η 2.4(본실험 값) + --trace-dg 40시행: 전체 변화 x(정규화 뒤까지)의 재구성 최대 오차 ≤ 1e-3 — 진단 D1(정규화 전 Δg 만)은 최대 오차 59.
+#     도파민 성분 xd 와 x 의 차(정규화 효과) 보고.
 set -u
 R=/mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild
 OUT="$R/research/experiments/logs/E202/pathcheck"; WD="$R/research/experiments/traces/E202/pathcheck"; mkdir -p "$OUT" "$WD"
@@ -30,6 +32,12 @@ timeout 3600 python reflex_override_task.py $BASE $ACT $FEAT $CTX --rc-task catc
   --save-weights $WD/w_a2_b15.npz --kc-motor-hard --kc-motor-comp --da-baseline --trace-dg $WD/dg_pc_b15.npz > "$f" 2>&1; rc=$?
 echo "[(a2) 계측 켬 rc=$rc] $(grep '^\[맥락 범주 과제\] 시행' "$f") | $(grep '^\[E202 계측\] 시행 40 ' "$f")"
 grep '^\[E202 계측\] 시행 [123] 범주' "$f" | sed 's/^/    /'
+[ $rc -ne 0 ] && tail -3 "$f" | sed 's/^/      /'
+f="$OUT/c_eta24_train_b15.log"
+BASE24="${BASE/--kc-motor-eta 0.15/--kc-motor-eta 2.4}"
+timeout 3600 python reflex_override_task.py $BASE24 $ACT $FEAT $CTX --rc-task catctx --episodes 2 --steps 20 --transplant-eval --brain-seed 15 --kc-type-weights $KW15 \
+  --save-weights $WD/w_c_b15.npz --kc-motor-hard --kc-motor-comp --da-baseline --trace-dg $WD/dg_c_b15.npz > "$f" 2>&1; rc=$?
+echo "[(c) η 2.4 계측 켬 rc=$rc] $(grep '^\[E202 계측\] 시행 40 ' "$f" | sed 's/ · 저장.*//')"
 [ $rc -ne 0 ] && tail -3 "$f" | sed 's/^/      /'
 python3 - "$REF" "$WD/w_a_b15.npz" "$WD/w_a2_b15.npz" "$WD/dg_pc_b15.npz" "$SN15" <<'PY'
 import sys
@@ -58,5 +66,15 @@ split_ok = all(np.allclose(D["xs_%s_l_%s" % (c, sd)] + D["xs_%s_r_%s" % (c, sd)]
 print("[대조 (b) 정정 1] 자극 쪽별 분할: 분할 합 = 합계 %s · Ns %s" % (split_ok, D["Ns"].tolist()))
 ok = s1 and s2 and rows_ok and sums_ok and fin and err <= 1e-3 and mag > 0 and split_ok
 print("[대조 (b)] %s" % ("통과" if ok else "실패"))
+# (c) η 2.4 — 전체 변화 x 재구성(정정 2)
+wc, dc = a2.replace("w_a2_b15", "w_c_b15"), dgp.replace("dg_pc_b15", "dg_c_b15")
+C = np.load(dc)
+dlc, _ = V.learned(wc, sn)
+errc = max(float(np.max(np.abs(np.asarray(dlc[sd], float) - C["tot_x_" + sd]))) for sd in "lr")
+magc = max(float(np.max(np.abs(C["tot_x_" + sd]))) for sd in "lr")
+nrm = max(float(np.max(np.abs(C["tot_x_" + sd] - C["tot_xd_" + sd]))) for sd in "lr")
+okc = C["rows"].shape[0] == 40 and errc <= 1e-3 and magc > 0
+print("[대조 (c)] η 2.4: 행 %d · 전체 x 재구성 최대 오차 %.2e(총 x 최대 %.3f) · 정규화 효과 max|x − xd| %.3f → %s"
+      % (C["rows"].shape[0], errc, magc, nrm, "통과" if okc else "실패"))
 PY
 echo "[E202 경로 검사] 종료 $(date '+%F %T')"

@@ -75,6 +75,7 @@ out, _ = run(["M1"] * 5, {11: {"own": 0.8}})
 chk("자기 쪽 몫 0.8 → 통과", "판정: 결과 빈도 비대칭(H123-alt)" in out and "자기 쪽 자극 몫 0.800" in out)
 out, _ = run(["M2"] * 5)
 chk("자기 쪽 분해 보고 줄", out.count("(보고) 자기 쪽 자극 시행만(근사)") == 5 and "자기 쪽 자극 몫 1.000" in out)
+chk("정정 2 도파민 성분 보고 줄(0.90배)", out.count("(보고) 도파민 성분 xd") == 5 and "전체 x 의 0.90배" in out)
 # 8) 무리 균형 평균 — 교차·같은 쪽 KC 수가 달라도 각 평균의 평균
 Z = {"resp_l": np.array([1, 1, 1, 0], np.int8), "resp_r": np.array([0, 0, 0, 0], np.int8),
      "sxi_l": np.array([0.05, 0.05, -0.05, 0.05]), "sxi_r": np.zeros(4)}

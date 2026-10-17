@@ -413,8 +413,8 @@ def main():
     ap.add_argument("--kc-motor-path", action="store_true",
                     help="E201: 경로 항상성 — 매 시행 KC 별 정규화 앞에서 KC 반구 × motor 4경로 평균 가중치를 init 으로 되돌림(kc_comp.apply_paths). --kc-motor-comp 필요. 기본 꺼짐")
     ap.add_argument("--trace-dg", type=str, default="",
-                    help="E202(읽기 전용): 시행마다 도파민 직전 e·g 와 보상 창 뒤(도파민 0 직후·정규화 전) g 를 당겨 KC 별 Δg(교차 − 같은 쪽)를 "
-                         "(실행 쪽 자극 쪽/반대) × (보상/무보상) 범주로 누적해 이 경로(npz)에 저장(dg_trace). --kc-motor·--act-window·--reward-window 필요. 기본 꺼짐")
+                    help="E202(읽기 전용): 시행마다 도파민 직전 e·g, 보상 창 뒤(도파민 0 직후·정규화 전) g, KC 별 정규화 뒤 g 를 당겨 KC 별 변화(교차 − 같은 쪽 — "
+                         "전체 x·도파민 성분 xd)를 (실행 쪽 자극 쪽/반대) × (보상/무보상) 범주로 누적해 이 경로(npz)에 저장(dg_trace). --kc-motor·--act-window·--reward-window 필요. 기본 꺼짐")
     ap.add_argument("--calib-kc-motor", action="store_true",
                     help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
@@ -2298,12 +2298,7 @@ def main():
                 brain.dopamine_level = 0.0
                 brain._push_dopamine_to_rstdp()
                 if _dgt is not None:
-                    # E202(읽기 전용): 보상 창 뒤·정규화 전 g — 이 시행의 도파민 게이팅 Δg 를 범주별로 누적
-                    _dgc = _dgt.after(brain, {"trial": ep * args.steps + t, "side": side, "ex": _ex, "correct": correct,
-                                              "same": bool(_catB), "ctx": (_rcx if _rcxrng is not None else None),
-                                              "cat": (_rcc if _rcrng is not None else None)})
-                    if len(_dgt.rows) <= 3:
-                        print("[E202 계측] 시행 %d 범주 %s · DA %+.4f · 자극 %s 실행 %s" % (len(_dgt.rows), _dgc, _dgt.rows[-1][7], side, _ex))
+                    _dgt.mid(brain)   # E202 정정 2(읽기 전용): 보상 창 뒤·정규화 전 g — 도파민 게이팅 성분(xd)
                 if _kcmp is not None:
                     # E199: 이 시행의 도파민 갱신이 끝난 뒤 KC 별 두 motor 평균 합 보존(감산 정규화 — 공통 모드 제거)
                     if _kcmp["pre"] is None:
@@ -2327,6 +2322,13 @@ def main():
                     if _kcmp["n"] <= 3:
                         print("[E199 경쟁 정규화] 시행 %d 적용 — 정규화 전 max|S−%.0f| 쪽 l %.4f·r %.4f → 뒤 %.2e·%.2e"
                               % (_kcmp["n"], 2.0 * float(_cfg_.kc_motor_init_w), _st["l"][0], _st["r"][0], _st["l"][1], _st["r"][1]))
+                if _dgt is not None:
+                    # E202(읽기 전용): 정정 2 — KC 별 정규화 뒤 g 까지 포함한 이 시행의 전체 변화 x 를 범주별로 누적(xd 는 도파민 성분)
+                    _dgc = _dgt.after(brain, {"trial": ep * args.steps + t, "side": side, "ex": _ex, "correct": correct,
+                                              "same": bool(_catB), "ctx": (_rcx if _rcxrng is not None else None),
+                                              "cat": (_rcc if _rcrng is not None else None)})
+                    if len(_dgt.rows) <= 3:
+                        print("[E202 계측] 시행 %d 범주 %s · DA %+.4f · 자극 %s 실행 %s" % (len(_dgt.rows), _dgc, _dgt.rows[-1][7], side, _ex))
                 if args.rw_da_reset:
                     # 외부 검토 2026-10-09 ①: 도파민 뉴런 입력도 0(기본은 다음 release_dopamine 까지 보상 시 입력 유지 → 간격·다음 시행 동안 D1·D2 구동)
                     _dav = brain.dopamine_neurons.vars["I_input"]
