@@ -415,6 +415,10 @@ def main():
     ap.add_argument("--trace-dg", type=str, default="",
                     help="E202(읽기 전용): 시행마다 도파민 직전 e·g, 보상 창 뒤(도파민 0 직후·정규화 전) g, KC 별 정규화 뒤 g 를 당겨 KC 별 변화(교차 − 같은 쪽 — "
                          "전체 x·도파민 성분 xd)를 (실행 쪽 자극 쪽/반대) × (보상/무보상) 범주로 누적해 이 경로(npz)에 저장(dg_trace). --kc-motor·--act-window·--reward-window 필요. 기본 꺼짐")
+    ap.add_argument("--kc-motor-actw", type=str, default="",
+                    help="E203: 활동 가중 정규화 — 매 시행 KC 별 정규화 뒤, KC 쪽마다 반응 KC(이 SXI npz 의 resp > 0)의 교차−같은 쪽 차를 "
+                         "발화 수(tot)로 가중한 평균 M 을 0 으로(반응 KC 교차 −M/2·같은 쪽 +M/2, 비반응 KC 불변) 되돌린 뒤 KC 별 합을 다시 맞춤(kc_comp.apply_active). "
+                         "--kc-motor-comp 필요. 기본 꺼짐")
     ap.add_argument("--calib-kc-motor", action="store_true",
                     help="E109 조작검증: KC→motor 가중치를 '완전 역전 학습'(교차=w_max, 같은쪽=0)과 "
                          "'반사 정렬'(반대)로 직접 넣고 변조폭을 재 종료(학습 없음) — 이 경로의 행동 권한.")
@@ -777,6 +781,8 @@ def main():
         raise SystemExit("--kc-motor-comp 는 보상 창 블록(--reward-window 또는 --trial-gap > 0)에서 적용된다")
     if args.kc_motor_path and not args.kc_motor_comp:
         raise SystemExit("--kc-motor-path 는 --kc-motor-comp 와 함께 쓴다(경로 평균 보존 뒤 KC 별 합 보존)")
+    if args.kc_motor_actw and not args.kc_motor_comp:
+        raise SystemExit("--kc-motor-actw 는 --kc-motor-comp 와 함께 쓴다(활동 가중 정규화 뒤 KC 별 합을 다시 맞춤)")
     if args.trace_dg and not (args.kc_motor and args.act_window > 0 and args.reward_window > 0):
         raise SystemExit("--trace-dg 는 --kc-motor·--act-window > 0(실행 쪽)·--reward-window > 0(보상 창 Δg)이 필요하다")
     if args.rw_apm_scale >= 0 or args.dec_apm_scale >= 0:
@@ -2322,6 +2328,32 @@ def main():
                     if _kcmp["n"] <= 3:
                         print("[E199 경쟁 정규화] 시행 %d 적용 — 정규화 전 max|S−%.0f| 쪽 l %.4f·r %.4f → 뒤 %.2e·%.2e"
                               % (_kcmp["n"], 2.0 * float(_cfg_.kc_motor_init_w), _st["l"][0], _st["r"][0], _st["l"][1], _st["r"][1]))
+                    if args.kc_motor_actw:
+                        # E203: 활동 가중 정규화 — 반응 KC 무리의 교차−같은 쪽 평균(발화 수 가중)을 0 으로, 자르기로 어긋난 KC 합은 다시 투영(최대 4회)
+                        if "am" not in _kcmp:
+                            _zaw = np.load(args.kc_motor_actw)
+                            _kcmp["am"] = {sd_: np.asarray(_zaw["resp_" + sd_]) > 0 for sd_ in "lr"}
+                            _kcmp["aw"] = {sd_: np.asarray(_zaw["tot_" + sd_], dtype=np.float64) for sd_ in "lr"}
+                            _kcmp["a0"], _kcmp["a1"], _kcmp["ait"] = [], 0.0, 0
+                            print("[E203 활동 가중 정규화] 반응 KC l %d·r %d · 가중 합 l %.0f·r %.0f · 파일 %s"
+                                  % (int(_kcmp["am"]["l"].sum()), int(_kcmp["am"]["r"].sum()), float(_kcmp["aw"]["l"][_kcmp["am"]["l"]].sum()),
+                                     float(_kcmp["aw"]["r"][_kcmp["am"]["r"]].sum()), args.kc_motor_actw))
+                        _nkc_ = int(_cfg_.n_kc_per_side)
+                        _a_first = None
+                        for _ait in range(4):
+                            _aw = _kcmp["mod"].apply_active(brain, _kcmp["pre"], _nkc_, _kcmp["am"], _kcmp["aw"], 0.0, float(_cfg_.kc_motor_w_max))
+                            if _a_first is None:
+                                _a_first = _aw
+                            _kcmp["mod"].apply(brain, _kcmp["pre"], _nkc_, 2.0 * float(_cfg_.kc_motor_init_w), 0.0, float(_cfg_.kc_motor_w_max))
+                            _am1 = _kcmp["mod"].active_offsets(brain, _kcmp["pre"], _nkc_, _kcmp["am"], _kcmp["aw"])
+                            if max(abs(v_) for v_ in _am1.values()) <= 1e-9:
+                                break
+                        _kcmp["a0"].append(max(abs(_a_first[sd_][0]) for sd_ in "lr"))
+                        _kcmp["a1"] = max(_kcmp["a1"], max(abs(v_) for v_ in _am1.values()))
+                        _kcmp["ait"] = max(_kcmp["ait"], _ait + 1)
+                        if len(_kcmp["a0"]) <= 3:
+                            print("[E203 활동 가중 정규화] 시행 %d — M 전 l %+.4f·r %+.4f → 뒤 %.2e·%.2e (반복 %d)"
+                                  % (len(_kcmp["a0"]), _a_first["l"][0], _a_first["r"][0], abs(_am1["l"]), abs(_am1["r"]), _ait + 1))
                 if _dgt is not None:
                     # E202(읽기 전용): 정정 2 — KC 별 정규화 뒤 g 까지 포함한 이 시행의 전체 변화 x 를 범주별로 누적(xd 는 도파민 성분)
                     _dgc = _dgt.after(brain, {"trial": ep * args.steps + t, "side": side, "ex": _ex, "correct": correct,
@@ -2374,6 +2406,10 @@ def main():
         print("[E199 경쟁 정규화] 적용 %d회 · 정규화 전 max|S−목표| 평균 %.4f 최대 %.4f · 정규화 뒤 최대 %.2e · hard=%d"
               % (_kcmp["n"], float(np.mean(_kcmp["d0"])) if _kcmp["d0"] else float("nan"), max(_kcmp["d0"]) if _kcmp["d0"] else float("nan"),
                  _kcmp["d1"], int(bool(args.kc_motor_hard))))
+        if args.kc_motor_actw:
+            _a0 = _kcmp.get("a0", [])
+            print("[E203 활동 가중 정규화] 적용 %d회 · 정규화 전 |M| 평균 %.4f 최대 %.4f · 뒤 최대 %.2e · 반복 최대 %d"
+                  % (len(_a0), float(np.mean(_a0)) if _a0 else float("nan"), max(_a0) if _a0 else float("nan"), _kcmp.get("a1", float("nan")), _kcmp.get("ait", 0)))
         if args.kc_motor_path:
             _p0 = _kcmp.get("p0", [])
             print("[E201 경로 항상성] 적용 %d회 · 정규화 전 경로 평균 최대 |m−init| 평균 %.4f 최대 %.4f · 뒤 최대 %.2e"

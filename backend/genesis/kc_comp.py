@@ -136,6 +136,68 @@ def apply_paths(brain, target, w_min, w_max):
     return out
 
 
+def active_offset(pre_c, g_c, pre_s, g_s, n_kc, mask, w):
+    """(E203) 반응 KC(mask) 무리의 활동 가중(w) 교차−같은 쪽 평균 M = Σ w_k·Δ_k / Σ w_k, Δ_k = 교차 경로 평균 − 같은 쪽 경로 평균.
+    두 경로 모두 시냅스가 있는 KC 만. 반환 (M, 쓴 KC 마스크). 가중치 합이 0 이면 M = 0."""
+    pre_c = np.asarray(pre_c, dtype=np.int64); pre_s = np.asarray(pre_s, dtype=np.int64)
+    g_c = np.asarray(g_c, dtype=np.float64); g_s = np.asarray(g_s, dtype=np.float64)
+    if pre_c.size != g_c.size or pre_s.size != g_s.size:
+        raise ValueError("pre·g 크기 불일치")
+    mask = np.asarray(mask, dtype=bool); w = np.asarray(w, dtype=np.float64)
+    if mask.size != n_kc or w.size != n_kc:
+        raise ValueError("마스크·가중치 길이 ≠ KC 수")
+    nc = np.bincount(pre_c, minlength=n_kc); ns = np.bincount(pre_s, minlength=n_kc)
+    if nc.size != n_kc or ns.size != n_kc:
+        raise ValueError("KC 번호 범위 밖")
+    mc = np.bincount(pre_c, weights=g_c, minlength=n_kc) / np.maximum(nc, 1)
+    ms = np.bincount(pre_s, weights=g_s, minlength=n_kc) / np.maximum(ns, 1)
+    sel = mask & (nc > 0) & (ns > 0)
+    ww = np.where(sel, w, 0.0)
+    if ww.sum() <= 0:
+        return 0.0, sel
+    return float(np.sum(ww * (mc - ms)) / ww.sum()), sel
+
+
+def center_active(pre_c, g_c, pre_s, g_s, n_kc, mask, w, w_min, w_max):
+    """(E203) 반응 KC 마다 교차 경로 −M/2·같은 쪽 +M/2(KC 합 보존 — 경계 자르기 전) 뒤 [w_min, w_max] 자르기.
+    비반응 KC 는 손대지 않는다. 반환 (새 g_c, 새 g_s, M 전, M 뒤)."""
+    m0, sel = active_offset(pre_c, g_c, pre_s, g_s, n_kc, mask, w)
+    pre_c = np.asarray(pre_c, dtype=np.int64); pre_s = np.asarray(pre_s, dtype=np.int64)
+    gc = np.clip(np.asarray(g_c, dtype=np.float64) - np.where(sel[pre_c], m0 / 2.0, 0.0), w_min, w_max)
+    gs = np.clip(np.asarray(g_s, dtype=np.float64) + np.where(sel[pre_s], m0 / 2.0, 0.0), w_min, w_max)
+    m1, _ = active_offset(pre_c, gc, pre_s, gs, n_kc, mask, w)
+    return gc, gs, m0, m1
+
+
+def _pull2(brain, kn):
+    oc = "r" if kn == "l" else "l"
+    cn, sn = "kc_%s_to_motor_%s" % (kn, oc), "kc_%s_to_motor_%s" % (kn, kn)
+    sc, ss = getattr(brain, cn), getattr(brain, sn)
+    sc.vars["g"].pull_from_device(); ss.vars["g"].pull_from_device()
+    return cn, sn, sc, ss, np.asarray(sc.vars["g"].values, dtype=np.float64).ravel(), np.asarray(ss.vars["g"].values, dtype=np.float64).ravel()
+
+
+def active_offsets(brain, pre, n_kc, masks, weights):
+    """(E203, 읽기 전용) 장치 가중치의 KC 쪽별 활동 가중 M."""
+    out = {}
+    for kn in "lr":
+        cn, sn, _, _, gc, gs = _pull2(brain, kn)
+        out[kn] = active_offset(pre[cn], gc, pre[sn], gs, n_kc, masks[kn], weights[kn])[0]
+    return out
+
+
+def apply_active(brain, pre, n_kc, masks, weights, w_min, w_max):
+    """(E203) 장치 가중치에 활동 가중 정규화(KC 쪽마다). 반환 {쪽: (M 전, 자르기 뒤 M)}. KC 별 합은 뒤에 apply 로 다시 맞춘다."""
+    out = {}
+    for kn in "lr":
+        cn, sn, sc, ss, gc, gs = _pull2(brain, kn)
+        ngc, ngs, m0, m1 = center_active(pre[cn], gc, pre[sn], gs, n_kc, masks[kn], weights[kn], w_min, w_max)
+        sc.vars["g"].values = ngc; sc.vars["g"].push_to_device()
+        ss.vars["g"].values = ngs; ss.vars["g"].push_to_device()
+        out[kn] = (m0, m1)
+    return out
+
+
 def kc_sums(pre_a, g_a, pre_b, g_b, n_kc):
     """(판정·보고용) KC 별 mean(g_a) + mean(g_b) 와 두 집단 모두 시냅스가 있는 KC 마스크."""
     pre_a = np.asarray(pre_a, dtype=np.int64); pre_b = np.asarray(pre_b, dtype=np.int64)
@@ -199,9 +261,29 @@ def _selftest():
     x, _, d1 = center_path(np.array([300., 300., 0., 100.]), 150.0, 0.0, 300.0)
     chk("경로 평균 셋 이동(s=100/3)", np.allclose(x, [300 - 100 / 3, 300 - 100 / 3, 0, 100 - 100 / 3]) and d1 < 1e-9, str(x))
     chk("경로 평균 이미 목표면 불변", np.allclose(center_path(np.array([100., 200.]), 150.0, 0.0, 300.0)[0], [100, 200]))
+    # 11) (E203) 활동 가중 M: KC0 Δ = 160−140 = +20(w 1), KC1 Δ = 100−200 = −100(w 3), KC2 비반응(Δ +50), KC3 한쪽 없음 → M = (20 − 300)/4 = −70
+    pc = np.array([0, 0, 1, 2, 3]); gc_ = np.array([160., 160., 100., 175., 150.])
+    ps = np.array([0, 1, 1, 2]); gs_ = np.array([140., 200., 200., 125.])
+    mk = np.array([True, True, False, True]); wk = np.array([1., 3., 1., 1.])
+    M, sel = active_offset(pc, gc_, ps, gs_, 4, mk, wk)
+    chk("활동 가중 M = −70(비반응·한쪽 없는 KC 제외)", np.isclose(M, -70.0) and list(sel) == [True, True, False, False], str((M, sel)))
+    ngc, ngs, m0, m1 = center_active(pc, gc_, ps, gs_, 4, mk, wk, 0.0, 300.0)
+    chk("이동 뒤 M = 0(경계 안)", np.isclose(m0, -70.0) and abs(m1) < 1e-9, "%.3e" % m1)
+    chk("반응 KC 교차 +35·같은 쪽 −35(합 보존)", np.allclose(ngc[:3], [195, 195, 135]) and np.allclose(ngs[:3], [105, 165, 165]), str((ngc, ngs)))
+    chk("비반응·한쪽 없는 KC 불변", np.isclose(ngc[3], 175) and np.isclose(ngs[3], 125) and np.isclose(ngc[4], 150))
+    s0, b0 = kc_sums(pc, gc_, ps, gs_, 4); s1, _ = kc_sums(pc, ngc, ps, ngs, 4)
+    chk("KC 별 합 보존(자르기 없음)", np.allclose(s0[b0], s1[b0]))
+    # 12) 자르기: KC0 교차 300·같은 쪽 0(Δ +300, w 3), KC1 교차 20·같은 쪽 280(Δ −260, w 1) → M = (900 − 260)/4 = 160 →
+    #     −80/+80 이동에서 KC1 이 0·300 에 잘려 Δ1 = −300 → M 뒤 = (3·140 − 300)/4 = 30(보고 — 경계 안 유지)
+    ngc2, ngs2, m02, m12 = center_active(np.array([0, 1]), np.array([300., 20.]), np.array([0, 1]), np.array([0., 280.]), 2,
+                                         np.array([True, True]), np.array([3., 1.]), 0.0, 300.0)
+    chk("자르기 시 경계 안·잔차 30", ngc2.min() >= 0 and ngs2.max() <= 300 and np.isclose(m02, 160.0) and np.isclose(m12, 30.0)
+        and np.allclose(ngc2, [220, 0]) and np.allclose(ngs2, [80, 300]), "%.3f → %.3f" % (m02, m12))
+    chk("가중치 합 0 → M 0", active_offset(pc, gc_, ps, gs_, 4, np.zeros(4, bool), wk)[0] == 0.0)
     for nm, fn in (("pre·g 크기 불일치 거부", lambda: project(pa, ga[:-1], pb, gb, n, 300.0, 0.0, 300.0)),
                    ("KC 범위 밖 거부", lambda: project(pa, ga, pb, gb, n - 1, 300.0, 0.0, 300.0)),
-                   ("경로 목표 경계 밖 거부", lambda: center_path(np.array([1.0]), 400.0, 0.0, 300.0))):
+                   ("경로 목표 경계 밖 거부", lambda: center_path(np.array([1.0]), 400.0, 0.0, 300.0)),
+                   ("활동 가중: 마스크 길이 거부", lambda: active_offset(pc, gc_, ps, gs_, 4, np.ones(3, bool), wk))):
         try:
             fn()
             chk(nm, False)
