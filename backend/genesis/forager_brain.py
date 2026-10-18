@@ -1207,6 +1207,10 @@ class ForagerBrainConfig:
     ctx2_n: int = 0                      # E179: 두 번째 맥락 전용 집단 zz_ctx2(대칭 맥락 A) 크기 — 스냅숏 적재가 있을 때만. 0 = 없음(이전 모델)
     ctx2_w: float = 4.0                  # E179: zz_ctx2 → KC(좌·우) 가중치
     ctx2_p: float = 0.10                 # E179: zz_ctx2 → KC 연결 확률(호스트 지역 난수 RandomState(17700 + genn_seed) — zz_ctx 와 독립)
+    ctx_gate_kc: bool = False            # E204: 맥락 게이팅 KC 무리(병목 정리 2026-10-18 G1) — KC 를 쪽마다 맥락 X·Y 무리로 나누고 맥락 집단이 반대 무리를 직접 억제. False = 이전 모델
+    ctx_gate_w: float = -20.0            # E204: 맥락 집단 → 반대 무리 KC 억제 가중치(음수, StaticPulse·ExpCurr τ 5)
+    ctx_gate_p: float = 0.10             # E204: 그 연결 확률(호스트 지역 난수 RandomState(19300 + genn_seed) — 무리 배정과 같은 난수열)
+    ctx_gate_frac: float = 0.5           # E204: 쪽마다 맥락 X 무리 비율(나머지 = 맥락 Y 무리)
     feat_n: int = 0                      # E183: 원시 특징 집단 zz_feat_l·zz_feat_r 크기(쪽마다) — 범주 표지 없는 특징 채널, 같은 쪽 KC 로만. 스냅숏 적재가 있을 때만. 0 = 없음(이전 모델)
     feat_w: float = 4.0                  # E183: zz_feat → KC(같은 쪽) 초기 가중치
     feat_p: float = 0.10                 # E183: zz_feat → KC 연결 확률(호스트 지역 난수 RandomState(18400 + genn_seed))
@@ -2283,6 +2287,36 @@ class ForagerBrain:
                 _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
                 self.ctx2_syn[_sd] = (_sg, int(_pi.size))
             print(f"  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 {_cn2} → KC 좌·우, w={_cw2:.2f}, p={_cp2:.3f}, 연결 좌 {self.ctx2_syn['l'][1]}·우 {self.ctx2_syn['r'][1]}")
+        # E204: 맥락 게이팅 KC 무리(G1) — KC 를 쪽마다 맥락 X·Y 무리로 나누고(호스트 지역 난수 RandomState(19300 + genn_seed), ctx_gate.build_all),
+        # 맥락 X 집단(zz_ctx2)은 Y 무리 KC 를, 맥락 Y 집단(zz_ctx)은 X 무리 KC 를 정적 음 가중치로 직접 억제한다(호스트 연결 — 새 뉴런 집단 없음).
+        # 각 무리의 KC→motor 시냅스가 그 맥락 전용 판독 경로가 된다. 기본 꺼짐 = 이전 모델(이 블록을 지나지 않는다).
+        self.ctx_gate_sub = None
+        if bool(getattr(self.config, "ctx_gate_kc", False)):
+            import ctx_gate as _CG
+            if not (_cn > 0 and _cn2 > 0):
+                raise RuntimeError("ctx_gate_kc 는 두 맥락 집단(ctx_n·ctx2_n > 0)이 필요하다")
+            _gw = float(getattr(self.config, "ctx_gate_w", -20.0)); _gp = float(getattr(self.config, "ctx_gate_p", 0.10))
+            _gf = float(getattr(self.config, "ctx_gate_frac", 0.5))
+            _CG.check_params(_gw, _gp, _gf)
+            _gm = _CG.build_all(19300 + int(getattr(self.config, "genn_seed", 0)), int(self.config.n_kc_per_side), _cn2, _cn, _gf, _gp)
+            self.ctx_gate_sub = {}
+            self.ctx_gate_syn = {}
+            for _sd, _post in (("l", self.kc_left), ("r", self.kc_right)):
+                _isx, _mx, _my = _gm[_sd]
+                self.ctx_gate_sub[_sd] = _isx
+                for _nm, _pre_pop, _m in (("zz_ctx2_inh_kc_%s" % _sd, self.ctx2_pop, _mx), ("zz_ctx_inh_kc_%s" % _sd, self.ctx_pop, _my)):
+                    _pi, _qi = np.nonzero(_m)
+                    _sg = self.model.add_synapse_population(
+                        _nm, "SPARSE", _pre_pop, _post,
+                        init_weight_update("StaticPulse", {}, {"g": init_var("Constant", {"constant": _gw})}),
+                        init_postsynaptic("ExpCurr", {"tau": 5.0}))
+                    _sg.set_sparse_connections(_pi.astype(np.uint32), _qi.astype(np.uint32))
+                    self.ctx_gate_syn[_nm] = (_sg, int(_pi.size))
+            print("  [E204 맥락 게이팅 KC] 무리 X 좌 %d·우 %d / Y 좌 %d·우 %d, 억제 w=%.2f p=%.3f, 연결 zz_ctx2→Y 좌 %d·우 %d · zz_ctx→X 좌 %d·우 %d"
+                  % (int(self.ctx_gate_sub["l"].sum()), int(self.ctx_gate_sub["r"].sum()),
+                     int((~self.ctx_gate_sub["l"]).sum()), int((~self.ctx_gate_sub["r"]).sum()), _gw, _gp,
+                     self.ctx_gate_syn["zz_ctx2_inh_kc_l"][1], self.ctx_gate_syn["zz_ctx2_inh_kc_r"][1],
+                     self.ctx_gate_syn["zz_ctx_inh_kc_l"][1], self.ctx_gate_syn["zz_ctx_inh_kc_r"][1]))
 
         # E183: 원시 특징 집단 zz_feat_l·zz_feat_r(감각 LIF, 먹이 눈과 같은 매개변수, 뉴런별 I_input 은 과제가 사례 패턴으로 설정) → 같은 쪽 KC 만
         # (호스트 지역 난수 RandomState(18400 + genn_seed) 연결 — 좌 먼저). 범주 표지 없음: 두 범주는 같은 집단의 다른 패턴. 새 뉴런 집단이므로 스냅숏 필요.

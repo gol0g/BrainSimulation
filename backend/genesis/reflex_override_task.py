@@ -489,6 +489,11 @@ def main():
                     help="E179: 맥락 전용 집단 2 zz_ctx2(대칭 맥락 A) 크기(→ KC 좌·우). 0 = 없음. --conn-snapshot 필요")
     ap.add_argument("--ctx2-w", type=float, default=4.0, help="E179: zz_ctx2 → KC 가중치")
     ap.add_argument("--ctx2-p", type=float, default=0.10, help="E179: zz_ctx2 → KC 연결 확률(호스트 지역 난수 17700 + genn_seed)")
+    ap.add_argument("--ctx-gate-kc", action="store_true",
+                    help="E204: 맥락 게이팅 KC 무리(G1) — KC 를 쪽마다 맥락 X·Y 무리로 나누고 맥락 집단이 반대 무리를 직접 억제(ctx_gate). 기본 꺼짐 = 이전 모델")
+    ap.add_argument("--ctx-gate-w", type=float, default=-20.0, help="E204: 맥락 집단 → 반대 무리 KC 억제 가중치(음수)")
+    ap.add_argument("--ctx-gate-p", type=float, default=0.10, help="E204: 그 연결 확률(호스트 지역 난수 19300 + genn_seed)")
+    ap.add_argument("--ctx-gate-frac", type=float, default=0.5, help="E204: 쪽마다 맥락 X 무리 비율")
     ap.add_argument("--eval-ctx2", action="store_true", help="E179: 분해(이식) 평가를 맥락 A(zz_ctx2) 켬으로. --eval-ctx(맥락 B)와 함께 쓸 수 없다")
     ap.add_argument("--eval-ctx-trial", action="store_true",
                     help="E182: 맥락 평가(--eval-ctx·--eval-ctx2)를 학습과 같은 시간 구조로 — 안정화·오프셋 맥락 없음, 시행마다 조향 처리 동안만 맥락 켬, 사이 --eval-ctx-gap 처리 맥락 끔·무자극. 기본 꺼짐 = 이전(맥락 내내 켬)")
@@ -655,6 +660,10 @@ def main():
     cfg.ctx2_n, cfg.ctx2_w, cfg.ctx2_p = int(args.ctx2_n), float(args.ctx2_w), float(args.ctx2_p)   # E179: 맥락 전용 집단 2(스냅숏 필요)
     if args.ctx2_n > 0 and not args.conn_snapshot:
         raise SystemExit("--ctx2-n > 0 은 --conn-snapshot 이 필요하다")
+    cfg.ctx_gate_kc = bool(args.ctx_gate_kc)   # E204: 맥락 게이팅 KC 무리(G1) — 꺼짐 = 이전 모델
+    cfg.ctx_gate_w, cfg.ctx_gate_p, cfg.ctx_gate_frac = float(args.ctx_gate_w), float(args.ctx_gate_p), float(args.ctx_gate_frac)
+    if args.ctx_gate_kc and (args.ctx_n <= 0 or args.ctx2_n <= 0 or not args.conn_snapshot):
+        raise SystemExit("--ctx-gate-kc 는 두 맥락 집단(--ctx-n·--ctx2-n > 0)과 --conn-snapshot 이 필요하다")
     cfg.feat_n, cfg.feat_w, cfg.feat_p = int(args.feat_n), float(args.feat_w), float(args.feat_p)   # E183: 원시 특징 집단(스냅숏 필요)
     cfg.feat_oja = bool(args.feat_oja)
     cfg.feat_oja_eta, cfg.feat_oja_beta = float(args.feat_oja_eta), float(args.feat_oja_beta)
@@ -1740,6 +1749,9 @@ def main():
             import rawcat as RC
             _RW = RC.make_world(n=args.feat_n, k=args.rc_k, shared=args.rc_shared, d=args.rc_d,
                                 n_train=args.rc_ntrain, n_new=args.rc_nnew, seed=args.rc_seed)
+            # E204 조작검증(읽기 전용 출력): 평가가 쓰는 원시 특징 세계(시드·원형 단위 앞 5개) — 새 원형 세계 팔이 평가에도 닿는지
+            print("[E204 평가 세계] 세계 시드 %d · 원형 A %s … · 원형 B %s …"
+                  % (args.rc_seed, ",".join(str(int(x)) for x in _RW["protos"]["A"][:5]), ",".join(str(int(x)) for x in _RW["protos"]["B"][:5])))
             _rcres = []
             _rckeys = []
             for _c in [c_ for c_ in args.rc_eval_cats.split(",") if c_]:      # E189: 기본 A,B(이전과 같은 순서·호출)
@@ -2055,6 +2067,7 @@ def main():
     _rcrev_announced = False
     _np2 = 0
     _rcp2_announced = False
+    _gate = {"a": 0, "b": 0, "n": 0}   # E204: 맥락 게이팅 KC 무리 점검 누적(활성·비활성 무리 발화, 시행 수)
     if args.rc_task == "catctx":
         _rcxs = args.rc_ctx_seed if args.rc_ctx_seed is not None else 18600 + _bseed
         _rcxrng = np.random.RandomState(_rcxs)
@@ -2213,6 +2226,16 @@ def main():
                         _cp_on = brain.ctx2_pop if _rcx == "X" else brain.ctx_pop
                         _cp_off = brain.ctx_pop if _rcx == "X" else brain.ctx2_pop
                         _rcx1 = (int(np.asarray(_cp_on.spike_recording_data[0][1]).size), int(np.asarray(_cp_off.spike_recording_data[0][1]).size))
+                if _rcxrng is not None and getattr(brain, "ctx_gate_sub", None) is not None:
+                    # E204 조작검증(읽기 전용): 행동 창 마지막 처리의 KC 발화를 무리별로 — 활성 맥락 무리 > 0, 비활성 무리 ≈ 0(매 시행 누적)
+                    import ctx_gate as _CGT
+                    _gcl = _CGT.count_by_subset(brain.kc_left.spike_recording_data[0][1], brain.ctx_gate_sub["l"])
+                    _gcr = _CGT.count_by_subset(brain.kc_right.spike_recording_data[0][1], brain.ctx_gate_sub["r"])
+                    _ga, _gb = _CGT.active_inactive(_gcl, _gcr, _rcx)
+                    _gate["a"] += _ga; _gate["b"] += _gb; _gate["n"] += 1
+                    if ep == 0 and t < 3:
+                        print("[E204 맥락 게이팅 점검] 시행 %d 맥락 %s — 행동 창 끝 KC 발화 활성 무리 %d · 비활성 무리 %d (좌 X %d·Y %d / 우 X %d·Y %d)"
+                              % (t, _rcx, _ga, _gb, _gcl[0], _gcl[1], _gcr[0], _gcr[1]))
                 rc_feat(brain, None, None, args.feat_level)   # E184: 보상 창·간격에는 특징 패턴 끔(먹이 광선과 같이)
                 if _rcxrng is not None:
                     ctx_state(brain, 0, args)                 # E187: 보상 창·간격에는 두 맥락 모두 끔
@@ -2402,6 +2425,9 @@ def main():
                                    + ([float(_ctx_on)] if _crng is not None else []))          # 맥락 의존 규칙: 37 맥락 켬(bicond 만 — 기본 행 길이 불변)
                 KCT["g_prev"] = _kg1
     print("[학습] %dep 완료, 보상 %d회 (탐색 주입 %d회, ε=%.2f)" % (args.episodes, rew, explored, eps))
+    if getattr(brain, "ctx_gate_sub", None) is not None:
+        print("[E204 맥락 게이팅 KC] 시행 %d · 행동 창 끝 KC 발화 활성 무리 합 %d · 비활성 무리 합 %d · 비(비활성/활성) %.4f"
+              % (_gate["n"], _gate["a"], _gate["b"], _gate["b"] / max(_gate["a"], 1)))
     if _kcmp is not None:
         print("[E199 경쟁 정규화] 적용 %d회 · 정규화 전 max|S−목표| 평균 %.4f 최대 %.4f · 정규화 뒤 최대 %.2e · hard=%d"
               % (_kcmp["n"], float(np.mean(_kcmp["d0"])) if _kcmp["d0"] else float("nan"), max(_kcmp["d0"]) if _kcmp["d0"] else float("nan"),

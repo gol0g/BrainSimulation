@@ -1,0 +1,23 @@
+[E204 보정] 시작 2026-10-18 14:19:39
+  (U_4900 X rc=0) RCEVAL 4 | motor 평균 0.6132 | 구성 줄 0
+  (U_4900 Y rc=0) RCEVAL 4 | motor 평균 0.6057 | 구성 줄 0
+  (G_4900 X rc=0) RCEVAL 4 | motor 평균 0.4593 | 구성 줄 2
+  (G_4900 Y rc=0) RCEVAL 4 | motor 평균 0.4644 | 구성 줄 2
+  (G_4600 X rc=0) RCEVAL 4 | motor 평균 0.4801 | 구성 줄 2
+  (G_4600 Y rc=0) RCEVAL 4 | motor 평균 0.4847 | 구성 줄 2
+  (G_4300 X rc=0) RCEVAL 4 | motor 평균 0.4986 | 구성 줄 2
+  (G_4300 Y rc=0) RCEVAL 4 | motor 평균 0.5031 | 구성 줄 2
+  (G_4000 X rc=0) RCEVAL 4 | motor 평균 0.5164 | 구성 줄 2
+  (G_4000 Y rc=0) RCEVAL 4 | motor 평균 0.5209 | 구성 줄 2
+  (G_3700 X rc=0) RCEVAL 4 | motor 평균 0.5346 | 구성 줄 2
+  (G_3700 Y rc=0) RCEVAL 4 | motor 평균 0.5397 | 구성 줄 2
+  (G_3400 X rc=0) RCEVAL 4 | motor 평균 0.5545 | 구성 줄 2
+  (G_3400 Y rc=0) RCEVAL 4 | motor 평균 0.5598 | 구성 줄 2
+  후보 −4900: m_G 0.4619 · |m_G − m_ref| 0.1476
+  후보 −4600: m_G 0.4824 · |m_G − m_ref| 0.1270
+  후보 −4300: m_G 0.5008 · |m_G − m_ref| 0.1086
+  후보 −4000: m_G 0.5187 · |m_G − m_ref| 0.0908
+  후보 −3700: m_G 0.5371 · |m_G − m_ref| 0.0723
+  후보 −3400: m_G 0.5571 · |m_G − m_ref| 0.0523
+[E204 보정 선택] T_G=-3400 m_ref=0.6094 m_G=0.5571 diff=0.0523 (m_ref = 게이팅 없음 −4900)
+[E204 보정] 종료 2026-10-18 14:33:59
