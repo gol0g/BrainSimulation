@@ -1,0 +1,81 @@
+=== E204 실행: 2026-10-18T05:44:10Z ===
+커맨드: bash scripts/e204_main.sh
+---
+[E204] 맥락 게이팅 KC 무리 · E200 학습(경쟁형 규칙·η 2.4·도파민 기준선) · catctx 3,000 · C2 · 게이팅 기저값 -2800 · 팔 G18·GN·UN · 뇌 10~14
+  e204 G18 train b10: => [맥락 범주 과제] 시행 3000 중 맥락 X 1455 · Y 1545 · 정답 같은 쪽 1522 · 교차 1478 || 보상 1855회 || 평균 DA +0.0069 || 게이팅 비(비활성/활성) 0.0000
+  e204 G18 b10 learn X: => A_train=-0.1021 A_new=-0.0455 B_train=+0.6525 B_new=+0.4637 
+  e204 G18 b10 learn Y: => A_train=+0.2007 A_new=+0.1554 B_train=-0.3916 B_new=-0.3154 
+  e204 G18 b10 none X: => A_train=+0.0157 A_new=+0.0579 B_train=+0.0657 B_new=+0.0538 
+  e204 G18 b10 none Y: => A_train=+0.0233 A_new=+0.0687 B_train=+0.0682 B_new=+0.0565 
+  e204 G18 train b11: => [맥락 범주 과제] 시행 3000 중 맥락 X 1483 · Y 1517 · 정답 같은 쪽 1547 · 교차 1453 || 보상 1852회 || 평균 DA +0.0037 || 게이팅 비(비활성/활성) 0.0000
+  e204 G18 b11 learn X: => A_train=-0.1990 A_new=-0.1567 B_train=+0.3563 B_new=+0.2294 
+  e204 G18 b11 learn Y: => A_train=+0.3730 A_new=+0.3306 B_train=-0.2760 B_new=-0.2130 
+  e204 G18 b11 none X: => A_train=+0.0101 A_new=+0.0210 B_train=+0.0269 B_new=+0.0223 
+  e204 G18 b11 none Y: => A_train=+0.0123 A_new=+0.0208 B_train=+0.0302 B_new=+0.0251 
+  e204 G18 train b12: => [맥락 범주 과제] 시행 3000 중 맥락 X 1503 · Y 1497 · 정답 같은 쪽 1483 · 교차 1517 || 보상 1858회 || 평균 DA +0.0058 || 게이팅 비(비활성/활성) 0.0000
+  e204 G18 b12 learn X: => A_train=-0.3736 A_new=-0.3026 B_train=+0.3426 B_new=+0.2246 
+  e204 G18 b12 learn Y: => A_train=+0.3298 A_new=+0.3149 B_train=-0.3178 B_new=-0.2534 
+  e204 G18 b12 none X: => A_train=+0.0160 A_new=+0.0415 B_train=+0.0413 B_new=+0.0347 
+  e204 G18 b12 none Y: => A_train=+0.0190 A_new=+0.0423 B_train=+0.0401 B_new=+0.0344 
+  e204 G18 train b13: => [맥락 범주 과제] 시행 3000 중 맥락 X 1484 · Y 1516 · 정답 같은 쪽 1512 · 교차 1488 || 보상 1840회 || 평균 DA +0.0028 || 게이팅 비(비활성/활성) 0.0000
+  e204 G18 b13 learn X: => A_train=-0.1737 A_new=-0.1169 B_train=+0.4235 B_new=+0.2602 
+  e204 G18 b13 learn Y: => A_train=+0.3565 A_new=+0.3353 B_train=-0.2619 B_new=-0.2131 
+  e204 G18 b13 none X: => A_train=+0.0109 A_new=+0.0488 B_train=+0.0655 B_new=+0.0481 
+  e204 G18 b13 none Y: => A_train=+0.0127 A_new=+0.0490 B_train=+0.0653 B_new=+0.0456 
+  e204 G18 train b14: => [맥락 범주 과제] 시행 3000 중 맥락 X 1553 · Y 1447 · 정답 같은 쪽 1531 · 교차 1469 || 보상 1822회 || 평균 DA +0.0049 || 게이팅 비(비활성/활성) 0.0003
+  e204 G18 b14 learn X: => A_train=-0.2565 A_new=-0.1758 B_train=+0.4506 B_new=+0.3262 
+  e204 G18 b14 learn Y: => A_train=+0.4007 A_new=+0.3695 B_train=-0.3167 B_new=-0.2485 
+  e204 G18 b14 none X: => A_train=+0.0113 A_new=+0.0355 B_train=+0.0449 B_new=+0.0373 
+  e204 G18 b14 none Y: => A_train=+0.0162 A_new=+0.0394 B_train=+0.0528 B_new=+0.0409 
+  e204 GN train b10: => [맥락 범주 과제] 시행 3000 중 맥락 X 1495 · Y 1505 · 정답 같은 쪽 1479 · 교차 1521 || 보상 1790회 || 평균 DA +0.0068 || 게이팅 비(비활성/활성) 0.0001
+  e204 GN b10 learn X: => A_train=-0.2389 A_new=-0.1822 B_train=+0.5261 B_new=+0.3949 
+  e204 GN b10 learn Y: => A_train=+0.3242 A_new=+0.3246 B_train=-0.1889 B_new=-0.1262 
+  e204 GN b10 none X: => A_train=+0.0186 A_new=+0.0620 B_train=+0.0673 B_new=+0.0556 
+  e204 GN b10 none Y: => A_train=+0.0159 A_new=+0.0618 B_train=+0.0711 B_new=+0.0614 
+  e204 GN train b11: => [맥락 범주 과제] 시행 3000 중 맥락 X 1493 · Y 1507 · 정답 같은 쪽 1491 · 교차 1509 || 보상 1830회 || 평균 DA +0.0090 || 게이팅 비(비활성/활성) 0.0002
+  e204 GN b11 learn X: => A_train=-0.2661 A_new=-0.1590 B_train=+0.3745 B_new=+0.2696 
+  e204 GN b11 learn Y: => A_train=+0.3530 A_new=+0.2694 B_train=-0.3124 B_new=-0.2468 
+  e204 GN b11 none X: => A_train=+0.0064 A_new=+0.0176 B_train=+0.0280 B_new=+0.0180 
+  e204 GN b11 none Y: => A_train=+0.0125 A_new=+0.0235 B_train=+0.0276 B_new=+0.0192 
+  e204 GN train b12: => [맥락 범주 과제] 시행 3000 중 맥락 X 1452 · Y 1548 · 정답 같은 쪽 1510 · 교차 1490 || 보상 1846회 || 평균 DA +0.0064 || 게이팅 비(비활성/활성) 0.0001
+  e204 GN b12 learn X: => A_train=-0.2725 A_new=-0.1513 B_train=+0.3956 B_new=+0.2988 
+  e204 GN b12 learn Y: => A_train=+0.2695 A_new=+0.1937 B_train=-0.3602 B_new=-0.2925 
+  e204 GN b12 none X: => A_train=+0.0169 A_new=+0.0383 B_train=+0.0382 B_new=+0.0351 
+  e204 GN b12 none Y: => A_train=+0.0127 A_new=+0.0343 B_train=+0.0432 B_new=+0.0425 
+  e204 GN train b13: => [맥락 범주 과제] 시행 3000 중 맥락 X 1479 · Y 1521 · 정답 같은 쪽 1502 · 교차 1498 || 보상 1868회 || 평균 DA +0.0066 || 게이팅 비(비활성/활성) 0.0000
+  e204 GN b13 learn X: => A_train=-0.3421 A_new=-0.2812 B_train=+0.2881 B_new=+0.2035 
+  e204 GN b13 learn Y: => A_train=+0.3340 A_new=+0.3019 B_train=-0.2630 B_new=-0.2068 
+  e204 GN b13 none X: => A_train=+0.0120 A_new=+0.0513 B_train=+0.0723 B_new=+0.0598 
+  e204 GN b13 none Y: => A_train=+0.0140 A_new=+0.0516 B_train=+0.0662 B_new=+0.0527 
+  e204 GN train b14: => [맥락 범주 과제] 시행 3000 중 맥락 X 1507 · Y 1493 · 정답 같은 쪽 1506 · 교차 1494 || 보상 1811회 || 평균 DA +0.0040 || 게이팅 비(비활성/활성) 0.0008
+  e204 GN b14 learn X: => A_train=-0.2193 A_new=-0.1395 B_train=+0.4661 B_new=+0.3418 
+  e204 GN b14 learn Y: => A_train=+0.2742 A_new=+0.2417 B_train=-0.3641 B_new=-0.2883 
+  e204 GN b14 none X: => A_train=+0.0116 A_new=+0.0351 B_train=+0.0441 B_new=+0.0342 
+  e204 GN b14 none Y: => A_train=+0.0145 A_new=+0.0378 B_train=+0.0475 B_new=+0.0425 
+  e204 UN train b10: => [맥락 범주 과제] 시행 3000 중 맥락 X 1495 · Y 1505 · 정답 같은 쪽 1479 · 교차 1521 || 보상 1585회 || 평균 DA +0.0024 || 게이팅 없음
+  e204 UN b10 learn X: => A_train=-0.2517 A_new=-0.1662 B_train=+0.3932 B_new=+0.2776 
+  e204 UN b10 learn Y: => A_train=+0.1726 A_new=+0.1845 B_train=-0.0707 B_new=-0.0490 
+  e204 UN b10 none X: => A_train=+0.0156 A_new=+0.0496 B_train=+0.0534 B_new=+0.0433 
+  e204 UN b10 none Y: => A_train=+0.0097 A_new=+0.0390 B_train=+0.0525 B_new=+0.0428 
+  e204 UN train b11: => [맥락 범주 과제] 시행 3000 중 맥락 X 1493 · Y 1507 · 정답 같은 쪽 1491 · 교차 1509 || 보상 1584회 || 평균 DA -0.0005 || 게이팅 없음
+  e204 UN b11 learn X: => A_train=-0.0076 A_new=+0.0484 B_train=+0.2306 B_new=+0.1816 
+  e204 UN b11 learn Y: => A_train=+0.4784 A_new=+0.3831 B_train=-0.1338 B_new=-0.0649 
+  e204 UN b11 none X: => A_train=+0.0065 A_new=+0.0128 B_train=+0.0173 B_new=+0.0165 
+  e204 UN b11 none Y: => A_train=+0.0053 A_new=+0.0126 B_train=+0.0120 B_new=+0.0092 
+  e204 UN train b12: => [맥락 범주 과제] 시행 3000 중 맥락 X 1452 · Y 1548 · 정답 같은 쪽 1510 · 교차 1490 || 보상 1645회 || 평균 DA +0.0011 || 게이팅 없음
+  e204 UN b12 learn X: => A_train=-0.2079 A_new=-0.1543 B_train=+0.1014 B_new=+0.0490 
+  e204 UN b12 learn Y: => A_train=+0.1865 A_new=+0.1360 B_train=-0.2326 B_new=-0.1939 
+  e204 UN b12 none X: => A_train=+0.0024 A_new=+0.0211 B_train=+0.0214 B_new=+0.0177 
+  e204 UN b12 none Y: => A_train=+0.0063 A_new=+0.0221 B_train=+0.0237 B_new=+0.0232 
+  e204 UN train b13: => [맥락 범주 과제] 시행 3000 중 맥락 X 1479 · Y 1521 · 정답 같은 쪽 1502 · 교차 1498 || 보상 1623회 || 평균 DA +0.0013 || 게이팅 없음
+  e204 UN b13 learn X: => A_train=-0.1538 A_new=-0.0760 B_train=+0.2432 B_new=+0.1788 
+  e204 UN b13 learn Y: => A_train=+0.2558 A_new=+0.2498 B_train=-0.1171 B_new=-0.0877 
+  e204 UN b13 none X: => A_train=+0.0095 A_new=+0.0321 B_train=+0.0489 B_new=+0.0399 
+  e204 UN b13 none Y: => A_train=+0.0081 A_new=+0.0353 B_train=+0.0571 B_new=+0.0417 
+  e204 UN train b14: => [맥락 범주 과제] 시행 3000 중 맥락 X 1507 · Y 1493 · 정답 같은 쪽 1506 · 교차 1494 || 보상 1609회 || 평균 DA -0.0002 || 게이팅 없음
+  e204 UN b14 learn X: => A_train=-0.1574 A_new=-0.0988 B_train=+0.2188 B_new=+0.1567 
+  e204 UN b14 learn Y: => A_train=+0.1696 A_new=+0.1399 B_train=-0.3131 B_new=-0.2393 
+  e204 UN b14 none X: => A_train=+0.0135 A_new=+0.0318 B_train=+0.0393 B_new=+0.0345 
+  e204 UN b14 none Y: => A_train=+0.0057 A_new=+0.0244 B_train=+0.0301 B_new=+0.0275 
+[E204] 전체 루프 종료
+=== 종료코드 0 ===

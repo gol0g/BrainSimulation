@@ -1,0 +1,6 @@
+[E204 보고 — 판정 밖, 결과 뒤 계산(사전등록 보고 항목)] 반응 KC(E196 세계 18300) 를 학습 차 Δ 부호로 motor_l·motor_r 에 셈 — G18 대 같은 뇌 E200
+b10 G18 motor_l 457 · motor_r 600 · 비(큰/작은) 1.31 | E200 motor_l 376 · motor_r 726 · 비(큰/작은) 1.93
+b11 G18 motor_l 565 · motor_r 497 · 비(큰/작은) 1.14 | E200 motor_l 728 · motor_r 377 · 비(큰/작은) 1.93
+b12 G18 motor_l 531 · motor_r 516 · 비(큰/작은) 1.03 | E200 motor_l 588 · motor_r 499 · 비(큰/작은) 1.18
+b13 G18 motor_l 624 · motor_r 481 · 비(큰/작은) 1.30 | E200 motor_l 746 · motor_r 404 · 비(큰/작은) 1.85
+b14 G18 motor_l 470 · motor_r 589 · 비(큰/작은) 1.25 | E200 motor_l 421 · motor_r 684 · 비(큰/작은) 1.62
