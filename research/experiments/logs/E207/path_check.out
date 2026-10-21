@@ -1,0 +1,35 @@
+[E207 경로 검사] 시작 2026-10-22 00:46:42
+[(a) 회귀 형성 rc=0 00:53:36] RCJ 12 · E207 줄 0
+[(b) F·X 측정 rc=0 00:56:18] RCJ 12 · 제시 0 · F 적재 2 · 동작점 기저값 -1300.0 
+    [E207 측정 맥락] tag=pre 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 131398 · 비활성 무리 781 · 게이팅 있음
+    [E207 측정 맥락] tag=post 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 132922 · 비활성 무리 817 · 게이팅 있음
+    RCJ side=l pair=AB J_pre=0.5310 J_post=0.5310 n_pre=167/179 n_post=167/179
+    RCJ side=l pair=AC J_pre=0.5156 J_post=0.5459 n_pre=167/174 n_post=167/170
+    RCJ side=l pair=BD J_pre=0.5385 J_post=0.5322 n_pre=179/181 n_post=179/178
+    RCJ side=r pair=AB J_pre=0.4515 J_post=0.5064 n_pre=176/168 n_post=182/169
+    RCJ side=r pair=AC J_pre=0.5517 J_post=0.5474 n_pre=176/184 n_post=182/177
+    RCJ side=r pair=BD J_pre=0.5446 J_post=0.5516 n_pre=168/178 n_post=169/177
+[(c) F·none 측정 rc=0 00:58:47] RCJ 12 · 제시 0 · F 적재 2 · 동작점 기저값 -1300.0 
+    RCJ side=l pair=AB J_pre=0.0323 J_post=0.0000 n_pre=76/84 n_post=78/82
+    RCJ side=l pair=AC J_pre=0.0719 J_post=0.0437 n_pre=76/88 n_post=78/89
+    RCJ side=l pair=BD J_pre=0.0382 J_post=0.0314 n_pre=84/79 n_post=82/82
+    RCJ side=r pair=AB J_pre=0.0405 J_post=0.0060 n_pre=93/87 n_post=81/87
+    RCJ side=r pair=AC J_pre=0.0920 J_post=0.0314 n_pre=93/85 n_post=81/83
+    RCJ side=r pair=BD J_pre=0.0719 J_post=0.0311 n_pre=87/77 n_post=87/79
+[(d) U·X 측정 rc=0 01:01:14] RCJ 12 · 제시 0 · F 적재 0 · 동작점 기저값 -2800.0 
+    [E207 측정 맥락] tag=pre 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 198324 · 비활성 무리 883 · 게이팅 있음
+    [E207 측정 맥락] tag=post 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 202160 · 비활성 무리 965 · 게이팅 있음
+    RCJ side=l pair=AB J_pre=0.5479 J_post=0.5585 n_pre=201/203 n_post=203/210
+    RCJ side=l pair=AC J_pre=0.5889 J_post=0.6126 n_pre=201/201 n_post=203/205
+    RCJ side=l pair=BD J_pre=0.5731 J_post=0.5827 n_pre=203/206 n_post=210/211
+    RCJ side=r pair=AB J_pre=0.5720 J_post=0.5869 n_pre=206/198 n_post=207/204
+    RCJ side=r pair=AC J_pre=0.6181 J_post=0.6314 n_pre=206/205 n_post=207/209
+    RCJ side=r pair=BD J_pre=0.5976 J_post=0.6414 n_pre=198/203 n_post=204/208
+[검사 (a)] 회귀 — 저장 배열 6개 같음 True · RCJ 12줄 같음 True · E207 줄 없음 True → 통과
+[검사 (b)] F·X — RAWCAT 1 · RCJ 12(J_pre=J_post False) · RCCHK [('post', (288, 0, 0, 0, 1)), ('pre', (288, 0, 0, 0, 1))] · 노출 0 · 세계 [(38300, '5,14,15,19,29')] · 동작점 [-1300.0] · F 적재 2 · 측정 맥락 {'pre': ('X', 288, 576000, 0, 131398, 781, '있음'), 'post': ('X', 288, 576000, 0, 132922, 817, '있음')} · S 21771 → 실패
+[검사 (c)] F·none — RAWCAT 1 · RCJ 12(J_pre=J_post False) · RCCHK [('post', (288, 0, 0, 0, 1)), ('pre', (288, 0, 0, 0, 1))] · 노출 0 · 세계 [(38300, '5,14,15,19,29')] · 동작점 [-1300.0] · F 적재 2 · 측정 맥락 {} · S 1376 → 실패
+[검사 (d)] U·X — RAWCAT 1 · RCJ 12(J_pre=J_post False) · RCCHK [('post', (288, 0, 0, 0, 1)), ('pre', (288, 0, 0, 0, 1))] · 노출 0 · 세계 [(38300, '5,14,15,19,29')] · 동작점 [-2800.0] · F 적재 0 · 측정 맥락 {'pre': ('X', 288, 576000, 0, 198324, 883, '있음'), 'post': ('X', 288, 576000, 0, 202160, 965, '있음')} · S 24681 → 실패
+[보고] F15 X 대 none RCJ 12값 같음 False(같으면 조작 무효 의심) · S_none 1376 · S_X 21771 · J(A,B) 좌/우 none 0/60 X 5310/5064
+[보고] F15 none(C2·게이팅 있음) RCJ 대 E206 형성 로그 post(맥락 집단 없음) — 같음 2/12 · 차 최대 130(1e-4)
+[E207 경로 검사] 실패
+[E207 경로 검사] 종료 2026-10-22 01:01:15

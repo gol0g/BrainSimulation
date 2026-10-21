@@ -526,6 +526,8 @@ def main():
                     help="E195 정정: KC 되먹임 억제(kc_inh → kc) 가중치 배율 — 이 cfg 로 만드는 모든 뇌. 1 = 이전(−15). 항상성 PI 제어기는 실제 KC 발화율이 목표보다 낮아 구동 0 이라 이것이 실제 희소화 손잡이")
     ap.add_argument("--rc-measure-ctx", action="store_true",
                     help="E192 rawcat(측정 전용): 노출 없이 사례 × 범주 A·B × 맥락 X(zz_ctx2)·Y(zz_ctx) 제시, 자극 쪽 KC 제시별 스파이크 수 RCKX 줄. --ctx-n·--ctx2-n 필요")
+    ap.add_argument("--rc-measure-ctx-on", default="none", choices=["none", "X", "Y"],
+                    help="E207 rawcat: 형성 전후 KC 집합 측정(RCKC·RCJ) 제시 3처리 동안 맥락을 켬(X = zz_ctx2, Y = zz_ctx — 학습 조건과 같은 구동; 간격·노출 동안은 끔). 기본 none = 이전")
     ap.add_argument("--rc-measure-cats", default="A,B",
                     help="E190 rawcat: 형성 전후 KC 집합 측정 범주(쉼표, A·B 포함). 기본 A,B = 이전. 범주 쌍 겹침 RCJ 줄은 측정 범주의 모든 쌍")
     ap.add_argument("--feat-weights", default=None,
@@ -719,6 +721,8 @@ def main():
         raise SystemExit("--rc-measure-cats 는 A·B 를 포함해야 한다(RAWCAT 분리 지표는 A·B)")
     if args.rc_measure_ctx and (args.decomp_mode != "rawcat" or args.ctx_n <= 0 or args.ctx2_n <= 0):
         raise SystemExit("--rc-measure-ctx 는 rawcat 측정 전용이며 --ctx-n > 0 과 --ctx2-n > 0 이 필요하다(맥락 X = zz_ctx2, Y = zz_ctx)")
+    if args.rc_measure_ctx_on != "none" and (args.decomp_mode != "rawcat" or args.ctx_n <= 0 or args.ctx2_n <= 0 or args.rc_measure_ctx):
+        raise SystemExit("--rc-measure-ctx-on 은 rawcat 형성 측정 전용이며 --ctx-n·--ctx2-n > 0 이 필요하고 --rc-measure-ctx 와 함께 쓸 수 없다")
     if (args.rc_expo_cats != "A,B" or args.rc_measure_cats != "A,B") and args.decomp_mode != "rawcat":
         raise SystemExit("--rc-expo-cats·--rc-measure-cats 는 rawcat 형성 전용이다(다른 경로에서는 듣지 않는다)")
     if (args.rc_task == "catctx" or args.rc_eval_ctx != "none") and (args.ctx_n <= 0 or args.ctx2_n <= 0):
@@ -971,7 +975,7 @@ def main():
                 for _ in range(30):
                     _b2.process(_obs2)
 
-            def _present(side, units, rec):
+            def _present(side, units, rec, ctxc=None):
                 sd = side[0]
                 kpop = _b2.kc_left if sd == "l" else _b2.kc_right
                 act = np.zeros(args.feat_n, dtype=bool)
@@ -984,6 +988,15 @@ def main():
                     ids = _ids(kpop)
                     if rec is not None and ids.size:
                         rec["kc"] += np.bincount(ids[ids < n_k], minlength=n_k)[:n_k]
+                    if ctxc is not None:   # E207 조작검증(읽기 전용): 켠·끈 맥락 발화, 게이팅 무리별 KC 발화(활성 = 켠 맥락의 무리)
+                        ctxc["on"] += int(_ids(ctxc["pon"]).size); ctxc["off"] += int(_ids(ctxc["poff"]).size)
+                        if ctxc["sub"] is not None and ids.size:
+                            _ik = ids[ids < n_k]
+                            _gx = int(np.sum(ctxc["sub"][sd][_ik]))
+                            if ctxc["x"]:
+                                ctxc["ga"] += _gx; ctxc["gb"] += int(_ik.size) - _gx
+                            else:
+                                ctxc["ga"] += int(_ik.size) - _gx; ctxc["gb"] += _gx
                     fid = _ids(_b2.feat_pop[sd])
                     fid = fid[fid < args.feat_n]
                     if rec is not None:
@@ -1012,6 +1025,12 @@ def main():
                 cnts = {}
                 rec = {"kc": None, "fa": 0, "fi": 0, "fo": 0, "gb": 0, "fu": []}
                 npres = 0
+                _cm = args.rc_measure_ctx_on
+                ctxc = None
+                if _cm != "none":   # E207: 측정 제시 동안 맥락 켬(학습 조건과 같은 구동) — 간격·노출은 끔
+                    ctxc = {"on": 0, "off": 0, "ga": 0, "gb": 0, "x": _cm == "X",
+                            "pon": _b2.ctx2_pop if _cm == "X" else _b2.ctx_pop, "poff": _b2.ctx_pop if _cm == "X" else _b2.ctx2_pop,
+                            "sub": getattr(_b2, "ctx_gate_sub", None)}
                 for _r in range(args.rc_reps):
                     for side in ("left", "right"):
                         for st in ("train", "new"):
@@ -1021,7 +1040,11 @@ def main():
                                     if key not in cnts:
                                         cnts[key] = np.zeros(n_k)
                                     rec["kc"] = cnts[key]
-                                    _present(side, W_[st][c][i], rec)
+                                    if ctxc is not None:
+                                        ctx_state(_b2, 2 if ctxc["x"] else 1, args)
+                                    _present(side, W_[st][c][i], rec, ctxc)
+                                    if ctxc is not None:
+                                        ctx_state(_b2, 0, args)
                                     _gap(base)
                                     npres += 1
                 g_a = _gpull()
@@ -1038,6 +1061,11 @@ def main():
                 print("RCCHK tag=%s npres=%d feat_active_frac=%.4f feat_inactive_spikes=%d feat_active_spikes=%d feat_other_side=%d goodbad=%d g_same=%d base_l=%d base_r=%d"
                       % (tag, npres, float(np.mean(rec["fu"])) if rec["fu"] else float("nan"), rec["fi"], rec["fa"], rec["fo"], rec["gb"], int(same),
                          int(base["l"].sum()), int(base["r"].sum())))
+                if ctxc is not None:
+                    if ctxc["on"] == 0:
+                        raise RuntimeError("E207 측정: 켠 맥락 집단 발화 0 — 맥락 입력이 닿지 않음(측정 도구 실패)")
+                    print("[E207 측정 맥락] tag=%s 맥락 %s 켬 — 제시 %d · 켠 맥락 발화 %d · 끈 맥락 발화 %d · KC 발화 활성 무리 %d · 비활성 무리 %d · 게이팅 %s"
+                          % (tag, _cm, npres, ctxc["on"], ctxc["off"], ctxc["ga"], ctxc["gb"], "있음" if ctxc["sub"] is not None else "없음"))
                 return sets
 
             def _wsum(g, sd):
