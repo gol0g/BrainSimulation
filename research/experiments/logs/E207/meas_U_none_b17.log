@@ -1,0 +1,988 @@
+Building Forager Brain (28,323 neurons)...
+  Phase 2a: Hypothalamus Circuit
+  [E176 초기 연결 스냅숏] 적재 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b17.npz — 스냅숏 희소 집단 790 개
+  Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
+  Obstacle Eye: L/R(200x2) [Push=8.0, Pull=-4.0]
+  Phase L5: Good_Food_L/R(200x2) + Bad_Food_L/R(200x2)
+  Hypothalamus: LowEnergy(200) + HighEnergy(200) + Hunger(500) + Satiety(500)
+  Motor: C=300.0 (anti-saturation)
+  Motor: Left(500) + Right(500)
+  Amygdala: Pain_L/R(200x2) + Danger(200) + LA(500) + CEA(300) + Fear(200)
+  Hippocampus: PlaceCells(400) + FoodMemory(200)
+  BasalGanglia (L2 D1/D2): D1(100L+100R) + D2(100L+100R) + Direct(100L+100R) + Indirect(100L+100R) + Dopamine(100)
+  Motor: C=300.0 (anti-saturation)
+  MSN: C=30.0 (graded response)
+  Building Hypothalamus circuit (Dual Sensor)...
+    LowEnergy→Hunger: 30.0 (excite)
+    HighEnergy→Satiety: 25.0 (excite)
+    Hunger↔Satiety: -20.0 (WTA)
+  Building Modulation circuit...
+    Hunger→FoodEye: 12.0 (amplify)
+    Satiety→Motor: -4.0 (suppress)
+  Building Reflex circuit (Phase 1)...
+    Wall Push: 60.0
+    Wall Pull: -40.0
+    Food Explore: food_eye→Motor 10.0 (static, weak)
+    Food Approach: good_food_eye→Motor R-STDP (init=0.0, learnable)
+  Building Obstacle avoidance circuit...
+    Obstacle Push: 8.0 (weak, wall=60.0)
+    Obstacle Pull: -4.0 (weak, wall=-40.0)
+  Building Motor WTA...
+    Motor WTA: -5.0
+  Building Amygdala circuit (Phase 2b)...
+    Pain→LA: 50.0 (US, unconditional)
+    Danger→LA: 25.0 (CS, conditioned)
+    Phase L13: BadFoodEye→LA: init_w=0.1, w_max=5.0 (DENSE, Hebbian)
+    LA→CEA: 30.0
+    CEA→Fear: 25.0
+  Building Fear-Motor circuit...
+    Pain→Motor (Push-Pull): push=60.0, pull=-40.0
+  Building Hunger-Fear competition...
+    Hunger→CEA: -15.0 (suppress fear)
+    CEA→Hunger: -10.0 (suppress appetite)
+  Building Hippocampus circuit (Phase 3c - Directional)...
+    PlaceCells→FoodMemory L/R: 2.0 (DIRECTIONAL, eta=0.15)
+    FoodMemory L→Motor L, R→Motor R: 5.0
+    Hunger→FoodMemory: 10.0 (amplify when hungry)
+  Building Basal Ganglia circuit (Phase L2: D1/D2 MSN + R-STDP)...
+    [C36 수리1] 학습가능 교차경로 신설: food_eye_L→D1_R, food_eye_R→D1_L (init=0.5, R-STDP) — 매핑 재학습 가능
+    FoodEye→D1 [C36 진짜 R-STDP]: init_w=1.0, w_max=30.0, eta=0.02, tau_e=12.0 (시냅스별 자격흔적)
+    FoodEye→D2 (Anti-Hebbian): init_w=1.0, w_min=0.1
+    D1→Direct: 20.0 (Go)
+    D2→Indirect: 15.0 (NoGo)
+    [C56] direct E/I 균형: 억제뉴런 60 → -100.0 (포화 해소, d1→direct는 강하게 유지)
+    Direct→Motor: 25.0 (Go, ipsi)
+    Direct→Motor: -8.0 (Push-Pull, contra)
+    Indirect→Motor: -10.0 (NoGo, lateralized)
+    Dopamine→D1: 15.0 (D1 receptor, excite)
+    Dopamine→D2: -12.0 (D2 receptor, inhibit)
+    Phase L7: GoodFood→D1 (R-STDP): init_w=1.0
+    Phase L7: BadFood→D1 (R-STDP, no DA): init_w=1.0
+    Phase L7: GoodFood→D2 (Anti-Hebbian): init_w=1.0
+    Phase L7: BadFood→D2 (Anti-Hebbian, no DA): init_w=1.0
+    Phase L7: 8 discriminative BG synapses, sparsity=0.08
+  Phase 5: Building PFC (Prefrontal Cortex)...
+    Working Memory: 200 neurons
+    Goal Food: 50 neurons
+    Goal Safety: 50 neurons
+    Inhibitory Control: 100 neurons
+    Input→WM: place=10.0, food_mem=15.0, fear=12.0
+    WM Recurrent: 8.0 (persistent activity)
+    Hunger→Goal_Food: 25.0
+    Fear→Goal_Safety: 20.0
+    Goal WTA: -15.0 (competition)
+    Inhibitory→Direct(L/R): -10.0 (suppress impulsive Go)
+    Inhibitory→Motor: 0.0
+    Goal_Food→Motor: 0.0 (goal-directed)
+  PFC circuit complete: 400 neurons
+  Phase 6a: Building Cerebellum...
+    Granule Cells: 300 neurons
+    Purkinje Cells: 100 neurons
+    Deep Nuclei: 100 neurons
+    Error Signal: 50 neurons
+    Motor→Granule: 12.0 (efference copy)
+    Sensory→Granule: 10.0
+    Granule→Purkinje: 5.0 (parallel fibers)
+    Error→Purkinje: 30.0 (climbing fibers)
+    Purkinje→Deep: -15.0 (inhibitory)
+    Deep→Motor: 0.0 (motor modulation)
+    Pain/Wall→Error: error signal triggers
+  Cerebellum circuit complete: 550 neurons
+  Phase 6b: Building Thalamus...
+    Food Relay: 100 neurons
+    Danger Relay: 100 neurons
+    TRN: 100 neurons
+    Arousal: 50 neurons
+    Food Eye→Food Relay: 15.0
+    Pain/Wall→Danger Relay: 18.0/12.0
+    Hunger/Fear→TRN: -12.0/-15.0 (gate control)
+    TRN→Relay: -10.0 (inhibitory gating)
+    Goal→Relay: 12.0 (attention)
+    Relay→Output: Food→Motor 0.0, Danger→Amyg 15.0
+    Energy→Arousal: Low 20.0, High -15.0
+    Arousal→Motor/Relay: 0.0/5.0
+  Thalamus circuit complete: 350 neurons
+  Phase 8: Building Primary Visual Cortex (V1)...
+    V1_Food: L(100) + R(100)
+    V1_Danger: L(100) + R(100)
+    FoodEye→V1_Food: 20.0
+    PainEye→V1_Danger: 20.0
+    WallEye→V1_Danger: 12.0
+    V1 Lateral Inhibition: -8.0
+    V1_Food→Motor (ipsi): 0.0
+    V1_Danger→Motor (contra): 0.0
+    V1_Food→PlaceCells: 10.0
+    V1_Danger→Amygdala LA: 12.0
+  V1 circuit complete: 400 neurons
+  Phase 9: Building Higher Visual Cortex (V2/V4)...
+    V2_Edge: Food(150) + Danger(150)
+    V4_Object: Food(100) + Danger(100) + Novel(100)
+    V1→V2 (수렴): 15.0
+    V2→V4 (분류): 20.0
+    V4 WTA (경쟁): -12.0
+    V1→V4_Novel (novelty): 4.5
+    V4_Food→Hippocampus: 15.0
+    V4_Food→Hunger: 10.0
+    V4_Danger→Amygdala: 18.0
+    V4_Novel→Dopamine: 20.0
+    Hunger→V4_Food (top-down): 8.0
+    Fear→V4_Danger (top-down): 10.0
+    Goal→V2 (attention): 6.0
+  V2/V4 circuit complete: 600 neurons
+  Phase 10: Building Inferior Temporal Cortex (IT)...
+    IT_Category: Food(200) + Danger(200) + Neutral(150)
+    IT_Association: 200 neurons
+    IT_Memory_Buffer: 250 neurons
+    V4→IT: 25.0
+    IT↔Hippocampus: 15.0/12.0
+    IT↔Amygdala: 18.0/15.0
+    IT→Motor: 0.0
+    IT→PFC Goal: 15.0
+    IT WTA: -15.0
+    IT↔Buffer: 12.0/10.0
+    Top-Down: Hunger→IT_Food 10.0
+  IT Cortex complete: 1000 neurons
+  *** M1 Milestone: Total neurons now = 28,323 ***
+  Phase 11: Building Auditory Cortex...
+    Sound Input: Danger L/R(100x2) + Food L/R(100x2)
+    A1: Danger(150) + Food(150)
+    A2_Association: 200 neurons
+    Sound→A1: 20.0
+    Sound Lateral Inhibition: -10.0
+    A1_Danger→Amygdala LA: 22.0 (fast fear)
+    A1→IT: 15.0 (multimodal)
+    Sound_Food Push-Pull: push=8.0, pull=-4.0
+    C1: Sound→Food_Eye cross-inhibition: -15.0 (Webb phonotaxis)
+    A1/IT→A2: 10.0/10.0
+    Top-Down: Fear→A1_Danger 8.0, Hunger→A1_Food 8.0
+  Auditory Cortex complete: 900 neurons
+    C1: Sound_Food→D1 direct (init=0.5, sp=0.1)
+  Phase 12: Building Multimodal Integration (STS)...
+    STS: Food(200) + Danger(200) + Congruence(150) + Mismatch(100)
+    Multimodal Buffer: 150
+    Visual→STS (IT): 20.0
+    Auditory→STS (A1/A2): 20.0/15.0
+    Congruence Detection: 15.0
+    Mismatch Detection: 12.0
+    STS WTA: -8.0
+    STS→Hippocampus: 8.0
+    STS→Amygdala: 8.0
+    STS→Motor: 0.0
+    STS→PFC: 10.0
+    STS→Multimodal Buffer: 12-15
+    Top-Down: Hunger→STS_Food 8.0, Fear→STS_Danger 10.0
+  Multimodal Integration complete: 800 neurons
+  Total neurons now = 28,323
+  Phase 13: Building Parietal Cortex (PPC)...
+    PPC_Space: Left(150) + Right(150)
+    PPC_Goal: Food(150) + Safety(150)
+    PPC_Attention: 200, Path_Buffer: 200
+    V1→PPC_Space: 15.0
+    IT→PPC_Space: 12.0
+    STS→PPC_Space: 15.0
+    Hippocampus→PPC_Space: 12.0
+    PFC→PPC: Goal(18.0), WM→Path(12.0)
+    Space-Goal Integration: 15.0
+    Path Buffer: 10.0
+    PPC WTA: -8.0
+    Attention: 12.0
+    PPC→Motor: 0.0
+    PPC→V1 (Top-Down): 8.0
+    PPC→STS (Top-Down): 8.0
+    PPC→Hippocampus: 5.0
+    Top-Down: Hunger→Goal_Food 10.0, Fear→Goal_Safety 12.0
+  Parietal Cortex complete: 1000 neurons
+  Total neurons now = 28,323
+  Phase 14: Building Premotor Cortex (PMC)...
+    PMd: Left(100) + Right(100)
+    PMv: Approach(100) + Avoid(100)
+    SMA: Sequence(150), pre_SMA(100)
+    Motor_Preparation: 150
+    PPC→PMd: 18.0
+    IT→PMv: 15.0
+    STS→PMv: 15.0
+    PFC→SMA: 15.0
+    SMA Recurrent: 8.0, pre_SMA→SMA: 12.0
+    PMd/PMv/SMA→Motor_Prep: 12.0
+    PMC WTA: -10.0
+    PMC→Motor: 0.0
+    PMC→Cerebellum: 10.0
+    BG→PMC: Direct 12.0, Indirect -8.0
+    Top-Down: Hunger→PMv_Approach 10.0, Fear→PMv_Avoid 12.0
+  Premotor Cortex complete: 800 neurons
+  Total neurons now = 28,323
+  Phase 15: Building Social Brain...
+    Populations: Agent_Eye(200×2) + Agent_Sound(100×2) + STS_Social(200) + TPJ(100+100+100) + ACC(100+100) + Social_Val(100+100)
+    Agent_Eye→STS_Social: 15.0
+    Agent_Sound→STS_Social: 12.0
+    STS_Social→TPJ: 12.0
+    TPJ→ACC: 12.0
+    Social Approach↔Avoid WTA: -8.0
+    STS_Social→PFC: 6.0
+    ACC→Amygdala: 5.0 (약한 간접)
+    Fear→STS_Social: 8.0
+    Phase 15 Social Brain: 1500 neurons
+  Phase 15b: Building Mirror Neuron circuit...
+    Social_Observation: 200 neurons (SensoryLIF)
+    Mirror_Food: 150 neurons (SensoryLIF)
+    Vicarious_Reward: 100 neurons (SensoryLIF)
+    Social_Memory: 150 neurons (LIF)
+    Agent_Eye→Social_Obs: 12.0
+    STS_Social→Social_Obs: 10.0
+    Social_Obs→Mirror_Food: 10.0
+    Hunger→Mirror_Food: 8.0
+    Mirror_Food→Vicarious_Reward: 12.0
+    Vicarious→Social_Memory: 15.0 (HEBBIAN, eta=0.1)
+    Social_Memory→Food_Memory: 5.0
+    Mirror→Goal_Food: 5.0
+    Mirror→Motor: 0.0 (DISABLED!)
+    Hunger→Social_Obs: 6.0
+    Fear→Social_Obs: -4.0
+    Phase 15b Mirror Neurons: 600 neurons
+  Phase 15c: Building Theory of Mind circuit...
+    ToM_Intention: 100 neurons (SensoryLIF)
+    ToM_Belief: 80 neurons (LIF)
+    ToM_Prediction: 80 neurons (LIF)
+    ToM_Surprise: 60 neurons (SensoryLIF)
+    CoopCompete_Coop: 80 neurons (LIF)
+    CoopCompete_Compete: 100 neurons (SensoryLIF)
+    Social_Obs→ToM_Intention: 10.0
+    STS_Social→ToM_Intention: 8.0
+    Prediction→Surprise: -10.0 (inhibitory)
+    ToM_Intention→Coop: 10.0 (HEBBIAN)
+    Coop↔Compete WTA: -8.0
+    Coop→Social_Approach: 5.0
+    Compete→Social_Avoid: 5.0
+    ToM→Motor: 0.0 (DISABLED!)
+    Hunger→ToM_Intention: 6.0
+    Fear→ToM_Intention: -4.0
+    Phase 15c Theory of Mind: 500 neurons
+  Phase 16: Building Association Cortex...
+    Assoc_Edible: 120
+    Assoc_Threatening: 120
+    Assoc_Animate: 100
+    Assoc_Context: 100
+    Assoc_Valence: 80
+    Assoc_Binding: 100
+    Assoc_Novelty: 80
+    Edible↔Threatening WTA: -6.0
+    Assoc_Binding: Hebbian DENSE (Edible, Context)
+    Phase 16 Association Cortex: 700 neurons
+    Motor direct: 0.0 (disabled)
+  Phase 17: Building Language Circuit...
+    Call Input: 200
+    Wernicke: 280
+    Broca: 280
+    Vocal Gate: 80, Mirror: 80, Binding: 80
+    C3: NPC Call Push-Pull: push=10.0, pull=-5.0
+    Phase 17 Language Circuit: 1000 neurons
+    Motor direct: 0.0 (disabled, except C3 Call Push-Pull)
+    Total neurons now = 28,323
+  Phase 18: Building WM Expansion Circuit...
+    Populations: WM_Thalamic(100) + Gate(50) + Temporal(80+40) + GoalSeq(80+70) + Context(100) + Inhibitory(100)
+    18a: Thalamocortical loop - WM↔Thalamic + Gate
+    18b: Temporal buffer - Recent(80) + Prior(40)
+    18c: Goal sequencer - Pending(80) + Switch(70)
+    18d: WM Context (Hebbian DENSE, eta=0.05, w_max=16.0)
+    18e: WM Inhibitory balance (100 neurons)
+    Motor direct: 0.0 (disabled)
+  Phase 19: Building Metacognition Circuit...
+    Populations: Confidence(80) + Uncertainty(80) + Evaluate(80) + ArousalMod(70) + Inhibitory(70)
+    19a: Confidence inputs (valence, congruence, goals, context)
+    19b: Uncertainty inputs (conflict, error, novelty, surprise, mismatch)
+    19c: Confidence↔Uncertainty WTA (-5.0)
+    19d: Outputs (conf→goals, eval→switch/arousal, arousal_mod→arousal/DA)
+    19e: Inhibitory balance (70 neurons)
+    19f: Hebbian DENSE (Valence→Confidence, eta=0.04, w_max=14.0)
+    Motor direct: 0.0 (disabled)
+    Phase 19 Metacognition: 380 neurons
+  Phase 20: Self-Model (자기 모델)
+    20-1: Populations (80+80+70+70+80+60 = 440 neurons)
+    20a: Self_Body inputs (hunger/fear/meta_conf/meta_uncert/dopamine)
+    20b: Self_Efference inputs (motor_left/motor_right)
+    20d: Self_Agency inputs (efference/predict/food_memory)
+    20e: Self_Narrative inputs (body/agency/wm_context/recurrent)
+    20f: Outputs (body→meta, agency→goals, narrative→WM, predict→error) ALL ≤1.5
+    20g: Inhibitory balance (60 neurons)
+    20h: Hebbian DENSE (Body→Narrative, eta=0.04, w_max=14.0)
+    L15: Hebbian DENSE (Agency→Narrative, eta=0.01, w_max=8.0)
+    Motor direct: 0.0 (disabled)
+    Phase 20 Self-Model: 440 neurons
+
+  === Phase L14: Agency Detection ===
+    Agency_PE: 50 neurons (LIF)
+    Forward Model: self_efference→self_predict DENSE Hebbian (eta=0.005, w_max=10.0)
+    V1_Food→Agency_PE: 8.0 (actual sensory)
+    Self_Predict→Agency_PE: -6.0 (predicted, cancels)
+    Agency_PE→Self_Agency: -2.0 (high PE = low agency)
+    Motor direct: 0.0 (disabled)
+
+  === Phase L5: Perceptual Learning Circuit ===
+    Good→IT_Food (R-STDP), Good→IT_Danger (Anti-Hebbian)
+    Bad→IT_Danger (R-STDP), Bad→IT_Food (Anti-Hebbian)
+    Init weight: 2.0, Sparsity: 0.08
+    Total: 8 learning synapses
+
+  === Phase L6: Prediction Error Circuit ===
+    PE_Food: L(50) + R(50)
+    PE_Danger: L(50) + R(50)
+    V1→PE (bottom-up excitatory): 10.0
+    IT→PE (top-down inhibitory): -7.0
+    PE→IT (R-STDP learning): init_w=1.0, eta=0.0005
+  Prediction Error circuit complete: 200 neurons, 4 learning synapses
+    Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
+  Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
+    Assoc_Edible→KC: 2.0, sparsity=0.05
+    Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
+    Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
+    PPC_Goal_Food→KC: 2.0, sparsity=0.05
+    Social_Memory→KC: 1.5, sparsity=0.03
+    Assoc_Binding→KC: 2.0, sparsity=0.05 (C2: learned category→BG)
+    KC→motor [E109 R-STDP 4방향]: init_w=150.0, w_max=300.0, eta=0.15, tau_e=12.0, sparsity=0.25
+    KC→D1 [정적 — 학습 불가]: init_w=0.5 (진짜 학습은 --kc-rstdp)
+  Phase L16: Sparse Expansion (KC) — single KC
+    KC: 3000×2 = 6000, KC_Inh: 400×2 = 800
+    Total KC neurons: 6000 + 800 inh = 6800
+    Output: 4 SPARSE learning (1 KC × 2 sides × D1+D2)
+    Phase L10: NAc(80+30), 2 R-STDP + 4 static, RPE discount=0.5
+    Phase L11: SWR(100+50+50), 7 static, replay_count=5
+    Phase L12: GW(50x2+60), 12 static, food_mem->motor reduced to 5.0
+  Building C4: Contextual Prediction circuit...
+    Pred_FoodSoon: 30 + Inh: 15 = 45 neurons
+    Predictive STDP: place(400)→pred DENSE + wmcb→pred DENSE
+    Teacher: food_eye→pred(8.0), lateral_inh(-5.0)
+    Budget: W_budget=12.0 per post neuron
+    Output: pred→goal_food(1.5), pred→D1(1.0)
+  Building C5: Curiosity-Driven Exploration circuit...
+    Curiosity_Gate: 20 + Inh: 10 = 30 neurons
+    Synapses: ~10 static (all static, no learning)
+    Input: V4_Novel(1.0), Assoc_Novelty(1.2), Meta_Uncertainty(1.5)
+    Safety: Fear(8.0)→Inh→Gate(-2.0)
+    Output: →Goal_Food(1.5), →D1(0.8)
+  Building M3: ACh Uncertainty Gate...
+    Surprise_Accum: 20 (C=50, slow)
+    Stability_Detector: 10
+    Input: Agency_PE(2.0), Meta_Uncertainty(1.5)
+    Output: surprise_rate → eta_mod (no Motor connection)
+  Building M4: Context Gate circuit...
+    CtxA: 4 (SensoryLIF), CtxB: 4
+    D1_ctx: 4×20=80 neurons (A_L/R + B_L/R, SensoryLIF)
+    Context gating: excite(12.0), inhibit(-15.0)
+    D1_ctx→Motor: Push-Pull 50.0/-20.0 sp=0.3 (v9e: sole food pathway)
+  Building M3: Place Transition + Value circuit...
+    Place→Place transition: DENSE 400x400 (STDP online)
+    Value population: 20 neurons
+    Value→D1: 1.0 (gentle)
+    Reverse replay: 5 steps backward
+  [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 11848·우 12333
+  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 12003·우 11996
+  [E204 맥락 게이팅 KC] 무리 X 좌 1508·우 1547 / Y 좌 1492·우 1453, 억제 w=-20.00 p=0.100, 연결 zz_ctx2→Y 좌 29839·우 28935 · zz_ctx→X 좌 30252·우 30876
+  [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 60355·우 59997, 정적
+  Spike recording enabled for all monitored populations
+Building model...
+make: Entering directory '/root/e207_main_run/forager_brain_CODE'
+make: Leaving directory '/root/e207_main_run/forager_brain_CODE'
+  [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 790 개
+  [motor 동작점] motor 좌·우 Ioffset 기저값 -2800.0(긴장성 억제)
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/kctype_oja_b17.npz 검증 일치 — good_food_eye_l_to_kc_l=237630.87 bad_food_eye_l_to_kc_l=241919.92 good_food_eye_r_to_kc_r=238239.97 bad_food_eye_r_to_kc_r=240065.70
+Model ready! Total: 28,323 neurons
+Building Forager Brain (28,323 neurons)...
+  Phase 2a: Hypothalamus Circuit
+  [E176 초기 연결 스냅숏] 적재 /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E176/snap/conn_b17.npz — 스냅숏 희소 집단 790 개
+  Sensory: Food_L/R(400x2) + Wall_L/R(200x2)
+  Obstacle Eye: L/R(200x2) [Push=8.0, Pull=-4.0]
+  Phase L5: Good_Food_L/R(200x2) + Bad_Food_L/R(200x2)
+  Hypothalamus: LowEnergy(200) + HighEnergy(200) + Hunger(500) + Satiety(500)
+  Motor: C=300.0 (anti-saturation)
+  Motor: Left(500) + Right(500)
+  Amygdala: Pain_L/R(200x2) + Danger(200) + LA(500) + CEA(300) + Fear(200)
+  Hippocampus: PlaceCells(400) + FoodMemory(200)
+  BasalGanglia (L2 D1/D2): D1(100L+100R) + D2(100L+100R) + Direct(100L+100R) + Indirect(100L+100R) + Dopamine(100)
+  Motor: C=300.0 (anti-saturation)
+  MSN: C=30.0 (graded response)
+  Building Hypothalamus circuit (Dual Sensor)...
+    LowEnergy→Hunger: 30.0 (excite)
+    HighEnergy→Satiety: 25.0 (excite)
+    Hunger↔Satiety: -20.0 (WTA)
+  Building Modulation circuit...
+    Hunger→FoodEye: 12.0 (amplify)
+    Satiety→Motor: -4.0 (suppress)
+  Building Reflex circuit (Phase 1)...
+    Wall Push: 60.0
+    Wall Pull: -40.0
+    Food Explore: food_eye→Motor 10.0 (static, weak)
+    Food Approach: good_food_eye→Motor R-STDP (init=0.0, learnable)
+  Building Obstacle avoidance circuit...
+    Obstacle Push: 8.0 (weak, wall=60.0)
+    Obstacle Pull: -4.0 (weak, wall=-40.0)
+  Building Motor WTA...
+    Motor WTA: -5.0
+  Building Amygdala circuit (Phase 2b)...
+    Pain→LA: 50.0 (US, unconditional)
+    Danger→LA: 25.0 (CS, conditioned)
+    Phase L13: BadFoodEye→LA: init_w=0.1, w_max=5.0 (DENSE, Hebbian)
+    LA→CEA: 30.0
+    CEA→Fear: 25.0
+  Building Fear-Motor circuit...
+    Pain→Motor (Push-Pull): push=60.0, pull=-40.0
+  Building Hunger-Fear competition...
+    Hunger→CEA: -15.0 (suppress fear)
+    CEA→Hunger: -10.0 (suppress appetite)
+  Building Hippocampus circuit (Phase 3c - Directional)...
+    PlaceCells→FoodMemory L/R: 2.0 (DIRECTIONAL, eta=0.15)
+    FoodMemory L→Motor L, R→Motor R: 5.0
+    Hunger→FoodMemory: 10.0 (amplify when hungry)
+  Building Basal Ganglia circuit (Phase L2: D1/D2 MSN + R-STDP)...
+    [C36 수리1] 학습가능 교차경로 신설: food_eye_L→D1_R, food_eye_R→D1_L (init=0.5, R-STDP) — 매핑 재학습 가능
+    FoodEye→D1 [C36 진짜 R-STDP]: init_w=1.0, w_max=30.0, eta=0.02, tau_e=12.0 (시냅스별 자격흔적)
+    FoodEye→D2 (Anti-Hebbian): init_w=1.0, w_min=0.1
+    D1→Direct: 20.0 (Go)
+    D2→Indirect: 15.0 (NoGo)
+    [C56] direct E/I 균형: 억제뉴런 60 → -100.0 (포화 해소, d1→direct는 강하게 유지)
+    Direct→Motor: 25.0 (Go, ipsi)
+    Direct→Motor: -8.0 (Push-Pull, contra)
+    Indirect→Motor: -10.0 (NoGo, lateralized)
+    Dopamine→D1: 15.0 (D1 receptor, excite)
+    Dopamine→D2: -12.0 (D2 receptor, inhibit)
+    Phase L7: GoodFood→D1 (R-STDP): init_w=1.0
+    Phase L7: BadFood→D1 (R-STDP, no DA): init_w=1.0
+    Phase L7: GoodFood→D2 (Anti-Hebbian): init_w=1.0
+    Phase L7: BadFood→D2 (Anti-Hebbian, no DA): init_w=1.0
+    Phase L7: 8 discriminative BG synapses, sparsity=0.08
+  Phase 5: Building PFC (Prefrontal Cortex)...
+    Working Memory: 200 neurons
+    Goal Food: 50 neurons
+    Goal Safety: 50 neurons
+    Inhibitory Control: 100 neurons
+    Input→WM: place=10.0, food_mem=15.0, fear=12.0
+    WM Recurrent: 8.0 (persistent activity)
+    Hunger→Goal_Food: 25.0
+    Fear→Goal_Safety: 20.0
+    Goal WTA: -15.0 (competition)
+    Inhibitory→Direct(L/R): -10.0 (suppress impulsive Go)
+    Inhibitory→Motor: 0.0
+    Goal_Food→Motor: 0.0 (goal-directed)
+  PFC circuit complete: 400 neurons
+  Phase 6a: Building Cerebellum...
+    Granule Cells: 300 neurons
+    Purkinje Cells: 100 neurons
+    Deep Nuclei: 100 neurons
+    Error Signal: 50 neurons
+    Motor→Granule: 12.0 (efference copy)
+    Sensory→Granule: 10.0
+    Granule→Purkinje: 5.0 (parallel fibers)
+    Error→Purkinje: 30.0 (climbing fibers)
+    Purkinje→Deep: -15.0 (inhibitory)
+    Deep→Motor: 0.0 (motor modulation)
+    Pain/Wall→Error: error signal triggers
+  Cerebellum circuit complete: 550 neurons
+  Phase 6b: Building Thalamus...
+    Food Relay: 100 neurons
+    Danger Relay: 100 neurons
+    TRN: 100 neurons
+    Arousal: 50 neurons
+    Food Eye→Food Relay: 15.0
+    Pain/Wall→Danger Relay: 18.0/12.0
+    Hunger/Fear→TRN: -12.0/-15.0 (gate control)
+    TRN→Relay: -10.0 (inhibitory gating)
+    Goal→Relay: 12.0 (attention)
+    Relay→Output: Food→Motor 0.0, Danger→Amyg 15.0
+    Energy→Arousal: Low 20.0, High -15.0
+    Arousal→Motor/Relay: 0.0/5.0
+  Thalamus circuit complete: 350 neurons
+  Phase 8: Building Primary Visual Cortex (V1)...
+    V1_Food: L(100) + R(100)
+    V1_Danger: L(100) + R(100)
+    FoodEye→V1_Food: 20.0
+    PainEye→V1_Danger: 20.0
+    WallEye→V1_Danger: 12.0
+    V1 Lateral Inhibition: -8.0
+    V1_Food→Motor (ipsi): 0.0
+    V1_Danger→Motor (contra): 0.0
+    V1_Food→PlaceCells: 10.0
+    V1_Danger→Amygdala LA: 12.0
+  V1 circuit complete: 400 neurons
+  Phase 9: Building Higher Visual Cortex (V2/V4)...
+    V2_Edge: Food(150) + Danger(150)
+    V4_Object: Food(100) + Danger(100) + Novel(100)
+    V1→V2 (수렴): 15.0
+    V2→V4 (분류): 20.0
+    V4 WTA (경쟁): -12.0
+    V1→V4_Novel (novelty): 4.5
+    V4_Food→Hippocampus: 15.0
+    V4_Food→Hunger: 10.0
+    V4_Danger→Amygdala: 18.0
+    V4_Novel→Dopamine: 20.0
+    Hunger→V4_Food (top-down): 8.0
+    Fear→V4_Danger (top-down): 10.0
+    Goal→V2 (attention): 6.0
+  V2/V4 circuit complete: 600 neurons
+  Phase 10: Building Inferior Temporal Cortex (IT)...
+    IT_Category: Food(200) + Danger(200) + Neutral(150)
+    IT_Association: 200 neurons
+    IT_Memory_Buffer: 250 neurons
+    V4→IT: 25.0
+    IT↔Hippocampus: 15.0/12.0
+    IT↔Amygdala: 18.0/15.0
+    IT→Motor: 0.0
+    IT→PFC Goal: 15.0
+    IT WTA: -15.0
+    IT↔Buffer: 12.0/10.0
+    Top-Down: Hunger→IT_Food 10.0
+  IT Cortex complete: 1000 neurons
+  *** M1 Milestone: Total neurons now = 28,323 ***
+  Phase 11: Building Auditory Cortex...
+    Sound Input: Danger L/R(100x2) + Food L/R(100x2)
+    A1: Danger(150) + Food(150)
+    A2_Association: 200 neurons
+    Sound→A1: 20.0
+    Sound Lateral Inhibition: -10.0
+    A1_Danger→Amygdala LA: 22.0 (fast fear)
+    A1→IT: 15.0 (multimodal)
+    Sound_Food Push-Pull: push=8.0, pull=-4.0
+    C1: Sound→Food_Eye cross-inhibition: -15.0 (Webb phonotaxis)
+    A1/IT→A2: 10.0/10.0
+    Top-Down: Fear→A1_Danger 8.0, Hunger→A1_Food 8.0
+  Auditory Cortex complete: 900 neurons
+    C1: Sound_Food→D1 direct (init=0.5, sp=0.1)
+  Phase 12: Building Multimodal Integration (STS)...
+    STS: Food(200) + Danger(200) + Congruence(150) + Mismatch(100)
+    Multimodal Buffer: 150
+    Visual→STS (IT): 20.0
+    Auditory→STS (A1/A2): 20.0/15.0
+    Congruence Detection: 15.0
+    Mismatch Detection: 12.0
+    STS WTA: -8.0
+    STS→Hippocampus: 8.0
+    STS→Amygdala: 8.0
+    STS→Motor: 0.0
+    STS→PFC: 10.0
+    STS→Multimodal Buffer: 12-15
+    Top-Down: Hunger→STS_Food 8.0, Fear→STS_Danger 10.0
+  Multimodal Integration complete: 800 neurons
+  Total neurons now = 28,323
+  Phase 13: Building Parietal Cortex (PPC)...
+    PPC_Space: Left(150) + Right(150)
+    PPC_Goal: Food(150) + Safety(150)
+    PPC_Attention: 200, Path_Buffer: 200
+    V1→PPC_Space: 15.0
+    IT→PPC_Space: 12.0
+    STS→PPC_Space: 15.0
+    Hippocampus→PPC_Space: 12.0
+    PFC→PPC: Goal(18.0), WM→Path(12.0)
+    Space-Goal Integration: 15.0
+    Path Buffer: 10.0
+    PPC WTA: -8.0
+    Attention: 12.0
+    PPC→Motor: 0.0
+    PPC→V1 (Top-Down): 8.0
+    PPC→STS (Top-Down): 8.0
+    PPC→Hippocampus: 5.0
+    Top-Down: Hunger→Goal_Food 10.0, Fear→Goal_Safety 12.0
+  Parietal Cortex complete: 1000 neurons
+  Total neurons now = 28,323
+  Phase 14: Building Premotor Cortex (PMC)...
+    PMd: Left(100) + Right(100)
+    PMv: Approach(100) + Avoid(100)
+    SMA: Sequence(150), pre_SMA(100)
+    Motor_Preparation: 150
+    PPC→PMd: 18.0
+    IT→PMv: 15.0
+    STS→PMv: 15.0
+    PFC→SMA: 15.0
+    SMA Recurrent: 8.0, pre_SMA→SMA: 12.0
+    PMd/PMv/SMA→Motor_Prep: 12.0
+    PMC WTA: -10.0
+    PMC→Motor: 0.0
+    PMC→Cerebellum: 10.0
+    BG→PMC: Direct 12.0, Indirect -8.0
+    Top-Down: Hunger→PMv_Approach 10.0, Fear→PMv_Avoid 12.0
+  Premotor Cortex complete: 800 neurons
+  Total neurons now = 28,323
+  Phase 15: Building Social Brain...
+    Populations: Agent_Eye(200×2) + Agent_Sound(100×2) + STS_Social(200) + TPJ(100+100+100) + ACC(100+100) + Social_Val(100+100)
+    Agent_Eye→STS_Social: 15.0
+    Agent_Sound→STS_Social: 12.0
+    STS_Social→TPJ: 12.0
+    TPJ→ACC: 12.0
+    Social Approach↔Avoid WTA: -8.0
+    STS_Social→PFC: 6.0
+    ACC→Amygdala: 5.0 (약한 간접)
+    Fear→STS_Social: 8.0
+    Phase 15 Social Brain: 1500 neurons
+  Phase 15b: Building Mirror Neuron circuit...
+    Social_Observation: 200 neurons (SensoryLIF)
+    Mirror_Food: 150 neurons (SensoryLIF)
+    Vicarious_Reward: 100 neurons (SensoryLIF)
+    Social_Memory: 150 neurons (LIF)
+    Agent_Eye→Social_Obs: 12.0
+    STS_Social→Social_Obs: 10.0
+    Social_Obs→Mirror_Food: 10.0
+    Hunger→Mirror_Food: 8.0
+    Mirror_Food→Vicarious_Reward: 12.0
+    Vicarious→Social_Memory: 15.0 (HEBBIAN, eta=0.1)
+    Social_Memory→Food_Memory: 5.0
+    Mirror→Goal_Food: 5.0
+    Mirror→Motor: 0.0 (DISABLED!)
+    Hunger→Social_Obs: 6.0
+    Fear→Social_Obs: -4.0
+    Phase 15b Mirror Neurons: 600 neurons
+  Phase 15c: Building Theory of Mind circuit...
+    ToM_Intention: 100 neurons (SensoryLIF)
+    ToM_Belief: 80 neurons (LIF)
+    ToM_Prediction: 80 neurons (LIF)
+    ToM_Surprise: 60 neurons (SensoryLIF)
+    CoopCompete_Coop: 80 neurons (LIF)
+    CoopCompete_Compete: 100 neurons (SensoryLIF)
+    Social_Obs→ToM_Intention: 10.0
+    STS_Social→ToM_Intention: 8.0
+    Prediction→Surprise: -10.0 (inhibitory)
+    ToM_Intention→Coop: 10.0 (HEBBIAN)
+    Coop↔Compete WTA: -8.0
+    Coop→Social_Approach: 5.0
+    Compete→Social_Avoid: 5.0
+    ToM→Motor: 0.0 (DISABLED!)
+    Hunger→ToM_Intention: 6.0
+    Fear→ToM_Intention: -4.0
+    Phase 15c Theory of Mind: 500 neurons
+  Phase 16: Building Association Cortex...
+    Assoc_Edible: 120
+    Assoc_Threatening: 120
+    Assoc_Animate: 100
+    Assoc_Context: 100
+    Assoc_Valence: 80
+    Assoc_Binding: 100
+    Assoc_Novelty: 80
+    Edible↔Threatening WTA: -6.0
+    Assoc_Binding: Hebbian DENSE (Edible, Context)
+    Phase 16 Association Cortex: 700 neurons
+    Motor direct: 0.0 (disabled)
+  Phase 17: Building Language Circuit...
+    Call Input: 200
+    Wernicke: 280
+    Broca: 280
+    Vocal Gate: 80, Mirror: 80, Binding: 80
+    C3: NPC Call Push-Pull: push=10.0, pull=-5.0
+    Phase 17 Language Circuit: 1000 neurons
+    Motor direct: 0.0 (disabled, except C3 Call Push-Pull)
+    Total neurons now = 28,323
+  Phase 18: Building WM Expansion Circuit...
+    Populations: WM_Thalamic(100) + Gate(50) + Temporal(80+40) + GoalSeq(80+70) + Context(100) + Inhibitory(100)
+    18a: Thalamocortical loop - WM↔Thalamic + Gate
+    18b: Temporal buffer - Recent(80) + Prior(40)
+    18c: Goal sequencer - Pending(80) + Switch(70)
+    18d: WM Context (Hebbian DENSE, eta=0.05, w_max=16.0)
+    18e: WM Inhibitory balance (100 neurons)
+    Motor direct: 0.0 (disabled)
+  Phase 19: Building Metacognition Circuit...
+    Populations: Confidence(80) + Uncertainty(80) + Evaluate(80) + ArousalMod(70) + Inhibitory(70)
+    19a: Confidence inputs (valence, congruence, goals, context)
+    19b: Uncertainty inputs (conflict, error, novelty, surprise, mismatch)
+    19c: Confidence↔Uncertainty WTA (-5.0)
+    19d: Outputs (conf→goals, eval→switch/arousal, arousal_mod→arousal/DA)
+    19e: Inhibitory balance (70 neurons)
+    19f: Hebbian DENSE (Valence→Confidence, eta=0.04, w_max=14.0)
+    Motor direct: 0.0 (disabled)
+    Phase 19 Metacognition: 380 neurons
+  Phase 20: Self-Model (자기 모델)
+    20-1: Populations (80+80+70+70+80+60 = 440 neurons)
+    20a: Self_Body inputs (hunger/fear/meta_conf/meta_uncert/dopamine)
+    20b: Self_Efference inputs (motor_left/motor_right)
+    20d: Self_Agency inputs (efference/predict/food_memory)
+    20e: Self_Narrative inputs (body/agency/wm_context/recurrent)
+    20f: Outputs (body→meta, agency→goals, narrative→WM, predict→error) ALL ≤1.5
+    20g: Inhibitory balance (60 neurons)
+    20h: Hebbian DENSE (Body→Narrative, eta=0.04, w_max=14.0)
+    L15: Hebbian DENSE (Agency→Narrative, eta=0.01, w_max=8.0)
+    Motor direct: 0.0 (disabled)
+    Phase 20 Self-Model: 440 neurons
+
+  === Phase L14: Agency Detection ===
+    Agency_PE: 50 neurons (LIF)
+    Forward Model: self_efference→self_predict DENSE Hebbian (eta=0.005, w_max=10.0)
+    V1_Food→Agency_PE: 8.0 (actual sensory)
+    Self_Predict→Agency_PE: -6.0 (predicted, cancels)
+    Agency_PE→Self_Agency: -2.0 (high PE = low agency)
+    Motor direct: 0.0 (disabled)
+
+  === Phase L5: Perceptual Learning Circuit ===
+    Good→IT_Food (R-STDP), Good→IT_Danger (Anti-Hebbian)
+    Bad→IT_Danger (R-STDP), Bad→IT_Food (Anti-Hebbian)
+    Init weight: 2.0, Sparsity: 0.08
+    Total: 8 learning synapses
+
+  === Phase L6: Prediction Error Circuit ===
+    PE_Food: L(50) + R(50)
+    PE_Danger: L(50) + R(50)
+    V1→PE (bottom-up excitatory): 10.0
+    IT→PE (top-down inhibitory): -7.0
+    PE→IT (R-STDP learning): init_w=1.0, eta=0.0005
+  Prediction Error circuit complete: 200 neurons, 4 learning synapses
+    Phase L9: 4 IT_Food→D1/D2 SPARSE synapses, init_w(D1)=0.5 init_w(D2)=0.5 sparsity=0.05
+  Phase L16: Building Sparse Expansion (KC) — single KC(3000×2)...
+    Assoc_Edible→KC: 2.0, sparsity=0.05
+    Sound_Food→KC: 4.0, sparsity=0.08 (lateralized)
+    Wernicke_Food→KC: 3.0, sparsity=0.05 (call semantics)
+    PPC_Goal_Food→KC: 2.0, sparsity=0.05
+    Social_Memory→KC: 1.5, sparsity=0.03
+    Assoc_Binding→KC: 2.0, sparsity=0.05 (C2: learned category→BG)
+    KC→motor [E109 R-STDP 4방향]: init_w=150.0, w_max=300.0, eta=0.15, tau_e=12.0, sparsity=0.25
+    KC→D1 [정적 — 학습 불가]: init_w=0.5 (진짜 학습은 --kc-rstdp)
+  Phase L16: Sparse Expansion (KC) — single KC
+    KC: 3000×2 = 6000, KC_Inh: 400×2 = 800
+    Total KC neurons: 6000 + 800 inh = 6800
+    Output: 4 SPARSE learning (1 KC × 2 sides × D1+D2)
+    Phase L10: NAc(80+30), 2 R-STDP + 4 static, RPE discount=0.5
+    Phase L11: SWR(100+50+50), 7 static, replay_count=5
+    Phase L12: GW(50x2+60), 12 static, food_mem->motor reduced to 5.0
+  Building C4: Contextual Prediction circuit...
+    Pred_FoodSoon: 30 + Inh: 15 = 45 neurons
+    Predictive STDP: place(400)→pred DENSE + wmcb→pred DENSE
+    Teacher: food_eye→pred(8.0), lateral_inh(-5.0)
+    Budget: W_budget=12.0 per post neuron
+    Output: pred→goal_food(1.5), pred→D1(1.0)
+  Building C5: Curiosity-Driven Exploration circuit...
+    Curiosity_Gate: 20 + Inh: 10 = 30 neurons
+    Synapses: ~10 static (all static, no learning)
+    Input: V4_Novel(1.0), Assoc_Novelty(1.2), Meta_Uncertainty(1.5)
+    Safety: Fear(8.0)→Inh→Gate(-2.0)
+    Output: →Goal_Food(1.5), →D1(0.8)
+  Building M3: ACh Uncertainty Gate...
+    Surprise_Accum: 20 (C=50, slow)
+    Stability_Detector: 10
+    Input: Agency_PE(2.0), Meta_Uncertainty(1.5)
+    Output: surprise_rate → eta_mod (no Motor connection)
+  Building M4: Context Gate circuit...
+    CtxA: 4 (SensoryLIF), CtxB: 4
+    D1_ctx: 4×20=80 neurons (A_L/R + B_L/R, SensoryLIF)
+    Context gating: excite(12.0), inhibit(-15.0)
+    D1_ctx→Motor: Push-Pull 50.0/-20.0 sp=0.3 (v9e: sole food pathway)
+  Building M3: Place Transition + Value circuit...
+    Place→Place transition: DENSE 400x400 (STDP online)
+    Value population: 20 neurons
+    Value→D1: 1.0 (gentle)
+    Reverse replay: 5 steps backward
+  [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 11848·우 12333
+  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=20.00, p=0.020, 연결 좌 12003·우 11996
+  [E204 맥락 게이팅 KC] 무리 X 좌 1508·우 1547 / Y 좌 1492·우 1453, 억제 w=-20.00 p=0.100, 연결 zz_ctx2→Y 좌 29839·우 28935 · zz_ctx→X 좌 30252·우 30876
+  [원시 특징] 특징 집단 zz_feat 좌·우 각 200 → 같은 쪽 KC, w=24.00, p=0.100, 연결 좌 60355·우 59997, 정적
+  Spike recording enabled for all monitored populations
+Building model...
+make: Entering directory '/root/e207_main_run/forager_brain_CODE'
+make: Nothing to be done for 'all'.
+make: Leaving directory '/root/e207_main_run/forager_brain_CODE'
+  [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 790 개
+  [motor 동작점] motor 좌·우 Ioffset 기저값 -2800.0(긴장성 억제)
+[E153 종류 입력 적재] /mnt/c/Users/JungHyun/Desktop/brain/BrainSimulation-rebuild/research/experiments/traces/E161/kctype_oja_b17.npz 검증 일치 — good_food_eye_l_to_kc_l=237630.87 bad_food_eye_l_to_kc_l=241919.92 good_food_eye_r_to_kc_r=238239.97 bad_food_eye_r_to_kc_r=240065.70
+Model ready! Total: 28,323 neurons
+[원시 특징 세계] n 200 k 40 공유 10 왜곡 12 노출 사례 6 새 사례 6 seed 38300 | 원형 A 5,14,15,19,29,36,38,41,48,54,58,61,73,78,80,87,93,95,101,104,117,118,126,131,138,144,147,149,152,153,155,159,161,172,175,177,181,183,192,196 | 원형 B 1,6,23,29,39,43,48,49,56,57,64,72,76,78,82,84,87,89,99,101,104,106,107,116,117,119,122,132,139,145,152,159,160,161,167,168,171,173,185,198
+RCKC tag=pre side=l set=new cat=A i=0 n=138 ids=73,84,107,118,183,283,308,311,340,346,350,356,426,469,500,501,549,554,558,571,580,586,597,619,622,679,686,783,798,805,817,824,826,876,888,915,943,972,979,1017,1028,1035,1046,1048,1096,1097,1110,1119,1124,1128,1129,1167,1175,1179,1212,1234,1295,1317,1334,1347,1349,1371,1401,1449,1496,1588,1600,1673,1722,1751,1766,1778,1798,1813,1843,1851,1853,1869,1929,1933,1945,1957,1965,1972,1976,1983,1997,2026,2044,2051,2065,2087,2113,2133,2147,2156,2163,2198,2243,2275,2297,2310,2350,2361,2437,2439,2440,2476,2483,2490,2496,2504,2513,2533,2550,2562,2571,2582,2595,2599,2602,2630,2634,2778,2797,2819,2821,2848,2850,2860,2861,2882,2896,2912,2926,2940,2944,2954
+RCKC tag=pre side=l set=new cat=A i=1 n=116 ids=32,46,118,185,265,285,308,311,350,356,469,475,491,548,549,571,597,599,605,622,643,645,664,679,686,729,749,817,851,876,888,938,943,972,979,981,1017,1028,1048,1056,1060,1062,1110,1124,1129,1138,1166,1175,1179,1204,1212,1228,1229,1234,1333,1334,1347,1349,1465,1496,1516,1518,1666,1673,1675,1679,1685,1691,1722,1751,1755,1789,1843,1851,1853,1874,1929,1957,1972,1976,2046,2052,2065,2113,2147,2156,2163,2225,2235,2289,2310,2393,2418,2439,2496,2550,2602,2617,2627,2630,2651,2674,2774,2794,2797,2811,2819,2823,2836,2868,2873,2893,2896,2926,2954,2993
+RCKC tag=pre side=l set=new cat=A i=2 n=130 ids=17,46,58,118,176,183,185,190,265,308,350,469,475,491,509,571,586,588,622,643,645,647,749,783,798,805,810,817,824,826,868,876,938,943,972,1035,1046,1048,1053,1092,1110,1124,1128,1129,1167,1175,1179,1204,1228,1229,1234,1257,1295,1301,1334,1347,1353,1369,1371,1401,1425,1465,1492,1496,1600,1673,1679,1692,1722,1766,1767,1772,1778,1789,1798,1813,1825,1853,1912,1933,1945,1946,1957,1961,1972,2046,2052,2058,2065,2087,2156,2163,2188,2198,2225,2275,2289,2297,2310,2320,2361,2373,2462,2466,2490,2496,2504,2509,2513,2562,2582,2602,2624,2627,2640,2643,2676,2724,2738,2767,2819,2821,2823,2848,2849,2860,2862,2873,2882,2896
+RCKC tag=pre side=l set=new cat=A i=3 n=120 ids=46,53,73,128,146,185,190,265,283,285,304,308,311,340,350,469,491,571,597,599,622,643,645,749,783,786,798,807,817,876,915,938,943,972,979,1017,1029,1044,1048,1060,1110,1128,1129,1159,1175,1204,1212,1229,1234,1295,1316,1334,1347,1353,1359,1368,1465,1492,1496,1666,1673,1679,1685,1691,1722,1751,1766,1772,1782,1789,1797,1813,1851,1853,1883,1929,1933,1972,2026,2051,2065,2066,2113,2156,2198,2225,2289,2297,2350,2361,2374,2377,2378,2379,2439,2440,2462,2466,2487,2490,2496,2513,2599,2602,2614,2627,2651,2676,2733,2738,2767,2811,2823,2848,2850,2868,2873,2882,2893,2896
+RCKC tag=pre side=l set=new cat=A i=4 n=120 ids=32,73,84,118,146,176,183,185,283,285,308,311,340,346,350,356,491,500,549,588,597,619,622,643,645,686,786,798,817,888,915,943,972,979,1017,1046,1047,1048,1056,1060,1096,1124,1129,1138,1167,1175,1179,1193,1204,1212,1228,1257,1295,1304,1317,1347,1349,1465,1492,1496,1513,1588,1673,1682,1691,1766,1772,1789,1843,1851,1853,1869,1876,1929,1933,1957,1972,1976,2051,2065,2087,2113,2133,2163,2198,2231,2253,2260,2275,2289,2297,2312,2374,2393,2439,2440,2449,2454,2496,2504,2509,2513,2517,2595,2599,2617,2624,2640,2651,2688,2778,2819,2821,2836,2860,2868,2873,2896,2912,2954
+RCKC tag=pre side=l set=new cat=A i=5 n=137 ids=73,84,107,146,162,183,185,227,265,285,308,311,350,356,469,491,509,551,558,571,597,599,600,619,622,643,645,673,686,729,783,786,798,817,826,876,888,915,934,938,943,972,979,981,1017,1029,1060,1092,1097,1119,1129,1138,1166,1198,1204,1212,1214,1228,1234,1260,1322,1334,1347,1349,1368,1465,1492,1496,1518,1600,1673,1675,1679,1685,1691,1722,1761,1766,1772,1786,1797,1813,1843,1853,1883,1912,1929,1945,1957,1965,1972,1983,2010,2014,2026,2044,2052,2058,2074,2087,2113,2156,2198,2225,2231,2243,2260,2275,2289,2361,2393,2437,2462,2473,2483,2487,2504,2550,2602,2630,2640,2651,2733,2797,2800,2811,2821,2836,2860,2868,2873,2883,2896,2908,2912,2926,2966
+RCKC tag=pre side=l set=new cat=B i=0 n=122 ids=46,54,58,84,118,185,190,265,308,311,356,406,421,469,475,490,491,509,549,550,554,571,600,622,643,686,729,798,817,872,943,979,1017,1045,1048,1056,1060,1062,1110,1124,1175,1179,1193,1198,1204,1212,1229,1234,1294,1295,1304,1347,1349,1359,1371,1392,1465,1542,1620,1666,1673,1679,1722,1732,1782,1825,1853,1945,1946,1950,1972,1976,2012,2014,2051,2052,2058,2065,2087,2156,2163,2188,2195,2198,2225,2227,2235,2243,2275,2289,2329,2337,2406,2462,2469,2487,2490,2496,2504,2561,2562,2595,2599,2602,2624,2630,2640,2658,2674,2692,2758,2794,2797,2819,2823,2836,2871,2893,2912,2952,2954,2959
+RCKC tag=pre side=l set=new cat=B i=1 n=129 ids=46,74,128,162,185,195,205,265,304,308,311,350,395,472,475,491,509,549,550,554,571,599,622,623,796,798,801,817,876,938,943,946,948,950,979,1045,1078,1119,1128,1129,1133,1138,1159,1173,1175,1179,1193,1198,1204,1211,1234,1317,1334,1347,1349,1371,1430,1435,1465,1467,1492,1504,1533,1542,1600,1673,1679,1722,1751,1772,1774,1786,1797,1853,1913,1933,1961,1972,1976,2044,2051,2058,2065,2066,2087,2133,2156,2160,2163,2195,2198,2225,2227,2235,2253,2275,2289,2297,2371,2388,2393,2426,2439,2462,2487,2496,2500,2504,2562,2563,2599,2624,2630,2634,2658,2738,2785,2797,2819,2836,2850,2871,2893,2896,2912,2954,2959,2962,2982
+RCKC tag=pre side=l set=new cat=B i=2 n=130 ids=46,54,57,185,195,220,262,265,308,311,346,350,356,392,395,443,469,475,490,491,509,571,600,622,623,633,645,657,659,798,817,876,938,943,946,948,950,1017,1029,1032,1046,1060,1078,1119,1124,1159,1175,1193,1198,1204,1296,1300,1335,1347,1349,1371,1401,1430,1456,1465,1496,1533,1600,1673,1679,1722,1723,1751,1772,1797,1813,1843,1929,1933,1950,1976,2014,2044,2051,2052,2066,2087,2099,2113,2133,2160,2188,2191,2195,2198,2225,2243,2253,2289,2310,2337,2377,2379,2388,2425,2443,2462,2487,2496,2500,2504,2509,2562,2571,2582,2595,2599,2624,2627,2630,2758,2775,2777,2794,2797,2836,2860,2871,2893,2908,2912,2926,2953,2954,2993
+RCKC tag=pre side=l set=new cat=B i=3 n=135 ids=57,84,118,185,190,220,227,265,300,304,311,340,346,421,475,477,491,497,509,549,550,554,597,600,622,659,798,806,817,876,914,943,948,972,1029,1045,1046,1060,1078,1119,1124,1159,1193,1198,1204,1210,1234,1295,1301,1317,1333,1334,1349,1371,1425,1430,1435,1465,1467,1556,1595,1600,1616,1620,1673,1679,1691,1699,1703,1722,1751,1772,1774,1797,1813,1825,1843,1945,1946,1953,1972,1976,1981,2046,2051,2052,2058,2065,2066,2087,2113,2156,2160,2163,2195,2198,2225,2227,2243,2253,2275,2297,2310,2371,2379,2425,2487,2490,2496,2504,2509,2561,2562,2599,2602,2614,2632,2666,2758,2763,2785,2794,2797,2819,2836,2850,2855,2893,2912,2953,2954,2959,2962,2991,2993
+RCKC tag=pre side=l set=new cat=B i=4 n=124 ids=37,54,128,185,205,220,265,294,311,346,356,436,443,475,490,509,550,554,571,600,622,623,699,801,817,851,876,886,943,979,1017,1020,1029,1045,1060,1078,1092,1110,1124,1128,1129,1175,1196,1229,1234,1304,1334,1347,1348,1349,1369,1371,1381,1430,1456,1462,1465,1496,1513,1600,1616,1623,1647,1666,1673,1679,1682,1720,1722,1732,1767,1772,1813,1834,1843,1933,1945,1946,1976,2014,2044,2051,2058,2065,2066,2087,2120,2155,2156,2160,2163,2195,2198,2225,2227,2235,2253,2275,2289,2337,2379,2388,2403,2424,2487,2504,2550,2562,2582,2599,2602,2624,2758,2759,2778,2797,2819,2836,2861,2871,2893,2896,2953,2954
+RCKC tag=pre side=l set=new cat=B i=5 n=118 ids=46,128,185,190,220,265,274,304,308,311,331,346,350,426,475,491,509,549,550,554,569,597,600,612,622,633,643,645,647,699,780,783,798,801,808,907,938,943,1017,1020,1029,1035,1045,1060,1062,1096,1110,1119,1124,1159,1175,1193,1212,1234,1334,1349,1369,1371,1430,1456,1465,1492,1533,1600,1666,1673,1699,1723,1772,1774,1776,1843,1853,1862,1945,1946,1972,1976,1981,2014,2051,2058,2065,2087,2120,2156,2188,2225,2234,2235,2243,2253,2275,2289,2320,2331,2377,2487,2490,2496,2500,2504,2509,2582,2595,2599,2614,2624,2676,2738,2819,2836,2850,2855,2896,2926,2953,2954
+RCKC tag=pre side=l set=new cat=C i=0 n=131 ids=15,61,80,128,159,179,185,190,304,308,340,350,356,430,469,477,491,549,550,571,600,623,664,673,679,783,801,806,810,815,817,888,938,946,1017,1028,1048,1092,1097,1129,1175,1179,1193,1212,1215,1228,1229,1234,1260,1295,1301,1317,1334,1347,1349,1371,1401,1407,1449,1465,1600,1623,1673,1679,1692,1720,1722,1751,1766,1778,1789,1813,1825,1831,1843,1851,1869,1924,1945,1961,1965,1976,2010,2065,2151,2156,2163,2188,2195,2198,2253,2289,2301,2312,2350,2361,2374,2424,2425,2483,2487,2490,2496,2562,2569,2612,2614,2630,2676,2696,2704,2710,2792,2794,2797,2819,2821,2823,2836,2862,2868,2873,2893,2896,2926,2933,2954,2955,2958,2991,2993
+RCKC tag=pre side=l set=new cat=C i=1 n=120 ids=15,17,58,61,128,162,190,227,269,304,308,340,346,350,356,491,497,549,571,597,600,622,623,664,679,702,783,786,798,801,817,876,888,905,907,938,946,972,1048,1129,1159,1175,1212,1229,1234,1260,1304,1317,1334,1347,1349,1359,1426,1465,1623,1673,1691,1699,1720,1722,1761,1766,1767,1797,1813,1843,1851,1869,1883,1929,1965,1976,2014,2026,2044,2051,2065,2120,2123,2156,2163,2195,2198,2243,2289,2297,2350,2361,2379,2424,2437,2439,2440,2483,2487,2490,2496,2550,2562,2613,2624,2676,2688,2692,2696,2704,2759,2794,2819,2821,2856,2862,2868,2896,2912,2926,2933,2954,2982,2993
+RCKC tag=pre side=l set=new cat=C i=2 n=124 ids=15,17,58,61,124,162,170,208,304,308,309,340,350,356,469,477,511,549,622,664,786,798,801,806,808,817,888,907,909,938,943,946,972,981,1110,1129,1159,1175,1193,1212,1229,1234,1295,1334,1371,1381,1465,1492,1623,1673,1675,1682,1691,1692,1699,1720,1751,1767,1771,1778,1789,1813,1843,1853,1869,1945,1961,1965,1972,1987,2010,2014,2044,2051,2065,2087,2092,2120,2151,2156,2163,2188,2198,2225,2227,2234,2235,2289,2312,2350,2374,2393,2416,2421,2439,2449,2487,2490,2504,2513,2612,2630,2692,2696,2704,2738,2819,2821,2836,2852,2856,2860,2862,2868,2893,2896,2912,2926,2933,2954,2955,2958,2982,2991
+RCKC tag=pre side=l set=new cat=C i=3 n=129 ids=15,67,128,227,304,309,346,350,356,370,430,458,477,509,548,549,597,600,622,623,633,643,664,683,702,780,783,798,806,810,817,824,909,938,943,946,964,981,1017,1059,1086,1129,1147,1159,1175,1179,1198,1229,1234,1260,1295,1334,1347,1359,1381,1407,1465,1513,1623,1673,1720,1751,1766,1767,1771,1797,1802,1813,1843,1851,1853,1869,1883,1912,1942,1945,1965,1976,1997,2010,2014,2035,2044,2051,2065,2087,2120,2133,2156,2163,2188,2198,2234,2235,2275,2289,2350,2374,2393,2418,2421,2425,2437,2462,2487,2496,2504,2513,2562,2599,2612,2630,2651,2692,2696,2710,2819,2836,2848,2856,2862,2868,2893,2896,2926,2958,2982,2991,2993
+RCKC tag=pre side=l set=new cat=C i=4 n=117 ids=15,17,58,73,162,227,285,304,308,350,491,549,597,622,623,633,679,729,798,801,817,862,888,938,945,946,957,981,1017,1060,1092,1110,1129,1175,1179,1200,1211,1229,1234,1260,1317,1334,1347,1369,1371,1456,1465,1492,1496,1623,1672,1673,1682,1691,1699,1720,1751,1760,1761,1766,1767,1789,1813,1825,1843,1853,1883,1933,1947,1961,1972,2010,2014,2051,2065,2113,2156,2163,2188,2195,2198,2225,2253,2275,2289,2297,2312,2350,2361,2363,2374,2379,2393,2421,2439,2443,2462,2483,2504,2584,2595,2627,2640,2651,2792,2819,2836,2852,2860,2862,2868,2896,2912,2926,2954,2982,2993
+RCKC tag=pre side=l set=new cat=C i=5 n=128 ids=15,17,58,61,73,111,124,162,227,304,308,311,350,356,396,472,491,549,600,622,623,633,643,673,679,801,808,810,817,824,888,907,938,972,981,1017,1060,1129,1139,1159,1167,1175,1179,1193,1229,1234,1257,1260,1317,1334,1349,1396,1424,1456,1465,1492,1600,1673,1679,1682,1691,1699,1720,1722,1751,1766,1767,1771,1789,1813,1843,1876,1929,1933,1942,1945,1961,1965,1972,1976,2014,2015,2046,2051,2065,2087,2151,2156,2163,2198,2235,2243,2253,2260,2289,2297,2312,2350,2361,2374,2393,2424,2426,2487,2490,2504,2586,2624,2640,2644,2651,2688,2692,2792,2794,2819,2821,2823,2836,2860,2861,2862,2868,2896,2912,2926,2933,2954
+RCKC tag=pre side=l set=new cat=D i=0 n=129 ids=15,58,67,84,185,188,205,265,283,285,311,350,356,421,475,477,490,509,549,554,571,580,605,622,647,724,798,801,808,851,858,893,909,938,943,946,976,1017,1020,1046,1048,1062,1064,1078,1110,1124,1129,1138,1167,1179,1198,1205,1234,1295,1317,1334,1347,1348,1368,1369,1381,1430,1435,1465,1533,1559,1600,1673,1682,1767,1789,1813,1831,1883,1912,1933,1943,1945,1972,1976,2014,2051,2052,2087,2092,2111,2113,2120,2133,2151,2155,2156,2163,2195,2225,2227,2233,2235,2253,2275,2289,2361,2418,2439,2462,2466,2487,2509,2550,2562,2571,2582,2590,2595,2696,2759,2792,2797,2800,2819,2821,2845,2849,2850,2860,2896,2954,2962,2994
+RCKC tag=pre side=l set=new cat=D i=1 n=137 ids=15,58,185,220,227,265,285,308,340,350,356,475,497,549,550,556,571,597,600,605,622,633,647,661,749,798,801,830,858,876,909,938,943,946,981,1029,1038,1045,1046,1048,1062,1076,1078,1110,1129,1159,1166,1179,1183,1194,1198,1205,1212,1228,1234,1260,1304,1316,1317,1334,1349,1368,1425,1435,1492,1501,1600,1623,1670,1673,1679,1682,1722,1767,1774,1789,1813,1831,1834,1843,1874,1883,1912,1945,1976,1989,2014,2044,2051,2058,2074,2087,2111,2113,2133,2151,2155,2163,2188,2195,2198,2227,2235,2253,2275,2289,2361,2393,2437,2439,2443,2462,2466,2487,2500,2504,2509,2533,2537,2552,2582,2628,2792,2794,2819,2836,2849,2850,2861,2868,2885,2896,2926,2954,2959,2962,2993
+RCKC tag=pre side=l set=new cat=D i=2 n=136 ids=84,128,146,185,187,190,227,269,283,285,311,340,356,475,477,497,509,550,554,571,599,619,622,724,728,753,783,798,801,830,876,909,943,946,981,1017,1020,1028,1046,1048,1090,1110,1128,1129,1138,1159,1166,1175,1198,1204,1205,1212,1214,1228,1229,1295,1301,1316,1317,1334,1348,1349,1381,1425,1430,1462,1492,1496,1559,1595,1600,1670,1679,1703,1774,1813,1823,1851,1883,1912,1933,1943,1945,1976,2012,2014,2051,2086,2087,2092,2113,2133,2151,2155,2156,2163,2195,2225,2233,2243,2253,2275,2295,2312,2337,2369,2371,2388,2393,2439,2462,2487,2490,2509,2513,2533,2562,2582,2595,2644,2759,2794,2797,2819,2821,2850,2861,2868,2896,2912,2926,2953,2954,2962,2993,2994
+RCKC tag=pre side=l set=new cat=D i=3 n=119 ids=15,46,128,185,188,205,283,285,311,346,350,356,406,469,475,477,509,550,554,571,597,599,643,652,724,729,749,783,801,830,876,893,943,946,976,981,1038,1045,1048,1060,1062,1078,1090,1110,1129,1167,1175,1179,1198,1205,1212,1229,1304,1334,1347,1348,1368,1426,1430,1465,1496,1600,1673,1679,1767,1772,1782,1797,1831,1851,1883,1945,1965,1972,1976,2012,2051,2065,2074,2087,2113,2133,2156,2160,2163,2195,2225,2227,2289,2312,2343,2361,2371,2393,2437,2439,2462,2487,2490,2504,2513,2533,2544,2569,2582,2599,2725,2821,2851,2855,2860,2868,2896,2912,2954,2959,2962,2993,2994
+RCKC tag=pre side=l set=new cat=D i=4 n=123 ids=15,146,185,190,265,283,285,340,346,350,356,430,475,509,548,549,550,571,597,599,622,633,643,724,729,801,808,830,903,909,938,943,946,981,1017,1020,1048,1062,1078,1110,1124,1129,1159,1166,1167,1198,1212,1228,1229,1295,1304,1316,1334,1347,1381,1435,1492,1559,1600,1647,1666,1670,1673,1679,1761,1772,1782,1789,1823,1851,1869,1943,1965,1976,2008,2012,2014,2044,2051,2058,2087,2113,2120,2151,2156,2163,2188,2195,2198,2225,2233,2235,2253,2275,2289,2297,2369,2371,2439,2462,2487,2490,2496,2504,2509,2513,2562,2595,2759,2794,2797,2819,2849,2850,2855,2860,2868,2896,2912,2926,2953,2954,2962
+RCKC tag=pre side=l set=new cat=D i=5 n=132 ids=15,54,58,118,128,146,162,185,190,208,283,285,340,350,356,475,509,519,539,549,550,571,588,619,622,643,661,679,724,749,753,798,806,830,893,909,943,950,960,979,1017,1020,1048,1062,1078,1110,1124,1128,1133,1166,1175,1179,1198,1212,1214,1228,1229,1234,1295,1317,1334,1347,1349,1368,1435,1465,1492,1496,1666,1673,1682,1716,1722,1772,1789,1797,1823,1876,1883,1933,1939,1945,1965,1972,1976,2012,2015,2058,2074,2087,2113,2156,2163,2188,2195,2198,2225,2227,2253,2275,2289,2312,2367,2388,2393,2437,2439,2462,2487,2490,2513,2537,2552,2584,2595,2655,2692,2725,2726,2805,2819,2821,2845,2849,2850,2868,2896,2912,2926,2954,2962,2993
+RCKC tag=pre side=l set=train cat=A i=0 n=134 ids=15,73,78,84,128,146,162,265,285,308,311,340,346,350,356,430,491,549,597,645,679,686,702,779,786,801,805,808,893,909,934,946,948,952,972,981,1020,1046,1056,1078,1097,1110,1129,1138,1175,1179,1193,1204,1212,1214,1215,1216,1228,1234,1257,1260,1295,1347,1348,1349,1369,1396,1465,1477,1490,1492,1496,1537,1580,1588,1600,1666,1672,1673,1685,1761,1766,1772,1789,1813,1843,1853,1862,1874,1876,1945,1952,1957,1965,1972,1981,2014,2065,2066,2087,2147,2156,2163,2188,2195,2198,2225,2231,2243,2275,2289,2297,2310,2361,2393,2439,2490,2496,2533,2537,2550,2562,2582,2602,2617,2624,2640,2674,2704,2724,2819,2848,2850,2862,2868,2873,2896,2933,2954
+RCKC tag=pre side=l set=train cat=A i=1 n=125 ids=15,53,58,73,84,127,146,265,285,304,308,340,346,350,475,491,500,549,558,569,571,597,622,623,643,645,647,679,686,699,749,783,786,798,801,817,972,981,1017,1032,1042,1048,1053,1056,1092,1097,1110,1124,1128,1129,1161,1167,1175,1179,1193,1212,1229,1234,1260,1295,1304,1333,1334,1347,1349,1425,1456,1465,1496,1623,1666,1673,1675,1679,1692,1751,1766,1772,1786,1789,1813,1825,1843,1869,1874,1883,1929,1933,1945,1972,1983,2051,2065,2087,2151,2156,2188,2234,2243,2266,2275,2289,2297,2361,2374,2418,2462,2496,2550,2582,2602,2617,2627,2688,2738,2767,2819,2823,2848,2850,2860,2868,2896,2912,2954
+RCKC tag=pre side=l set=train cat=A i=2 n=119 ids=46,84,185,208,283,308,311,340,350,421,469,491,496,500,549,554,622,645,686,783,786,798,817,876,927,972,979,1048,1056,1060,1078,1097,1098,1110,1129,1138,1175,1179,1194,1204,1212,1215,1229,1234,1295,1301,1317,1333,1334,1347,1369,1400,1401,1465,1492,1496,1516,1600,1673,1679,1722,1751,1752,1766,1772,1778,1782,1789,1813,1843,1869,1883,1933,1945,1965,2044,2065,2087,2156,2163,2195,2198,2227,2231,2243,2275,2289,2297,2320,2350,2361,2374,2426,2439,2466,2468,2490,2496,2504,2537,2550,2590,2602,2627,2630,2651,2676,2738,2778,2792,2815,2819,2821,2848,2858,2868,2896,2944,2954
+RCKC tag=pre side=l set=train cat=A i=3 n=129 ids=15,58,73,146,162,185,190,265,283,304,308,311,340,346,350,356,469,475,491,549,597,600,619,643,645,673,679,686,714,749,783,786,798,817,862,876,915,938,943,972,979,981,1032,1056,1060,1092,1119,1129,1167,1175,1179,1193,1198,1200,1212,1214,1215,1229,1234,1263,1334,1347,1349,1465,1477,1479,1492,1496,1518,1666,1673,1722,1751,1761,1766,1767,1789,1813,1843,1853,1945,1957,1965,1983,2044,2046,2051,2065,2066,2087,2120,2133,2156,2163,2188,2198,2234,2243,2289,2297,2361,2379,2418,2425,2437,2449,2473,2490,2504,2513,2550,2595,2602,2614,2617,2666,2674,2676,2797,2819,2848,2860,2868,2873,2882,2896,2912,2926,2944
+RCKC tag=pre side=l set=train cat=A i=4 n=130 ids=15,53,73,80,84,185,190,265,304,306,308,350,356,364,469,491,501,540,549,558,597,622,633,643,645,679,817,826,868,876,888,915,938,943,972,981,1032,1035,1044,1046,1048,1060,1062,1097,1110,1128,1166,1175,1179,1204,1212,1214,1229,1234,1334,1347,1349,1359,1369,1396,1465,1492,1496,1516,1518,1666,1672,1673,1679,1722,1745,1751,1755,1761,1766,1772,1782,1789,1853,1869,1883,1929,1933,1945,1957,1972,1983,2051,2065,2086,2087,2113,2133,2147,2156,2163,2195,2198,2231,2275,2289,2297,2331,2361,2374,2379,2462,2466,2473,2504,2562,2584,2595,2602,2614,2617,2627,2628,2643,2767,2819,2821,2836,2848,2850,2860,2868,2873,2896,2926
+RCKC tag=pre side=l set=train cat=A i=5 n=129 ids=53,107,176,183,227,265,283,308,311,340,350,469,491,496,509,525,549,619,622,645,661,686,749,786,798,805,817,824,826,868,870,876,909,938,943,972,981,1017,1023,1046,1096,1110,1124,1129,1138,1159,1175,1179,1204,1212,1228,1257,1295,1304,1317,1334,1369,1371,1396,1465,1496,1513,1516,1580,1588,1600,1666,1673,1679,1685,1703,1720,1722,1724,1751,1766,1767,1772,1789,1813,1843,1929,1933,1961,2026,2035,2044,2051,2052,2065,2074,2113,2133,2163,2188,2195,2198,2249,2253,2275,2289,2361,2374,2379,2462,2490,2504,2513,2550,2595,2602,2643,2651,2688,2738,2767,2819,2821,2836,2849,2850,2860,2868,2873,2882,2896,2908,2940,2944
+RCKC tag=pre side=l set=train cat=B i=0 n=131 ids=46,54,57,84,118,185,190,220,265,311,346,350,356,393,443,475,477,479,490,491,509,549,550,571,597,619,622,623,643,701,729,798,817,872,909,943,946,979,1020,1029,1043,1045,1056,1060,1062,1078,1092,1110,1119,1124,1129,1138,1159,1173,1179,1193,1198,1210,1228,1295,1347,1349,1369,1371,1456,1465,1496,1513,1595,1600,1666,1673,1682,1691,1703,1751,1772,1843,1851,1933,1972,1976,2014,2044,2052,2065,2087,2113,2120,2151,2156,2163,2195,2225,2235,2243,2253,2275,2297,2310,2337,2424,2425,2462,2487,2490,2496,2500,2504,2513,2550,2562,2597,2599,2614,2624,2630,2632,2797,2805,2819,2836,2850,2855,2893,2912,2926,2940,2952,2991,2993
+RCKC tag=pre side=l set=train cat=B i=1 n=133 ids=15,46,54,79,118,128,170,183,185,186,190,195,220,265,304,308,311,346,350,356,443,469,475,490,491,509,549,550,554,571,622,623,643,652,659,729,771,780,801,817,868,872,876,915,938,943,1038,1046,1060,1110,1119,1124,1159,1175,1179,1193,1204,1212,1304,1317,1347,1348,1349,1371,1381,1426,1456,1465,1492,1504,1542,1559,1600,1666,1673,1679,1691,1722,1766,1774,1797,1822,1862,1976,1981,2025,2044,2051,2052,2065,2087,2113,2120,2156,2160,2163,2195,2225,2227,2235,2243,2275,2424,2462,2487,2490,2500,2504,2556,2561,2562,2582,2599,2614,2624,2643,2758,2763,2785,2794,2797,2819,2836,2850,2860,2896,2912,2926,2946,2954,2991,2993,2996
+RCKC tag=pre side=l set=train cat=B i=2 n=128 ids=54,183,185,187,190,195,265,274,308,311,346,350,356,370,469,475,491,550,554,571,600,622,643,686,699,729,798,801,817,872,876,909,938,943,960,979,981,1017,1020,1038,1045,1060,1062,1110,1119,1124,1159,1167,1175,1193,1204,1212,1234,1295,1301,1304,1349,1371,1456,1465,1486,1492,1496,1533,1537,1600,1642,1647,1666,1672,1673,1679,1682,1722,1774,1797,1806,1843,1933,1969,1972,1976,2014,2046,2051,2058,2065,2066,2087,2113,2156,2163,2188,2195,2198,2225,2227,2233,2235,2243,2297,2379,2424,2462,2487,2490,2496,2500,2504,2562,2582,2614,2624,2630,2658,2664,2794,2797,2819,2836,2850,2860,2893,2896,2926,2953,2954,2993
+RCKC tag=pre side=l set=train cat=B i=3 n=118 ids=46,54,128,185,190,265,274,308,311,346,356,393,475,490,509,550,554,600,622,623,643,699,771,798,876,909,938,943,948,950,1045,1048,1060,1062,1119,1124,1129,1133,1159,1167,1175,1193,1205,1229,1234,1295,1304,1334,1347,1348,1349,1371,1430,1465,1492,1600,1672,1673,1691,1766,1772,1774,1776,1853,1933,1972,1976,1983,2014,2026,2058,2065,2066,2087,2113,2151,2156,2163,2188,2195,2198,2225,2227,2234,2235,2289,2297,2337,2369,2388,2424,2425,2443,2462,2487,2496,2513,2550,2561,2562,2582,2599,2624,2704,2738,2794,2819,2822,2836,2868,2893,2896,2905,2926,2940,2953,2954,2962
+RCKC tag=pre side=l set=train cat=B i=4 n=126 ids=46,54,128,162,170,185,190,195,220,265,294,308,311,350,356,443,472,475,490,509,549,550,580,588,599,600,622,623,679,798,876,909,938,943,946,979,1029,1045,1046,1048,1060,1119,1124,1129,1133,1138,1159,1163,1175,1179,1193,1204,1229,1234,1348,1349,1369,1371,1456,1465,1496,1600,1647,1666,1673,1682,1772,1825,1843,1896,1933,1950,1976,2014,2044,2051,2058,2065,2066,2087,2120,2160,2163,2188,2195,2198,2225,2227,2235,2253,2289,2310,2337,2367,2388,2403,2424,2425,2437,2462,2487,2496,2500,2504,2562,2584,2595,2599,2614,2624,2630,2658,2738,2758,2794,2797,2819,2821,2836,2855,2893,2896,2912,2953,2954,2962
+RCKC tag=pre side=l set=train cat=B i=5 n=133 ids=46,54,57,58,128,185,190,220,265,300,311,340,356,370,392,406,421,450,469,475,479,490,491,509,549,550,554,571,619,622,645,659,676,679,699,728,796,798,801,806,807,817,872,876,909,934,938,943,950,972,1017,1045,1060,1078,1129,1138,1159,1175,1179,1193,1196,1204,1229,1295,1304,1316,1317,1334,1335,1340,1347,1349,1371,1392,1465,1467,1492,1542,1595,1600,1623,1673,1679,1722,1797,1843,1933,1976,2014,2044,2046,2051,2052,2058,2066,2087,2133,2156,2160,2163,2188,2195,2198,2225,2227,2253,2289,2337,2425,2426,2437,2462,2487,2500,2561,2562,2599,2602,2624,2758,2785,2797,2805,2821,2836,2885,2893,2896,2912,2926,2959,2962,2993
+RCKC tag=pre side=l set=train cat=C i=0 n=119 ids=15,17,73,111,124,190,227,304,308,309,350,356,396,477,511,549,550,597,622,623,643,673,679,783,801,806,810,817,824,863,888,905,907,909,927,938,946,981,1017,1048,1092,1097,1129,1159,1175,1179,1198,1205,1229,1234,1281,1295,1317,1334,1347,1349,1465,1492,1673,1691,1722,1751,1767,1789,1813,1843,1869,1883,1933,1965,1972,1976,2014,2015,2044,2046,2051,2052,2163,2198,2231,2243,2253,2289,2297,2312,2350,2374,2424,2439,2443,2454,2483,2487,2490,2496,2504,2586,2612,2651,2676,2696,2704,2710,2738,2819,2821,2836,2850,2852,2860,2862,2868,2893,2896,2912,2926,2954,2982
+RCKC tag=pre side=l set=train cat=C i=1 n=115 ids=15,17,176,304,308,346,350,351,356,477,491,509,549,597,600,622,623,643,664,702,715,780,801,810,817,888,938,943,972,981,1017,1048,1110,1129,1159,1167,1175,1179,1193,1212,1229,1234,1257,1260,1317,1334,1347,1348,1349,1359,1369,1465,1492,1559,1623,1673,1682,1691,1745,1766,1771,1772,1774,1782,1813,1843,1846,1853,1945,1961,1965,1976,2046,2051,2058,2065,2087,2156,2163,2188,2198,2231,2235,2289,2301,2350,2361,2379,2418,2421,2462,2466,2487,2490,2496,2504,2584,2595,2612,2644,2696,2792,2794,2819,2836,2848,2862,2868,2893,2896,2912,2926,2954,2982,2991
+RCKC tag=pre side=l set=train cat=C i=2 n=125 ids=15,58,61,265,294,304,311,350,356,370,430,477,491,509,548,550,597,600,622,664,673,679,702,749,783,786,801,806,810,817,888,903,938,946,964,972,981,1017,1059,1060,1092,1129,1159,1175,1179,1212,1229,1234,1260,1295,1334,1369,1396,1465,1588,1600,1623,1642,1672,1673,1679,1691,1692,1720,1722,1761,1766,1767,1789,1813,1843,1853,1869,1883,1912,1929,1945,1965,1972,2044,2051,2058,2065,2066,2087,2156,2188,2195,2198,2234,2235,2243,2253,2289,2350,2361,2393,2424,2487,2490,2496,2504,2550,2599,2612,2624,2630,2696,2797,2819,2821,2823,2836,2849,2852,2860,2862,2868,2893,2896,2912,2926,2954,2958,2982
+RCKC tag=pre side=l set=train cat=C i=3 n=117 ids=15,61,124,185,227,304,350,351,356,370,430,477,549,569,580,597,600,622,623,664,673,702,817,888,890,907,938,946,979,981,1017,1044,1092,1110,1129,1159,1175,1179,1212,1229,1260,1269,1295,1317,1334,1349,1424,1449,1456,1465,1556,1623,1666,1673,1682,1691,1692,1720,1722,1767,1771,1789,1813,1860,1869,1876,1883,1929,1933,1945,1963,1965,1972,2044,2051,2065,2087,2120,2163,2198,2225,2235,2243,2289,2297,2301,2320,2350,2361,2374,2379,2393,2424,2437,2466,2487,2496,2504,2562,2584,2630,2738,2819,2821,2823,2836,2848,2849,2860,2862,2868,2893,2896,2912,2926,2954,2982
+RCKC tag=pre side=l set=train cat=C i=4 n=108 ids=15,61,128,146,190,265,269,285,304,308,350,356,477,548,597,600,622,623,643,673,679,702,801,806,817,862,888,890,907,938,946,972,981,1017,1048,1092,1097,1129,1139,1159,1175,1212,1229,1234,1295,1304,1349,1359,1369,1465,1623,1673,1679,1691,1720,1751,1767,1789,1813,1843,1846,1883,1945,1965,1972,1976,2051,2065,2066,2113,2120,2163,2175,2195,2198,2235,2243,2253,2289,2312,2350,2361,2374,2379,2393,2424,2425,2437,2487,2504,2513,2562,2569,2584,2704,2819,2821,2836,2850,2852,2860,2868,2893,2896,2926,2955,2958,2982
+RCKC tag=pre side=l set=train cat=C i=5 n=130 ids=15,61,111,128,179,190,304,308,309,350,430,475,477,511,548,600,622,623,645,664,702,780,798,801,806,817,888,907,915,938,943,946,948,972,979,981,1017,1048,1053,1086,1097,1129,1139,1200,1229,1234,1295,1334,1347,1349,1359,1407,1456,1465,1600,1623,1666,1673,1675,1679,1682,1691,1692,1697,1720,1745,1751,1767,1771,1782,1797,1813,1843,1862,1869,1876,1883,1912,1933,1943,1945,1961,1965,2010,2014,2044,2058,2065,2125,2156,2163,2175,2195,2198,2231,2235,2253,2275,2289,2350,2374,2379,2393,2416,2421,2425,2437,2466,2487,2496,2599,2612,2630,2651,2704,2710,2738,2792,2836,2862,2868,2870,2893,2896,2912,2926,2954,2958,2982,2993
+RCKC tag=pre side=l set=train cat=D i=0 n=129 ids=15,84,118,128,146,176,185,205,220,283,285,311,350,356,421,475,477,509,539,548,549,571,580,597,599,619,622,643,679,724,771,798,801,830,876,893,909,938,943,946,1017,1038,1047,1048,1062,1078,1090,1129,1159,1166,1198,1205,1228,1234,1295,1300,1316,1317,1334,1347,1348,1349,1425,1426,1496,1533,1595,1600,1673,1699,1727,1738,1772,1774,1789,1851,1883,1945,1972,1976,2012,2014,2029,2051,2052,2058,2074,2087,2113,2133,2151,2163,2195,2225,2243,2253,2275,2289,2350,2371,2396,2418,2437,2439,2443,2462,2513,2533,2537,2552,2562,2595,2759,2815,2819,2821,2850,2851,2855,2868,2873,2896,2912,2926,2953,2954,2962,2993,2994
+RCKC tag=pre side=l set=train cat=D i=1 n=124 ids=15,58,146,185,283,285,304,311,350,469,475,497,509,549,550,571,580,599,605,633,679,724,728,729,798,801,808,830,863,893,909,943,945,946,950,976,981,1017,1038,1046,1048,1078,1110,1124,1129,1159,1166,1179,1198,1212,1228,1257,1260,1304,1317,1333,1347,1348,1349,1371,1381,1435,1465,1492,1496,1600,1647,1673,1761,1779,1789,1813,1831,1883,1912,1943,1945,1972,1976,2012,2044,2051,2087,2113,2156,2163,2188,2195,2225,2227,2235,2253,2289,2371,2393,2425,2437,2439,2462,2466,2487,2509,2513,2537,2544,2552,2582,2584,2595,2624,2759,2794,2819,2836,2849,2850,2855,2873,2926,2954,2959,2962,2993,2994
+RCKC tag=pre side=l set=train cat=D i=2 n=141 ids=15,54,57,67,84,185,205,220,265,285,311,340,346,350,356,490,497,506,550,571,580,622,643,647,753,798,801,858,876,893,903,909,943,946,981,1020,1029,1038,1048,1062,1064,1078,1110,1124,1129,1159,1166,1179,1198,1205,1212,1228,1229,1234,1304,1317,1333,1347,1349,1368,1381,1492,1496,1565,1566,1600,1605,1670,1673,1679,1772,1774,1813,1831,1851,1912,1945,1946,1965,1972,1976,1981,2012,2051,2058,2065,2087,2092,2113,2133,2151,2156,2163,2195,2198,2225,2233,2235,2253,2275,2289,2297,2331,2343,2361,2369,2437,2439,2443,2462,2466,2487,2490,2504,2509,2533,2550,2582,2595,2599,2627,2655,2688,2733,2759,2778,2783,2794,2800,2819,2849,2850,2851,2868,2896,2912,2926,2953,2954,2962,2993
+RCKC tag=pre side=l set=train cat=D i=3 n=131 ids=15,58,84,146,220,283,285,292,304,311,340,350,356,392,475,477,497,509,539,549,550,554,571,580,597,599,600,605,618,619,622,639,647,664,729,801,828,851,863,893,903,943,948,976,981,1017,1046,1048,1062,1078,1110,1129,1166,1167,1179,1198,1212,1228,1234,1257,1260,1334,1347,1348,1349,1368,1381,1435,1465,1496,1533,1559,1623,1666,1673,1679,1703,1723,1751,1761,1772,1774,1797,1813,1831,1862,1874,1912,1943,1945,1972,1976,2012,2087,2092,2113,2133,2156,2163,2225,2231,2235,2243,2253,2275,2289,2337,2437,2439,2443,2466,2487,2500,2509,2537,2582,2655,2794,2797,2819,2844,2850,2855,2868,2896,2912,2926,2953,2954,2993,2994
+RCKC tag=pre side=l set=train cat=D i=4 n=130 ids=15,128,146,185,190,208,220,222,265,283,285,304,311,346,350,356,475,477,509,548,549,550,556,571,580,599,600,622,623,633,643,801,830,909,913,943,950,981,1044,1047,1048,1061,1062,1078,1110,1124,1129,1159,1179,1193,1198,1205,1212,1228,1229,1234,1295,1317,1334,1347,1349,1368,1407,1430,1435,1477,1496,1600,1673,1682,1767,1772,1774,1797,1851,1883,1912,1943,1957,1965,1972,1976,2012,2014,2051,2058,2065,2074,2111,2113,2133,2156,2163,2188,2195,2225,2227,2235,2243,2253,2275,2289,2343,2361,2369,2393,2403,2437,2439,2462,2487,2509,2513,2562,2599,2628,2655,2821,2850,2851,2860,2885,2896,2912,2926,2954,2959,2962,2993,2994
+RCKC tag=pre side=l set=train cat=D i=5 n=132 ids=15,58,84,146,170,185,190,208,262,265,283,285,311,350,421,469,475,497,509,549,550,556,571,597,599,605,619,622,679,749,798,801,909,913,915,943,965,981,1017,1020,1029,1046,1048,1056,1062,1078,1090,1110,1124,1129,1159,1167,1179,1198,1205,1212,1229,1316,1317,1334,1348,1368,1435,1465,1492,1496,1559,1600,1670,1673,1682,1772,1774,1782,1789,1883,1913,1943,1976,1988,2012,2014,2044,2051,2058,2087,2092,2113,2151,2163,2225,2227,2235,2253,2275,2289,2350,2361,2369,2388,2396,2426,2437,2439,2449,2462,2487,2496,2500,2504,2509,2513,2529,2544,2562,2582,2595,2624,2626,2738,2794,2819,2849,2850,2851,2855,2868,2896,2926,2954,2962,2994
+RCKC tag=pre side=r set=new cat=A i=0 n=123 ids=10,33,49,54,119,128,194,197,198,231,245,277,407,410,431,464,490,494,519,568,651,668,771,794,800,809,820,840,889,901,903,908,927,949,969,1002,1011,1022,1038,1064,1070,1072,1074,1103,1146,1155,1172,1175,1213,1233,1248,1292,1295,1307,1315,1334,1351,1382,1403,1422,1448,1525,1618,1624,1713,1795,1814,1816,1887,1910,1921,1950,1957,1969,1988,2002,2047,2075,2082,2089,2113,2171,2173,2188,2191,2200,2215,2235,2259,2267,2277,2288,2340,2346,2389,2391,2405,2410,2415,2462,2501,2538,2543,2545,2589,2612,2703,2729,2732,2734,2754,2755,2756,2777,2786,2799,2824,2886,2891,2894,2905,2915,2956
+RCKC tag=pre side=r set=new cat=A i=1 n=130 ids=6,57,73,81,96,131,154,168,184,194,198,215,231,245,251,276,277,316,324,407,494,504,517,558,629,651,668,728,746,771,776,800,820,840,884,889,903,908,941,949,969,975,997,1002,1011,1042,1064,1113,1146,1164,1173,1186,1224,1248,1279,1283,1295,1315,1317,1329,1334,1351,1356,1483,1509,1579,1618,1625,1650,1701,1774,1795,1807,1814,1816,1819,1839,1886,1910,1921,1950,1957,1969,1998,2115,2171,2173,2178,2188,2191,2192,2200,2235,2259,2262,2271,2277,2283,2346,2371,2379,2389,2391,2404,2410,2415,2449,2465,2501,2511,2538,2589,2593,2627,2649,2672,2682,2734,2754,2777,2786,2890,2891,2905,2912,2915,2926,2930,2942,2990
+RCKC tag=pre side=r set=new cat=A i=2 n=131 ids=6,54,73,131,135,168,169,194,198,231,245,269,276,277,294,316,407,429,431,464,465,494,504,517,528,629,651,665,668,697,702,716,728,769,800,806,809,820,889,903,969,976,1002,1011,1022,1038,1048,1054,1064,1070,1146,1172,1175,1186,1223,1233,1295,1312,1334,1340,1351,1403,1448,1525,1554,1573,1579,1603,1618,1650,1655,1665,1688,1703,1722,1726,1742,1754,1795,1834,1839,1910,1957,2047,2069,2082,2085,2089,2113,2144,2178,2188,2191,2200,2235,2262,2271,2277,2317,2346,2373,2389,2391,2410,2458,2462,2465,2501,2529,2534,2578,2589,2649,2682,2703,2709,2719,2726,2734,2747,2752,2754,2777,2786,2824,2854,2886,2894,2912,2956,2990
+RCKC tag=pre side=r set=new cat=A i=3 n=134 ids=54,57,73,128,146,158,168,197,198,231,234,247,269,276,277,316,351,407,425,472,494,503,504,517,519,546,558,651,665,687,741,771,800,806,820,893,941,949,969,1002,1011,1022,1038,1103,1115,1146,1155,1162,1172,1173,1175,1233,1250,1279,1283,1295,1307,1334,1351,1379,1403,1448,1483,1509,1573,1575,1579,1618,1650,1665,1713,1722,1742,1754,1774,1777,1795,1807,1814,1816,1839,1887,1910,1930,1957,1975,1998,2047,2064,2082,2115,2144,2171,2173,2178,2188,2235,2299,2316,2371,2373,2379,2389,2391,2404,2410,2415,2449,2453,2458,2462,2501,2524,2554,2589,2593,2649,2672,2679,2703,2734,2745,2754,2777,2786,2824,2833,2886,2905,2912,2915,2941,2956,2990
+RCKC tag=pre side=r set=new cat=A i=4 n=133 ids=10,54,87,128,131,146,168,184,198,215,234,245,269,276,277,281,285,316,407,431,464,490,494,517,519,546,651,668,687,731,771,776,800,820,889,893,903,913,941,949,975,1064,1070,1074,1113,1146,1155,1172,1173,1188,1224,1248,1274,1279,1295,1317,1334,1351,1381,1382,1403,1433,1448,1509,1514,1573,1579,1618,1624,1649,1650,1698,1722,1750,1754,1774,1795,1814,1816,1819,1824,1910,1921,1950,1957,1969,1975,2069,2089,2155,2171,2178,2188,2191,2200,2235,2281,2316,2346,2371,2379,2389,2391,2405,2415,2447,2462,2467,2501,2532,2578,2589,2612,2649,2660,2682,2703,2726,2729,2732,2734,2754,2777,2786,2799,2823,2891,2894,2905,2915,2956,2972,2990
+RCKC tag=pre side=r set=new cat=A i=5 n=139 ids=10,73,96,128,131,140,169,194,197,198,208,215,245,255,269,276,277,281,313,407,431,464,490,494,504,517,519,546,558,629,631,639,651,716,725,741,771,783,800,806,820,832,862,884,893,903,913,941,949,969,1002,1020,1054,1070,1072,1074,1095,1115,1146,1155,1172,1173,1175,1176,1233,1238,1248,1283,1295,1307,1334,1356,1403,1409,1443,1448,1483,1509,1624,1685,1703,1742,1754,1774,1795,1807,1816,1819,1839,1854,1855,1858,1910,1950,1969,1975,1998,2047,2089,2171,2178,2188,2200,2206,2235,2267,2371,2391,2404,2405,2410,2415,2453,2589,2612,2649,2672,2682,2703,2709,2734,2740,2745,2754,2755,2762,2777,2786,2799,2824,2886,2891,2894,2905,2915,2935,2956,2972,2990
+RCKC tag=pre side=r set=new cat=B i=0 n=125 ids=10,54,73,81,96,119,131,168,215,231,245,255,262,277,285,316,351,407,410,429,431,464,494,580,623,627,629,668,702,717,728,731,754,771,809,820,875,879,889,927,949,975,1011,1038,1042,1064,1070,1223,1233,1250,1279,1283,1318,1329,1334,1351,1403,1433,1476,1547,1579,1603,1624,1650,1655,1688,1698,1726,1750,1754,1794,1807,1814,1816,1876,1950,1957,1965,1975,2035,2073,2075,2082,2085,2102,2133,2149,2171,2173,2191,2192,2259,2288,2299,2373,2389,2391,2415,2421,2458,2467,2512,2517,2531,2545,2554,2572,2589,2612,2639,2649,2657,2682,2719,2732,2734,2754,2762,2777,2799,2835,2890,2894,2917,2956
+RCKC tag=pre side=r set=new cat=B i=1 n=137 ids=6,10,49,73,81,96,118,128,131,159,197,198,231,242,255,277,285,316,351,352,407,431,490,494,561,580,605,631,668,702,716,717,735,809,882,889,893,949,969,1038,1042,1070,1071,1089,1115,1173,1188,1223,1233,1248,1250,1251,1283,1318,1334,1351,1381,1403,1432,1443,1476,1489,1509,1554,1573,1579,1603,1618,1624,1650,1750,1807,1814,1816,1854,1855,1858,1916,1950,1957,1966,1969,1975,1977,2007,2102,2122,2133,2135,2164,2171,2173,2191,2259,2316,2340,2346,2373,2391,2404,2421,2453,2458,2462,2465,2496,2501,2512,2516,2517,2538,2545,2589,2593,2612,2649,2682,2693,2725,2732,2734,2754,2756,2762,2768,2777,2786,2799,2835,2886,2890,2894,2910,2915,2930,2956,2972
+RCKC tag=pre side=r set=new cat=B i=2 n=127 ids=10,49,73,81,96,99,118,131,183,198,208,255,276,277,285,313,316,351,407,431,464,494,631,644,651,668,702,716,717,783,792,800,882,889,893,927,949,969,1003,1008,1011,1038,1042,1070,1103,1115,1175,1213,1223,1232,1233,1238,1248,1250,1283,1295,1317,1318,1326,1334,1351,1371,1403,1427,1432,1433,1443,1489,1504,1525,1547,1579,1603,1624,1650,1750,1754,1795,1807,1814,1816,1854,1916,1957,1958,1965,1966,1969,1975,1977,2075,2085,2135,2171,2173,2235,2281,2299,2300,2316,2338,2373,2421,2512,2517,2545,2578,2589,2593,2612,2639,2649,2682,2725,2732,2734,2747,2754,2786,2799,2824,2886,2890,2894,2912,2917,2972
+RCKC tag=pre side=r set=new cat=B i=3 n=130 ids=6,10,33,49,73,81,128,131,168,198,215,231,245,255,277,316,351,392,405,429,431,494,519,580,623,668,697,702,716,728,783,788,800,805,809,820,840,875,879,889,927,949,969,1038,1042,1064,1070,1071,1173,1233,1238,1248,1250,1251,1295,1318,1329,1334,1351,1403,1433,1443,1476,1504,1519,1521,1525,1529,1539,1579,1603,1624,1650,1739,1750,1754,1760,1807,1814,1854,1916,1950,1957,1966,1969,1975,1978,2047,2064,2075,2085,2102,2115,2149,2171,2173,2191,2200,2235,2288,2299,2316,2346,2369,2373,2404,2421,2458,2499,2501,2531,2532,2538,2545,2589,2612,2639,2649,2682,2725,2732,2734,2747,2754,2777,2799,2824,2912,2917,2956
+RCKC tag=pre side=r set=new cat=B i=4 n=127 ids=6,10,73,96,118,128,131,197,198,215,245,277,285,351,392,407,429,431,468,494,556,580,606,623,644,668,687,702,717,728,766,783,809,862,884,889,895,949,969,1011,1024,1038,1042,1068,1070,1071,1088,1223,1233,1248,1250,1283,1318,1328,1334,1351,1403,1443,1476,1519,1525,1529,1547,1603,1622,1668,1750,1754,1807,1816,1854,1950,1957,1966,1982,2035,2047,2075,2082,2085,2113,2171,2173,2178,2259,2281,2288,2299,2300,2336,2346,2356,2373,2391,2404,2405,2421,2462,2517,2532,2545,2612,2635,2639,2649,2657,2682,2732,2734,2747,2752,2754,2762,2777,2786,2798,2799,2811,2823,2824,2835,2886,2890,2894,2917,2956,2972
+RCKC tag=pre side=r set=new cat=B i=5 n=128 ids=1,6,10,49,73,81,96,118,128,131,197,198,231,245,255,277,285,316,351,429,468,490,494,517,580,597,665,687,702,716,800,809,820,879,889,949,975,1038,1042,1070,1133,1223,1233,1248,1250,1283,1295,1318,1329,1334,1351,1381,1384,1433,1440,1441,1443,1448,1476,1504,1519,1525,1579,1624,1739,1750,1754,1814,1816,1834,1910,1916,1921,1950,1957,1958,1965,1966,1975,1982,2047,2069,2075,2082,2085,2115,2149,2171,2173,2281,2288,2299,2300,2316,2364,2373,2389,2404,2421,2458,2465,2501,2531,2532,2545,2578,2589,2612,2639,2654,2657,2682,2732,2734,2747,2754,2762,2777,2786,2798,2799,2824,2835,2886,2912,2915,2972,2990
+RCKC tag=pre side=r set=new cat=C i=0 n=133 ids=9,10,30,33,57,69,73,81,87,96,151,168,169,198,209,231,234,245,255,276,281,316,429,465,478,490,494,517,546,580,628,702,728,754,783,820,832,840,893,941,949,973,976,997,1002,1038,1054,1071,1103,1117,1133,1155,1172,1175,1187,1188,1213,1233,1238,1248,1250,1265,1295,1329,1334,1351,1403,1446,1448,1509,1579,1650,1685,1701,1718,1726,1754,1795,1807,1814,1816,1824,1855,1921,1950,1975,1978,1982,2047,2064,2069,2113,2122,2127,2136,2171,2173,2178,2191,2200,2235,2259,2271,2277,2281,2288,2371,2391,2399,2404,2415,2447,2458,2462,2504,2538,2572,2578,2593,2649,2654,2734,2747,2754,2777,2786,2789,2799,2823,2886,2890,2939,2972
+RCKC tag=pre side=r set=new cat=C i=1 n=128 ids=5,6,10,33,69,73,96,169,197,231,234,241,245,255,269,276,285,316,362,407,410,465,478,494,517,528,580,668,687,728,754,788,800,820,829,840,848,889,893,941,949,969,996,997,1054,1070,1103,1113,1115,1133,1155,1164,1172,1175,1233,1238,1248,1295,1317,1329,1334,1351,1403,1433,1448,1514,1525,1579,1606,1618,1685,1701,1718,1726,1777,1795,1814,1816,1855,1950,1975,1978,1982,2047,2079,2082,2102,2122,2127,2171,2173,2178,2235,2259,2277,2300,2368,2369,2371,2399,2404,2405,2415,2421,2447,2458,2462,2496,2501,2512,2534,2538,2593,2639,2649,2657,2703,2707,2726,2734,2747,2754,2762,2777,2786,2800,2833,2886
+RCKC tag=pre side=r set=new cat=C i=2 n=126 ids=10,30,33,41,45,49,57,73,87,96,131,168,169,181,197,215,231,234,245,255,285,316,352,362,378,465,494,499,517,546,580,628,631,702,735,754,769,800,829,893,903,941,975,997,1038,1064,1070,1074,1172,1187,1248,1250,1265,1295,1312,1329,1334,1351,1403,1433,1440,1446,1525,1529,1579,1650,1685,1718,1754,1770,1777,1795,1797,1814,1816,1834,1950,1975,1982,2047,2064,2113,2115,2122,2149,2171,2178,2191,2200,2259,2271,2277,2281,2288,2368,2371,2391,2404,2415,2447,2453,2458,2462,2467,2496,2512,2532,2538,2578,2593,2639,2649,2677,2728,2734,2747,2754,2762,2777,2786,2799,2800,2824,2886,2914,2990
+RCKC tag=pre side=r set=new cat=C i=3 n=133 ids=10,33,41,57,73,87,96,118,168,197,198,231,234,245,255,276,285,316,362,378,379,402,429,465,490,494,517,628,665,668,697,702,741,754,776,788,789,800,806,829,832,840,893,927,941,949,996,1015,1038,1054,1061,1070,1074,1103,1113,1133,1164,1172,1175,1213,1248,1250,1295,1299,1307,1328,1334,1351,1371,1403,1440,1448,1517,1525,1603,1618,1649,1650,1718,1726,1795,1814,1816,1855,1910,1950,1957,1975,1978,2022,2047,2069,2102,2113,2115,2122,2171,2173,2178,2192,2194,2200,2215,2281,2299,2300,2346,2371,2391,2404,2422,2453,2467,2512,2532,2579,2589,2705,2734,2747,2762,2772,2777,2786,2799,2800,2886,2890,2894,2926,2961,2972,2990
+RCKC tag=pre side=r set=new cat=C i=4 n=122 ids=10,30,45,69,73,96,131,197,229,231,234,245,255,304,316,362,429,465,468,490,494,499,517,546,580,628,629,631,665,754,783,800,813,820,829,903,949,996,1022,1038,1054,1070,1155,1173,1191,1213,1233,1238,1248,1295,1334,1351,1529,1573,1579,1603,1650,1701,1726,1754,1770,1795,1814,1816,1855,1966,1975,2047,2069,2082,2089,2113,2122,2127,2171,2173,2178,2200,2206,2259,2271,2277,2299,2340,2371,2391,2404,2415,2447,2462,2465,2467,2512,2517,2529,2534,2538,2578,2589,2593,2612,2649,2654,2707,2728,2729,2734,2747,2754,2755,2762,2777,2786,2798,2799,2823,2824,2886,2912,2956,2958,2972
+RCKC tag=pre side=r set=new cat=C i=5 n=136 ids=10,33,45,73,96,131,146,154,169,197,231,234,245,247,255,276,281,285,316,379,405,407,410,429,490,494,517,528,546,580,628,665,697,702,735,754,776,789,790,800,820,829,903,941,949,975,996,1038,1054,1063,1070,1074,1103,1113,1164,1172,1233,1238,1248,1295,1328,1334,1351,1403,1433,1440,1448,1517,1525,1579,1603,1606,1649,1650,1685,1691,1790,1795,1807,1814,1816,1834,1910,1950,1969,1978,2047,2068,2069,2082,2122,2127,2171,2173,2178,2200,2215,2259,2281,2288,2371,2389,2391,2399,2404,2415,2421,2447,2453,2482,2512,2534,2578,2589,2614,2639,2649,2657,2707,2725,2728,2734,2747,2754,2755,2762,2777,2786,2823,2824,2886,2901,2912,2946,2956,2972
+RCKC tag=pre side=r set=new cat=D i=0 n=127 ids=6,10,43,54,73,118,128,131,135,169,198,215,231,245,255,277,279,304,324,407,429,431,465,494,495,561,580,687,702,717,731,735,754,792,800,804,820,840,875,879,927,941,949,1011,1061,1064,1071,1089,1121,1133,1155,1186,1194,1223,1233,1248,1279,1307,1308,1312,1317,1334,1351,1381,1432,1433,1441,1504,1514,1547,1603,1618,1697,1713,1718,1739,1797,1807,1816,1854,1885,1887,1950,1969,1992,2027,2075,2144,2171,2173,2191,2235,2279,2281,2340,2369,2373,2389,2404,2415,2421,2453,2458,2496,2501,2538,2589,2635,2639,2649,2660,2682,2732,2734,2747,2763,2777,2786,2799,2800,2835,2865,2910,2912,2917,2930,2956
+RCKC tag=pre side=r set=new cat=D i=1 n=142 ids=10,41,43,45,54,73,118,119,128,131,168,169,194,208,215,245,255,276,277,279,324,422,429,431,451,465,468,494,495,519,561,580,623,661,687,702,710,755,800,820,829,875,879,903,941,949,1008,1024,1061,1068,1121,1133,1155,1186,1206,1214,1218,1223,1233,1248,1307,1308,1329,1334,1336,1351,1381,1433,1441,1510,1603,1606,1618,1624,1655,1697,1718,1739,1750,1795,1807,1816,1854,1855,1885,1886,1910,1916,1921,1950,1975,1977,2047,2075,2088,2102,2171,2173,2191,2201,2235,2316,2340,2369,2373,2376,2389,2400,2404,2415,2459,2501,2517,2578,2593,2612,2635,2649,2657,2660,2682,2729,2732,2734,2745,2747,2756,2762,2763,2769,2777,2786,2799,2800,2823,2848,2865,2886,2910,2956,2958,2972
+RCKC tag=pre side=r set=new cat=D i=2 n=134 ids=10,43,58,73,154,168,169,194,198,215,231,242,245,255,277,285,304,316,320,324,407,410,494,495,575,665,783,792,799,820,879,884,903,927,941,949,969,1011,1038,1064,1070,1071,1088,1103,1133,1155,1184,1186,1194,1201,1223,1233,1248,1279,1295,1334,1351,1381,1432,1433,1574,1618,1697,1718,1737,1750,1758,1795,1814,1816,1824,1854,1885,1886,1887,1910,1950,1969,1972,1975,1977,2002,2015,2027,2047,2059,2075,2089,2102,2113,2115,2134,2144,2145,2149,2171,2173,2200,2235,2251,2259,2279,2288,2316,2373,2389,2404,2421,2453,2459,2501,2532,2578,2589,2614,2635,2639,2649,2657,2682,2732,2734,2747,2754,2777,2786,2798,2818,2823,2854,2886,2942,2956,2958
+RCKC tag=pre side=r set=new cat=D i=3 n=128 ids=6,10,43,49,73,198,215,231,242,245,255,276,279,285,304,305,351,352,378,407,410,451,465,494,495,631,702,717,735,754,769,783,804,806,820,829,875,893,949,969,1011,1038,1062,1068,1070,1071,1088,1115,1133,1155,1186,1201,1223,1233,1248,1307,1308,1312,1317,1329,1332,1334,1351,1403,1441,1443,1618,1650,1697,1718,1739,1807,1814,1816,1886,1916,1950,1969,1972,1975,1977,2047,2064,2082,2089,2100,2144,2145,2149,2164,2171,2173,2191,2200,2216,2235,2299,2316,2340,2373,2389,2404,2405,2421,2453,2458,2501,2578,2589,2635,2649,2682,2706,2732,2745,2747,2756,2763,2777,2786,2787,2799,2823,2865,2886,2917,2942,2958
+RCKC tag=pre side=r set=new cat=D i=4 n=134 ids=6,10,43,45,73,128,131,169,194,198,231,245,276,277,279,316,392,402,407,429,431,451,465,495,503,517,665,668,702,710,717,746,754,792,829,840,864,903,927,941,949,1002,1011,1048,1064,1070,1133,1146,1155,1164,1186,1206,1214,1223,1233,1248,1317,1329,1341,1351,1432,1448,1496,1574,1650,1697,1701,1750,1754,1795,1807,1816,1854,1885,1887,1910,1916,1950,1972,1975,1977,2059,2069,2075,2102,2115,2134,2149,2171,2173,2191,2200,2201,2235,2281,2299,2340,2355,2371,2373,2389,2404,2405,2415,2421,2458,2459,2465,2501,2531,2538,2558,2578,2589,2635,2639,2649,2657,2682,2703,2729,2732,2734,2747,2762,2763,2777,2798,2800,2823,2890,2894,2912,2956
+RCKC tag=pre side=r set=new cat=D i=5 n=131 ids=6,41,45,54,73,128,131,194,215,242,255,262,277,285,304,305,313,316,340,352,407,464,494,495,519,554,561,580,629,665,702,717,725,783,800,820,875,884,927,949,1011,1038,1115,1155,1201,1223,1233,1248,1279,1328,1334,1348,1351,1541,1554,1603,1618,1624,1650,1718,1739,1750,1754,1795,1807,1814,1816,1854,1886,1887,1916,1950,1957,1972,1975,1977,2002,2015,2047,2059,2069,2075,2085,2089,2133,2171,2173,2191,2200,2201,2281,2288,2309,2316,2373,2389,2404,2405,2421,2449,2458,2478,2501,2512,2517,2531,2572,2589,2614,2635,2639,2647,2649,2660,2682,2732,2734,2745,2777,2786,2824,2854,2886,2890,2894,2912,2917,2942,2956,2958,2961
+RCKC tag=pre side=r set=train cat=A i=0 n=141 ids=6,33,49,54,73,96,106,128,131,146,168,169,194,198,215,231,245,269,276,277,281,285,316,362,407,431,464,465,490,504,517,528,558,627,631,651,668,693,709,716,728,746,771,776,777,794,800,806,820,879,927,941,949,969,997,1042,1054,1064,1070,1074,1089,1113,1115,1146,1155,1172,1174,1175,1224,1233,1295,1334,1356,1382,1403,1448,1509,1514,1578,1618,1624,1625,1640,1655,1774,1795,1816,1819,1910,1950,1969,1975,2047,2069,2075,2082,2086,2171,2173,2178,2191,2200,2235,2271,2288,2346,2371,2391,2404,2405,2415,2422,2447,2453,2458,2462,2501,2504,2543,2589,2593,2612,2649,2672,2682,2703,2734,2754,2756,2777,2786,2799,2823,2851,2854,2886,2891,2894,2901,2905,2912
+RCKC tag=pre side=r set=train cat=A i=1 n=135 ids=30,73,131,146,159,168,184,198,231,234,245,269,276,277,285,316,407,464,490,494,528,546,651,668,709,728,731,746,783,785,794,800,806,820,862,864,903,908,949,969,996,997,1002,1011,1038,1042,1043,1064,1070,1072,1074,1103,1115,1133,1146,1172,1173,1188,1224,1233,1243,1295,1312,1334,1351,1379,1403,1448,1483,1509,1514,1579,1618,1649,1650,1665,1742,1754,1774,1795,1814,1816,1819,1858,1886,1921,1950,1957,1975,1982,2047,2082,2085,2171,2173,2178,2188,2191,2192,2194,2200,2215,2259,2262,2271,2288,2346,2371,2391,2404,2415,2501,2529,2612,2635,2649,2654,2672,2700,2703,2704,2734,2756,2758,2772,2777,2786,2823,2824,2833,2886,2905,2912,2956,2990
+RCKC tag=pre side=r set=train cat=A i=2 n=123 ids=6,54,73,96,128,146,169,194,198,229,231,234,245,269,276,277,324,407,431,464,465,490,494,504,517,695,702,716,728,746,754,800,806,820,889,893,949,969,997,1011,1022,1038,1064,1070,1103,1146,1173,1175,1186,1224,1279,1295,1307,1334,1351,1382,1403,1448,1483,1509,1514,1525,1579,1624,1650,1683,1691,1698,1795,1797,1816,1819,1887,1910,1950,1957,1969,1975,2047,2069,2113,2144,2155,2188,2191,2192,2200,2259,2277,2288,2337,2356,2371,2389,2391,2399,2404,2405,2447,2458,2462,2501,2529,2531,2538,2589,2593,2612,2635,2672,2734,2762,2777,2786,2799,2823,2886,2894,2905,2912,2926,2935,2956
+RCKC tag=pre side=r set=train cat=A i=3 n=135 ids=6,10,15,49,57,73,117,118,128,131,135,158,168,169,184,198,234,245,285,322,352,392,407,429,464,490,494,517,558,629,651,702,728,771,776,800,806,820,840,893,913,927,941,942,969,975,997,1002,1011,1022,1027,1038,1042,1043,1064,1070,1074,1113,1146,1155,1172,1173,1244,1295,1312,1315,1334,1340,1351,1403,1448,1509,1605,1665,1703,1774,1795,1814,1816,1819,1858,1887,1910,1950,1957,1969,1975,2047,2064,2069,2085,2089,2171,2173,2178,2188,2194,2200,2235,2271,2281,2371,2379,2389,2391,2415,2421,2458,2501,2517,2524,2529,2534,2543,2589,2593,2612,2635,2649,2654,2682,2703,2729,2734,2754,2755,2762,2777,2786,2799,2824,2886,2894,2912,2915
+RCKC tag=pre side=r set=train cat=A i=4 n=134 ids=6,10,15,49,54,57,73,81,131,158,197,198,215,229,234,241,245,269,276,304,316,340,351,410,494,517,558,568,580,651,668,728,800,806,820,840,889,903,913,941,949,969,996,1027,1038,1054,1064,1074,1103,1113,1146,1162,1164,1233,1250,1279,1295,1315,1317,1334,1403,1448,1483,1509,1579,1618,1625,1640,1650,1665,1742,1774,1795,1814,1816,1819,1839,1887,1950,1957,1969,1975,2002,2047,2064,2069,2082,2135,2171,2178,2188,2191,2192,2194,2200,2271,2288,2300,2317,2346,2371,2391,2404,2415,2449,2458,2465,2501,2517,2529,2538,2589,2593,2612,2635,2649,2672,2682,2703,2728,2729,2734,2754,2756,2777,2786,2799,2823,2886,2894,2901,2912,2915,2990
+RCKC tag=pre side=r set=train cat=A i=5 n=142 ids=54,73,128,131,169,193,197,198,229,231,245,247,251,262,269,276,277,316,324,351,362,407,429,431,490,517,519,615,639,651,668,709,716,728,769,771,785,800,804,809,820,862,879,889,893,903,918,941,949,969,997,1002,1024,1064,1070,1074,1103,1113,1115,1146,1155,1175,1186,1188,1213,1243,1279,1295,1334,1351,1448,1483,1509,1514,1525,1618,1624,1640,1650,1683,1691,1698,1750,1754,1774,1795,1807,1814,1816,1838,1910,1921,1957,1975,2047,2082,2089,2173,2178,2188,2191,2200,2235,2271,2281,2288,2340,2371,2373,2391,2404,2415,2458,2501,2538,2546,2589,2593,2612,2635,2647,2649,2654,2672,2682,2700,2705,2728,2729,2732,2734,2754,2762,2777,2786,2799,2894,2905,2912,2956,2972,2990
+RCKC tag=pre side=r set=train cat=B i=0 n=119 ids=1,6,10,33,49,70,73,81,96,128,131,198,215,231,251,255,277,316,351,392,407,429,431,465,490,494,580,606,627,665,687,702,716,735,809,820,840,889,893,927,949,975,1038,1042,1070,1175,1188,1218,1223,1233,1248,1250,1295,1328,1329,1334,1351,1422,1432,1433,1443,1476,1509,1514,1603,1618,1624,1650,1691,1750,1754,1814,1816,1854,1887,1916,1950,1966,1975,1982,2041,2075,2085,2102,2171,2200,2281,2329,2349,2404,2421,2422,2458,2501,2512,2516,2531,2545,2578,2589,2612,2639,2649,2657,2672,2682,2734,2747,2754,2755,2762,2786,2799,2886,2890,2912,2917,2956,2972
+RCKC tag=pre side=r set=train cat=B i=1 n=131 ids=6,10,49,73,81,96,119,128,131,198,215,229,231,276,277,285,311,316,352,392,407,431,468,494,503,519,580,627,631,668,687,695,702,717,728,771,804,820,875,879,889,913,942,949,975,1011,1038,1042,1064,1070,1071,1115,1133,1188,1191,1223,1233,1250,1283,1334,1351,1440,1443,1448,1489,1519,1525,1579,1603,1618,1624,1650,1718,1750,1754,1794,1807,1814,1816,1827,1916,1957,1958,1966,1969,1975,1982,2075,2085,2135,2149,2171,2192,2281,2300,2316,2338,2373,2376,2389,2391,2421,2458,2511,2512,2517,2545,2554,2612,2639,2649,2682,2693,2719,2725,2732,2734,2754,2762,2777,2786,2806,2835,2866,2890,2894,2910,2915,2917,2956,2990
+RCKC tag=pre side=r set=train cat=B i=2 n=136 ids=6,10,73,81,96,128,131,169,198,231,242,245,255,277,285,316,324,351,392,407,410,431,464,494,580,623,629,665,668,687,702,716,717,809,820,875,889,949,975,1011,1038,1042,1064,1070,1175,1188,1233,1248,1250,1283,1295,1318,1328,1334,1351,1403,1422,1433,1443,1448,1466,1476,1489,1519,1525,1579,1624,1650,1698,1750,1754,1795,1807,1814,1816,1876,1916,1950,1957,1958,1965,1966,1969,1975,1977,2075,2082,2085,2119,2144,2149,2171,2173,2178,2235,2259,2288,2316,2329,2349,2373,2389,2404,2415,2421,2449,2458,2501,2511,2516,2517,2531,2554,2612,2614,2639,2649,2682,2693,2732,2752,2754,2762,2777,2786,2800,2824,2835,2843,2890,2894,2917,2942,2956,2972,2990
+RCKC tag=pre side=r set=train cat=B i=3 n=135 ids=10,49,54,70,73,96,118,119,131,197,198,208,231,245,255,277,285,316,351,407,410,429,431,436,451,464,494,517,519,623,627,631,665,687,716,717,728,754,783,820,829,889,893,949,976,1011,1038,1042,1070,1071,1103,1115,1173,1223,1233,1248,1250,1295,1317,1329,1334,1351,1403,1432,1476,1514,1529,1579,1603,1650,1688,1739,1750,1754,1774,1816,1854,1855,1950,1957,1965,1975,1977,2007,2035,2069,2075,2082,2085,2102,2149,2171,2173,2191,2200,2299,2300,2336,2349,2389,2391,2404,2421,2458,2478,2496,2512,2517,2529,2532,2554,2556,2578,2589,2593,2639,2649,2654,2657,2672,2682,2726,2732,2734,2747,2754,2777,2786,2799,2915,2917,2942,2956,2972,2990
+RCKC tag=pre side=r set=train cat=B i=4 n=125 ids=1,6,33,45,49,70,73,81,96,128,131,197,198,215,231,242,262,277,285,305,392,407,410,429,431,454,464,490,494,561,580,627,668,700,702,716,717,728,804,809,889,893,949,1011,1038,1042,1070,1071,1170,1175,1223,1233,1318,1328,1334,1351,1403,1432,1443,1476,1504,1519,1579,1603,1624,1650,1726,1750,1754,1807,1816,1827,1916,1950,1957,1975,1977,1982,2085,2102,2116,2149,2171,2173,2200,2235,2277,2281,2288,2299,2300,2336,2349,2373,2389,2391,2404,2421,2458,2467,2496,2512,2516,2517,2531,2538,2545,2572,2612,2639,2649,2734,2752,2754,2755,2762,2786,2799,2835,2865,2866,2886,2894,2915,2972
+RCKC tag=pre side=r set=train cat=B i=5 n=125 ids=45,49,54,73,119,131,194,208,209,231,255,262,277,285,305,316,407,429,431,436,468,494,519,561,580,623,687,702,716,717,728,731,783,800,805,809,820,875,879,889,941,949,1042,1068,1070,1071,1223,1238,1250,1328,1329,1334,1351,1403,1422,1443,1476,1489,1509,1519,1554,1603,1618,1624,1640,1650,1655,1698,1718,1726,1750,1754,1807,1814,1816,1827,1854,1855,1863,1873,1910,1916,1950,1957,1972,1977,2035,2075,2089,2102,2133,2134,2135,2149,2171,2173,2191,2235,2271,2299,2316,2336,2373,2376,2389,2404,2421,2458,2512,2516,2517,2545,2554,2593,2612,2639,2649,2682,2732,2734,2747,2754,2786,2917,2972
+RCKC tag=pre side=r set=train cat=C i=0 n=131 ids=10,30,33,41,45,87,96,118,131,161,168,197,198,231,234,245,247,255,269,276,279,316,379,405,407,451,465,478,517,546,580,628,629,631,665,668,700,702,728,754,769,800,805,820,829,840,864,927,941,996,997,1011,1054,1070,1103,1113,1115,1164,1172,1213,1238,1248,1250,1295,1307,1329,1334,1351,1440,1448,1517,1525,1539,1579,1650,1685,1691,1718,1770,1795,1797,1807,1814,1816,1832,1834,1910,1916,1950,1969,1975,2082,2113,2122,2171,2173,2200,2215,2281,2288,2299,2338,2349,2371,2404,2447,2453,2532,2538,2554,2572,2578,2589,2593,2649,2654,2677,2706,2734,2754,2762,2777,2786,2799,2823,2824,2886,2910,2915,2946,2956
+RCKC tag=pre side=r set=train cat=C i=1 n=136 ids=15,41,45,49,57,69,87,96,146,231,234,245,255,269,276,285,351,362,378,402,407,465,468,478,490,494,499,517,528,580,628,665,702,728,741,754,769,800,806,829,848,903,941,976,1011,1022,1038,1054,1070,1072,1103,1113,1164,1187,1188,1191,1213,1248,1250,1307,1329,1334,1351,1356,1403,1440,1448,1514,1525,1541,1579,1603,1604,1618,1650,1660,1665,1726,1754,1795,1816,1975,1978,2047,2064,2069,2113,2134,2135,2171,2173,2178,2191,2194,2215,2259,2291,2299,2305,2371,2391,2404,2415,2447,2462,2465,2467,2496,2512,2532,2534,2538,2612,2649,2654,2677,2703,2707,2719,2726,2728,2734,2745,2747,2762,2777,2786,2799,2800,2824,2886,2910,2912,2915,2958,2990
+RCKC tag=pre side=r set=train cat=C i=2 n=130 ids=6,10,41,49,57,73,76,131,135,168,169,197,198,231,234,245,255,269,285,316,320,362,379,405,407,461,465,490,494,517,546,580,628,631,668,697,702,706,741,754,769,776,800,805,829,840,853,941,949,997,1011,1012,1038,1054,1061,1071,1103,1146,1172,1213,1233,1248,1250,1295,1315,1334,1351,1409,1448,1525,1579,1618,1650,1660,1685,1718,1795,1807,1814,1816,1855,1887,1950,1975,1998,2047,2082,2113,2115,2171,2173,2178,2200,2259,2262,2277,2349,2368,2371,2389,2391,2404,2405,2415,2447,2453,2465,2517,2532,2538,2589,2635,2639,2649,2657,2703,2707,2719,2747,2755,2777,2786,2800,2824,2833,2886,2890,2901,2939,2972
+RCKC tag=pre side=r set=train cat=C i=3 n=129 ids=45,49,57,69,73,131,161,181,182,215,231,234,241,245,247,255,276,285,316,352,378,397,429,465,494,517,528,580,615,628,668,695,702,741,754,769,800,829,832,840,941,942,949,969,973,996,1008,1038,1054,1061,1071,1103,1113,1146,1164,1172,1175,1213,1233,1248,1250,1265,1295,1307,1328,1334,1351,1403,1440,1448,1525,1579,1603,1618,1650,1726,1754,1770,1795,1797,1814,1816,1855,2047,2069,2113,2115,2171,2178,2186,2200,2206,2259,2271,2277,2371,2391,2399,2404,2405,2415,2447,2453,2458,2462,2498,2532,2538,2589,2612,2649,2657,2734,2747,2754,2755,2777,2786,2789,2824,2865,2881,2886,2890,2912,2956,2961,2972,2990
+RCKC tag=pre side=r set=train cat=C i=4 n=134 ids=30,33,45,49,57,69,118,131,135,161,197,198,215,229,234,245,247,255,269,316,362,378,379,397,402,407,451,465,494,517,628,668,702,728,741,754,788,800,829,840,848,853,903,913,941,949,969,1008,1054,1061,1074,1103,1113,1115,1133,1155,1164,1172,1187,1213,1248,1250,1295,1334,1351,1440,1442,1446,1448,1525,1579,1618,1650,1685,1718,1726,1740,1758,1770,1795,1807,1814,1816,1839,1910,1950,1975,1978,2047,2082,2113,2122,2127,2171,2178,2200,2215,2235,2277,2340,2349,2368,2371,2391,2404,2405,2415,2447,2453,2462,2517,2532,2538,2593,2612,2649,2654,2706,2726,2728,2734,2747,2754,2755,2777,2786,2789,2824,2886,2901,2910,2915,2939,2956
+RCKC tag=pre side=r set=train cat=C i=5 n=131 ids=10,30,33,45,49,57,81,87,96,118,131,134,158,168,197,198,208,215,229,234,245,255,285,316,340,378,402,407,451,465,494,517,528,546,580,628,651,668,697,702,720,741,754,789,800,806,829,840,848,927,949,1038,1054,1061,1071,1103,1113,1133,1172,1187,1233,1238,1248,1250,1295,1299,1328,1329,1334,1351,1403,1448,1603,1606,1650,1754,1795,1807,1814,1816,1916,1950,1975,2002,2022,2047,2093,2113,2122,2171,2173,2178,2185,2194,2215,2259,2288,2300,2368,2371,2391,2404,2405,2415,2421,2447,2462,2465,2498,2512,2517,2532,2589,2593,2612,2654,2672,2706,2719,2728,2729,2747,2754,2755,2762,2777,2786,2799,2823,2886,2917
+RCKC tag=pre side=r set=train cat=D i=0 n=123 ids=43,54,57,73,128,131,154,194,198,215,245,255,277,279,378,379,407,451,494,495,580,661,665,702,792,800,829,875,884,893,926,927,949,1011,1061,1062,1070,1071,1089,1115,1175,1223,1233,1248,1307,1317,1329,1334,1336,1341,1351,1382,1403,1433,1441,1443,1547,1718,1739,1750,1758,1795,1807,1816,1887,1916,1950,1969,1977,2075,2084,2089,2127,2133,2134,2149,2171,2173,2200,2201,2235,2251,2267,2281,2288,2316,2340,2369,2373,2389,2400,2404,2405,2421,2450,2453,2458,2501,2512,2538,2578,2589,2635,2639,2649,2682,2704,2726,2732,2734,2747,2754,2777,2786,2800,2823,2828,2848,2865,2886,2912,2956,2958
+RCKC tag=pre side=r set=train cat=D i=1 n=132 ids=6,10,14,43,54,57,73,119,131,169,198,215,242,245,255,262,277,313,316,378,397,407,410,429,449,468,490,494,495,503,628,661,668,693,702,710,809,820,864,875,893,927,941,947,949,1024,1071,1103,1121,1133,1155,1184,1186,1191,1214,1223,1233,1248,1250,1329,1334,1340,1351,1409,1547,1551,1603,1618,1655,1718,1726,1739,1750,1795,1807,1814,1816,1854,1885,1916,1950,1957,1969,1985,2027,2075,2079,2089,2102,2134,2171,2173,2191,2200,2201,2235,2340,2369,2373,2389,2400,2404,2415,2421,2422,2453,2458,2501,2512,2517,2578,2589,2612,2614,2635,2649,2682,2726,2732,2734,2747,2762,2777,2786,2799,2800,2890,2912,2956,2958,2961,2972
+RCKC tag=pre side=r set=train cat=D i=2 n=139 ids=10,73,119,154,168,198,215,231,242,245,255,277,285,304,305,313,316,378,410,429,431,451,465,494,495,561,580,626,665,668,702,735,790,800,875,903,927,949,969,1011,1024,1038,1061,1064,1070,1071,1089,1121,1133,1155,1186,1201,1223,1233,1248,1250,1295,1308,1317,1329,1334,1336,1351,1403,1409,1433,1504,1514,1525,1574,1618,1754,1792,1795,1814,1816,1885,1949,1950,1969,1972,1975,2015,2027,2075,2085,2089,2097,2102,2113,2115,2135,2144,2171,2173,2191,2200,2201,2279,2281,2299,2340,2356,2369,2373,2389,2400,2404,2415,2421,2441,2449,2458,2532,2538,2572,2578,2589,2639,2649,2654,2682,2729,2732,2734,2745,2747,2756,2763,2777,2786,2800,2865,2886,2910,2917,2930,2956,2958
+RCKC tag=pre side=r set=train cat=D i=3 n=125 ids=6,41,73,118,119,128,131,169,173,215,231,245,255,262,276,305,313,317,402,407,410,429,468,494,495,580,631,665,702,716,735,783,790,800,806,820,840,903,927,949,969,1008,1011,1038,1042,1064,1070,1071,1072,1103,1121,1133,1155,1186,1191,1214,1233,1248,1250,1262,1307,1312,1317,1329,1334,1351,1381,1409,1483,1603,1618,1649,1718,1750,1754,1807,1814,1816,1854,1916,1950,1975,2047,2064,2069,2102,2144,2145,2149,2171,2173,2191,2281,2288,2295,2299,2369,2373,2389,2400,2404,2415,2421,2462,2501,2512,2538,2589,2612,2614,2635,2649,2732,2734,2747,2756,2777,2786,2823,2865,2886,2956,2958,2961,2972
+RCKC tag=pre side=r set=train cat=D i=4 n=131 ids=49,54,73,96,118,128,131,169,198,215,231,242,245,255,277,279,285,304,351,379,407,451,465,494,495,519,561,580,665,687,710,717,731,820,875,893,913,927,941,949,1008,1011,1061,1103,1121,1155,1191,1214,1223,1233,1248,1307,1317,1329,1334,1351,1381,1433,1441,1442,1551,1618,1650,1688,1718,1739,1750,1755,1807,1816,1818,1854,1855,1916,1950,1972,1977,2035,2064,2075,2079,2082,2102,2127,2133,2149,2171,2173,2191,2201,2215,2235,2251,2288,2299,2300,2316,2340,2373,2389,2400,2404,2405,2421,2453,2458,2501,2517,2578,2593,2612,2649,2654,2682,2703,2729,2732,2734,2747,2756,2763,2777,2786,2823,2835,2843,2865,2886,2912,2917,2956
+RCKC tag=pre side=r set=train cat=D i=5 n=131 ids=6,43,54,73,96,119,128,131,169,215,231,255,262,277,279,285,304,305,316,341,407,410,422,425,465,494,519,546,580,631,665,687,702,754,783,799,800,820,829,840,844,893,903,927,941,949,995,1002,1020,1064,1071,1133,1155,1186,1201,1233,1248,1295,1307,1308,1328,1334,1351,1381,1419,1483,1603,1618,1624,1650,1685,1718,1750,1754,1758,1807,1814,1816,1886,1887,1910,1916,1950,1982,2084,2088,2091,2100,2171,2173,2191,2200,2201,2299,2371,2373,2389,2400,2404,2421,2449,2450,2453,2458,2459,2501,2538,2578,2589,2606,2612,2635,2639,2649,2657,2682,2732,2745,2747,2754,2756,2762,2777,2786,2823,2848,2865,2912,2956,2958,2961
+RCCHK tag=pre npres=288 feat_active_frac=1.0000 feat_inactive_spikes=0 feat_active_spikes=115200 feat_other_side=0 goodbad=0 g_same=1 base_l=80197 base_r=84172
+RCW side=l nsyn=60355 g_mean0=24.0000 g_mean1=24.0000 dg_abs=0.0000 frac_changed=0.0000 wsel0=0.6667 wsel1=0.6667 kc_in_mean0=482.8400 kc_in_mean1=482.8400 g0_init=1
+RCW side=r nsyn=59997 g_mean0=24.0000 g_mean1=24.0000 dg_abs=0.0000 frac_changed=0.0000 wsel0=0.6667 wsel1=0.6667 kc_in_mean0=479.9760 kc_in_mean1=479.9760 g0_init=1
+[원시 특징 노출] 제시 0(주기 0 × 사례 6 × 범주 4 × 쪽 2), 노출 eta 0, Oja 끔(정적), 도파민 호출 없음 — 노출 범주 A,B,C,D
+RCKC tag=post side=l set=new cat=A i=0 n=136 ids=73,84,107,118,183,220,283,304,308,311,340,350,356,469,475,500,501,549,558,571,580,597,619,622,623,679,686,783,798,805,817,824,826,876,888,915,943,972,979,1017,1028,1046,1047,1048,1096,1097,1119,1124,1128,1129,1167,1175,1179,1212,1229,1295,1317,1347,1349,1401,1496,1588,1600,1673,1722,1751,1766,1767,1772,1778,1813,1851,1853,1869,1929,1933,1945,1957,1965,1972,1976,1983,1997,2014,2026,2044,2051,2087,2113,2133,2147,2151,2156,2163,2195,2198,2243,2275,2297,2310,2350,2361,2377,2437,2439,2440,2449,2462,2473,2476,2483,2490,2496,2504,2533,2550,2562,2571,2582,2595,2599,2602,2630,2778,2797,2819,2821,2848,2850,2860,2861,2882,2896,2926,2940,2944
+RCKC tag=post side=l set=new cat=A i=1 n=126 ids=32,46,118,185,220,265,285,308,311,350,356,366,469,475,491,548,571,597,599,605,622,643,645,664,679,729,749,798,817,851,876,888,909,938,943,972,981,1017,1020,1028,1048,1056,1060,1062,1110,1124,1129,1138,1166,1175,1179,1204,1212,1228,1229,1234,1333,1334,1347,1349,1465,1496,1516,1518,1588,1666,1673,1675,1679,1685,1691,1722,1751,1755,1772,1789,1797,1843,1851,1853,1874,1929,1957,1972,1976,2046,2052,2065,2113,2133,2147,2156,2163,2176,2225,2235,2289,2310,2393,2418,2439,2462,2496,2550,2595,2602,2617,2627,2630,2651,2674,2774,2794,2797,2811,2819,2823,2836,2861,2868,2873,2893,2896,2926,2954,2993
+RCKC tag=post side=l set=new cat=A i=2 n=135 ids=17,46,58,118,176,183,185,190,265,308,350,469,475,491,509,571,586,588,623,643,645,647,749,783,798,805,817,824,826,868,876,938,943,972,1020,1028,1035,1046,1048,1053,1092,1110,1124,1129,1167,1175,1179,1204,1228,1229,1257,1295,1301,1304,1334,1347,1353,1369,1371,1401,1465,1492,1496,1537,1588,1600,1673,1679,1692,1722,1751,1766,1767,1772,1778,1789,1797,1798,1813,1825,1853,1912,1933,1945,1946,1957,1961,1972,2046,2052,2058,2065,2087,2147,2156,2163,2188,2198,2225,2275,2289,2297,2310,2320,2361,2373,2462,2490,2496,2504,2509,2513,2562,2582,2602,2627,2640,2643,2676,2724,2738,2767,2797,2819,2821,2823,2836,2848,2849,2860,2862,2868,2873,2882,2896
+RCKC tag=post side=l set=new cat=A i=3 n=131 ids=46,53,73,128,146,185,190,265,283,285,304,308,311,340,350,469,491,571,597,599,622,623,643,645,749,783,786,798,807,817,876,909,915,938,943,972,979,1017,1029,1044,1048,1060,1110,1128,1129,1159,1175,1204,1212,1229,1234,1295,1304,1316,1334,1347,1349,1353,1359,1368,1426,1465,1479,1492,1496,1666,1673,1679,1685,1691,1722,1751,1766,1772,1782,1789,1797,1813,1851,1853,1883,1912,1929,1933,1972,2026,2051,2058,2065,2066,2113,2133,2147,2156,2198,2225,2289,2297,2350,2361,2374,2377,2378,2379,2439,2440,2462,2466,2487,2490,2496,2513,2599,2602,2614,2627,2651,2676,2733,2738,2767,2778,2811,2823,2848,2850,2868,2873,2882,2893,2896
+RCKC tag=post side=l set=new cat=A i=4 n=126 ids=32,73,84,146,176,183,185,283,285,308,311,333,340,350,356,469,491,500,548,549,588,597,619,622,643,645,686,786,798,817,826,888,915,943,972,1017,1046,1047,1048,1060,1124,1129,1138,1167,1175,1179,1193,1204,1212,1257,1295,1304,1317,1347,1349,1368,1465,1492,1496,1513,1588,1673,1682,1691,1722,1766,1772,1789,1797,1843,1851,1853,1869,1876,1883,1912,1929,1933,1957,1972,1976,2051,2065,2087,2113,2133,2156,2163,2198,2231,2253,2275,2289,2297,2312,2374,2393,2425,2439,2440,2449,2454,2496,2513,2517,2562,2595,2599,2624,2626,2640,2651,2688,2778,2819,2821,2836,2860,2861,2868,2871,2873,2896,2912,2953,2954
+RCKC tag=post side=l set=new cat=A i=5 n=134 ids=73,84,107,146,185,220,227,265,285,308,311,340,350,356,469,491,509,551,558,571,597,599,600,619,622,623,643,645,673,686,729,783,786,798,817,826,876,888,915,934,938,943,972,979,981,1029,1060,1092,1097,1119,1129,1138,1166,1198,1204,1212,1228,1234,1260,1322,1334,1347,1349,1368,1369,1465,1492,1496,1518,1600,1673,1675,1679,1685,1691,1722,1766,1772,1786,1797,1813,1853,1883,1912,1929,1933,1945,1957,1965,1972,1983,2010,2014,2026,2044,2052,2058,2074,2113,2133,2156,2198,2225,2231,2243,2260,2275,2289,2361,2393,2437,2462,2473,2483,2504,2537,2550,2602,2630,2640,2651,2733,2797,2800,2811,2821,2836,2860,2868,2873,2896,2912,2926,2966
+RCKC tag=post side=l set=new cat=B i=0 n=127 ids=46,54,58,84,118,127,185,190,265,304,308,311,356,370,406,421,443,469,475,490,491,509,550,554,571,600,622,643,729,798,817,872,909,943,979,1020,1045,1048,1056,1060,1062,1110,1124,1175,1179,1193,1204,1212,1229,1294,1295,1304,1347,1348,1349,1359,1371,1392,1465,1542,1620,1666,1673,1679,1722,1732,1772,1782,1797,1825,1853,1945,1946,1950,1969,1972,1976,2012,2014,2051,2052,2058,2065,2087,2113,2156,2163,2188,2195,2198,2225,2227,2235,2243,2275,2289,2329,2337,2406,2462,2469,2487,2490,2496,2504,2561,2562,2595,2599,2602,2624,2630,2640,2658,2674,2692,2758,2794,2797,2819,2823,2836,2855,2871,2893,2954,2959
+RCKC tag=post side=l set=new cat=B i=1 n=130 ids=46,74,128,146,162,185,195,205,265,304,308,311,350,395,469,472,475,477,491,509,549,554,571,599,622,623,796,798,801,817,876,909,938,943,946,948,950,979,1045,1078,1119,1129,1133,1138,1159,1173,1175,1179,1193,1198,1204,1211,1234,1304,1317,1334,1347,1349,1371,1430,1465,1467,1504,1533,1542,1600,1673,1679,1722,1751,1772,1774,1786,1797,1883,1913,1933,1961,1976,2044,2051,2058,2065,2066,2087,2133,2156,2160,2195,2198,2225,2227,2235,2243,2253,2275,2289,2297,2371,2377,2388,2393,2426,2439,2462,2487,2496,2500,2504,2562,2563,2599,2624,2630,2634,2658,2785,2794,2797,2819,2836,2850,2871,2893,2896,2912,2953,2959,2962,2982
+RCKC tag=post side=l set=new cat=B i=2 n=134 ids=46,54,57,185,195,220,262,265,308,311,346,350,356,370,392,395,443,469,475,490,491,509,571,600,622,623,633,645,659,676,798,817,938,943,946,948,950,1017,1029,1032,1046,1060,1078,1119,1124,1159,1175,1198,1204,1296,1300,1304,1335,1347,1349,1368,1369,1371,1401,1430,1456,1465,1496,1533,1600,1673,1679,1722,1723,1772,1797,1813,1831,1843,1912,1933,1950,1972,1976,2014,2044,2051,2052,2066,2087,2099,2113,2133,2160,2191,2195,2197,2198,2225,2243,2253,2289,2297,2310,2331,2337,2377,2379,2388,2425,2443,2462,2487,2496,2500,2504,2509,2562,2571,2582,2595,2599,2624,2627,2630,2758,2777,2794,2797,2819,2836,2860,2871,2893,2896,2912,2926,2953,2993
+RCKC tag=post side=l set=new cat=B i=3 n=135 ids=57,84,118,185,188,190,220,265,300,304,311,340,346,392,421,469,475,477,491,509,549,554,597,600,622,659,798,806,817,876,909,914,943,948,1020,1028,1029,1045,1046,1060,1078,1119,1124,1193,1198,1204,1210,1234,1295,1301,1333,1334,1349,1369,1371,1425,1430,1435,1465,1556,1595,1600,1616,1620,1673,1679,1691,1699,1703,1722,1751,1772,1774,1797,1813,1825,1912,1945,1946,1972,1981,2046,2051,2052,2058,2065,2066,2087,2113,2126,2133,2156,2160,2163,2195,2198,2225,2227,2243,2253,2275,2297,2310,2371,2377,2379,2425,2462,2487,2490,2496,2509,2561,2562,2599,2602,2614,2666,2758,2785,2794,2797,2819,2836,2850,2855,2871,2893,2912,2926,2953,2954,2959,2991,2993
+RCKC tag=post side=l set=new cat=B i=4 n=134 ids=37,54,127,128,185,205,220,265,294,304,308,311,340,346,356,370,436,443,469,472,475,490,509,548,550,554,571,600,622,623,665,699,798,801,817,851,876,886,943,979,1017,1020,1029,1045,1060,1062,1078,1092,1124,1129,1138,1175,1196,1214,1229,1304,1347,1348,1349,1371,1381,1430,1456,1462,1465,1496,1600,1616,1623,1647,1666,1673,1679,1682,1720,1722,1732,1767,1772,1813,1834,1843,1851,1912,1933,1945,1946,1976,2014,2044,2051,2058,2065,2066,2087,2120,2155,2156,2160,2163,2195,2198,2225,2227,2235,2275,2337,2379,2388,2403,2424,2425,2462,2487,2504,2550,2562,2582,2599,2602,2624,2758,2759,2778,2794,2797,2819,2836,2850,2861,2871,2893,2896,2953
+RCKC tag=post side=l set=new cat=B i=5 n=121 ids=46,128,185,188,190,220,265,274,304,308,311,340,346,350,392,426,475,491,509,549,550,569,597,600,612,622,623,633,643,645,647,699,780,783,798,801,808,907,938,943,1017,1020,1029,1035,1045,1046,1060,1062,1096,1119,1124,1129,1159,1175,1193,1212,1234,1334,1349,1369,1371,1430,1456,1465,1492,1533,1600,1666,1673,1699,1723,1772,1774,1776,1843,1853,1862,1912,1933,1945,1946,1972,1976,1981,2014,2058,2065,2087,2120,2156,2225,2234,2235,2243,2253,2275,2289,2320,2331,2377,2393,2462,2487,2490,2496,2500,2509,2562,2595,2599,2614,2624,2676,2819,2836,2850,2855,2896,2926,2953,2954
+RCKC tag=post side=l set=new cat=C i=0 n=135 ids=15,61,80,127,128,159,179,190,304,308,340,350,351,356,430,469,477,549,571,600,623,664,673,679,783,801,806,810,815,817,888,915,927,938,946,952,1017,1028,1092,1097,1129,1175,1179,1193,1215,1229,1234,1260,1295,1301,1317,1334,1347,1349,1371,1401,1407,1449,1465,1588,1600,1623,1673,1679,1692,1697,1720,1722,1751,1766,1778,1789,1813,1825,1831,1851,1869,1883,1924,1945,1961,1965,2010,2014,2044,2065,2074,2151,2156,2163,2188,2195,2198,2243,2253,2289,2301,2312,2350,2361,2374,2393,2424,2425,2462,2483,2487,2562,2569,2612,2614,2630,2676,2696,2704,2710,2792,2794,2797,2819,2821,2823,2836,2862,2868,2873,2893,2896,2926,2933,2954,2955,2958,2991,2993
+RCKC tag=post side=l set=new cat=C i=1 n=127 ids=15,17,58,61,128,162,190,227,269,304,308,340,346,350,356,370,491,497,549,571,597,600,622,623,664,679,702,783,786,798,801,817,876,888,905,907,938,946,972,1028,1048,1129,1159,1175,1212,1229,1234,1260,1304,1317,1334,1347,1349,1359,1371,1426,1465,1492,1623,1673,1691,1699,1720,1722,1751,1761,1766,1767,1772,1797,1813,1838,1843,1851,1869,1883,1912,1929,1965,1976,2014,2026,2044,2051,2065,2120,2123,2156,2163,2195,2198,2243,2289,2297,2350,2361,2379,2437,2440,2449,2483,2487,2490,2496,2550,2562,2613,2624,2627,2676,2688,2692,2704,2759,2794,2819,2821,2856,2862,2868,2896,2912,2926,2933,2954,2982,2993
+RCKC tag=post side=l set=new cat=C i=2 n=131 ids=15,17,58,61,124,162,170,188,208,304,308,309,340,350,356,469,477,509,511,549,622,623,664,786,798,801,806,808,817,888,907,909,938,943,946,972,981,1028,1111,1129,1159,1175,1193,1212,1229,1234,1249,1295,1304,1334,1371,1465,1492,1588,1623,1673,1675,1682,1691,1692,1699,1720,1751,1767,1771,1778,1789,1813,1843,1853,1860,1869,1933,1945,1961,1965,1972,2010,2014,2044,2051,2058,2065,2087,2092,2120,2151,2156,2163,2188,2198,2225,2227,2234,2235,2289,2312,2350,2374,2393,2416,2421,2439,2449,2483,2487,2490,2504,2513,2612,2630,2688,2692,2696,2704,2738,2819,2836,2852,2860,2862,2868,2893,2896,2912,2926,2933,2955,2958,2982,2991
+RCKC tag=post side=l set=new cat=C i=3 n=134 ids=15,67,127,188,227,269,304,309,346,350,356,370,430,458,472,477,509,525,548,549,597,600,623,633,643,664,683,702,780,783,798,806,810,817,876,888,909,938,943,946,964,981,1017,1059,1086,1129,1147,1159,1175,1179,1198,1229,1234,1260,1295,1334,1347,1349,1359,1381,1407,1465,1513,1623,1673,1720,1766,1767,1772,1782,1797,1813,1843,1851,1853,1869,1883,1912,1924,1942,1945,1965,1976,1997,2010,2014,2035,2044,2051,2058,2065,2120,2133,2156,2163,2188,2198,2234,2235,2275,2289,2350,2361,2374,2393,2418,2421,2425,2437,2462,2487,2496,2504,2513,2562,2612,2630,2651,2692,2696,2710,2819,2836,2848,2856,2862,2868,2893,2896,2926,2958,2982,2991,2993
+RCKC tag=post side=l set=new cat=C i=4 n=119 ids=15,17,58,73,84,127,162,227,285,304,308,350,469,491,549,597,623,633,679,729,798,801,817,862,888,938,946,981,1060,1092,1129,1175,1179,1211,1212,1229,1234,1260,1317,1334,1347,1349,1369,1371,1456,1465,1492,1496,1623,1672,1673,1682,1699,1720,1751,1760,1766,1767,1772,1789,1813,1825,1843,1853,1876,1883,1896,1933,1947,1961,1972,2010,2014,2051,2065,2113,2156,2163,2176,2188,2195,2198,2225,2253,2275,2289,2297,2312,2350,2361,2363,2374,2379,2393,2421,2439,2462,2483,2504,2584,2595,2627,2640,2778,2792,2794,2819,2836,2852,2860,2862,2868,2873,2896,2912,2926,2954,2982,2993
+RCKC tag=post side=l set=new cat=C i=5 n=133 ids=17,58,61,73,111,124,162,227,304,308,350,356,370,396,472,491,548,600,622,623,633,643,664,673,679,801,808,810,817,824,888,907,909,915,938,972,981,1017,1060,1125,1129,1139,1159,1167,1175,1179,1193,1212,1229,1234,1257,1260,1317,1334,1349,1369,1396,1424,1456,1465,1492,1600,1673,1679,1691,1699,1720,1722,1751,1766,1767,1771,1789,1813,1843,1876,1883,1912,1929,1933,1942,1945,1961,1965,1972,1976,2015,2046,2051,2065,2087,2151,2156,2163,2198,2227,2235,2243,2253,2260,2272,2289,2297,2312,2350,2361,2374,2393,2426,2462,2487,2490,2504,2586,2640,2688,2692,2738,2792,2794,2819,2821,2823,2836,2860,2861,2862,2868,2896,2912,2926,2933,2982
+RCKC tag=post side=l set=new cat=D i=0 n=137 ids=15,57,58,67,185,188,220,265,283,285,311,348,350,356,475,477,490,509,549,554,571,580,605,622,647,724,798,801,808,851,858,876,893,909,938,943,946,976,1017,1020,1046,1048,1062,1078,1110,1124,1129,1138,1167,1179,1198,1205,1257,1295,1317,1334,1347,1348,1349,1368,1369,1381,1430,1465,1533,1559,1600,1673,1682,1691,1767,1772,1789,1813,1831,1876,1883,1912,1933,1943,1945,1972,1976,2014,2051,2052,2087,2092,2111,2113,2120,2133,2151,2155,2156,2163,2195,2225,2227,2233,2235,2253,2275,2289,2331,2361,2418,2439,2462,2466,2487,2509,2550,2562,2571,2582,2590,2595,2696,2759,2792,2794,2797,2800,2819,2821,2836,2845,2849,2850,2860,2868,2873,2926,2954,2962,2994
+RCKC tag=post side=l set=new cat=D i=1 n=145 ids=15,58,146,190,220,227,265,285,304,308,340,350,356,469,475,497,550,556,571,597,600,605,623,633,647,661,749,798,801,830,851,858,876,909,938,943,946,981,1020,1029,1038,1045,1046,1048,1062,1078,1110,1124,1129,1159,1166,1179,1183,1194,1198,1205,1212,1228,1234,1260,1304,1316,1317,1334,1349,1368,1425,1430,1435,1465,1492,1501,1600,1623,1670,1673,1679,1682,1722,1767,1774,1789,1813,1831,1834,1843,1862,1874,1883,1912,1945,1976,1989,2014,2044,2051,2058,2074,2087,2113,2133,2151,2155,2163,2195,2198,2227,2235,2253,2275,2289,2361,2393,2437,2439,2443,2449,2462,2466,2487,2500,2504,2509,2533,2537,2552,2582,2595,2628,2792,2794,2819,2836,2849,2850,2861,2868,2885,2896,2926,2953,2954,2959,2962,2993
+RCKC tag=post side=l set=new cat=D i=2 n=139 ids=84,128,146,185,187,188,190,269,283,285,311,340,356,469,475,477,497,509,548,571,599,600,619,724,728,753,783,798,801,830,876,909,943,946,981,1017,1020,1028,1046,1048,1110,1128,1129,1138,1159,1166,1175,1198,1204,1205,1212,1214,1229,1295,1301,1316,1317,1334,1348,1349,1381,1430,1462,1492,1496,1559,1588,1595,1670,1673,1679,1758,1772,1774,1797,1813,1823,1851,1883,1912,1933,1943,1945,1976,2012,2014,2051,2058,2074,2086,2087,2092,2113,2133,2151,2155,2156,2163,2195,2225,2233,2243,2253,2275,2295,2312,2337,2369,2371,2388,2393,2439,2462,2487,2490,2509,2513,2533,2562,2582,2595,2604,2644,2759,2794,2797,2819,2821,2850,2861,2868,2873,2896,2912,2926,2953,2962,2993,2994
+RCKC tag=post side=l set=new cat=D i=3 n=123 ids=15,46,128,146,185,188,190,205,283,285,311,346,350,356,406,469,475,477,509,550,554,571,597,599,643,652,679,724,749,783,801,830,876,893,909,943,946,976,981,1028,1038,1045,1046,1048,1060,1062,1078,1110,1129,1138,1167,1175,1179,1198,1205,1212,1229,1304,1334,1347,1348,1349,1368,1426,1430,1465,1496,1600,1673,1679,1767,1772,1782,1797,1831,1851,1876,1883,1912,1945,1965,1972,1976,2012,2051,2065,2074,2113,2133,2156,2160,2163,2195,2225,2227,2289,2312,2343,2361,2371,2393,2437,2439,2462,2487,2490,2513,2569,2582,2599,2725,2821,2851,2855,2860,2868,2896,2912,2954,2959,2962,2993,2994
+RCKC tag=post side=l set=new cat=D i=4 n=127 ids=15,146,185,190,265,283,285,340,346,350,356,430,475,509,548,549,550,571,597,599,633,643,724,729,798,801,808,830,903,909,938,943,946,981,1017,1020,1048,1062,1078,1110,1124,1129,1159,1167,1198,1212,1228,1229,1295,1304,1316,1334,1347,1349,1368,1381,1435,1492,1559,1600,1647,1666,1670,1673,1761,1772,1782,1789,1797,1823,1851,1869,1883,1933,1943,1965,1972,1976,2008,2012,2014,2044,2051,2087,2113,2120,2151,2156,2163,2195,2198,2225,2233,2235,2253,2275,2278,2289,2297,2312,2331,2369,2371,2439,2462,2487,2490,2496,2509,2513,2562,2595,2759,2794,2797,2819,2850,2855,2860,2868,2873,2896,2912,2926,2953,2954,2962
+RCKC tag=post side=l set=new cat=D i=5 n=130 ids=15,54,58,118,128,146,162,185,190,208,283,285,340,350,356,475,509,519,539,548,549,550,571,588,619,643,661,679,724,749,753,798,806,830,893,909,943,950,960,979,1017,1020,1048,1062,1078,1110,1124,1129,1133,1166,1175,1179,1198,1212,1214,1229,1295,1317,1334,1347,1349,1368,1435,1465,1492,1496,1666,1673,1682,1716,1722,1758,1772,1789,1797,1823,1876,1883,1933,1939,1945,1965,1972,1976,2012,2014,2015,2058,2074,2087,2113,2133,2156,2163,2188,2195,2198,2225,2227,2253,2289,2312,2369,2393,2437,2439,2462,2487,2490,2513,2537,2552,2584,2595,2655,2692,2725,2726,2805,2819,2845,2849,2850,2868,2896,2912,2926,2954,2962,2993
+RCKC tag=post side=l set=train cat=A i=0 n=126 ids=15,73,84,128,146,162,265,285,308,311,340,346,350,475,491,549,597,645,664,679,686,714,783,786,805,893,909,915,934,948,952,972,981,1017,1046,1047,1078,1097,1129,1138,1175,1179,1193,1204,1212,1214,1215,1216,1228,1234,1257,1260,1347,1349,1369,1396,1465,1477,1492,1496,1588,1600,1673,1685,1716,1761,1766,1772,1789,1813,1843,1853,1862,1874,1876,1883,1912,1945,1952,1957,1965,1972,1981,2014,2065,2066,2120,2147,2156,2163,2188,2195,2198,2231,2275,2289,2297,2310,2361,2393,2439,2462,2490,2496,2533,2537,2582,2584,2602,2617,2624,2640,2651,2674,2704,2724,2758,2778,2819,2848,2850,2868,2873,2896,2933,2954
+RCKC tag=post side=l set=train cat=A i=1 n=124 ids=15,53,73,84,127,265,285,304,308,311,340,346,350,475,491,549,558,571,597,623,643,645,647,679,686,699,749,783,786,798,801,817,876,909,972,981,1017,1020,1032,1048,1053,1056,1092,1097,1110,1124,1129,1161,1167,1175,1179,1193,1212,1229,1234,1260,1295,1304,1333,1334,1347,1349,1368,1425,1456,1465,1496,1588,1623,1666,1673,1675,1679,1692,1751,1766,1772,1786,1789,1813,1825,1843,1853,1869,1874,1883,1929,1933,1945,1961,1972,1983,2044,2065,2087,2156,2243,2266,2275,2289,2297,2361,2374,2418,2462,2496,2537,2550,2582,2602,2617,2627,2688,2738,2767,2819,2823,2848,2850,2860,2868,2873,2896,2954
+RCKC tag=post side=l set=train cat=A i=2 n=125 ids=46,53,84,185,208,283,308,311,340,350,421,469,491,496,500,554,622,645,686,783,786,817,876,927,972,979,1048,1056,1060,1078,1097,1098,1110,1129,1138,1175,1179,1194,1204,1212,1215,1229,1295,1301,1317,1333,1334,1347,1349,1368,1369,1400,1401,1465,1492,1496,1516,1600,1616,1673,1679,1722,1751,1752,1766,1767,1772,1778,1782,1789,1797,1813,1843,1851,1853,1869,1883,1933,1945,1965,2044,2065,2087,2156,2163,2195,2198,2227,2243,2275,2289,2297,2320,2350,2361,2373,2374,2426,2439,2462,2466,2468,2496,2504,2537,2550,2590,2602,2627,2630,2651,2676,2738,2758,2778,2792,2815,2819,2821,2848,2858,2868,2896,2944,2954
+RCKC tag=post side=l set=train cat=A i=3 n=131 ids=73,146,162,185,190,265,283,285,304,308,311,340,346,350,356,469,475,491,597,600,643,645,673,679,686,714,749,783,786,798,817,862,915,938,943,972,979,981,1032,1056,1092,1119,1129,1167,1175,1179,1193,1198,1200,1212,1214,1215,1229,1234,1260,1263,1334,1347,1349,1465,1477,1479,1492,1496,1518,1666,1673,1722,1751,1761,1766,1767,1772,1789,1797,1813,1843,1851,1853,1945,1957,1965,1972,1983,2044,2046,2051,2065,2066,2087,2120,2133,2156,2163,2188,2195,2198,2243,2289,2297,2310,2361,2377,2379,2418,2425,2437,2449,2462,2473,2490,2504,2513,2550,2595,2602,2614,2617,2666,2674,2676,2797,2819,2848,2860,2868,2873,2882,2896,2926,2944
+RCKC tag=post side=l set=train cat=A i=4 n=135 ids=15,53,73,80,84,185,190,265,283,304,306,308,350,356,364,469,491,501,540,549,597,622,633,643,645,679,686,817,826,862,868,876,888,915,938,943,981,1020,1032,1035,1044,1046,1048,1060,1062,1097,1110,1128,1175,1179,1212,1214,1229,1234,1257,1260,1334,1347,1349,1359,1368,1369,1396,1465,1492,1496,1516,1518,1588,1666,1673,1679,1722,1745,1751,1755,1761,1766,1772,1782,1789,1853,1869,1883,1912,1929,1933,1945,1957,1961,1972,1983,2051,2065,2087,2113,2133,2147,2156,2163,2195,2198,2231,2275,2289,2297,2331,2361,2374,2379,2425,2462,2466,2473,2504,2537,2562,2584,2595,2602,2614,2627,2628,2643,2767,2819,2821,2836,2848,2850,2860,2868,2873,2896,2926
+RCKC tag=post side=l set=train cat=A i=5 n=134 ids=53,107,176,183,227,265,283,304,308,311,340,350,469,491,496,509,549,558,619,622,643,645,661,686,749,783,786,798,805,817,824,826,868,870,876,909,915,938,943,972,981,1017,1023,1046,1110,1119,1124,1129,1138,1159,1175,1179,1204,1212,1228,1257,1295,1304,1317,1334,1349,1369,1371,1396,1425,1465,1496,1513,1516,1588,1600,1666,1673,1679,1685,1703,1720,1722,1724,1751,1766,1767,1772,1789,1813,1843,1883,1929,1933,1961,2026,2035,2044,2051,2052,2065,2074,2087,2113,2133,2163,2188,2195,2198,2249,2253,2275,2289,2361,2374,2377,2379,2462,2490,2504,2595,2602,2643,2651,2688,2738,2767,2819,2821,2836,2849,2850,2860,2868,2873,2882,2896,2940,2944
+RCKC tag=post side=l set=train cat=B i=0 n=136 ids=46,54,57,84,118,185,190,220,265,308,311,346,350,356,370,443,469,472,475,477,479,490,491,509,548,549,550,571,597,619,622,623,643,701,729,783,798,872,876,909,943,979,1020,1028,1029,1043,1045,1056,1060,1062,1078,1092,1110,1119,1124,1129,1138,1159,1173,1179,1193,1198,1210,1295,1347,1349,1369,1371,1426,1430,1456,1465,1494,1496,1513,1595,1600,1620,1666,1673,1682,1703,1751,1772,1797,1851,1933,1972,1976,2014,2044,2052,2065,2087,2113,2120,2151,2156,2163,2195,2225,2235,2243,2253,2275,2297,2310,2337,2424,2425,2462,2487,2490,2496,2500,2504,2550,2562,2597,2599,2614,2624,2630,2632,2797,2805,2819,2836,2850,2855,2893,2912,2926,2940,2991,2993
+RCKC tag=post side=l set=train cat=B i=1 n=130 ids=15,46,54,79,128,170,183,185,186,190,195,220,265,304,308,311,346,350,356,443,469,472,475,490,491,509,548,549,550,554,571,622,623,643,652,659,679,729,771,780,801,868,872,915,938,943,1038,1060,1110,1119,1124,1138,1159,1175,1179,1193,1204,1212,1304,1347,1348,1349,1371,1381,1426,1456,1465,1492,1504,1542,1559,1600,1666,1673,1679,1722,1751,1766,1772,1797,1822,1862,1883,1976,1981,2025,2044,2051,2052,2065,2087,2113,2120,2156,2160,2163,2195,2225,2227,2235,2243,2424,2462,2487,2490,2500,2556,2561,2562,2582,2599,2614,2624,2643,2758,2763,2785,2794,2797,2819,2836,2850,2860,2896,2912,2926,2946,2954,2991,2996
+RCKC tag=post side=l set=train cat=B i=2 n=133 ids=54,183,185,187,190,195,258,265,274,304,308,311,346,350,356,370,469,472,475,491,550,554,600,622,633,643,686,699,729,783,798,801,817,872,876,909,938,943,960,979,981,1017,1020,1038,1045,1060,1062,1110,1119,1124,1159,1167,1175,1179,1193,1204,1212,1234,1295,1301,1304,1349,1371,1456,1465,1492,1496,1533,1537,1559,1600,1620,1642,1647,1666,1672,1673,1679,1682,1722,1772,1797,1806,1843,1853,1912,1933,1969,1972,1976,2014,2051,2058,2065,2066,2087,2156,2163,2195,2198,2225,2227,2233,2235,2243,2297,2379,2424,2462,2487,2490,2496,2500,2504,2562,2582,2595,2614,2624,2630,2658,2664,2794,2797,2819,2836,2850,2893,2896,2926,2953,2954,2993
+RCKC tag=post side=l set=train cat=B i=3 n=124 ids=46,53,54,128,185,190,274,308,311,346,350,356,469,472,475,490,509,550,554,600,622,623,643,699,771,783,798,876,909,938,943,948,950,1020,1045,1048,1060,1062,1119,1129,1133,1159,1167,1175,1193,1205,1212,1229,1234,1295,1304,1334,1347,1348,1349,1371,1430,1465,1477,1492,1600,1672,1673,1691,1766,1772,1776,1851,1853,1862,1912,1933,1972,1976,1983,2014,2026,2058,2065,2066,2087,2113,2151,2156,2163,2188,2195,2198,2225,2227,2234,2235,2289,2297,2337,2369,2388,2424,2425,2443,2462,2487,2496,2513,2550,2561,2562,2582,2599,2624,2704,2738,2794,2819,2822,2836,2868,2893,2896,2905,2926,2940,2953,2962
+RCKC tag=post side=l set=train cat=B i=4 n=122 ids=54,128,162,185,190,220,265,294,311,346,350,356,370,443,472,475,490,509,548,549,550,580,588,599,600,622,623,679,798,876,909,938,943,946,979,1029,1045,1046,1048,1060,1119,1129,1133,1138,1163,1175,1179,1193,1204,1229,1348,1349,1369,1371,1456,1465,1496,1537,1600,1647,1666,1673,1682,1691,1722,1772,1825,1843,1883,1896,1933,1950,1976,2014,2044,2058,2065,2066,2087,2120,2160,2163,2177,2195,2198,2225,2227,2235,2253,2289,2310,2337,2367,2388,2393,2403,2424,2425,2462,2487,2496,2500,2562,2584,2595,2599,2614,2624,2630,2658,2738,2758,2794,2797,2819,2836,2855,2893,2912,2926,2953,2962
+RCKC tag=post side=l set=train cat=B i=5 n=133 ids=46,54,57,128,185,188,190,220,262,265,300,311,340,356,370,392,406,421,443,450,469,475,479,490,491,509,548,550,554,571,619,622,623,645,659,679,728,798,801,806,807,817,872,876,909,938,943,950,972,1017,1045,1060,1078,1119,1124,1129,1138,1159,1175,1179,1193,1196,1204,1229,1295,1304,1316,1335,1340,1347,1349,1371,1392,1465,1467,1492,1542,1595,1600,1623,1673,1679,1722,1797,1851,1862,1933,1976,2014,2044,2051,2052,2058,2066,2087,2133,2156,2160,2163,2188,2195,2198,2225,2227,2253,2289,2337,2425,2426,2437,2462,2487,2500,2561,2562,2599,2602,2624,2758,2785,2794,2797,2805,2836,2873,2885,2893,2896,2912,2926,2959,2962,2993
+RCKC tag=post side=l set=train cat=C i=0 n=120 ids=15,17,73,111,124,190,227,304,308,309,350,356,396,430,477,511,549,597,622,623,643,673,679,783,801,806,817,863,876,888,905,907,909,927,938,946,981,1017,1028,1048,1092,1097,1129,1159,1175,1179,1198,1229,1234,1281,1295,1317,1334,1349,1465,1673,1691,1720,1722,1751,1767,1772,1789,1813,1843,1869,1883,1933,1965,1972,1976,2014,2015,2046,2051,2052,2163,2175,2198,2227,2231,2243,2253,2289,2297,2312,2350,2374,2377,2424,2439,2454,2483,2487,2490,2496,2504,2586,2612,2651,2676,2696,2704,2738,2778,2794,2819,2821,2836,2850,2852,2860,2862,2868,2893,2896,2912,2926,2954,2982
+RCKC tag=post side=l set=train cat=C i=1 n=123 ids=15,17,53,188,304,308,346,350,351,356,370,469,477,509,549,597,600,622,623,643,664,679,715,783,801,817,888,915,938,972,981,1017,1028,1048,1110,1129,1159,1167,1175,1179,1193,1212,1229,1234,1257,1260,1317,1334,1347,1348,1349,1359,1369,1406,1426,1465,1492,1559,1575,1623,1673,1682,1691,1745,1751,1766,1771,1772,1774,1782,1813,1843,1846,1853,1883,1912,1945,1961,1965,1969,1976,2046,2051,2065,2087,2156,2163,2188,2198,2231,2235,2289,2297,2301,2350,2361,2379,2418,2421,2462,2466,2487,2490,2496,2504,2584,2595,2644,2696,2792,2794,2819,2836,2848,2862,2868,2893,2896,2912,2926,2954,2982,2991
+RCKC tag=post side=l set=train cat=C i=2 n=128 ids=15,58,61,127,265,269,304,311,340,350,351,356,370,430,469,477,491,509,548,600,622,623,643,664,673,679,702,749,783,786,798,801,806,810,817,888,903,938,946,964,965,972,981,1017,1092,1129,1159,1175,1179,1212,1229,1234,1260,1295,1334,1349,1369,1396,1465,1588,1600,1623,1672,1673,1679,1692,1720,1722,1761,1766,1767,1789,1797,1813,1843,1853,1869,1883,1912,1929,1945,1965,1972,2044,2051,2058,2065,2066,2087,2113,2156,2188,2195,2198,2234,2235,2243,2253,2289,2350,2361,2393,2424,2487,2490,2496,2504,2550,2582,2599,2624,2630,2696,2797,2819,2821,2823,2836,2849,2852,2860,2862,2868,2893,2912,2926,2958,2982
+RCKC tag=post side=l set=train cat=C i=3 n=119 ids=15,61,124,185,190,227,304,350,351,356,370,430,477,548,549,569,597,600,622,623,643,664,673,702,817,888,890,907,938,946,981,1017,1044,1092,1129,1159,1175,1179,1212,1229,1260,1269,1295,1317,1334,1349,1424,1456,1465,1556,1623,1666,1673,1682,1691,1692,1720,1722,1767,1771,1772,1789,1813,1851,1860,1869,1876,1883,1912,1933,1945,1961,1963,1965,1972,2044,2051,2065,2087,2120,2163,2198,2225,2235,2243,2289,2297,2301,2320,2350,2361,2374,2379,2393,2424,2437,2466,2483,2487,2496,2504,2562,2584,2595,2630,2738,2823,2836,2848,2849,2860,2862,2868,2893,2896,2912,2926,2954,2982
+RCKC tag=post side=l set=train cat=C i=4 n=124 ids=15,61,124,146,190,265,269,285,304,350,351,356,370,396,430,469,477,548,597,600,622,623,643,673,679,702,783,801,806,817,862,888,890,907,915,938,946,972,981,1017,1048,1092,1097,1129,1139,1159,1175,1179,1212,1229,1234,1295,1304,1334,1349,1359,1369,1465,1477,1588,1600,1623,1673,1679,1691,1720,1722,1751,1767,1789,1813,1843,1846,1883,1912,1945,1961,1965,1972,1976,2051,2065,2066,2113,2120,2163,2175,2176,2195,2198,2235,2243,2253,2289,2312,2350,2361,2374,2377,2379,2424,2425,2437,2487,2504,2513,2562,2569,2584,2630,2704,2794,2819,2821,2836,2850,2852,2860,2868,2893,2926,2955,2958,2982
+RCKC tag=post side=l set=train cat=C i=5 n=129 ids=15,61,111,128,179,190,304,309,350,430,475,477,511,548,597,600,622,623,645,664,702,780,798,801,806,817,888,907,915,927,938,946,948,972,979,981,1017,1048,1053,1086,1097,1129,1139,1212,1229,1234,1295,1334,1349,1359,1407,1456,1465,1600,1623,1666,1673,1675,1679,1682,1691,1692,1697,1720,1745,1767,1771,1782,1797,1813,1843,1853,1862,1869,1876,1883,1912,1933,1943,1945,1961,1965,1972,2010,2014,2044,2065,2125,2156,2163,2175,2195,2198,2231,2235,2253,2275,2289,2350,2374,2377,2379,2393,2416,2421,2425,2437,2487,2496,2612,2630,2651,2704,2710,2738,2792,2836,2862,2868,2870,2893,2896,2912,2926,2954,2958,2982,2991,2993
+RCKC tag=post side=l set=train cat=D i=0 n=128 ids=15,84,118,128,146,176,185,220,269,283,285,304,311,350,356,475,477,509,539,548,571,580,597,599,600,619,622,633,643,679,724,798,801,830,876,893,909,938,946,1017,1028,1038,1047,1048,1062,1090,1129,1159,1198,1205,1212,1228,1295,1300,1316,1317,1334,1347,1348,1349,1426,1496,1533,1595,1600,1673,1699,1727,1738,1751,1772,1774,1789,1797,1851,1883,1912,1945,1972,1976,1989,2012,2014,2029,2044,2051,2052,2058,2074,2087,2113,2151,2163,2195,2225,2253,2275,2289,2350,2371,2396,2418,2437,2439,2443,2462,2513,2537,2552,2562,2595,2759,2815,2819,2821,2850,2851,2855,2868,2873,2896,2912,2926,2953,2954,2962,2993,2994
+RCKC tag=post side=l set=train cat=D i=1 n=122 ids=58,146,185,283,285,304,311,350,469,475,497,509,549,571,580,599,605,633,679,724,728,729,798,801,808,830,863,893,909,913,943,945,946,950,976,981,1017,1038,1046,1048,1078,1110,1124,1129,1159,1166,1198,1205,1212,1228,1257,1260,1304,1333,1347,1348,1349,1368,1371,1381,1435,1465,1492,1496,1600,1647,1673,1761,1779,1789,1813,1831,1834,1883,1912,1943,1945,1972,1976,2012,2044,2051,2087,2113,2156,2163,2195,2225,2227,2235,2253,2289,2371,2393,2425,2437,2439,2462,2466,2509,2513,2537,2544,2552,2582,2584,2595,2624,2759,2794,2819,2836,2850,2855,2873,2926,2953,2954,2959,2962,2993,2994
+RCKC tag=post side=l set=train cat=D i=2 n=145 ids=15,54,57,67,84,208,220,262,265,285,311,340,346,350,356,490,497,506,550,571,580,622,643,647,679,728,753,783,798,801,858,876,893,903,909,943,946,981,1020,1029,1048,1062,1064,1078,1110,1124,1129,1138,1159,1166,1179,1198,1212,1228,1229,1304,1317,1333,1347,1349,1368,1381,1492,1496,1559,1565,1600,1605,1673,1679,1767,1772,1774,1813,1831,1851,1853,1883,1912,1945,1946,1965,1976,1981,2012,2014,2051,2065,2087,2092,2113,2133,2151,2156,2163,2195,2198,2225,2233,2235,2253,2275,2289,2297,2331,2343,2361,2369,2425,2437,2439,2443,2462,2466,2487,2490,2509,2533,2537,2550,2582,2584,2595,2599,2655,2688,2733,2759,2778,2783,2794,2797,2800,2819,2850,2851,2868,2873,2896,2912,2926,2953,2954,2962,2993
+RCKC tag=post side=l set=train cat=D i=3 n=129 ids=15,58,84,146,220,283,285,292,304,311,340,350,356,392,469,475,477,497,509,539,549,550,571,580,597,599,600,618,619,639,647,664,728,729,801,828,851,863,893,903,943,976,1017,1020,1046,1048,1062,1078,1110,1129,1166,1167,1179,1198,1212,1228,1257,1260,1334,1348,1349,1368,1381,1435,1465,1496,1533,1559,1623,1666,1673,1679,1703,1723,1751,1761,1772,1774,1797,1813,1831,1862,1874,1912,1943,1945,1976,2012,2058,2087,2092,2113,2133,2156,2163,2225,2235,2243,2253,2275,2289,2337,2393,2437,2439,2443,2462,2466,2487,2500,2509,2537,2582,2655,2688,2794,2797,2819,2844,2850,2855,2868,2896,2912,2926,2953,2954,2993,2994
+RCKC tag=post side=l set=train cat=D i=4 n=127 ids=15,128,146,185,190,208,220,222,265,283,285,304,311,346,350,356,469,475,477,509,548,549,550,556,571,580,599,600,623,633,643,798,801,830,909,913,943,950,981,1028,1044,1046,1047,1048,1061,1062,1078,1110,1124,1129,1159,1179,1198,1205,1212,1228,1229,1295,1334,1349,1368,1430,1465,1477,1496,1600,1673,1682,1767,1772,1774,1797,1851,1876,1883,1912,1943,1957,1965,1972,1976,2012,2051,2058,2065,2074,2113,2133,2156,2163,2188,2195,2225,2227,2235,2243,2253,2275,2289,2312,2331,2343,2361,2369,2393,2403,2437,2439,2462,2487,2509,2513,2562,2599,2628,2821,2850,2851,2860,2885,2896,2926,2954,2959,2962,2993,2994
+RCKC tag=post side=l set=train cat=D i=5 n=137 ids=15,58,84,146,170,185,190,208,220,262,265,283,285,304,311,350,421,469,475,497,509,549,550,556,571,597,599,605,619,679,749,798,801,909,913,915,943,965,981,1017,1020,1029,1046,1048,1056,1062,1078,1090,1110,1124,1129,1159,1167,1179,1198,1205,1212,1229,1316,1317,1334,1348,1349,1368,1465,1492,1496,1559,1588,1600,1673,1682,1767,1772,1774,1782,1789,1797,1851,1883,1912,1913,1943,1976,1989,2012,2044,2051,2058,2087,2113,2120,2151,2156,2163,2195,2225,2227,2235,2253,2275,2289,2361,2369,2388,2393,2396,2426,2439,2449,2462,2487,2496,2500,2504,2509,2513,2529,2544,2582,2595,2624,2626,2738,2759,2794,2819,2849,2850,2851,2855,2868,2896,2926,2954,2962,2994
+RCKC tag=post side=r set=new cat=A i=0 n=134 ids=10,49,119,128,194,197,198,231,245,276,277,285,407,410,431,464,490,494,519,568,629,651,668,702,771,794,800,806,809,820,840,889,901,903,908,927,941,949,969,997,1002,1011,1022,1038,1064,1070,1072,1074,1103,1113,1146,1155,1172,1175,1188,1213,1233,1248,1292,1295,1307,1315,1334,1351,1356,1382,1403,1422,1448,1514,1579,1618,1624,1713,1795,1814,1816,1858,1910,1921,1950,1957,1969,1975,1988,2002,2047,2075,2082,2089,2113,2188,2191,2200,2215,2235,2259,2267,2277,2288,2346,2389,2391,2405,2410,2415,2462,2465,2501,2538,2543,2545,2589,2612,2654,2703,2729,2732,2734,2754,2755,2756,2763,2777,2786,2799,2824,2886,2891,2894,2905,2915,2956,2972
+RCKC tag=post side=r set=new cat=A i=1 n=129 ids=6,49,57,73,81,96,131,154,168,184,194,198,215,231,245,251,276,277,285,316,324,407,429,494,504,517,558,629,651,668,728,746,771,776,800,820,840,884,889,903,908,941,949,969,975,997,1002,1042,1064,1113,1146,1164,1173,1186,1224,1248,1279,1283,1295,1315,1317,1329,1351,1356,1483,1509,1579,1618,1625,1650,1701,1774,1795,1807,1814,1816,1819,1839,1886,1910,1921,1957,1969,1998,2047,2064,2115,2171,2178,2191,2192,2200,2235,2259,2271,2277,2283,2346,2356,2371,2379,2389,2391,2404,2410,2415,2449,2465,2501,2538,2589,2593,2612,2627,2649,2672,2682,2734,2754,2777,2786,2890,2891,2905,2915,2926,2930,2942,2972
+RCKC tag=post side=r set=new cat=A i=2 n=133 ids=6,10,49,73,131,135,168,169,194,198,231,245,269,276,277,294,316,407,429,431,464,465,494,504,517,528,629,651,665,668,697,702,769,800,806,809,820,889,903,969,976,997,1002,1011,1022,1038,1048,1054,1064,1070,1103,1146,1155,1172,1175,1186,1223,1233,1295,1334,1340,1351,1356,1403,1448,1509,1525,1529,1554,1573,1579,1618,1650,1655,1665,1688,1722,1726,1742,1754,1795,1839,1858,1910,1957,2047,2069,2082,2085,2089,2113,2144,2178,2188,2191,2200,2235,2262,2271,2277,2317,2346,2371,2373,2389,2391,2410,2458,2462,2465,2501,2534,2578,2589,2593,2639,2649,2682,2703,2709,2719,2726,2734,2747,2752,2754,2777,2786,2824,2854,2894,2912,2956
+RCKC tag=post side=r set=new cat=A i=3 n=134 ids=57,73,128,158,197,198,231,234,247,269,276,277,316,351,407,425,472,494,503,504,517,519,558,580,651,665,687,697,728,741,771,800,806,820,893,941,949,969,997,1002,1011,1022,1038,1103,1115,1146,1155,1162,1172,1173,1175,1233,1250,1279,1283,1295,1307,1334,1351,1379,1403,1448,1483,1509,1514,1529,1573,1575,1579,1618,1650,1665,1713,1722,1742,1754,1774,1777,1795,1807,1814,1816,1839,1858,1887,1910,1930,1957,1975,2047,2064,2082,2089,2144,2173,2178,2188,2235,2299,2316,2371,2373,2379,2389,2391,2404,2410,2415,2449,2453,2458,2462,2501,2524,2589,2593,2649,2672,2679,2703,2734,2745,2754,2777,2786,2824,2833,2886,2905,2912,2915,2941,2956,2990
+RCKC tag=post side=r set=new cat=A i=4 n=133 ids=10,54,81,87,128,131,146,168,184,198,215,231,234,245,269,276,277,281,285,316,407,431,464,490,494,517,519,546,651,665,668,687,728,771,776,800,820,889,893,903,913,927,941,949,969,975,1064,1070,1074,1113,1146,1155,1172,1173,1188,1224,1243,1248,1274,1279,1295,1317,1334,1351,1381,1403,1433,1448,1509,1514,1573,1579,1618,1624,1649,1650,1655,1665,1698,1722,1774,1795,1814,1816,1819,1910,1950,1957,1969,1975,2064,2069,2089,2155,2178,2188,2191,2200,2235,2316,2346,2371,2379,2389,2391,2405,2415,2453,2462,2467,2532,2578,2589,2593,2612,2649,2660,2682,2703,2729,2732,2734,2754,2777,2786,2799,2823,2891,2894,2905,2915,2956,2972
+RCKC tag=post side=r set=new cat=A i=5 n=137 ids=10,73,96,128,131,169,194,197,198,208,215,245,255,269,276,277,281,285,313,407,431,464,490,494,504,517,519,558,580,629,631,639,651,697,716,725,771,783,800,806,820,832,862,884,893,913,941,949,969,1002,1020,1054,1070,1072,1074,1095,1115,1146,1155,1172,1173,1175,1176,1233,1238,1248,1283,1295,1307,1334,1356,1403,1409,1443,1448,1483,1509,1624,1685,1703,1742,1754,1774,1795,1807,1816,1819,1839,1854,1855,1858,1910,1950,1969,1975,1998,2047,2064,2089,2171,2178,2188,2191,2200,2206,2235,2267,2371,2389,2391,2404,2405,2410,2453,2589,2612,2649,2672,2682,2703,2709,2734,2740,2754,2756,2786,2799,2824,2886,2891,2894,2905,2915,2935,2956,2972,2990
+RCKC tag=post side=r set=new cat=B i=0 n=126 ids=10,70,73,81,96,117,119,131,168,215,231,245,255,262,277,285,316,351,352,407,410,429,431,464,494,580,623,627,629,668,702,717,731,754,771,809,820,875,879,889,927,949,975,1038,1042,1064,1070,1223,1232,1233,1250,1279,1283,1318,1328,1329,1334,1351,1403,1433,1476,1579,1603,1624,1650,1655,1688,1698,1718,1726,1750,1754,1807,1814,1816,1876,1957,1965,1975,2035,2069,2073,2075,2082,2085,2102,2133,2149,2171,2191,2192,2259,2288,2299,2373,2389,2391,2421,2449,2458,2467,2512,2516,2517,2531,2545,2572,2589,2612,2639,2649,2682,2719,2725,2732,2734,2754,2762,2777,2786,2799,2835,2890,2917,2956,2972
+RCKC tag=post side=r set=new cat=B i=1 n=136 ids=10,49,73,81,96,118,128,131,159,197,198,231,242,255,276,277,285,316,351,352,407,431,490,494,504,561,580,605,631,665,668,702,716,717,735,809,820,882,889,893,949,969,1038,1042,1070,1071,1089,1115,1188,1223,1233,1248,1250,1251,1283,1318,1328,1334,1351,1381,1403,1432,1443,1476,1489,1509,1554,1573,1579,1603,1618,1624,1650,1750,1807,1814,1816,1854,1855,1858,1916,1950,1957,1966,1969,1975,1977,2007,2075,2102,2122,2133,2135,2164,2171,2173,2191,2259,2316,2346,2373,2391,2404,2421,2453,2458,2462,2465,2496,2512,2516,2517,2538,2545,2589,2593,2612,2639,2649,2682,2693,2725,2732,2734,2754,2762,2768,2786,2799,2835,2886,2890,2915,2917,2956,2972
+RCKC tag=post side=r set=new cat=B i=2 n=133 ids=10,49,73,81,96,99,118,131,135,183,198,208,231,255,276,277,285,313,316,351,407,431,464,494,631,644,651,668,702,717,728,783,792,800,820,882,889,893,913,927,949,969,1003,1008,1038,1042,1070,1071,1103,1115,1213,1223,1232,1233,1248,1250,1283,1295,1317,1318,1326,1334,1351,1371,1403,1432,1433,1443,1489,1504,1509,1519,1525,1547,1579,1603,1624,1650,1750,1754,1795,1807,1816,1854,1910,1916,1957,1958,1965,1966,1969,1975,1977,2069,2075,2085,2135,2171,2173,2206,2235,2259,2281,2299,2300,2316,2338,2373,2421,2453,2512,2517,2545,2578,2589,2593,2612,2639,2649,2682,2725,2732,2734,2747,2754,2786,2799,2824,2886,2890,2894,2917,2972
+RCKC tag=post side=r set=new cat=B i=3 n=130 ids=6,10,33,49,73,81,128,131,154,168,198,215,231,242,255,316,351,392,405,429,431,494,519,580,623,668,697,702,716,783,788,800,805,809,820,840,875,879,889,927,941,949,969,1038,1042,1064,1070,1071,1173,1238,1248,1250,1251,1295,1318,1329,1334,1351,1403,1433,1443,1476,1504,1519,1525,1529,1539,1579,1603,1613,1624,1650,1750,1754,1760,1807,1814,1854,1916,1957,1958,1966,1969,1975,1978,2047,2064,2075,2085,2102,2149,2171,2173,2191,2200,2235,2288,2299,2316,2329,2346,2369,2373,2391,2404,2421,2458,2499,2501,2531,2532,2538,2545,2578,2589,2612,2639,2649,2654,2682,2725,2732,2734,2754,2777,2799,2824,2912,2917,2956
+RCKC tag=post side=r set=new cat=B i=4 n=128 ids=6,10,49,73,96,118,128,131,197,198,215,231,245,277,285,351,392,407,429,431,468,494,580,606,623,644,668,687,702,717,728,766,783,809,862,864,884,889,895,949,969,1011,1024,1038,1042,1068,1070,1071,1088,1223,1233,1248,1250,1283,1318,1328,1334,1351,1403,1443,1476,1519,1525,1529,1547,1603,1622,1668,1754,1816,1854,1910,1950,1957,1966,1982,2035,2047,2069,2075,2082,2085,2113,2171,2178,2259,2281,2288,2299,2300,2336,2346,2356,2373,2389,2391,2404,2405,2421,2462,2488,2517,2531,2532,2545,2612,2635,2639,2649,2654,2657,2682,2732,2734,2752,2754,2762,2777,2786,2798,2799,2823,2835,2890,2894,2917,2956,2972
+RCKC tag=post side=r set=new cat=B i=5 n=130 ids=1,6,10,49,73,81,96,118,128,131,197,198,231,245,255,277,285,316,351,429,468,490,494,517,580,615,665,668,687,702,716,783,800,809,820,879,889,927,949,975,1038,1042,1070,1133,1146,1223,1233,1248,1250,1283,1295,1318,1329,1334,1351,1381,1384,1433,1440,1441,1443,1476,1504,1525,1579,1603,1624,1739,1750,1754,1814,1816,1834,1910,1916,1921,1950,1957,1958,1965,1966,1975,1982,2047,2069,2075,2082,2085,2115,2149,2171,2173,2191,2281,2288,2299,2300,2316,2364,2373,2389,2404,2421,2458,2465,2501,2531,2532,2545,2578,2589,2612,2639,2654,2682,2732,2734,2747,2754,2762,2777,2786,2798,2799,2824,2835,2886,2912,2915,2972
+RCKC tag=post side=r set=new cat=C i=0 n=136 ids=9,10,30,57,69,73,81,87,96,131,151,168,169,198,209,231,234,245,255,276,281,316,391,429,465,490,494,517,546,580,628,702,754,783,820,829,832,840,893,941,949,973,976,997,1002,1038,1054,1071,1103,1117,1133,1146,1155,1172,1175,1187,1188,1213,1233,1248,1250,1265,1295,1318,1329,1334,1351,1403,1446,1509,1579,1618,1650,1685,1701,1718,1726,1754,1795,1814,1816,1824,1855,1858,1910,1921,1950,1975,1978,1982,2047,2064,2069,2113,2122,2127,2136,2171,2173,2178,2191,2200,2235,2259,2271,2277,2281,2288,2371,2389,2391,2399,2404,2415,2447,2458,2462,2504,2538,2572,2578,2593,2649,2654,2734,2747,2754,2777,2786,2789,2799,2823,2886,2890,2939,2972
+RCKC tag=post side=r set=new cat=C i=1 n=140 ids=5,6,10,33,57,69,73,96,169,197,215,231,234,241,245,255,269,276,285,316,352,362,407,410,465,478,494,517,528,580,654,668,687,728,754,783,788,800,820,829,840,848,889,893,927,941,949,969,996,997,1054,1070,1103,1113,1115,1133,1146,1155,1164,1172,1233,1248,1295,1317,1329,1334,1351,1403,1433,1448,1514,1525,1579,1606,1618,1685,1701,1718,1726,1740,1766,1777,1795,1814,1816,1855,1950,1975,1978,1982,2047,2079,2082,2102,2113,2122,2127,2171,2173,2178,2235,2259,2277,2299,2368,2369,2371,2391,2399,2404,2405,2415,2421,2447,2458,2462,2496,2501,2512,2534,2538,2593,2639,2649,2654,2657,2703,2707,2726,2734,2747,2754,2762,2777,2786,2800,2833,2886,2956,2972
+RCKC tag=post side=r set=new cat=C i=2 n=128 ids=5,10,30,41,45,49,57,73,87,131,168,169,181,197,215,231,234,245,255,285,316,352,362,378,465,494,499,517,546,580,628,702,735,754,769,800,806,820,829,883,893,903,941,975,997,1038,1070,1074,1138,1146,1172,1187,1248,1250,1279,1295,1312,1329,1334,1351,1403,1433,1440,1446,1514,1525,1529,1579,1650,1685,1718,1754,1770,1777,1795,1797,1814,1816,1834,1858,1910,1950,1975,1982,2047,2064,2113,2122,2149,2171,2178,2191,2200,2215,2259,2271,2277,2288,2371,2391,2404,2415,2447,2453,2458,2462,2467,2496,2512,2532,2538,2578,2593,2639,2649,2677,2734,2747,2754,2762,2777,2786,2799,2800,2824,2886,2914,2990
+RCKC tag=post side=r set=new cat=C i=3 n=140 ids=10,33,41,49,57,73,87,118,168,197,198,231,234,245,255,276,285,316,362,378,402,429,465,490,494,517,611,628,665,668,697,702,741,754,776,788,789,800,806,820,829,832,840,893,927,941,949,996,1015,1038,1054,1061,1070,1074,1103,1113,1133,1164,1172,1175,1213,1248,1250,1295,1299,1307,1328,1334,1351,1371,1403,1440,1448,1517,1525,1529,1603,1618,1649,1650,1685,1718,1726,1795,1814,1816,1855,1910,1950,1957,1975,1978,2022,2047,2069,2102,2113,2122,2171,2178,2192,2194,2200,2215,2271,2281,2299,2300,2346,2371,2389,2391,2404,2422,2453,2467,2512,2532,2579,2589,2593,2639,2649,2705,2734,2747,2762,2772,2777,2786,2799,2800,2824,2886,2890,2894,2926,2956,2961,2972
+RCKC tag=post side=r set=new cat=C i=4 n=125 ids=10,30,45,69,73,96,131,197,229,231,234,245,255,276,304,316,362,405,429,465,468,490,494,499,517,546,580,628,629,631,665,702,728,754,783,800,813,820,829,903,949,996,1022,1038,1054,1070,1146,1155,1213,1233,1248,1295,1334,1351,1403,1514,1529,1573,1579,1603,1650,1701,1754,1770,1795,1814,1816,1855,1905,1966,1975,2047,2069,2082,2089,2113,2122,2127,2171,2173,2178,2191,2200,2259,2271,2277,2281,2299,2340,2371,2391,2404,2415,2447,2453,2462,2465,2467,2512,2517,2534,2538,2578,2589,2593,2612,2649,2654,2707,2728,2729,2734,2747,2754,2762,2777,2786,2799,2823,2824,2886,2912,2956,2958,2972
+RCKC tag=post side=r set=new cat=C i=5 n=135 ids=33,45,73,96,131,146,154,169,197,231,234,245,255,276,285,316,379,405,407,410,429,490,494,517,528,546,580,665,697,702,754,776,789,790,800,820,829,903,927,941,949,975,996,1038,1054,1063,1070,1074,1103,1113,1146,1164,1172,1188,1233,1248,1295,1328,1334,1351,1403,1433,1440,1448,1517,1525,1579,1603,1606,1649,1650,1685,1691,1790,1795,1807,1814,1816,1834,1855,1910,1950,1969,1978,2047,2064,2068,2069,2082,2122,2127,2171,2173,2178,2191,2200,2215,2259,2299,2371,2389,2391,2399,2404,2421,2447,2453,2482,2512,2534,2578,2589,2593,2614,2639,2649,2654,2657,2707,2725,2728,2734,2754,2755,2762,2777,2786,2799,2823,2824,2886,2912,2946,2956,2972
+RCKC tag=post side=r set=new cat=D i=0 n=135 ids=6,10,41,43,54,73,118,119,128,131,135,169,198,215,231,245,255,277,279,285,304,324,397,407,410,429,431,465,494,495,561,580,627,687,702,717,731,735,754,792,800,804,820,840,875,879,927,941,949,1011,1061,1071,1089,1121,1133,1155,1186,1194,1223,1233,1248,1279,1295,1307,1308,1312,1317,1329,1334,1351,1381,1432,1433,1441,1476,1504,1514,1547,1618,1697,1713,1718,1739,1797,1807,1814,1816,1854,1885,1887,1910,1950,1969,2027,2075,2144,2171,2173,2191,2235,2279,2281,2299,2340,2369,2373,2389,2404,2421,2453,2458,2496,2501,2538,2589,2635,2639,2649,2660,2682,2732,2734,2747,2763,2777,2786,2799,2800,2835,2865,2910,2912,2917,2930,2956
+RCKC tag=post side=r set=new cat=D i=1 n=137 ids=1,10,43,45,54,73,118,119,131,169,194,208,215,245,255,276,277,279,324,429,431,451,465,468,494,495,519,580,623,661,665,668,687,702,710,755,800,820,829,875,879,903,941,949,1008,1024,1068,1121,1133,1155,1186,1206,1214,1218,1223,1233,1248,1307,1308,1329,1334,1351,1381,1433,1441,1476,1510,1603,1606,1618,1655,1697,1718,1739,1750,1795,1807,1816,1854,1855,1885,1886,1910,1916,1950,1975,1977,2047,2075,2088,2102,2171,2173,2191,2200,2201,2235,2316,2340,2369,2373,2376,2389,2400,2404,2415,2421,2459,2517,2578,2593,2612,2649,2657,2660,2682,2729,2732,2734,2745,2747,2756,2762,2763,2769,2777,2786,2799,2800,2823,2848,2865,2886,2910,2956,2958,2972
+RCKC tag=post side=r set=new cat=D i=2 n=134 ids=10,43,58,73,81,154,168,169,194,198,215,231,242,285,304,316,324,407,410,494,495,575,665,783,792,799,806,820,879,884,903,927,941,949,969,1011,1038,1070,1071,1088,1103,1133,1155,1184,1186,1194,1201,1223,1233,1248,1279,1295,1328,1334,1351,1381,1403,1432,1433,1442,1574,1618,1697,1701,1718,1737,1750,1758,1795,1814,1816,1824,1854,1885,1886,1910,1950,1969,1972,1975,1977,2002,2015,2027,2047,2059,2069,2075,2089,2102,2113,2115,2134,2135,2144,2149,2171,2173,2235,2251,2259,2279,2281,2288,2316,2373,2389,2404,2421,2453,2459,2501,2516,2532,2538,2589,2614,2639,2649,2657,2682,2732,2734,2747,2754,2777,2786,2798,2818,2823,2854,2942,2956,2958
+RCKC tag=post side=r set=new cat=D i=3 n=139 ids=6,10,43,49,73,198,215,231,242,245,255,276,277,279,285,304,305,313,351,352,378,407,410,451,465,494,495,517,528,631,665,702,717,754,783,804,806,820,829,875,927,949,969,1011,1038,1062,1068,1070,1071,1088,1103,1115,1133,1155,1186,1201,1223,1233,1248,1295,1307,1308,1312,1317,1318,1332,1334,1351,1403,1441,1443,1618,1650,1697,1701,1718,1739,1807,1814,1816,1886,1910,1916,1950,1969,1972,1975,1977,2027,2047,2064,2100,2133,2144,2145,2149,2164,2171,2173,2191,2200,2216,2299,2316,2373,2389,2404,2405,2421,2449,2453,2458,2501,2578,2589,2593,2639,2649,2679,2682,2706,2732,2734,2745,2747,2756,2763,2777,2786,2787,2799,2823,2835,2865,2886,2917,2942,2956,2958
+RCKC tag=post side=r set=new cat=D i=4 n=136 ids=6,10,43,45,73,128,131,169,194,198,231,245,276,277,279,316,392,402,407,429,431,451,465,495,665,668,702,710,717,746,754,792,820,829,903,927,941,949,1002,1011,1048,1070,1071,1133,1146,1155,1164,1186,1206,1214,1223,1233,1248,1317,1328,1329,1341,1351,1432,1442,1448,1496,1574,1618,1650,1697,1701,1742,1795,1807,1816,1854,1885,1887,1910,1916,1950,1972,1975,1977,2059,2069,2075,2102,2115,2134,2149,2171,2173,2191,2200,2201,2235,2259,2281,2299,2340,2364,2371,2373,2389,2400,2404,2405,2415,2421,2449,2458,2459,2465,2496,2501,2531,2538,2558,2578,2589,2639,2649,2657,2682,2703,2729,2732,2734,2747,2762,2763,2777,2786,2798,2800,2823,2835,2894,2912
+RCKC tag=post side=r set=new cat=D i=5 n=133 ids=6,45,54,73,131,194,242,245,255,262,277,279,285,304,305,313,316,340,352,407,464,490,494,495,519,554,561,580,629,665,702,717,725,783,800,820,875,884,927,949,1011,1038,1115,1155,1201,1206,1223,1233,1248,1317,1328,1334,1348,1351,1403,1541,1554,1618,1650,1697,1718,1739,1742,1754,1795,1807,1814,1816,1854,1886,1887,1916,1950,1957,1972,1975,1977,2002,2015,2047,2059,2069,2075,2085,2089,2133,2171,2173,2191,2200,2201,2281,2288,2305,2309,2316,2373,2389,2404,2405,2421,2449,2453,2458,2512,2516,2517,2531,2572,2589,2614,2635,2639,2647,2649,2660,2682,2732,2734,2745,2777,2786,2824,2835,2854,2890,2894,2912,2917,2942,2956,2958,2961
+RCKC tag=post side=r set=train cat=A i=0 n=138 ids=6,33,49,54,73,96,106,128,131,146,168,169,194,198,215,231,245,269,276,277,281,285,316,362,407,431,464,490,494,504,517,528,558,627,631,651,668,693,709,746,771,776,777,794,800,806,820,879,913,927,941,949,969,997,1042,1064,1070,1074,1089,1113,1115,1146,1155,1172,1174,1224,1233,1295,1334,1356,1382,1403,1448,1509,1514,1578,1618,1625,1640,1655,1774,1795,1816,1819,1910,1950,1969,1975,2047,2064,2069,2075,2082,2086,2173,2178,2191,2200,2235,2271,2288,2346,2371,2389,2391,2404,2405,2422,2447,2449,2453,2458,2462,2501,2543,2589,2593,2612,2649,2654,2672,2703,2734,2754,2756,2777,2786,2799,2823,2851,2854,2886,2891,2894,2901,2905,2912,2972
+RCKC tag=post side=r set=train cat=A i=1 n=135 ids=6,30,73,131,159,168,184,198,231,234,245,269,276,277,285,316,402,407,464,490,494,528,546,580,651,668,709,746,783,785,794,800,806,820,862,864,903,941,949,969,996,997,1002,1038,1042,1043,1074,1103,1115,1133,1146,1155,1172,1173,1188,1224,1233,1243,1295,1312,1334,1351,1356,1379,1403,1448,1483,1509,1514,1579,1618,1649,1650,1665,1718,1742,1754,1774,1795,1814,1816,1819,1858,1886,1921,1950,1957,1975,1982,2002,2047,2069,2082,2085,2171,2173,2178,2188,2191,2192,2194,2200,2215,2259,2262,2271,2288,2346,2371,2391,2404,2415,2501,2529,2543,2612,2635,2649,2654,2672,2700,2703,2704,2734,2758,2772,2777,2786,2823,2833,2865,2886,2905,2912,2956
+RCKC tag=post side=r set=train cat=A i=2 n=122 ids=6,10,49,54,73,96,128,146,169,194,198,229,231,234,245,269,276,277,324,407,429,431,464,465,490,494,504,517,629,695,702,746,754,800,806,820,893,927,949,969,997,1011,1038,1064,1070,1103,1146,1155,1173,1175,1224,1279,1295,1307,1334,1351,1382,1403,1448,1483,1509,1514,1525,1579,1618,1624,1650,1691,1698,1795,1797,1816,1819,1910,1957,1969,1975,2047,2064,2069,2113,2144,2155,2188,2191,2192,2200,2259,2277,2288,2356,2371,2389,2391,2399,2404,2405,2447,2458,2462,2501,2529,2531,2538,2589,2593,2612,2654,2672,2734,2777,2786,2799,2823,2886,2894,2905,2912,2926,2935,2956,2972
+RCKC tag=post side=r set=train cat=A i=3 n=135 ids=6,10,15,49,57,73,117,128,131,135,168,169,184,193,198,245,285,294,322,352,392,407,429,464,490,494,517,558,580,629,651,728,771,776,800,806,820,840,893,913,927,941,942,969,975,997,1002,1011,1022,1038,1042,1043,1064,1070,1074,1113,1146,1155,1172,1173,1244,1279,1295,1312,1315,1334,1340,1351,1356,1403,1448,1509,1665,1703,1718,1774,1795,1814,1816,1819,1858,1887,1910,1950,1957,1966,1969,1975,1998,2047,2064,2069,2085,2089,2171,2178,2188,2194,2200,2271,2371,2379,2389,2391,2421,2458,2501,2517,2524,2529,2532,2534,2543,2589,2593,2612,2635,2639,2649,2654,2682,2703,2729,2734,2754,2755,2762,2777,2786,2799,2824,2886,2894,2912,2915
+RCKC tag=post side=r set=train cat=A i=4 n=140 ids=6,10,15,49,54,57,73,81,131,197,198,215,229,234,241,245,269,276,304,316,340,351,410,490,494,504,517,528,558,568,580,629,651,668,728,800,806,820,840,889,903,913,941,949,969,996,1038,1054,1064,1074,1103,1113,1115,1146,1155,1162,1164,1233,1250,1279,1295,1315,1317,1334,1403,1448,1483,1509,1514,1579,1618,1625,1640,1650,1665,1742,1754,1774,1795,1814,1816,1819,1839,1858,1887,1910,1950,1957,1969,1975,2002,2047,2064,2069,2082,2135,2171,2178,2188,2191,2192,2194,2200,2271,2288,2300,2317,2346,2371,2389,2391,2404,2449,2465,2501,2517,2538,2589,2593,2612,2635,2649,2672,2682,2703,2728,2729,2734,2754,2756,2777,2786,2799,2823,2824,2886,2894,2915,2968,2972
+RCKC tag=post side=r set=train cat=A i=5 n=141 ids=10,73,128,131,169,193,197,198,229,231,245,247,251,262,269,276,277,316,324,351,362,407,429,431,490,504,517,519,615,639,651,668,709,771,785,800,804,809,820,862,879,889,893,903,918,927,941,949,969,997,1002,1024,1064,1070,1074,1103,1113,1115,1146,1155,1175,1186,1188,1213,1223,1243,1279,1295,1334,1351,1403,1483,1509,1514,1525,1529,1618,1624,1640,1650,1683,1691,1698,1754,1795,1807,1814,1816,1838,1910,1921,1957,1969,1975,2047,2082,2089,2178,2188,2191,2200,2235,2259,2271,2281,2288,2371,2373,2389,2391,2404,2458,2501,2538,2546,2589,2593,2612,2635,2639,2647,2649,2654,2682,2700,2705,2728,2729,2732,2734,2754,2762,2777,2786,2799,2894,2905,2912,2956,2972,2990
+RCKC tag=post side=r set=train cat=B i=0 n=121 ids=1,6,10,33,49,70,73,81,96,128,131,198,215,231,245,251,255,277,316,351,392,407,429,431,465,490,494,528,580,606,627,665,668,687,716,735,809,820,889,893,927,949,975,1038,1042,1070,1188,1218,1223,1233,1248,1250,1295,1328,1329,1334,1351,1422,1432,1433,1443,1476,1509,1514,1519,1603,1618,1624,1650,1750,1754,1814,1816,1854,1887,1914,1916,1950,1966,1975,1982,2075,2085,2102,2171,2200,2281,2299,2329,2389,2404,2421,2422,2458,2501,2512,2516,2531,2545,2578,2589,2593,2612,2639,2649,2654,2672,2682,2734,2754,2755,2762,2786,2799,2835,2886,2890,2912,2917,2956,2972
+RCKC tag=post side=r set=train cat=B i=1 n=136 ids=6,10,49,73,81,96,119,128,131,215,229,231,276,277,285,305,311,316,352,392,407,431,468,494,495,503,519,580,615,627,631,668,687,695,702,717,771,804,820,875,889,913,942,949,975,1008,1011,1038,1042,1070,1071,1103,1115,1133,1188,1191,1223,1233,1250,1283,1317,1334,1351,1443,1476,1489,1509,1519,1525,1579,1603,1618,1624,1650,1718,1750,1754,1794,1807,1814,1816,1827,1828,1910,1916,1957,1958,1966,1975,1982,2075,2082,2085,2135,2149,2171,2192,2281,2300,2316,2338,2373,2376,2389,2391,2421,2458,2511,2512,2517,2545,2578,2612,2639,2649,2654,2682,2693,2719,2725,2732,2734,2754,2762,2777,2786,2806,2835,2866,2890,2894,2910,2915,2917,2956,2990
+RCKC tag=post side=r set=train cat=B i=2 n=135 ids=6,10,73,81,96,128,131,169,198,231,242,245,255,277,285,316,324,351,392,407,410,431,464,494,528,580,623,629,665,668,687,702,716,717,728,809,820,875,889,949,975,1011,1038,1042,1070,1175,1188,1233,1248,1250,1295,1318,1328,1334,1351,1403,1422,1433,1443,1466,1476,1489,1509,1519,1525,1579,1624,1650,1698,1750,1754,1795,1807,1814,1816,1876,1916,1950,1957,1958,1965,1966,1975,1977,2047,2075,2082,2085,2119,2144,2149,2171,2173,2178,2200,2235,2259,2288,2316,2329,2349,2373,2389,2404,2421,2449,2458,2516,2517,2531,2554,2612,2614,2639,2649,2682,2693,2732,2752,2754,2762,2777,2786,2799,2800,2824,2835,2843,2890,2894,2917,2942,2956,2972,2990
+RCKC tag=post side=r set=train cat=B i=3 n=135 ids=10,49,54,70,73,81,118,119,131,197,198,208,231,245,255,277,285,316,351,392,407,410,429,431,436,451,464,494,517,519,627,631,665,687,717,728,754,783,820,829,889,893,927,949,976,1011,1038,1042,1070,1071,1103,1115,1173,1223,1233,1250,1295,1317,1329,1334,1351,1403,1476,1514,1519,1529,1579,1603,1650,1688,1739,1750,1754,1774,1807,1816,1855,1950,1957,1965,1975,1977,2007,2035,2069,2075,2082,2085,2102,2149,2171,2173,2191,2200,2299,2300,2336,2349,2356,2389,2391,2404,2421,2458,2478,2496,2512,2517,2529,2532,2554,2589,2593,2639,2649,2654,2657,2672,2682,2725,2726,2732,2734,2745,2747,2754,2777,2786,2799,2915,2917,2942,2956,2972,2990
+RCKC tag=post side=r set=train cat=B i=4 n=133 ids=1,6,33,45,49,70,73,81,96,128,131,197,198,215,231,242,262,277,285,305,316,392,407,429,431,454,464,490,494,528,561,580,627,668,700,702,716,717,728,804,809,820,889,893,949,975,1011,1038,1042,1070,1071,1170,1175,1223,1233,1318,1328,1334,1351,1432,1443,1476,1504,1509,1519,1579,1603,1624,1650,1718,1726,1750,1754,1807,1814,1816,1827,1910,1916,1950,1957,1975,1977,1982,2075,2085,2102,2116,2149,2171,2173,2200,2235,2277,2281,2288,2299,2300,2329,2336,2349,2356,2373,2389,2404,2421,2458,2467,2496,2512,2516,2517,2531,2538,2545,2572,2612,2639,2649,2734,2752,2754,2755,2762,2786,2799,2824,2835,2865,2866,2894,2915,2972
+RCKC tag=post side=r set=train cat=B i=5 n=130 ids=10,45,49,54,73,119,131,194,208,209,231,255,262,277,285,305,316,407,429,431,436,468,494,519,561,580,623,687,702,716,717,728,731,771,783,800,805,809,820,875,879,889,941,949,1038,1042,1068,1070,1071,1103,1223,1238,1250,1328,1329,1334,1351,1403,1422,1443,1476,1489,1509,1519,1554,1579,1603,1613,1618,1624,1640,1650,1655,1698,1718,1726,1750,1754,1807,1814,1816,1827,1854,1855,1863,1873,1910,1916,1957,1972,1977,2035,2075,2102,2133,2134,2135,2149,2171,2173,2191,2235,2271,2299,2316,2336,2373,2376,2389,2391,2404,2421,2512,2516,2517,2545,2554,2593,2612,2639,2649,2682,2725,2732,2734,2754,2786,2905,2917,2972
+RCKC tag=post side=r set=train cat=C i=0 n=136 ids=9,10,30,33,41,45,87,96,118,131,154,168,197,198,231,234,245,247,255,269,276,279,316,379,405,407,429,451,465,478,517,546,580,628,629,631,665,668,754,774,800,805,820,829,840,864,927,941,975,996,997,1011,1015,1054,1070,1103,1113,1115,1146,1164,1172,1213,1233,1248,1250,1295,1307,1318,1329,1334,1351,1448,1514,1517,1539,1579,1650,1685,1691,1718,1770,1795,1797,1807,1814,1816,1832,1834,1858,1910,1916,1969,1975,2069,2113,2122,2173,2200,2215,2259,2281,2288,2299,2349,2371,2389,2391,2404,2447,2453,2532,2538,2554,2572,2578,2589,2593,2639,2649,2654,2677,2706,2734,2754,2762,2763,2777,2786,2799,2823,2824,2886,2910,2915,2946,2956
+RCKC tag=post side=r set=train cat=C i=1 n=138 ids=41,45,49,57,69,87,96,231,234,245,255,269,276,285,351,362,378,402,407,465,468,478,490,494,499,517,528,580,628,665,668,702,728,741,754,769,800,806,829,848,903,941,976,1022,1038,1054,1070,1072,1103,1113,1164,1187,1188,1191,1213,1248,1250,1295,1307,1329,1334,1351,1356,1403,1514,1525,1541,1579,1603,1604,1618,1650,1660,1665,1718,1726,1754,1795,1816,1910,1975,1978,2047,2064,2069,2113,2134,2135,2171,2173,2191,2194,2215,2291,2299,2305,2371,2391,2399,2404,2415,2447,2453,2462,2465,2467,2496,2512,2532,2534,2538,2593,2612,2638,2649,2654,2677,2703,2707,2719,2726,2728,2734,2745,2747,2762,2777,2786,2799,2800,2824,2886,2910,2912,2915,2956,2958,2990
+RCKC tag=post side=r set=train cat=C i=2 n=134 ids=6,10,41,49,57,73,131,135,168,169,197,198,231,234,245,255,269,285,316,362,379,391,405,407,461,465,490,494,517,528,546,580,628,631,668,697,702,706,741,754,769,776,800,805,829,840,853,941,949,997,1011,1012,1038,1054,1061,1071,1103,1146,1155,1172,1213,1233,1248,1250,1295,1315,1334,1351,1409,1448,1525,1579,1618,1650,1660,1685,1718,1750,1795,1807,1814,1816,1855,1858,1887,1910,1950,1975,1998,2027,2047,2082,2113,2115,2171,2178,2191,2200,2259,2277,2349,2368,2371,2389,2391,2404,2405,2415,2447,2453,2465,2517,2532,2538,2589,2639,2649,2657,2703,2707,2719,2747,2754,2755,2777,2786,2800,2824,2833,2886,2890,2901,2939,2972
+RCKC tag=post side=r set=train cat=C i=3 n=134 ids=49,57,69,73,117,131,161,181,182,231,234,241,245,247,255,276,285,316,352,378,397,416,429,465,494,517,528,580,615,628,668,695,697,702,741,754,769,800,829,832,840,941,942,949,969,973,996,997,1008,1038,1054,1061,1071,1103,1113,1146,1164,1172,1175,1213,1233,1248,1250,1265,1295,1307,1328,1334,1351,1403,1440,1448,1525,1579,1603,1618,1650,1726,1754,1770,1795,1797,1814,1816,1855,1910,2047,2069,2113,2171,2178,2186,2191,2200,2206,2259,2271,2277,2371,2389,2391,2399,2404,2405,2415,2447,2453,2458,2462,2498,2532,2538,2589,2612,2639,2649,2657,2705,2734,2747,2754,2777,2786,2789,2824,2865,2881,2886,2890,2912,2956,2961,2972,2990
+RCKC tag=post side=r set=train cat=C i=4 n=147 ids=10,30,33,45,49,57,69,87,118,131,135,161,197,198,215,229,231,234,245,247,255,269,276,316,362,378,379,397,402,407,451,465,494,517,580,628,668,702,728,741,754,788,800,829,840,848,853,903,913,927,941,949,969,997,1008,1054,1061,1074,1103,1113,1115,1133,1155,1164,1172,1187,1213,1233,1248,1250,1295,1334,1351,1356,1403,1440,1442,1448,1525,1579,1603,1618,1650,1685,1718,1725,1726,1740,1742,1770,1795,1807,1814,1816,1839,1910,1950,1975,1978,2047,2073,2082,2113,2122,2127,2178,2200,2215,2235,2277,2349,2368,2371,2391,2404,2405,2415,2447,2453,2458,2462,2517,2532,2538,2593,2612,2649,2654,2703,2706,2726,2728,2734,2747,2754,2755,2777,2786,2789,2824,2865,2886,2890,2910,2915,2939,2956
+RCKC tag=post side=r set=train cat=C i=5 n=144 ids=10,30,33,45,49,57,81,87,96,118,131,134,168,197,198,208,215,229,231,234,245,255,276,285,316,340,378,391,402,407,451,465,494,517,528,546,580,628,651,665,668,697,702,720,741,754,789,800,806,829,840,848,927,941,949,1008,1015,1038,1054,1061,1071,1103,1113,1133,1146,1172,1187,1233,1248,1250,1295,1299,1328,1329,1334,1351,1403,1448,1579,1603,1650,1665,1754,1795,1807,1814,1816,1910,1916,1950,1975,2022,2047,2064,2093,2113,2122,2171,2173,2178,2185,2194,2215,2259,2288,2300,2368,2371,2389,2391,2404,2405,2415,2421,2447,2462,2465,2467,2498,2512,2517,2532,2538,2589,2593,2612,2654,2672,2706,2719,2729,2747,2754,2755,2762,2763,2777,2786,2799,2823,2824,2876,2886,2917
+RCKC tag=post side=r set=train cat=D i=0 n=136 ids=10,43,49,54,57,73,128,131,154,194,215,231,242,245,255,262,277,279,316,378,379,407,429,451,494,495,661,665,702,792,800,804,820,829,875,884,893,926,927,949,993,1011,1061,1062,1070,1071,1089,1115,1155,1175,1223,1233,1248,1307,1329,1334,1336,1341,1351,1382,1403,1433,1441,1443,1514,1547,1590,1618,1718,1739,1742,1750,1758,1795,1807,1816,1887,1910,1916,1950,1969,1975,2059,2064,2075,2084,2089,2113,2127,2133,2134,2149,2171,2173,2191,2200,2201,2235,2251,2267,2281,2316,2369,2373,2389,2400,2404,2405,2421,2453,2458,2501,2512,2538,2589,2635,2639,2649,2682,2704,2726,2732,2734,2747,2754,2777,2786,2800,2823,2828,2848,2865,2886,2912,2956,2958
+RCKC tag=post side=r set=train cat=D i=1 n=134 ids=6,10,43,49,54,57,73,119,131,198,215,231,242,245,255,262,277,304,313,316,378,397,407,410,429,449,468,490,494,495,503,580,661,668,702,710,809,820,864,875,893,913,927,941,947,949,1024,1071,1103,1121,1133,1155,1184,1186,1191,1214,1223,1233,1248,1250,1329,1334,1351,1409,1551,1603,1618,1650,1655,1718,1726,1739,1750,1795,1807,1814,1816,1854,1885,1910,1916,1957,1969,1985,2027,2075,2089,2102,2133,2134,2149,2171,2173,2191,2200,2201,2235,2316,2369,2373,2389,2400,2404,2415,2421,2422,2453,2458,2512,2516,2517,2578,2589,2612,2614,2635,2639,2649,2682,2732,2734,2747,2754,2762,2777,2786,2799,2800,2890,2912,2956,2958,2961,2972
+RCKC tag=post side=r set=train cat=D i=2 n=138 ids=10,73,119,154,168,198,215,231,242,245,255,277,285,304,305,313,316,378,392,407,410,429,431,494,495,580,665,668,702,735,800,820,875,903,927,949,969,1011,1024,1038,1061,1064,1070,1071,1089,1121,1133,1155,1186,1201,1206,1223,1233,1248,1250,1295,1308,1317,1329,1334,1336,1351,1403,1409,1433,1442,1504,1514,1574,1618,1713,1754,1792,1795,1814,1816,1885,1949,1950,1972,1975,2015,2027,2047,2075,2085,2089,2097,2102,2113,2135,2144,2171,2173,2191,2200,2279,2281,2299,2340,2356,2369,2373,2389,2400,2404,2421,2441,2449,2458,2516,2532,2538,2572,2578,2589,2612,2614,2639,2649,2654,2682,2729,2732,2734,2745,2747,2756,2763,2777,2786,2800,2865,2886,2910,2917,2956,2958
+RCKC tag=post side=r set=train cat=D i=3 n=136 ids=6,41,57,73,118,119,128,131,173,215,231,242,245,255,262,276,304,305,313,316,351,402,407,410,429,468,494,495,580,631,665,702,716,735,783,790,800,806,820,840,903,913,927,947,949,969,1008,1011,1038,1042,1070,1071,1072,1103,1121,1133,1155,1186,1233,1248,1250,1262,1295,1307,1312,1317,1329,1334,1351,1381,1409,1483,1603,1618,1701,1718,1750,1754,1807,1814,1816,1854,1910,1916,1950,1975,1982,2047,2064,2069,2102,2133,2144,2145,2149,2171,2173,2191,2251,2267,2281,2288,2295,2299,2369,2373,2389,2400,2404,2415,2421,2462,2465,2501,2512,2538,2589,2612,2614,2635,2639,2649,2732,2734,2747,2756,2763,2777,2786,2823,2865,2886,2956,2958,2961,2972
+RCKC tag=post side=r set=train cat=D i=4 n=131 ids=10,43,49,54,73,96,118,128,131,169,198,215,231,242,245,255,277,279,285,304,316,351,352,379,407,431,451,465,494,495,519,561,580,665,687,710,717,731,820,875,893,913,927,941,949,1008,1011,1061,1103,1121,1155,1206,1214,1223,1233,1248,1307,1317,1329,1334,1351,1381,1433,1441,1442,1618,1650,1688,1718,1739,1750,1755,1807,1816,1818,1854,1855,1916,1950,1972,1975,1977,2035,2064,2075,2079,2082,2102,2127,2133,2149,2171,2173,2191,2201,2215,2235,2251,2299,2300,2316,2373,2389,2400,2404,2421,2453,2458,2501,2516,2517,2578,2593,2612,2649,2654,2682,2703,2732,2734,2756,2763,2777,2786,2823,2835,2865,2886,2912,2917,2956
+RCKC tag=post side=r set=train cat=D i=5 n=130 ids=6,43,54,73,96,119,128,131,169,215,231,245,255,262,277,279,285,304,305,316,407,410,422,425,465,494,519,546,554,580,665,687,702,754,783,799,800,820,829,840,844,875,903,927,941,949,995,1002,1020,1058,1064,1071,1103,1133,1155,1186,1201,1233,1248,1295,1307,1308,1334,1351,1381,1419,1483,1603,1618,1650,1685,1718,1750,1754,1807,1814,1816,1886,1887,1910,1916,1950,1969,1982,2088,2100,2149,2171,2173,2191,2200,2201,2299,2329,2371,2373,2389,2400,2404,2421,2449,2450,2453,2458,2459,2538,2578,2589,2606,2612,2639,2649,2657,2682,2732,2745,2747,2754,2756,2762,2777,2786,2823,2848,2865,2890,2912,2956,2958,2961
+RCCHK tag=post npres=288 feat_active_frac=1.0000 feat_inactive_spikes=0 feat_active_spikes=115200 feat_other_side=0 goodbad=0 g_same=1 base_l=84069 base_r=87417
+RCJ side=l pair=AB J_pre=0.3246 J_post=0.2921 n_pre=123/130 n_post=132/129
+RCJ side=l pair=AC J_pre=0.3714 J_post=0.3871 n_pre=123/117 n_post=132/126
+RCJ side=l pair=AD J_pre=0.2923 J_post=0.3085 n_pre=123/129 n_post=132/131
+RCJ side=l pair=BC J_pre=0.3000 J_post=0.2944 n_pre=130/117 n_post=129/126
+RCJ side=l pair=BD J_pre=0.3351 J_post=0.3402 n_pre=130/129 n_post=129/131
+RCJ side=l pair=CD J_pre=0.2746 J_post=0.2786 n_pre=117/129 n_post=126/131
+RCJ side=r pair=AB J_pre=0.2878 J_post=0.3029 n_pre=133/131 n_post=135/136
+RCJ side=r pair=AC J_pre=0.3010 J_post=0.3333 n_pre=133/135 n_post=135/141
+RCJ side=r pair=AD J_pre=0.2886 J_post=0.3137 n_pre=133/126 n_post=135/133
+RCJ side=r pair=BC J_pre=0.2667 J_post=0.2884 n_pre=131/135 n_post=136/141
+RCJ side=r pair=BD J_pre=0.3598 J_post=0.4010 n_pre=131/126 n_post=136/133
+RCJ side=r pair=CD J_pre=0.2609 J_post=0.2925 n_pre=135/126 n_post=141/133
+=> RAWCAT side=l S_new 0.1561→0.1509 S_train 0.2797→0.2963 J_AB 0.3246→0.2921 sel 1.0000→1.0000 newok 12→12/12 K 127.2→130.1 | side=r S_new 0.1967→0.1912 S_train 0.3091→0.3085 J_AB 0.2878→0.3029 sel 1.0000→1.0000 newok 12→12/12 K 131.0→132.7 | feat_n=200 w=24.00 p=0.100 level=0.90 oja=0 expo=0 expo_eta=0 reps=3

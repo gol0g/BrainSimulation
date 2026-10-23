@@ -1,0 +1,26 @@
+=== E207 실행: 2026-10-21T16:08:07Z ===
+커맨드: bash scripts/e207_main.sh
+---
+[E207] 학습 조건의 범주 KC 겹침(측정) · U·F × 맥락 none·X · C2·게이팅·기저값 U −2800·F −1300 · 세계 38300 · 뇌 16~20
+  e207 U none b16: => side=l pair=AB=0.3262/0.3161 side=l pair=AC=0.3946/0.3812 side=l pair=BD=0.3568/0.3057 side=r pair=AB=0.3333/0.3382 side=r pair=AC=0.4105/0.4565 side=r pair=BD=0.3656/0.3575 
+  e207 U X b16: => side=l pair=AB=0.5113/0.4964 side=l pair=AC=0.5935/0.5891 side=l pair=BD=0.5627/0.5741 side=r pair=AB=0.6208/0.5813 side=r pair=AC=0.6173/0.5952 side=r pair=BD=0.6736/0.6296 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 196826 · 비활성 무리 1157
+  e207 F none b16: => side=l pair=AB=0.0593/0.0000 side=l pair=AC=0.0596/0.0272 side=l pair=BD=0.0634/0.0267 side=r pair=AB=0.0446/0.0195 side=r pair=AC=0.0795/0.0248 side=r pair=BD=0.0818/0.0189 
+  e207 F X b16: => side=l pair=AB=0.5197/0.5419 side=l pair=AC=0.5149/0.5083 side=l pair=BD=0.4937/0.4978 side=r pair=AB=0.5213/0.5093 side=r pair=AC=0.4933/0.4978 side=r pair=BD=0.5342/0.5650 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 131177 · 비활성 무리 789
+  e207 U none b17: => side=l pair=AB=0.3246/0.2921 side=l pair=AC=0.3714/0.3871 side=l pair=BD=0.3351/0.3402 side=r pair=AB=0.2878/0.3029 side=r pair=AC=0.3010/0.3333 side=r pair=BD=0.3598/0.4010 
+  e207 U X b17: => side=l pair=AB=0.5564/0.5634 side=l pair=AC=0.5478/0.5693 side=l pair=BD=0.5827/0.5930 side=r pair=AB=0.5862/0.5644 side=r pair=AC=0.6142/0.5779 side=r pair=BD=0.5968/0.6100 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 202207 · 비활성 무리 990
+  e207 F none b17: => side=l pair=AB=0.0136/0.0000 side=l pair=AC=0.0544/0.0196 side=l pair=BD=0.0127/0.0309 side=r pair=AB=0.0312/0.0118 side=r pair=AC=0.0196/0.0375 side=r pair=BD=0.0570/0.0299 
+  e207 F X b17: => side=l pair=AB=0.5171/0.5060 side=l pair=AC=0.4672/0.4922 side=l pair=BD=0.5708/0.5532 side=r pair=AB=0.5172/0.5130 side=r pair=AC=0.5953/0.6154 side=r pair=BD=0.5505/0.5642 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 135561 · 비활성 무리 887
+  e207 U none b18: => side=l pair=AB=0.3552/0.3246 side=l pair=AC=0.3333/0.3545 side=l pair=BD=0.3791/0.3617 side=r pair=AB=0.3350/0.2919 side=r pair=AC=0.3756/0.3781 side=r pair=BD=0.3487/0.3266 
+  e207 U X b18: => side=l pair=AB=0.5402/0.5741 side=l pair=AC=0.5603/0.5639 side=l pair=BD=0.6055/0.6370 side=r pair=AB=0.5725/0.5752 side=r pair=AC=0.6109/0.6479 side=r pair=BD=0.6204/0.6054 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 206022 · 비활성 무리 1080
+  e207 F none b18: => side=l pair=AB=0.0258/0.0066 side=l pair=AC=0.0663/0.0419 side=l pair=BD=0.0534/0.0360 side=r pair=AB=0.0600/0.0340 side=r pair=AC=0.0696/0.0513 side=r pair=BD=0.0405/0.0067 
+  e207 F X b18: => side=l pair=AB=0.5238/0.4940 side=l pair=AC=0.4644/0.4724 side=l pair=BD=0.5197/0.4815 side=r pair=AB=0.4703/0.4826 side=r pair=AC=0.5595/0.5833 side=r pair=BD=0.5378/0.5422 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 137210 · 비활성 무리 810
+  e207 U none b19: => side=l pair=AB=0.3262/0.3529 side=l pair=AC=0.4647/0.4471 side=l pair=BD=0.3966/0.3607 side=r pair=AB=0.3122/0.3081 side=r pair=AC=0.3457/0.3564 side=r pair=BD=0.3226/0.3636 
+  e207 U X b19: => side=l pair=AB=0.6076/0.6214 side=l pair=AC=0.6067/0.6456 side=l pair=BD=0.6198/0.6331 side=r pair=AB=0.5696/0.5732 side=r pair=AC=0.5352/0.5346 side=r pair=BD=0.5697/0.5687 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 193360 · 비활성 무리 1310
+  e207 F none b19: => side=l pair=AB=0.0145/0.0068 side=l pair=AC=0.0949/0.0476 side=l pair=BD=0.0880/0.0286 side=r pair=AB=0.0204/0.0000 side=r pair=AC=0.0526/0.0282 side=r pair=BD=0.0690/0.0244 
+  e207 F X b19: => side=l pair=AB=0.5193/0.5232 side=l pair=AC=0.5972/0.5982 side=l pair=BD=0.5819/0.5816 side=r pair=AB=0.4956/0.4800 side=r pair=AC=0.5105/0.5084 side=r pair=BD=0.5043/0.4978 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 132015 · 비활성 무리 949
+  e207 U none b20: => side=l pair=AB=0.3041/0.3000 side=l pair=AC=0.2938/0.2915 side=l pair=BD=0.3778/0.3455 side=r pair=AB=0.3593/0.3121 side=r pair=AC=0.3516/0.3548 side=r pair=BD=0.3450/0.3090 
+  e207 U X b20: => side=l pair=AB=0.5960/0.5698 side=l pair=AC=0.6250/0.6349 side=l pair=BD=0.5697/0.5923 side=r pair=AB=0.5407/0.5724 side=r pair=AC=0.6084/0.6044 side=r pair=BD=0.5615/0.5839 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 194670 · 비활성 무리 1177
+  e207 F none b20: => side=l pair=AB=0.0411/0.0136 side=l pair=AC=0.0455/0.0126 side=l pair=BD=0.0375/0.0066 side=r pair=AB=0.0280/0.0278 side=r pair=AC=0.0395/0.0189 side=r pair=BD=0.0593/0.0548 
+  e207 F X b20: => side=l pair=AB=0.4812/0.5210 side=l pair=AC=0.4800/0.5182 side=l pair=BD=0.5574/0.5488 side=r pair=AB=0.4631/0.4878 side=r pair=AC=0.5404/0.5397 side=r pair=BD=0.5085/0.5185 || 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 133559 · 비활성 무리 840
+[E207] 전체 루프 종료
+=== 종료코드 0 ===
