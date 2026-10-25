@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import report_e209_overlap as R  # noqa: E402
 
-DEV = {"kc_l_to_inh_l": (30000, 10.0), "kc_inh_l_to_kc_l": (48000, -30.0), "kc_r_to_inh_r": (30010, 10.0), "kc_inh_r_to_kc_r": (47990, -30.0)}
+DEV = {"kc_l_to_inh_l": (59718, 5.0), "kc_inh_l_to_kc_l": (95826, -15.0), "kc_r_to_inh_r": (60064, 5.0), "kc_inh_r_to_kc_r": (96092, -15.0)}   # 재배선 판(가중치 그대로)
 
 
 def cat_sets(n, k):
@@ -22,14 +22,15 @@ def cat_sets(n, k):
     return {"A": A, "B": B, "C": C, "D": D}
 
 
-def write_meas(path, n, k, ctx=None, gate_act=60000, gate_ina=300, im=None, dev=None, ctx_w=0.0, bad_rcj=False, dev_extra=None):
+def write_meas(path, n, k, ctx=None, gate_act=60000, gate_ina=300, im=None, dev=None, ctx_w=0.0, bad_rcj=False, dev_extra=None, tail=True):
     """ctx = None(맥락 없음) 또는 'X'. im = (활성, 비활성) 억제 뉴런 발화(None 이면 줄 없음). dev = 장치 확인 사전(None 이면 줄 없음)."""
     S = cat_sets(n, k)
     lines = ["[원시 특징 노출] 제시 0(노출 없음)",
              "  [맥락 입력] 맥락 전용 집단 zz_ctx 200 → KC 좌·우, w=%.2f, p=0.020, 연결 좌 12106·우 11860" % ctx_w,
              "  [맥락 입력 2] 맥락 전용 집단 zz_ctx2 200 → KC 좌·우, w=%.2f, p=0.020, 연결 좌 11825·우 11895" % ctx_w]
     for d in ([dev] if dev is not None else []) + ([dev_extra] if dev_extra is not None else []):
-        lines.append("  [E209 구획 되먹임 억제 확인] 장치 — " + " · ".join("%s %d(같음·무리 밖 0·g %.2f)" % (g, d[g][0], d[g][1]) for g in R.GROUPS))
+        lines.append("  [E209 구획 되먹임 억제 확인] 장치 — " + " · ".join("%s %d(같음·무리 밖 0·g %.2f)" % (g, d[g][0], d[g][1]) for g in R.GROUPS)
+                     + (" · " + R.RW_TAIL if tail else ""))
     for tag in ("pre", "post"):
         for s in "lr":
             for c in "ABCD":
@@ -66,7 +67,7 @@ def build(root, spec):
         if sp.get("miss"):
             continue
         write_meas(L("E209", "meas_C_X_b%d.log"), n, sp["kc"], ctx="X", gate_act=sp.get("ga", 30000), gate_ina=sp.get("gi", 700),
-                   im=sp.get("im", (5000, 10)), dev=sp.get("dev", DEV), ctx_w=sp.get("cw", 0.0), bad_rcj=sp.get("bad_rcj", False))
+                   im=sp.get("im", (5000, 10)), dev=sp.get("dev", DEV), ctx_w=sp.get("cw", 0.0), bad_rcj=sp.get("bad_rcj", False), tail=sp.get("tail", True))
         write_meas(L("E209", "meas_C_none_b%d.log"), n, sp["kn"], dev=sp.get("devn", DEV))
 
 
@@ -118,20 +119,20 @@ def main():
     chk("b16 집합 S(로그 RCJ 4 × 0.1765 = 7060)", "집합 S 첫/둘째 구획·X 7060/7060" in row(out, 16), row(out, 16))
     chk("억제 뉴런 발화 줄 옮김(활성 5000/5000 · 비활성 10/10)", "활성 5000/5000 · 비활성 10/10" in row(out, 16), row(out, 16))
     # 2) 점검 — 측정 무효 다섯 갈래·결측
-    spec = {16: dict(base, kc=3, im=None), 17: dict(base, kc=3, im=(5000, 51)), 18: dict(base, kc=3, gi=1301),
+    spec = {16: dict(base, kc=3, im=None), 17: dict(base, kc=3, tail=False), 18: dict(base, kc=3, gi=3001),
             19: dict(base, kc=3, devn={**DEV, "kc_l_to_inh_l": (30001, 10.0)}), 20: dict(base, kc=3, miss=True)}
     out = run(spec)
     chk("b16 억제 측정 줄 없음 → 측정 무효", "b16: 측정 무효" in out, row(out, 16))
-    chk("b17 비활성 억제 발화 51 × 100 > 5000 → 측정 무효", "b17: 측정 무효" in out, row(out, 17))
-    chk("b18 비활성 KC 발화 1301 × 100 > E207 활성 130000 → 측정 무효", "b18: 측정 무효" in out, row(out, 18))
+    chk("b17 장치 줄에 재배선 꼬리 없음(연결 절반 판 꼴) → 측정 무효", "b17: 측정 무효" in out, row(out, 17))
+    chk("b18 비활성 KC 발화 3001 × 10 > 같은 측정 활성 30000 → 측정 무효", "b18: 측정 무효" in out, row(out, 18))
     chk("b19 두 측정 구획 연결 수 다름 → 측정 무효", "b19: 측정 무효" in out, row(out, 19))
     chk("b20 C 로그 없음 → 결측", "b20: 결측" in out, row(out, 20))
-    spec = {16: dict(base, kc=3, gi=1300), 17: dict(base, kc=3, im=(5000, 50)), 18: dict(base, kc=3, dev={**DEV, "kc_inh_r_to_kc_r": (47990, -15.0)}, devn={**DEV, "kc_inh_r_to_kc_r": (47990, -15.0)}),
+    spec = {16: dict(base, kc=3, gi=3000), 17: dict(base, kc=3, im=(5000, 2500)), 18: dict(base, kc=3, dev={**DEV, "kc_inh_r_to_kc_r": (96092, -30.0)}, devn={**DEV, "kc_inh_r_to_kc_r": (96092, -30.0)}),
             19: dict(base, kc=3, cw=20.0), 20: dict(base, kc=3, bad_rcj=True)}
     out = run(spec)
-    chk("b16 경계 1300 × 100 = 130000 → 유효", "b16: 구획·X" in out, row(out, 16))
-    chk("b17 경계 50 × 100 = 5000 → 유효", "b17: 구획·X" in out, row(out, 17))
-    chk("b18 장치 g −15(2배 아님) → 측정 무효", "b18: 측정 무효" in out, row(out, 18))
+    chk("b16 경계 3000 × 10 = 30000 → 유효", "b16: 구획·X" in out, row(out, 16))
+    chk("b17 비활성 억제 발화 큰 몫(2500/5000)도 유효(보고만)", "b17: 구획·X" in out and "비활성 2500/2500" in row(out, 17), row(out, 17))
+    chk("b18 장치 g −30(재배선은 가중치 그대로여야) → 측정 무효", "b18: 측정 무효" in out, row(out, 18))
     chk("b19 맥락 무게 20 → 측정 무효", "b19: 측정 무효" in out, row(out, 19))
     chk("b20 RCJ ≠ 집합 J(자기 점검) → 측정 무효", "b20: 측정 무효(자기 점검" in out, row(out, 20))
     # 3) 자기 점검 반올림 경계 — 집합 J = 7/160 = 0.04375(로그는 과제와 같은 '%.4f' → '0.0437'): self_check 통과·brain_stats 정수 비교는 거짓 불일치

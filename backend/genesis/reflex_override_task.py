@@ -524,6 +524,9 @@ def main():
                     help="E195: KC 항상성 억제(PI 제어기) 목표 발화율 — 이 cfg 로 만드는 모든 뇌. 0.05 = 이전 고정값, 낮추면 KC 희소화")
     ap.add_argument("--kc-inh-scale", type=float, default=1.0,
                     help="E195 정정: KC 되먹임 억제(kc_inh → kc) 가중치 배율 — 이 cfg 로 만드는 모든 뇌. 1 = 이전(−15). 항상성 PI 제어기는 실제 KC 발화율이 목표보다 낮아 구동 0 이라 이것이 실제 희소화 손잡이")
+    ap.add_argument("--kc-inh-rewire", action="store_true",
+                    help="E209: 구획 되먹임 억제 재배선 판 — KC 억제 뉴런을 게이팅 무리(X·Y)마다 반반 나누고 KC ↔ 억제 연결 중 무리 밖 연결의 앞 뉴런을 같은 무리 안 뉴런으로 바꿈"
+                         "(뒤 뉴런마다 받는 연결 수·가중치 그대로). --ctx-gate-kc·--conn-snapshot·--ctx-gate-frac 0.5 필요, --kc-inh-compart·--kc-inh-scale 과 함께 못 씀. 꺼짐 = 이전 모델")
     ap.add_argument("--kc-inh-compart", action="store_true",
                     help="E209: 구획 되먹임 억제 — KC 억제 뉴런을 게이팅 무리(X·Y)마다 반반 나누고 KC ↔ 억제 연결을 같은 무리 안 쌍만(스냅숏 연결의 부분집합), 두 방향 가중치 2배. "
                          "--ctx-gate-kc·--conn-snapshot·--ctx-gate-frac 0.5 필요. 꺼짐 = 이전 모델")
@@ -694,6 +697,9 @@ def main():
     if args.kc_inh_scale != 1.0:
         print("[E195 KC 되먹임 억제] 배율 %.2f (kc_inh_to_kc_weight %.1f)" % (args.kc_inh_scale, cfg.kc_inh_to_kc_weight))
     cfg.kc_inh_compart = bool(args.kc_inh_compart)   # E209: 구획 되먹임 억제 — 꺼짐 = 이전 모델
+    cfg.kc_inh_rewire = bool(args.kc_inh_rewire)     # E209: 구획 되먹임 억제 재배선 판 — 꺼짐 = 이전 모델
+    if args.kc_inh_rewire and (args.kc_inh_compart or not args.ctx_gate_kc or not args.conn_snapshot or args.ctx_gate_frac != 0.5 or args.kc_inh_scale != 1.0):
+        raise SystemExit("--kc-inh-rewire 는 --ctx-gate-kc·--conn-snapshot·--ctx-gate-frac 0.5 가 필요하고 --kc-inh-compart·--kc-inh-scale 과 함께 쓸 수 없다")
     if args.kc_inh_compart and (not args.ctx_gate_kc or not args.conn_snapshot or args.ctx_gate_frac != 0.5 or args.kc_inh_scale != 1.0):
         raise SystemExit("--kc-inh-compart 는 --ctx-gate-kc·--conn-snapshot·--ctx-gate-frac 0.5 가 필요하고 --kc-inh-scale 과 함께 쓸 수 없다")
     if (args.feat_weights or args.rc_task != "none" or args.rc_eval) and args.feat_n <= 0:

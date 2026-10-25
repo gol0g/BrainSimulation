@@ -2321,11 +2321,18 @@ class ForagerBrain:
         # KC ↔ KC 억제 연결(kc_*_to_inh_*·kc_inh_*_to_kc_*)을 스냅숏 연결 중 같은 무리 안 쌍만 남겨 다시 싣는다(새 집단 없음 — 연결 부분집합, build 전).
         # 가중치 2배는 _build_sparse_expansion_circuit 에서. 꺼진 무리의 몫이 켜진 무리로 넘어가지 않게(게이팅 탈억제 차단 — 통합 병목 정리 8-2절).
         # 게이팅(ctx_gate_kc)·스냅숏·무리 비율 0.5 가 필요하다. 기본 꺼짐 = 이전 모델(이 블록을 지나지 않는다).
+        # 재배선 판(kc_inh_rewire, 개발 진단 3 뒤 — 연결 절반 + 가중치 2배는 KC 마다 받는 억제 수의 편차를 키워 억제를 덜 받는 KC 가 범주 무관 허브가 됨):
+        # 무리 밖 연결을 지우지 않고 그 시냅스 앞 뉴런을 시냅스 뒤 뉴런과 같은 무리의 뉴런으로 바꾼다(ctx_gate.rewire_within — 뒤 뉴런마다 받는 연결 수 그대로, 중복 없음,
+        # 호스트 지역 난수 RandomState(19950 + genn_seed), 쪽 l → r·KC→억제 먼저). 가중치는 그대로(배율 1). 억제 뉴런 무리 배정은 두 방식이 같다(19900 + genn_seed).
         self.kc_inh_compart_sub = None
         self._kc_inh_compart_keep = None
-        if bool(getattr(self.config, "kc_inh_compart", False)):
+        self._kc_inh_rewire_indeg = None
+        _kic, _kir = bool(getattr(self.config, "kc_inh_compart", False)), bool(getattr(self.config, "kc_inh_rewire", False))
+        if _kic and _kir:
+            raise RuntimeError("kc_inh_compart 와 kc_inh_rewire 는 함께 쓸 수 없다")
+        if _kic or _kir:
             if self.ctx_gate_sub is None or not self._conn_snap_load:
-                raise RuntimeError("kc_inh_compart 는 ctx_gate_kc(맥락 게이팅 무리)와 초기 연결 스냅숏(conn_snapshot_load)이 필요하다")
+                raise RuntimeError("kc_inh_compart·kc_inh_rewire 는 ctx_gate_kc(맥락 게이팅 무리)와 초기 연결 스냅숏(conn_snapshot_load)이 필요하다")
             if float(getattr(self.config, "ctx_gate_frac", 0.5)) != 0.5:
                 raise RuntimeError("kc_inh_compart 는 ctx_gate_frac 0.5 에서만 — 가중치 2배 보정의 전제")
             if getattr(self.config, "conn_snapshot_save", ""):
@@ -2335,6 +2342,10 @@ class ForagerBrain:
             _snp = np.load(self._conn_snap_load)
             self.kc_inh_compart_sub = {}
             self._kc_inh_compart_keep = {}
+            if _kir:
+                import ctx_gate as _CG2
+                _rrs = np.random.RandomState(19950 + int(getattr(self.config, "genn_seed", 0)))
+                self._kc_inh_rewire_indeg = {}
             _rep = []
             for _sd in ("l", "r"):
                 _ihx = np.zeros(_nih, dtype=bool)
@@ -2344,13 +2355,24 @@ class ForagerBrain:
                 for _nm, _pre_isx, _post_isx in (("kc_%s_to_inh_%s" % (_sd, _sd), _isx, _ihx), ("kc_inh_%s_to_kc_%s" % (_sd, _sd), _ihx, _isx)):
                     _pre = np.asarray(_snp[_nm + "__pre"], dtype=np.int64)
                     _post = np.asarray(_snp[_nm + "__post"], dtype=np.int64)
-                    _keep = _pre_isx[_pre] == _post_isx[_post]
-                    self.model.synapse_populations[_nm].set_sparse_connections(_pre[_keep].astype(np.uint32), _post[_keep].astype(np.uint32))
-                    self._kc_inh_compart_keep[_nm] = (_pre[_keep].copy(), _post[_keep].copy())
-                    _rep.append("%s %d/%d" % (_nm, int(_keep.sum()), int(_keep.size)))
-            print("  [E209 구획 되먹임 억제] KC 억제 뉴런 무리 X 좌 %d·우 %d / %d, 같은 무리 안 연결만 — %s, 가중치 KC→억제 %.2f·억제→KC %.2f(2배)"
-                  % (int(self.kc_inh_compart_sub["l"].sum()), int(self.kc_inh_compart_sub["r"].sum()), _nih, " · ".join(_rep),
-                     float(self.config.kc_to_inh_weight) * 2.0, float(self.config.kc_inh_to_kc_weight) * 2.0))
+                    if _kic:
+                        _keep = _pre_isx[_pre] == _post_isx[_post]
+                        _np_, _nq_ = _pre[_keep], _post[_keep]
+                        _rep.append("%s %d/%d" % (_nm, int(_keep.sum()), int(_keep.size)))
+                    else:
+                        _np_, _nq_, _mv = _CG2.rewire_within(_pre, _post, _pre_isx, _post_isx, _rrs)
+                        self._kc_inh_rewire_indeg[_nm] = np.bincount(_post, minlength=_post_isx.size)
+                        _rep.append("%s 옮김 %d/%d" % (_nm, int(_mv), int(_pre.size)))
+                    self.model.synapse_populations[_nm].set_sparse_connections(_np_.astype(np.uint32), _nq_.astype(np.uint32))
+                    self._kc_inh_compart_keep[_nm] = (_np_.copy(), _nq_.copy())
+            if _kic:
+                print("  [E209 구획 되먹임 억제] KC 억제 뉴런 무리 X 좌 %d·우 %d / %d, 같은 무리 안 연결만 — %s, 가중치 KC→억제 %.2f·억제→KC %.2f(2배)"
+                      % (int(self.kc_inh_compart_sub["l"].sum()), int(self.kc_inh_compart_sub["r"].sum()), _nih, " · ".join(_rep),
+                         float(self.config.kc_to_inh_weight) * 2.0, float(self.config.kc_inh_to_kc_weight) * 2.0))
+            else:
+                print("  [E209 구획 되먹임 억제 — 재배선] KC 억제 뉴런 무리 X 좌 %d·우 %d / %d, 무리 밖 연결의 앞 뉴런을 같은 무리 안으로(뒤 뉴런마다 받는 연결 수 그대로) — %s, 가중치 그대로 KC→억제 %.2f·억제→KC %.2f"
+                      % (int(self.kc_inh_compart_sub["l"].sum()), int(self.kc_inh_compart_sub["r"].sum()), _nih, " · ".join(_rep),
+                         float(self.config.kc_to_inh_weight), float(self.config.kc_inh_to_kc_weight)))
 
         # E183: 원시 특징 집단 zz_feat_l·zz_feat_r(감각 LIF, 먹이 눈과 같은 매개변수, 뉴런별 I_input 은 과제가 사례 패턴으로 설정) → 같은 쪽 KC 만
         # (호스트 지역 난수 RandomState(18400 + genn_seed) 연결 — 좌 먼저). 범주 표지 없음: 두 범주는 같은 집단의 다른 패턴. 새 뉴런 집단이므로 스냅숏 필요.
@@ -2425,13 +2447,14 @@ class ForagerBrain:
         if self._conn_snap_load:
             print(f"  [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 {self._conn_snap_n} 개")
         if self.kc_inh_compart_sub is not None:
-            # E209 조작검증(읽기 전용): 장치 연결 = 걸러 실은 쌍(정렬 비교), 무리 밖 쌍 0, 장치 가중치 = 2배 값 — 하나라도 어긋나면 중단.
+            # E209 조작검증(읽기 전용): 장치 연결 = 호스트가 실은 쌍(정렬 비교), 무리 밖 쌍 0, 장치 가중치 = 의도 값(첫 판 2배·재배선 그대로), 재배선은 받는 수·중복도 — 하나라도 어긋나면 중단.
             _chk = []
             for _sd in ("l", "r"):
                 _isx = self.ctx_gate_sub[_sd]
                 _ihx = self.kc_inh_compart_sub[_sd]
-                for _nm, _pre_isx, _post_isx, _w in (("kc_%s_to_inh_%s" % (_sd, _sd), _isx, _ihx, float(self.config.kc_to_inh_weight) * 2.0),
-                                                      ("kc_inh_%s_to_kc_%s" % (_sd, _sd), _ihx, _isx, float(self.config.kc_inh_to_kc_weight) * 2.0)):
+                _wf = 1.0 if self._kc_inh_rewire_indeg is not None else 2.0
+                for _nm, _pre_isx, _post_isx, _w in (("kc_%s_to_inh_%s" % (_sd, _sd), _isx, _ihx, float(self.config.kc_to_inh_weight) * _wf),
+                                                      ("kc_inh_%s_to_kc_%s" % (_sd, _sd), _ihx, _isx, float(self.config.kc_inh_to_kc_weight) * _wf)):
                     _sg = self.model.synapse_populations[_nm]
                     _sg.pull_connectivity_from_device()
                     _p = np.asarray(_sg.get_sparse_pre_inds(), dtype=np.int64)
@@ -2444,10 +2467,16 @@ class ForagerBrain:
                     _sg.vars["g"].pull_from_device()
                     _g = np.asarray(_sg.vars["g"].values, dtype=np.float32).ravel()
                     _gok = bool(_g.size == _p.size and np.all(_g == np.float32(_w)))
-                    if not (_same and _out == 0 and _gok):
-                        raise RuntimeError("E209 구획 되먹임 억제 조작검증 실패: %s 연결 같음 %s · 무리 밖 %d · 가중치 %s" % (_nm, _same, _out, _gok))
+                    _dok = True
+                    if self._kc_inh_rewire_indeg is not None:   # 재배선: 뒤 뉴런마다 받는 연결 수 = 스냅숏, 중복 쌍 없음
+                        _want = self._kc_inh_rewire_indeg[_nm]
+                        _dok = bool(np.array_equal(np.bincount(_q, minlength=_want.size), _want)
+                                    and np.unique(_p * int(_want.size) + _q).size == _p.size)
+                    if not (_same and _out == 0 and _gok and _dok):
+                        raise RuntimeError("E209 구획 되먹임 억제 조작검증 실패: %s 연결 같음 %s · 무리 밖 %d · 가중치 %s · 받는 수·중복 %s" % (_nm, _same, _out, _gok, _dok))
                     _chk.append("%s %d(같음·무리 밖 0·g %.2f)" % (_nm, int(_p.size), _w))
-            print("  [E209 구획 되먹임 억제 확인] 장치 — " + " · ".join(_chk))
+            print("  [E209 구획 되먹임 억제 확인] 장치 — " + " · ".join(_chk)
+                  + (" · 재배선 — 뒤 뉴런마다 받는 연결 수 = 스냅숏·중복 없음" if self._kc_inh_rewire_indeg is not None else ""))
         _css = getattr(self.config, "conn_snapshot_save", "") or ""
         if _css:
             self._save_conn_snapshot(_css)

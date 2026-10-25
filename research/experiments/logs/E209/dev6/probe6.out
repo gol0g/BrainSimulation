@@ -1,0 +1,31 @@
+[E209 개발 진단 6] 코드 md5 aea16dfe5a7c · 과제 fe0e792c4fc9 · ctx_gate acc85f5df971
+[E209 개발 진단 6] 시작 2026-10-25 23:49:53
+[(f0) 형성 rc=0 23:56:47] 제시 816 | RCJ 12 | base_l=78854 base_r=85626
+    RCJ side=l pair=AB J_pre=0.3161 J_post=0.0064 n_pre=132/122 n_post=75/83
+    RCJ side=l pair=AC J_pre=0.3490 J_post=0.0307 n_pre=132/127 n_post=75/93
+    RCJ side=l pair=BD J_pre=0.2376 J_post=0.0191 n_pre=122/128 n_post=83/77
+    RCJ side=r pair=AB J_pre=0.3498 J_post=0.0119 n_pre=136/138 n_post=79/91
+    RCJ side=r pair=AC J_pre=0.3684 J_post=0.0127 n_pre=136/124 n_post=79/81
+    RCJ side=r pair=BD J_pre=0.4315 J_post=0.0289 n_pre=138/144 n_post=91/87
+[(f) 형성 rc=0 00:03:32] 제시 816 | RCJ 12 | base_l=81325 base_r=84448
+    RCJ side=l pair=AB J_pre=0.3315 J_post=0.0122 n_pre=119/126 n_post=81/85
+    RCJ side=l pair=AC J_pre=0.3279 J_post=0.0292 n_pre=119/124 n_post=81/95
+    RCJ side=l pair=BD J_pre=0.2525 J_post=0.0128 n_pre=126/122 n_post=85/73
+    RCJ side=r pair=AB J_pre=0.3417 J_post=0.0127 n_pre=128/139 n_post=70/89
+    RCJ side=r pair=AC J_pre=0.4068 J_post=0.0261 n_pre=128/121 n_post=70/87
+    RCJ side=r pair=BD J_pre=0.3795 J_post=0.0178 n_pre=139/130 n_post=89/83
+  (f0) 형성 회귀: 다름 ef06deb37036 대 a4e0be07d8c4 — 차이 줄 110
+  (f0) 형성 가중치 = E206 F15: False
+[(F_R·none·재배선) rc=0 00:06:12] RCJ 12 · 사례당 반응 KC(post·train) 120.4(n=48) · F 적재 2 · base_l=81265 base_r=84437
+[(F_R·X·재배선) rc=0 00:08:49] RCJ 12 · 사례당 반응 KC(post·train) 67.1(n=48) · F 적재 2 · base_l=81403 base_r=84201
+    [E207 측정 맥락] tag=pre 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 34896 · 비활성 무리 3158 · 게이팅 있음
+    [E209 구획 억제 측정] tag=pre 맥락 X 켬 — 제시 288 · KC 억제 뉴런 발화 활성 무리 384163 · 비활성 무리 89397
+    [E207 측정 맥락] tag=post 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 35314 · 비활성 무리 3134 · 게이팅 있음
+    [E209 구획 억제 측정] tag=post 맥락 X 켬 — 제시 288 · KC 억제 뉴런 발화 활성 무리 386892 · 비활성 무리 90939
+[E209 개발 진단 6] 겹침·허브(posthoc_e208_graded.brain_stats — AC·BD 두 쪽, 둘째 측정; 허브 = 왼쪽 범주 ≥ 3 반응 KC)
+  공유 F·없음(진단 3): S 집합 1377 · 가중 4112 · 코사인 0.189 | A·B 코사인 0.104 | 사례당 반응 KC 121.0 · 허브 0
+  공유 F·X(진단 3): S 집합 5239 · 가중 8400 · 코사인 0.406 | A·B 코사인 0.295 | 사례당 반응 KC 109.1 · 허브 14
+  재배선 F_R·없음: S 집합 1260 · 가중 4163 · 코사인 0.191 | A·B 코사인 0.109 | 사례당 반응 KC 120.4 · 허브 1
+  재배선 F_R·X: S 집합 2119 · 가중 4704 · 코사인 0.228 | A·B 코사인 0.158 | 사례당 반응 KC 67.1 · 허브 2
+  문턱: (나) 없음 반응 비 0.99(0.80~1.25) · 없음 코사인 0.191 ≤ 0.289 · (다) X/없음 0.56(≤ 0.70) · (라) q 0.182(≤ 0.6667)
+[E209 개발 진단 6] 종료 2026-10-26 00:08:49

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """E209 독립 대조 — judge_e209(과 그것이 쓰는 judge_e193·e204·e205·e206·e208·report_e209_overlap)와 코드를 나누지 않는 다른 경로(정규식·정수 산술 직접)로 같은 판정을 다시 계산한다.
-verify_e208_independent 와 같은 꼴 + 구획 되먹임 억제 점검을 따로 구현: 그 뇌의 초기 연결 스냅숏(traces/E176/snap/conn_b{B}.npz)에서 게이팅 무리(난수 19300 + genn_seed —
-쪽 l → r 마다 KC 배정·X 마스크·Y 마스크 순서)와 억제 뉴런 무리(난수 19900 + genn_seed 순열 앞 200, l → r)를 모델 코드 없이 다시 만들어 같은 무리 안 연결 수를 세고,
-모든 학습·평가 로그의 장치 확인 줄 연결 수가 그 값과 같은지(g 10.00·−30.00, 구성 줄 수 = 장치 줄 수, 학습 ≥ 2·평가 ≥ 1). 짝·같은 값은 E208 F-G0, 가설 줄은 H130 갈래.
+verify_e208_independent 와 같은 꼴 + 구획 되먹임 억제(재배선) 점검을 따로 구현: 그 뇌의 초기 연결 스냅숏(traces/E176/snap/conn_b{B}.npz)에서 게이팅 무리(난수 19300 + genn_seed —
+쪽 l → r 마다 KC 배정·X 마스크·Y 마스크 순서)와 억제 뉴런 무리(난수 19900 + genn_seed 순열 앞 200, l → r)를 모델 코드 없이 다시 만들어 원래 무리 밖이던 연결 수를 세고,
+모든 학습·평가 로그의 구성 줄 '옮김 k/n' 이 (그 수, 스냅숏 연결 수)와 같고 장치 확인 줄 연결 수 = 스냅숏 연결 수·g 5.00·−15.00·재배선 꼬리인지(구성 줄 수 = 장치 줄 수, 학습 ≥ 2·평가 ≥ 1).
+게이팅 요약 비 문턱 0.10(criteria_fixed.txt). 짝·같은 값은 E208 F-G0, 가설 줄은 H130 갈래.
 실행: python3 scripts/verify_e209_independent.py (저장소 루트에서)"""
 import os
 import re
@@ -27,7 +28,7 @@ def i4(s):
 
 
 def expected_compart(b):
-    """스냅숏 + 다시 만든 무리 마스크 → {집단: 같은 무리 안 연결 수}."""
+    """스냅숏 + 다시 만든 무리 마스크 → {집단: (원래 무리 밖 연결 수 = 옮길 수, 스냅숏 연결 수)}."""
     gs = 12345 + b
     rs = np.random.RandomState(19300 + gs)
     kx = {}
@@ -46,34 +47,41 @@ def expected_compart(b):
         sd = nm[-1]   # 이름 끝 글자 = 쪽(kc_l_to_inh_l·kc_inh_l_to_kc_l)
         pre, post = S[nm + "__pre"].astype(np.int64), S[nm + "__post"].astype(np.int64)
         a, c = (kx[sd], ix[sd]) if "_to_inh_" in nm else (ix[sd], kx[sd])
-        out[nm] = int(np.sum(a[pre] == c[post]))
+        out[nm] = (int(np.sum(a[pre] != c[post])), int(pre.size))
     return out
 
 
 RX_DEV = re.compile(r"^\s*\[E209 구획 되먹임 억제 확인\] 장치 — (.*)$", re.M)
 RX_DEV1 = re.compile(r"(kc_\S+) (\d+)\(같음·무리 밖 0·g (\S+)\)")
-RX_CB = re.compile(r"^\s*\[E209 구획 되먹임 억제\] KC 억제 뉴런 무리 X 좌 (\d+)·우 (\d+) / (\d+), 같은 무리 안 연결만 — .*, 가중치 KC→억제 (\S+)·억제→KC (\S+)\(2배\)$", re.M)
+RX_CB = re.compile(r"^\s*\[E209 구획 되먹임 억제 — 재배선\] KC 억제 뉴런 무리 X 좌 (\d+)·우 (\d+) / (\d+), 무리 밖 연결의 앞 뉴런을 같은 무리 안으로\(뒤 뉴런마다 받는 연결 수 그대로\) — (.*), 가중치 그대로 KC→억제 (\S+)·억제→KC (\S+)$", re.M)
+RX_CB1 = re.compile(r"(kc_\S+) 옮김 (\d+)/(\d+)")
+TAIL = "재배선 — 뒤 뉴런마다 받는 연결 수 = 스냅숏·중복 없음"
+GMAX = 0.10
 
 
 def compart_ok(t, exp, nmin):
-    """로그 본문 t — 구성 줄·장치 줄 같은 수 ≥ nmin, 구성 줄 무리 X 200·200 / 400·가중치 '10.00'·'-30.00', 장치 줄마다 4집단 연결 수 = exp·g 문자열 맞음."""
+    """로그 본문 t — 구성 줄·장치 줄 같은 수 ≥ nmin, 구성 줄 무리 X 200·200 / 400·가중치 '5.00'·'-15.00'·옮김 k/n = exp, 장치 줄마다 4집단 연결 수 = 스냅숏 n·g 문자열·재배선 꼬리."""
     cb, dv = RX_CB.findall(t), RX_DEV.findall(t)
     if len(cb) < nmin or len(cb) != len(dv):
         return False
-    if any(c != ("200", "200", "400", "10.00", "-30.00") for c in cb):
-        return False
+    for c in cb:
+        if (c[0], c[1], c[2], c[4], c[5]) != ("200", "200", "400", "5.00", "-15.00"):
+            return False
+        mv = {nm: (int(k), int(n)) for nm, k, n in RX_CB1.findall(c[3])}
+        if mv != exp:
+            return False
     for d in dv:
         g = {nm: (int(n), w) for nm, n, w in RX_DEV1.findall(d)}
-        if set(g) != set(NAMES) or any(g[nm] != (exp[nm], "10.00" if "_to_inh_" in nm else "-30.00") for nm in NAMES):
+        if set(g) != set(NAMES) or any(g[nm] != (exp[nm][1], "5.00" if "_to_inh_" in nm else "-15.00") for nm in NAMES) or TAIL not in d:
             return False
     return True
 
 
 def flines(t, b, tc):
-    """로그 본문 t — F 적재 줄이 모두 그 뇌 파일·검증 일치이고 ≥ 1, 동작점 줄이 모두 T_C 이고 ≥ 1."""
+    """로그 본문 t — F_R 적재 줄이 모두 그 뇌 파일(traces/E209/feat_formed)·검증 일치이고 ≥ 1, 동작점 줄이 모두 T_C 이고 ≥ 1."""
     fl = re.findall(r"^\[E184 특징 가중치 적재\] (\S+)( 검증 일치)?", t, re.M)
     tn = re.findall(r"\[motor 동작점\] .*?기저값 (-?\d+)\.0\(", t)
-    f_ok = bool(fl) and all(g == " 검증 일치" and p.replace("\\", "/").endswith("traces/E206/feat_formed_b%d.npz" % b) for p, g in fl)
+    f_ok = bool(fl) and all(g == " 검증 일치" and p.replace("\\", "/").endswith("traces/E209/feat_formed_b%d.npz" % b) for p, g in fl)
     t_ok = bool(tn) and all(int(x) == tc for x in tn)
     return f_ok and t_ok
 
@@ -127,6 +135,18 @@ def trlog(path, b, tc):
             "f": flines(t, b, tc), "text": t}
 
 
+def formlog(path, exp):
+    """F_R 형성 로그 — 제시 816·노출 범주 A,B,C,D·RCJ 12줄·AC·BD J_post ≤ 0.1000(문자열 → 정수)·세계 38300·원형 A 5,14,15,19,29·RAWCAT 1·재배선 줄."""
+    t = open(path, encoding="utf-8", errors="replace").read()
+    ex = re.search(r"^\[원시 특징 노출\] 제시 (\d+)\(.*노출 범주 (\S+)", t, re.M)
+    rj = re.findall(r"^RCJ side=([lr]) pair=([A-D]{2}) J_pre=([0-9.]+) J_post=([0-9.]+)", t, re.M)
+    wl = re.findall(r"^\[원시 특징 세계\] .*seed (\d+) \| 원형 A (\d+),(\d+),(\d+),(\d+),(\d+)", t, re.M)
+    jp = {(sd, pr): i4("+" + post) for sd, pr, _, post in rj if pr in ("AC", "BD")}
+    good = (bool(ex) and ex.group(1) == "816" and ex.group(2) == "A,B,C,D" and len(rj) == 12 and len(jp) == 4 and all(v <= 1000 for v in jp.values())
+            and wl == [("38300", "5", "14", "15", "19", "29")] and len(re.findall(r"^=> RAWCAT ", t, re.M)) == 1 and compart_ok(t, exp, 1))
+    return good, jp
+
+
 def l4cat(a):
     tr = [a[k][0] for k in SIGN]; nw = [a[k][1] for k in SIGN]
     acq = sum(v >= 1000 for v in tr)
@@ -150,9 +170,12 @@ def main():
                 raise ValueError("E206 b%d 맥락 연결 줄" % b)
             want = {k: next(iter(v))[2:] for k, v in c6.items()}
             exp = expected_compart(b)
+            fok, fj = formlog(os.path.join(L, "form_b%d.log" % b), exp)
+            if not fok or not os.path.exists(os.path.join(EXP, "traces", "E209", "feat_formed_b%d.npz" % b)):
+                bad.append("형성 b%d(J_post %s)" % (b, fj))
             tl = trlog(os.path.join(L, "train_GC_b%d.log" % b), b, tc)
-            if tl["seed"] != (38300, 38500 + b) or not (tl["gate"] and tl["gate"][0] == 3000 and tl["gate"][1] <= 0.01) or not tl["f"] or not cw_ok(tl["text"], want) or not compart_ok(tl["text"], exp, 2):
-                bad.append("F-G0C b%d 학습(시드 %s·게이팅 %s·F/동작점 %s·맥락 무게 %s·구획 %s)" % (b, tl["seed"], tl["gate"], tl["f"], cw_ok(tl["text"], want), compart_ok(tl["text"], exp, 2)))
+            if tl["seed"] != (38300, 38500 + b) or not (tl["gate"] and tl["gate"][0] == 3000 and tl["gate"][1] <= GMAX) or not tl["f"] or not cw_ok(tl["text"], want) or not compart_ok(tl["text"], exp, 2):
+                bad.append("F-G0R b%d 학습(시드 %s·게이팅 %s·F/동작점 %s·맥락 무게 %s·구획 %s)" % (b, tl["seed"], tl["gate"], tl["f"], cw_ok(tl["text"], want), compart_ok(tl["text"], exp, 2)))
             a, same = {}, True
             for x in "XY":
                 dl, il = evlog(os.path.join(L, "ev_GC_b%d_learn_%s.log" % (b, x)), b, tc)
@@ -162,27 +185,27 @@ def main():
                 for nm, inf, pw in (("learn", il, 8), ("none", inn, 0)):
                     if (inf["pushed"] != pw or inf["world"] != 38300 or inf["proto"] != (5, 14, 15, 19, 29) or inf["ctx"] != {x} or inf["ctxon"] != {"96"}
                             or inf["trials"] != {(96, 96)} or not inf["f"] or not cw_ok(inf["text"], want) or not compart_ok(inf["text"], exp, 1)):
-                        bad.append("F-G0C b%d %s %s 평가 %s" % (b, nm, x, {k_: v_ for k_, v_ in inf.items() if k_ != "text"}))
+                        bad.append("F-G0R b%d %s %s 평가 %s" % (b, nm, x, {k_: v_ for k_, v_ in inf.items() if k_ != "text"}))
                 for c in "AB":
                     a[(x, c)] = tuple(SIGN[(x, c)] * (dl[(c, s)] - dn[(c, s)]) for s in ("train", "new"))
             if same:
-                bad.append("F-G0C b%d learn = E208 F-G0 learn(같은 값)" % b)
+                bad.append("F-G0R b%d learn = E208 F-G0 learn(같은 값)" % b)
             cat[b], m[b] = l4cat(a)
             for t, nt in (("R", 1500), ("V", 3000), ("P", 3000)):
                 tl = trlog(os.path.join(L, "train_%s_b%d.log" % (t, b)), b, tc)
-                if not (tl["gate"] and tl["gate"][0] == nt and tl["gate"][1] <= 0.01 and tl["cnt"] == (nt, "X", nt) and tl["seed"] == (38300, 38500 + b) and tl["f"]
+                if not (tl["gate"] and tl["gate"][0] == nt and tl["gate"][1] <= GMAX and tl["cnt"] == (nt, "X", nt) and tl["seed"] == (38300, 38500 + b) and tl["f"]
                         and cw_ok(tl["text"], want) and compart_ok(tl["text"], exp, 2)):
-                    bad.append("G0C-%s b%d 학습(게이팅 %s·켬 %s·시드 %s·F/동작점 %s·맥락 무게 %s·구획 %s)" % (t, b, tl["gate"], tl["cnt"], tl["seed"], tl["f"], cw_ok(tl["text"], want), compart_ok(tl["text"], exp, 2)))
+                    bad.append("G0R-%s b%d 학습(게이팅 %s·켬 %s·시드 %s·F/동작점 %s·맥락 무게 %s·구획 %s)" % (t, b, tl["gate"], tl["cnt"], tl["seed"], tl["f"], cw_ok(tl["text"], want), compart_ok(tl["text"], exp, 2)))
                 if (tl["rev"] is not None) != (t == "V") or (t == "V" and tl["rev"] != ("1500", "1500", "3000")):
-                    bad.append("G0C-%s b%d 반전 줄 %s" % (t, b, tl["rev"]))
+                    bad.append("G0R-%s b%d 반전 줄 %s" % (t, b, tl["rev"]))
                 if (tl["p2"] is not None) != (t == "P") or (t == "P" and tl["p2"] != ("1500", "1500", "3000")):
-                    bad.append("G0C-%s b%d 둘째 쌍 줄 %s" % (t, b, tl["p2"]))
+                    bad.append("G0R-%s b%d 둘째 쌍 줄 %s" % (t, b, tl["p2"]))
             D = {}
             for nm, pw in (("R_learn", 8), ("V_learn", 8), ("P_learn", 8), ("none", 0)):
                 d, inf = evlog(os.path.join(L, "ev_b%d_%s.log" % (b, nm)), b, tc)
                 if (inf["pushed"] != pw or inf["world"] != 38300 or inf["proto"] != (5, 14, 15, 19, 29) or inf["ctx"] != {"X"} or inf["ctxon"] != {"96"}
                         or inf["trials"] != {(96, 96)} or not inf["f"] or not cw_ok(inf["text"], want) or not compart_ok(inf["text"], exp, 1)):
-                    bad.append("G0C b%d %s 평가 %s" % (b, nm, {k_: v_ for k_, v_ in inf.items() if k_ != "text"}))
+                    bad.append("G0R b%d %s 평가 %s" % (b, nm, {k_: v_ for k_, v_ in inf.items() if k_ != "text"}))
                 D[nm] = d
             eR = {k: D["R_learn"][k] - D["none"][k] for k in D["R_learn"]}
             eV = {k: D["V_learn"][k] - D["none"][k] for k in D["V_learn"]}
@@ -206,7 +229,7 @@ def main():
     except (OSError, KeyError, ValueError, IndexError, TypeError, AttributeError) as ex:
         print("독립 판정: 보류(결측 — %s)" % type(ex).__name__)
         return 0
-    print("독립 F-G0C: 범주 %s · 가장 약한 칸 %s" % (" ".join("b%d %s" % (b, cat[b]) for b in BR), " ".join("%+d" % m[b] for b in BR)))
+    print("독립 F-G0R: 범주 %s · 가장 약한 칸 %s" % (" ".join("b%d %s" % (b, cat[b]) for b in BR), " ".join("%+d" % m[b] for b in BR)))
     print("독립 앞 능력: 범주 규칙 %s | 반전 %s | 유지 %s" % (" ".join(st["R"][b] for b in BR), " ".join(st["V"][b] for b in BR),
                                                     " ".join(("유지" if k[2] else "간섭") if k[2] is not None else ("기준미달" if not k[0] else "전제미달") for k in (st["K"][b] for b in BR))))
     if bad:

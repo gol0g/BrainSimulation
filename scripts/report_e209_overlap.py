@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""E209 보고(판정 밖 — 사전등록 4절 '보고'): 구획 되먹임 억제 구조(F-G0C)에서 잰 형성 표현 F 의 범주 KC 겹침 — E208 보고 측정 커맨드에 --kc-inh-compart 만 더함.
+"""E209 보고(판정 밖 — 사전등록 4절 '보고'): 구획 되먹임 억제 재배선 구조(F-G0R)에서 잰 형성 표현 F 의 범주 KC 겹침 — E208 보고 측정 커맨드에 --kc-inh-rewire 만 더함.
 뇌마다 맥락 X 켬(meas_C_X)·맥락 없음(meas_C_none) 두 측정. 주 지표 = 기능적 겹침 코사인(posthoc_e208_graded.brain_stats — 둘째 측정 post, AC·BD 두 쪽 네 값 평균; 통합 병목 정리 8-1절과 같은 정의).
 같은 뇌의 짝: E207 F·맥락 없음(공유 억제 — cos_none), E208 F·흥분 0·맥락 X(공유 억제 — cos_G0).
 남은 몫 q = (cos_C − cos_none) / (cos_G0 − cos_none) 를 1e-4 정수로 반올림해 읽기 규칙(결과 전): q ≤ 3333 '겹침 사라짐(맥락 없음 쪽)', q ≥ 6667 '겹침 남음', 그 밖 '가운데'. 분모 ≤ 0 이면 '판단 불가'.
 함께 적음: 집합 S 첫/둘째(J7.score), 사례당 반응 KC(post·train 48사례 평균 — C·X / C·none 비), 억제 뉴런 무리별 발화.
-점검(어기면 그 뇌 '측정 무효'): C·X — '[E207 측정 맥락]' pre·post(X·제시 288·켠 > 0·끈 0·게이팅 있음·활성 > 0·비활성 × 100 ≤ 같은 뇌 E207 F·X 같은 tag 활성 — E208 정정 1),
-  '[E209 구획 억제 측정]' pre·post(X·288·활성 > 0·비활성 × 100 ≤ 활성), RCJ 12·노출 0·맥락 무게 0, 구획 장치 확인 줄 ≥ 1(4집단);
+점검(어기면 그 뇌 '측정 무효'): C·X — '[E207 측정 맥락]' pre·post(X·제시 288·켠 > 0·끈 0·게이팅 있음·활성 > 0·비활성 × 10 ≤ 같은 측정 활성 — E209 게이팅 문턱(criteria_fixed.txt): 구획은 Y 무리를 X 활동이 억제하던 길을 끊어 새는 몫이 설계상 늘어남),
+  '[E209 구획 억제 측정]' pre·post(X·288·활성 > 0 — 비활성 몫은 보고만), RCJ 12·노출 0·맥락 무게 0, 구획 장치 확인 줄 ≥ 1(4집단·g 5.00/−15.00·재배선 꼬리);
   C·none — RCJ 12·노출 0·'[E207 측정 맥락]' 없음·구획 장치 확인 줄 ≥ 1; 두 측정의 구획 연결 수가 같음; 자기 점검(집합 J 의 '%.4f' 문자열 = RCJ J_post 문자열 — self_check) 네 로그 모두.
 입력: logs/E209/meas_C_{X|none}_b{B}.log, logs/E207/meas_F_{none|X}_b{B}.log, logs/E208/meas_F_X_b{B}.log. 실행: python3 scripts/report_e209_overlap.py (저장소 루트에서)"""
 import os
@@ -22,6 +22,8 @@ BRAINS = (16, 17, 18, 19, 20)
 Q_LO, Q_HI = 3333, 6667
 RX_W = re.compile(r"\[맥락 입력(?: 2)?\] 맥락 전용 집단 (zz_ctx2?) \d+ → KC 좌·우, w=(-?[0-9.]+),")
 RX_DEV = re.compile(r"\[E209 구획 되먹임 억제 확인\] 장치 — (.*)$")
+W_KI, W_IK = 5.0, -15.0   # 재배선 판 — 가중치 그대로(연결 절반 판은 10·−30)
+RW_TAIL = "재배선 — 뒤 뉴런마다 받는 연결 수 = 스냅숏·중복 없음"
 RX_DEV1 = re.compile(r"(kc_(?:inh_)?[lr]_to_(?:inh|kc)_[lr]) (\d+)\(같음·무리 밖 0·g (-?[0-9.]+)\)")
 RX_IM = re.compile(r"\[E209 구획 억제 측정\] tag=(\w+) 맥락 (\w) 켬 — 제시 (\d+) · KC 억제 뉴런 발화 활성 무리 (\d+) · 비활성 무리 (\d+)")
 GROUPS = ("kc_l_to_inh_l", "kc_inh_l_to_kc_l", "kc_r_to_inh_r", "kc_inh_r_to_kc_r")
@@ -32,12 +34,14 @@ def ctx_weights(path):
 
 
 def read_compart(path):
-    """→ {"dev": [{집단: (연결 수, g)}, …](확인 줄마다), "im": {tag: (맥락, 제시, 활성, 비활성)}}."""
+    """→ {"dev": [{집단: (연결 수, g), "_tail": 재배선 꼬리 여부}, …](확인 줄마다), "im": {tag: (맥락, 제시, 활성, 비활성)}}."""
     dev, im = [], {}
     for ln in open(path, encoding="utf-8", errors="replace"):
         m = RX_DEV.search(ln)
         if m:
-            dev.append({g.group(1): (int(g.group(2)), float(g.group(3))) for g in RX_DEV1.finditer(m.group(1))})
+            d_ = {g.group(1): (int(g.group(2)), float(g.group(3))) for g in RX_DEV1.finditer(m.group(1))}
+            d_["_tail"] = RW_TAIL in m.group(1)
+            dev.append(d_)
             continue
         m = RX_IM.search(ln)
         if m:
@@ -46,24 +50,24 @@ def read_compart(path):
 
 
 def dev_ok(c):
-    """구획 장치 확인 줄 ≥ 1, 줄마다 4집단·g = 10/−30, 모든 줄의 연결 수가 같음 → (통과, 연결 수 사전)."""
+    """구획 장치 확인 줄 ≥ 1, 줄마다 4집단·g = 5/−15·재배선 꼬리, 모든 줄의 연결 수가 같음 → (통과, 연결 수 사전)."""
     if not c["dev"]:
         return False, None
     first = c["dev"][0]
-    good = all(set(d) == set(GROUPS) for d in c["dev"]) and all(d == first for d in c["dev"])
-    good = good and all(first[g][1] == (10.0 if "_to_inh_" in g else -30.0) and first[g][0] > 0 for g in GROUPS)
+    good = all(set(d) == set(GROUPS) | {"_tail"} and d["_tail"] for d in c["dev"]) and all(d == first for d in c["dev"])
+    good = good and all(first[g][1] == (W_KI if "_to_inh_" in g else W_IK) and first[g][0] > 0 for g in GROUPS)
     return good, ({g: first[g][0] for g in GROUPS} if good else None)
 
 
 def valid_x(path, r, ref, c):
-    cx, rc = r["ctx"], ref["ctx"]
+    cx = r["ctx"]   # ref(E207 F·X)는 보고용으로만 읽음 — 게이팅 점검은 같은 측정의 활성 발화 기준(E209 문턱)
     w = ctx_weights(path)
-    ok = (set(cx) == {"pre", "post"} and set(rc) == {"pre", "post"}
-          and all(v and v[0] == "X" and v[1] == 288 and v[2] > 0 and v[3] == 0 and v[6] == "있음" and v[4] > 0 and rc[t] and 100 * v[5] <= rc[t][4]
+    ok = (set(cx) == {"pre", "post"}
+          and all(v and v[0] == "X" and v[1] == 288 and v[2] > 0 and v[3] == 0 and v[6] == "있음" and v[4] > 0 and 10 * v[5] <= v[4]
                   for t, v in cx.items())
           and len(r["rcj"]) == 12 and r["expo"] == 0 and {p for p, _ in w} == {"zz_ctx", "zz_ctx2"} and all(x == 0.0 for _, x in w))
     im = c["im"]
-    ok = ok and set(im) == {"pre", "post"} and all(v[0] == "X" and v[1] == 288 and v[2] > 0 and 100 * v[3] <= v[2] for v in im.values())
+    ok = ok and set(im) == {"pre", "post"} and all(v[0] == "X" and v[1] == 288 and v[2] > 0 for v in im.values())
     return ok and dev_ok(c)[0]
 
 
