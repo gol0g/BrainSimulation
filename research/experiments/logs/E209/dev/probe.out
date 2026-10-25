@@ -1,0 +1,20 @@
+[E209 개발 진단] 시작 2026-10-25 22:35:24
+[(off) rc=0 22:38:29] RCJ 12 · 
+    [E207 측정 맥락] tag=pre 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 63536 · 비활성 무리 757 · 게이팅 있음
+    [E207 측정 맥락] tag=post 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 64076 · 비활성 무리 831 · 게이팅 있음
+    RCJ side=l pair=AB J_pre=0.1438 J_post=0.0864 n_pre=92/83 n_post=91/85
+    RCJ side=l pair=AC J_pre=0.1288 J_post=0.1566 n_pre=92/92 n_post=91/101
+    RCJ side=l pair=BD J_pre=0.1274 J_post=0.0988 n_pre=83/94 n_post=85/104
+    RCJ side=r pair=AB J_pre=0.1229 J_post=0.0860 n_pre=105/96 n_post=104/98
+    RCJ side=r pair=AC J_pre=0.1758 J_post=0.1383 n_pre=105/109 n_post=104/110
+    RCJ side=r pair=BD J_pre=0.1595 J_post=0.1302 n_pre=96/93 n_post=98/93
+[(on) rc=0 22:41:28] RCJ 12 ·   [E209 무리별 항상성] 켬 — 맥락이 하나만 켜진 단계의 KC 항상성 PI 오차를 켜진 무리(X 켬 → X 무리, Y 켬 → Y 무리) 발화율로   [E209 무리별 항상성] 켬 — 맥락이 하나만 켜진 단계의 KC 항상성 PI 오차를 켜진 무리(X 켬 → X 무리, Y 켬 → Y 무리) 발화율로 [E209 무리별 항상성] process 단계 — 켜진 무리 기준 1728 · 전체 기준 5870 · 맥락 둘 다 켬 0 [E209 무리별 항상성] process 단계 — 켜진 무리 기준 0 · 전체 기준 20 · 맥락 둘 다 켬 0 
+    [E207 측정 맥락] tag=pre 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 63536 · 비활성 무리 757 · 게이팅 있음
+    [E207 측정 맥락] tag=post 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 64099 · 비활성 무리 813 · 게이팅 있음
+    RCJ side=l pair=AB J_pre=0.1438 J_post=0.0864 n_pre=92/83 n_post=91/85
+    RCJ side=l pair=AC J_pre=0.1288 J_post=0.1566 n_pre=92/92 n_post=91/101
+    RCJ side=l pair=BD J_pre=0.1274 J_post=0.0988 n_pre=83/94 n_post=85/104
+    RCJ side=r pair=AB J_pre=0.1229 J_post=0.0909 n_pre=105/96 n_post=105/99
+    RCJ side=r pair=AC J_pre=0.1758 J_post=0.1444 n_pre=105/109 n_post=105/109
+    RCJ side=r pair=BD J_pre=0.1595 J_post=0.1420 n_pre=96/93 n_post=99/94
+[E209 개발 진단] 종료 2026-10-25 22:41:28
