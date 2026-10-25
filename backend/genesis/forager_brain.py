@@ -2317,6 +2317,40 @@ class ForagerBrain:
                      int((~self.ctx_gate_sub["l"]).sum()), int((~self.ctx_gate_sub["r"]).sum()), _gw, _gp,
                      self.ctx_gate_syn["zz_ctx2_inh_kc_l"][1], self.ctx_gate_syn["zz_ctx2_inh_kc_r"][1],
                      self.ctx_gate_syn["zz_ctx_inh_kc_l"][1], self.ctx_gate_syn["zz_ctx_inh_kc_r"][1]))
+        # E209: 구획 되먹임 억제 — KC 억제 뉴런을 쪽마다 맥락 X·Y 무리로 정확히 반반(호스트 지역 난수 RandomState(19900 + genn_seed) 순열, 쪽 l → r) 나누고,
+        # KC ↔ KC 억제 연결(kc_*_to_inh_*·kc_inh_*_to_kc_*)을 스냅숏 연결 중 같은 무리 안 쌍만 남겨 다시 싣는다(새 집단 없음 — 연결 부분집합, build 전).
+        # 가중치 2배는 _build_sparse_expansion_circuit 에서. 꺼진 무리의 몫이 켜진 무리로 넘어가지 않게(게이팅 탈억제 차단 — 통합 병목 정리 8-2절).
+        # 게이팅(ctx_gate_kc)·스냅숏·무리 비율 0.5 가 필요하다. 기본 꺼짐 = 이전 모델(이 블록을 지나지 않는다).
+        self.kc_inh_compart_sub = None
+        self._kc_inh_compart_keep = None
+        if bool(getattr(self.config, "kc_inh_compart", False)):
+            if self.ctx_gate_sub is None or not self._conn_snap_load:
+                raise RuntimeError("kc_inh_compart 는 ctx_gate_kc(맥락 게이팅 무리)와 초기 연결 스냅숏(conn_snapshot_load)이 필요하다")
+            if float(getattr(self.config, "ctx_gate_frac", 0.5)) != 0.5:
+                raise RuntimeError("kc_inh_compart 는 ctx_gate_frac 0.5 에서만 — 가중치 2배 보정의 전제")
+            if getattr(self.config, "conn_snapshot_save", ""):
+                raise RuntimeError("kc_inh_compart 와 conn_snapshot_save 는 함께 쓸 수 없다(걸러낸 연결이 스냅숏으로 저장됨)")
+            _nih = int(self.config.n_kc_inhibitory_per_side)
+            _crs3 = np.random.RandomState(19900 + int(getattr(self.config, "genn_seed", 0)))
+            _snp = np.load(self._conn_snap_load)
+            self.kc_inh_compart_sub = {}
+            self._kc_inh_compart_keep = {}
+            _rep = []
+            for _sd in ("l", "r"):
+                _ihx = np.zeros(_nih, dtype=bool)
+                _ihx[_crs3.permutation(_nih)[:_nih // 2]] = True
+                self.kc_inh_compart_sub[_sd] = _ihx
+                _isx = self.ctx_gate_sub[_sd]
+                for _nm, _pre_isx, _post_isx in (("kc_%s_to_inh_%s" % (_sd, _sd), _isx, _ihx), ("kc_inh_%s_to_kc_%s" % (_sd, _sd), _ihx, _isx)):
+                    _pre = np.asarray(_snp[_nm + "__pre"], dtype=np.int64)
+                    _post = np.asarray(_snp[_nm + "__post"], dtype=np.int64)
+                    _keep = _pre_isx[_pre] == _post_isx[_post]
+                    self.model.synapse_populations[_nm].set_sparse_connections(_pre[_keep].astype(np.uint32), _post[_keep].astype(np.uint32))
+                    self._kc_inh_compart_keep[_nm] = (_pre[_keep].copy(), _post[_keep].copy())
+                    _rep.append("%s %d/%d" % (_nm, int(_keep.sum()), int(_keep.size)))
+            print("  [E209 구획 되먹임 억제] KC 억제 뉴런 무리 X 좌 %d·우 %d / %d, 같은 무리 안 연결만 — %s, 가중치 KC→억제 %.2f·억제→KC %.2f(2배)"
+                  % (int(self.kc_inh_compart_sub["l"].sum()), int(self.kc_inh_compart_sub["r"].sum()), _nih, " · ".join(_rep),
+                     float(self.config.kc_to_inh_weight) * 2.0, float(self.config.kc_inh_to_kc_weight) * 2.0))
 
         # E183: 원시 특징 집단 zz_feat_l·zz_feat_r(감각 LIF, 먹이 눈과 같은 매개변수, 뉴런별 I_input 은 과제가 사례 패턴으로 설정) → 같은 쪽 KC 만
         # (호스트 지역 난수 RandomState(18400 + genn_seed) 연결 — 좌 먼저). 범주 표지 없음: 두 범주는 같은 집단의 다른 패턴. 새 뉴런 집단이므로 스냅숏 필요.
@@ -2390,6 +2424,30 @@ class ForagerBrain:
         self.model.load(num_recording_timesteps=10)
         if self._conn_snap_load:
             print(f"  [E176 초기 연결 스냅숏] 스냅숏으로 만든 희소 집단 {self._conn_snap_n} 개")
+        if self.kc_inh_compart_sub is not None:
+            # E209 조작검증(읽기 전용): 장치 연결 = 걸러 실은 쌍(정렬 비교), 무리 밖 쌍 0, 장치 가중치 = 2배 값 — 하나라도 어긋나면 중단.
+            _chk = []
+            for _sd in ("l", "r"):
+                _isx = self.ctx_gate_sub[_sd]
+                _ihx = self.kc_inh_compart_sub[_sd]
+                for _nm, _pre_isx, _post_isx, _w in (("kc_%s_to_inh_%s" % (_sd, _sd), _isx, _ihx, float(self.config.kc_to_inh_weight) * 2.0),
+                                                      ("kc_inh_%s_to_kc_%s" % (_sd, _sd), _ihx, _isx, float(self.config.kc_inh_to_kc_weight) * 2.0)):
+                    _sg = self.model.synapse_populations[_nm]
+                    _sg.pull_connectivity_from_device()
+                    _p = np.asarray(_sg.get_sparse_pre_inds(), dtype=np.int64)
+                    _q = np.asarray(_sg.get_sparse_post_inds(), dtype=np.int64)
+                    _kp, _kq = self._kc_inh_compart_keep[_nm]
+                    _o1 = np.lexsort((_q, _p))
+                    _o2 = np.lexsort((_kq, _kp))
+                    _same = bool(_p.size == _kp.size and np.array_equal(_p[_o1], _kp[_o2]) and np.array_equal(_q[_o1], _kq[_o2]))
+                    _out = int(np.sum(_pre_isx[_p] != _post_isx[_q]))
+                    _sg.vars["g"].pull_from_device()
+                    _g = np.asarray(_sg.vars["g"].values, dtype=np.float32).ravel()
+                    _gok = bool(_g.size == _p.size and np.all(_g == np.float32(_w)))
+                    if not (_same and _out == 0 and _gok):
+                        raise RuntimeError("E209 구획 되먹임 억제 조작검증 실패: %s 연결 같음 %s · 무리 밖 %d · 가중치 %s" % (_nm, _same, _out, _gok))
+                    _chk.append("%s %d(같음·무리 밖 0·g %.2f)" % (_nm, int(_p.size), _w))
+            print("  [E209 구획 되먹임 억제 확인] 장치 — " + " · ".join(_chk))
         _css = getattr(self.config, "conn_snapshot_save", "") or ""
         if _css:
             self._save_conn_snapshot(_css)
@@ -9456,18 +9514,21 @@ class ForagerBrain:
             print(f"    Assoc_Binding→KC: 2.0, sparsity=0.05 (C2: learned category→BG)")
 
         # === C) WTA synapses: single inhibition loop ===
+        # E209 구획 되먹임 억제(kc_inh_compart): 연결은 뒤(게이팅 무리 배정 뒤)에서 같은 무리 안 쌍만 남긴다 — 연결 수가 약 절반이 되므로
+        # 두 방향 가중치를 여기서 2배로(뉴런마다 받는 시냅스 총입력 기대값 보존). 기본 꺼짐 = 배율 1(이전 모델).
+        _kcf = 2.0 if bool(getattr(self.config, "kc_inh_compart", False)) else 1.0
         self._create_static_synapse(
             "kc_l_to_inh_l", self.kc_left, self.kc_inh_left,
-            self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
+            self.config.kc_to_inh_weight * _kcf, sparsity=self.config.kc_to_inh_sparsity)
         self._create_static_synapse(
             "kc_inh_l_to_kc_l", self.kc_inh_left, self.kc_left,
-            self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+            self.config.kc_inh_to_kc_weight * _kcf, sparsity=self.config.kc_inh_to_kc_sparsity)
         self._create_static_synapse(
             "kc_r_to_inh_r", self.kc_right, self.kc_inh_right,
-            self.config.kc_to_inh_weight, sparsity=self.config.kc_to_inh_sparsity)
+            self.config.kc_to_inh_weight * _kcf, sparsity=self.config.kc_to_inh_sparsity)
         self._create_static_synapse(
             "kc_inh_r_to_kc_r", self.kc_inh_right, self.kc_right,
-            self.config.kc_inh_to_kc_weight, sparsity=self.config.kc_inh_to_kc_sparsity)
+            self.config.kc_inh_to_kc_weight * _kcf, sparsity=self.config.kc_inh_to_kc_sparsity)
 
         # === E109: KC→motor 학습 경로 (4방향: 같은 쪽 + 교차) ===
         # 최소 회로의 KC→출력 R-STDP 를 옮긴다. 교차(kc_l→motor_r)가 있어야 반사 반대 매핑을 배울 수 있다.

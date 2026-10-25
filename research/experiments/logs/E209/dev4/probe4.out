@@ -1,0 +1,29 @@
+[E209 개발 진단 4] 코드 md5 ef2b9996857b · 과제 85c8d892769c
+[E209 개발 진단 4] 시작 2026-10-25 23:26:00
+[(형성·구획) rc=0 23:32:59] [원시 특징 세계] n 200 k 40 공유 10 왜곡 12 노출 사례 6 새 사례 6 seed 38300 | 원형 A 5,14, | 제시 816 | RCJ 12
+      [E209 구획 되먹임 억제 확인] 장치 — kc_l_to_inh_l 29856(같음·무리 밖 0·g 10.00) · kc_inh_l_to_kc_l 48020(같음·무리 밖 0·g -30.00) · kc_r_to_inh_r 30025(같음·무리 �
+    RCJ side=l pair=AB J_pre=0.4940 J_post=0.0160 n_pre=194/181 n_post=64/63
+    RCJ side=l pair=AC J_pre=0.5285 J_post=0.0866 n_pre=194/182 n_post=64/74
+    RCJ side=l pair=BD J_pre=0.4854 J_post=0.0690 n_pre=181/174 n_post=63/61
+    RCJ side=r pair=AB J_pre=0.4978 J_post=0.0080 n_pre=159/178 n_post=65/61
+    RCJ side=r pair=AC J_pre=0.4483 J_post=0.0458 n_pre=159/177 n_post=65/72
+    RCJ side=r pair=BD J_pre=0.5740 J_post=0.0427 n_pre=178/173 n_post=61/61
+  (대조) E206 경로 검사 (f) 공유 고리 형성 로그:
+    RCJ side=l pair=AB J_pre=0.3161 J_post=0.0064 n_pre=132/122 n_post=75/83
+    RCJ side=l pair=AC J_pre=0.3490 J_post=0.0307 n_pre=132/127 n_post=75/93
+    RCJ side=l pair=BD J_pre=0.2376 J_post=0.0191 n_pre=122/128 n_post=83/77
+    RCJ side=r pair=AB J_pre=0.3498 J_post=0.0061 n_pre=136/138 n_post=75/89
+    RCJ side=r pair=AC J_pre=0.3684 J_post=0.0331 n_pre=136/124 n_post=75/81
+    RCJ side=r pair=BD J_pre=0.4315 J_post=0.0237 n_pre=138/144 n_post=89/84
+[(F_C·none·구획) rc=0 23:35:37] RCJ 12 · 사례당 반응 KC(post·train) 90.5(n=48) · F 적재 2
+[(F_C·X·구획) rc=0 23:38:09] RCJ 12 · 사례당 반응 KC(post·train) 46.5(n=48) · F 적재 2
+    [E207 측정 맥락] tag=pre 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 47530 · 비활성 무리 2440 · 게이팅 있음
+    [E209 구획 억제 측정] tag=pre 맥락 X 켬 — 제시 288 · KC 억제 뉴런 발화 활성 무리 417117 · 비활성 무리 106881
+    [E207 측정 맥락] tag=post 맥락 X 켬 — 제시 288 · 켠 맥락 발화 576000 · 끈 맥락 발화 0 · KC 발화 활성 무리 47582 · 비활성 무리 2418 · 게이팅 있음
+    [E209 구획 억제 측정] tag=post 맥락 X 켬 — 제시 288 · KC 억제 뉴런 발화 활성 무리 420245 · 비활성 무리 109502
+[E209 개발 진단 4] 겹침(posthoc_e208_graded.brain_stats — AC·BD 두 쪽, 둘째 측정)
+  F_C·없음·구획: S 집합 2551 · 가중 5094 · 코사인 0.250 | A·B 코사인 0.121
+  F_C·X·구획: S 집합 3556 · 가중 5187 · 코사인 0.265 | A·B 코사인 0.129
+  F·없음·공유(개발 진단 3): S 집합 1377 · 가중 4112 · 코사인 0.189 | A·B 코사인 0.104
+  F·X·공유(개발 진단 3): S 집합 5239 · 가중 8400 · 코사인 0.406 | A·B 코사인 0.295
+[E209 개발 진단 4] 종료 2026-10-25 23:38:09

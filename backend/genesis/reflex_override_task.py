@@ -524,6 +524,9 @@ def main():
                     help="E195: KC 항상성 억제(PI 제어기) 목표 발화율 — 이 cfg 로 만드는 모든 뇌. 0.05 = 이전 고정값, 낮추면 KC 희소화")
     ap.add_argument("--kc-inh-scale", type=float, default=1.0,
                     help="E195 정정: KC 되먹임 억제(kc_inh → kc) 가중치 배율 — 이 cfg 로 만드는 모든 뇌. 1 = 이전(−15). 항상성 PI 제어기는 실제 KC 발화율이 목표보다 낮아 구동 0 이라 이것이 실제 희소화 손잡이")
+    ap.add_argument("--kc-inh-compart", action="store_true",
+                    help="E209: 구획 되먹임 억제 — KC 억제 뉴런을 게이팅 무리(X·Y)마다 반반 나누고 KC ↔ 억제 연결을 같은 무리 안 쌍만(스냅숏 연결의 부분집합), 두 방향 가중치 2배. "
+                         "--ctx-gate-kc·--conn-snapshot·--ctx-gate-frac 0.5 필요. 꺼짐 = 이전 모델")
     ap.add_argument("--rc-measure-ctx", action="store_true",
                     help="E192 rawcat(측정 전용): 노출 없이 사례 × 범주 A·B × 맥락 X(zz_ctx2)·Y(zz_ctx) 제시, 자극 쪽 KC 제시별 스파이크 수 RCKX 줄. --ctx-n·--ctx2-n 필요")
     ap.add_argument("--rc-measure-ctx-on", default="none", choices=["none", "X", "Y"],
@@ -690,6 +693,9 @@ def main():
     cfg.kc_inh_to_kc_weight = float(cfg.kc_inh_to_kc_weight) * float(args.kc_inh_scale)   # E195 정정: 되먹임 억제 배율(1 = 이전)
     if args.kc_inh_scale != 1.0:
         print("[E195 KC 되먹임 억제] 배율 %.2f (kc_inh_to_kc_weight %.1f)" % (args.kc_inh_scale, cfg.kc_inh_to_kc_weight))
+    cfg.kc_inh_compart = bool(args.kc_inh_compart)   # E209: 구획 되먹임 억제 — 꺼짐 = 이전 모델
+    if args.kc_inh_compart and (not args.ctx_gate_kc or not args.conn_snapshot or args.ctx_gate_frac != 0.5 or args.kc_inh_scale != 1.0):
+        raise SystemExit("--kc-inh-compart 는 --ctx-gate-kc·--conn-snapshot·--ctx-gate-frac 0.5 가 필요하고 --kc-inh-scale 과 함께 쓸 수 없다")
     if (args.feat_weights or args.rc_task != "none" or args.rc_eval) and args.feat_n <= 0:
         raise SystemExit("--feat-weights·--rc-task·--rc-eval 은 --feat-n > 0 이 필요하다")
     if args.rc_eval and not args.decomp_weights:
@@ -997,6 +1003,14 @@ def main():
                                 ctxc["ga"] += _gx; ctxc["gb"] += int(_ik.size) - _gx
                             else:
                                 ctxc["ga"] += int(_ik.size) - _gx; ctxc["gb"] += _gx
+                        if ctxc["isub"] is not None:   # E209 조작검증(읽기 전용): 구획 억제 — 자극 쪽 KC 억제 뉴런 무리별 발화(활성 = 켠 맥락의 무리)
+                            _ii = _ids(_b2.kc_inh_left if sd == "l" else _b2.kc_inh_right)
+                            _ii = _ii[_ii < ctxc["isub"][sd].size]
+                            _ix = int(np.sum(ctxc["isub"][sd][_ii]))
+                            if ctxc["x"]:
+                                ctxc["ia"] += _ix; ctxc["ib"] += int(_ii.size) - _ix
+                            else:
+                                ctxc["ia"] += int(_ii.size) - _ix; ctxc["ib"] += _ix
                     fid = _ids(_b2.feat_pop[sd])
                     fid = fid[fid < args.feat_n]
                     if rec is not None:
@@ -1030,7 +1044,8 @@ def main():
                 if _cm != "none":   # E207: 측정 제시 동안 맥락 켬(학습 조건과 같은 구동) — 간격·노출은 끔
                     ctxc = {"on": 0, "off": 0, "ga": 0, "gb": 0, "x": _cm == "X",
                             "pon": _b2.ctx2_pop if _cm == "X" else _b2.ctx_pop, "poff": _b2.ctx_pop if _cm == "X" else _b2.ctx2_pop,
-                            "sub": getattr(_b2, "ctx_gate_sub", None)}
+                            "sub": getattr(_b2, "ctx_gate_sub", None),
+                            "isub": getattr(_b2, "kc_inh_compart_sub", None), "ia": 0, "ib": 0}
                 for _r in range(args.rc_reps):
                     for side in ("left", "right"):
                         for st in ("train", "new"):
@@ -1066,6 +1081,9 @@ def main():
                         raise RuntimeError("E207 측정: 켠 맥락 집단 발화 0 — 맥락 입력이 닿지 않음(측정 도구 실패)")
                     print("[E207 측정 맥락] tag=%s 맥락 %s 켬 — 제시 %d · 켠 맥락 발화 %d · 끈 맥락 발화 %d · KC 발화 활성 무리 %d · 비활성 무리 %d · 게이팅 %s"
                           % (tag, _cm, npres, ctxc["on"], ctxc["off"], ctxc["ga"], ctxc["gb"], "있음" if ctxc["sub"] is not None else "없음"))
+                    if ctxc["isub"] is not None:
+                        print("[E209 구획 억제 측정] tag=%s 맥락 %s 켬 — 제시 %d · KC 억제 뉴런 발화 활성 무리 %d · 비활성 무리 %d"
+                              % (tag, _cm, npres, ctxc["ia"], ctxc["ib"]))
                 return sets
 
             def _wsum(g, sd):
